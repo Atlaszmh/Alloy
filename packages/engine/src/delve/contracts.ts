@@ -93,8 +93,8 @@ function offered(t: ContractTemplate, can: Possible): boolean {
  * hard one may add an essence (`essence: 'fit'`) at `essenceChance` × Lucky
  * Charm's boost. A template already on the board is passed over while another
  * can be offered. Its text's `{count}`, `{biome}`, `{element}`, `{reaction}`,
- * `{depth}` and `{rarity}` are filled from the data's names, and `{s}` is "s"
- * unless the count is 1. The caller moves `boardCount` on.
+ * `{depth}`, `{rooms}` and `{rarity}` are filled from the data's names, and `{s}`
+ * is "s" unless the count is 1. The caller moves `boardCount` on.
  */
 export function generateContract(registry: DataRegistry, profile: DelveProfile): Contract {
   const { tierWeights, depthScale, essenceChance, countScale } =
@@ -120,6 +120,7 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
   if (rule.minRarity) filter.minRarity = pick(can.rarities);
   if (rule.noPotion) filter.noPotion = true;
   if (rule.noDamage) filter.noDamage = true;
+  if (rule.minRoomsCleared) filter.minRoomsCleared = rule.minRoomsCleared;
   const grow = 1 + (countScale[t.type] ?? 0) * profile.bestDepth;
   const count = Math.max(1, Math.round(rng.nextInt(...t.count[tier]) * grow));
 
@@ -140,6 +141,7 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
     count,
     s: count === 1 ? '' : 's',
     depth: filter.minDepth ?? '',
+    rooms: filter.minRoomsCleared ?? '',
     rarity: filter.minRarity ? registry.getQuestsData().rarityNames[filter.minRarity] : '',
     biome: registry.getDelveData().biomes.find((b) => b.id === filter.biome)?.name ?? '',
     element: filter.element ? registry.getArpgData().mana[filter.element].name : '',

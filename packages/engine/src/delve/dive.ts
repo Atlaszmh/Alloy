@@ -217,6 +217,8 @@ export function bankWorld(
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
       dropsGiven: [...world.loot.dropsGiven],
+      used: [...dive.used, ...pending.used],
+      diveBuffs: [...dive.diveBuffs, ...pending.diveBuffs],
       found,
       bestFind,
     },
@@ -312,8 +314,10 @@ export function completeFloor(
     stats: { ...banked.profile.stats, bossKills: banked.profile.stats.bossKills + (bossKilled ? 1 : 0) },
   };
   // The floor's quest events: a boss counts here, once a floor, never as a kill (the quests spec's S4).
+  // A generated floor counts its cleared rooms (the open room clears whole).
+  const rooms = world.map.open ? {} : { roomsCleared: world.map.rooms.filter((r) => r.cleared).length };
   const events: QuestEvent[] = [
-    { type: 'clearFloor', biome: world.biomeId, depth: dive.depth, noPotion: !world.potionDrunk, noDamage: !world.hurt },
+    { type: 'clearFloor', biome: world.biomeId, depth: dive.depth, noPotion: !world.potionDrunk, noDamage: !world.hurt, ...rooms },
   ];
   if (bossKilled) events.push({ type: 'boss', biome: world.biomeId });
 

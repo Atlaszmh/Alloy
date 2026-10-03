@@ -682,6 +682,7 @@ export const ObjectiveSchema = z
         noPotion: z.boolean(),
         noDamage: z.boolean(),
         minDepth: z.number().int().min(1),
+        minRoomsCleared: z.number().int().min(1),
         reaction: ReactionIdSchema,
         pair: z.literal(true),
         minRarity: RaritySchema,
@@ -791,6 +792,7 @@ const ContractTemplateSchema = z
         minRarity: z.literal('owned'),
         noPotion: z.literal(true),
         noDamage: z.literal(true),
+        minRoomsCleared: z.number().int().min(1),
       })
       .partial()
       .strict()

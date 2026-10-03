@@ -271,10 +271,10 @@
         {
           "id": "clean",
           "type": "clearFloor",
-          "filter": { "noPotion": true, "noDamage": true, "minDepth": 5 },
+          "filter": { "noPotion": true, "noDamage": true, "minDepth": 5, "minRoomsCleared": 2 },
           "count": 1,
           "scope": "total",
-          "text": "Clear a floor of depth 5 or deeper without a potion or taking damage"
+          "text": "Clear a floor of depth 5 or deeper, 2 rooms or more, without a potion or taking damage"
         }
       ],
       "rewards": [
@@ -428,10 +428,10 @@
       "name": "Dry Run",
       "line": "Potions are a crutch. Clear a floor without one and tell me how it felt.",
       "type": "clearFloor",
-      "filter": { "noPotion": true, "minDepth": "flag" },
+      "filter": { "noPotion": true, "minDepth": "flag", "minRoomsCleared": 2 },
       "count": { "easy": [1, 1], "normal": [2, 3], "hard": [4, 5] },
       "scope": "total",
-      "text": "Clear {count} floor{s} of depth {depth} or deeper without a potion",
+      "text": "Clear {count} floor{s} of depth {depth} or deeper, {rooms} rooms or more, without a potion",
       "rewards": {
         "easy": [
           { "kind": "scrap", "count": 50 },
