@@ -38,7 +38,12 @@ export function QuestTracker({
       title={<span style={{ color: 'var(--k-hot-hi)' }}>Quests</span>}
       aside={
         onJournal ? (
-          <button type="button" className={hintClass} onMouseDown={noFocus} onClick={onJournal}>
+          <button
+            type="button"
+            className={`${hintClass} min-h-8`}
+            onMouseDown={noFocus}
+            onClick={onJournal}
+          >
             {hint}
           </button>
         ) : (

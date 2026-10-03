@@ -266,7 +266,7 @@ function Journal({
           <h3 className="k-label m-0">
             <button
               type="button"
-              className="k-label"
+              className="k-label min-h-8"
               aria-expanded={doneOpen}
               onClick={() => setShowDone(!doneOpen)}
               data-testid="quest-done-toggle"
