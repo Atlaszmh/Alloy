@@ -448,16 +448,19 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
 
 /**
  * At an anvil alcove mid-floor, the bot's pick (the stop's preference ladder over
- * `alcoveOffers`), taken through `takeAlcove`; the profile unchanged when it takes nothing.
- * The ladder runs on a dry run: the profile as if at a stop offering the alcove's kinds,
- * its floor's haul banked.
+ * `alcoveOffers`), taken through `takeAlcove`. The world banks first, as the client's does
+ * before it opens the alcove, so the offers count what the floor has picked up; the banked
+ * profile comes back when it takes nothing. The ladder runs on a dry run: the profile as if
+ * at a stop offering the alcove's kinds, its floor's haul banked.
  */
 export function takeBestAlcove(
   registry: DataRegistry,
-  profile: DelveProfile,
+  unbanked: DelveProfile,
   world: ArpgWorld,
   id: string,
 ): DelveProfile {
+  if (!unbanked.dive) return unbanked;
+  const profile = bankWorld(registry, unbanked, world).profile;
   const dive = profile.dive;
   const offers = alcoveOffers(registry, profile, world, id);
   if (!dive || offers.length === 0) return profile;

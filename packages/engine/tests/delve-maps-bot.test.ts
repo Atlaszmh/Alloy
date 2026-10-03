@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { BotPolicy } from '../src/arpg/bot.js';
+import { stepWorld } from '../src/arpg/step.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { botStep, takeBestAlcove } from '../src/delve/autopilot.js';
-import { beginFloor, startDive } from '../src/delve/dive.js';
+import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
 import { createDelveProfile } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
@@ -76,8 +77,30 @@ describe('the bot on a generated floor', () => {
     expect(p.dive!.used).toEqual(['1:1']);
     expect(w.map.rooms[1].interactable!.used).toBe(true);
     expect(p.equipped.ring?.uid === 'r1' || p.bag[0]?.upgrade === 1).toBe(true);
-    // Used, it offers nothing: the profile comes back as it was.
-    expect(takeBestAlcove(registry, p, w, '1:1')).toBe(p);
+    // Used, it offers nothing: the profile comes back as it was (banked, with nothing to bank).
+    expect(takeBestAlcove(registry, p, w, '1:1')).toEqual(p);
+  });
+
+  it('its alcove pick is the same whether or not the world banked just before (the haul pays)', () => {
+    const p = startDive(
+      registry,
+      { ...createDelveProfile(registry, 3, { primary: 'fire' }), scrap: 0 },
+      1,
+    );
+    /** The alcove opened, 1000 scrap picked up and not yet banked (the upgrade it pays for). */
+    const opened = () => {
+      const w = floorWorld(twoRooms('alcove', { kind: 'alcove' }, 1));
+      Object.assign(w.hero, { x: 19, y: 7 });
+      stepWorld(registry, w, { move: { x: 0, y: 0 }, interact: true }, STEP);
+      w.pending.scrap = 1000;
+      return w;
+    };
+    const fresh = opened();
+    const banked = opened();
+    const a = takeBestAlcove(registry, p, fresh, '1:1');
+    const b = takeBestAlcove(registry, bankWorld(registry, p, banked).profile, banked, '1:1');
+    expect(b.dive!.used).toEqual(['1:1']);
+    expect(a).toEqual(b);
   });
 
   it('walks round a one-cell gap between pillars to a foe it sees through it', () => {
