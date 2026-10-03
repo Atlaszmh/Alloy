@@ -47,6 +47,8 @@ export interface ArenaInput {
   mouse: Vec | null;
   potion: boolean;
   dodge: boolean;
+  /** Interact pressed (a chest, a shrine, an alcove, the gate). */
+  interact: boolean;
   /** Manual basic attacks: held now, pressed since the last frame, and the aim (client px, or null to auto-aim). */
   attackHeld: boolean;
   attackTap: boolean;
@@ -68,6 +70,7 @@ export function createArenaInput(): ArenaInput {
     mouse: null,
     potion: false,
     dodge: false,
+    interact: false,
     attackHeld: false,
     attackTap: false,
     attackAim: null,
@@ -148,6 +151,7 @@ export function frameInput(
   input.cast = null;
   input.potion = false;
   input.dodge = false;
+  input.interact = false;
   input.attackTap = false;
   return out;
 }
@@ -161,6 +165,7 @@ function keysInput(input: ArenaInput, o: FrameOpts): ArpgInput {
     holding: holdingSlot(input),
     potion: input.potion,
     dodge: input.dodge,
+    interact: input.interact,
     ...(o.manual
       ? {
           attack: input.attackHeld || input.attackTap,
@@ -207,6 +212,7 @@ function padInput(
     holding: frame.holding,
     potion: pad.potion,
     dodge: pad.dodge,
+    interact: pad.interact,
     ...(o.manual
       ? {
           attack: pad.attackHeld,
@@ -335,6 +341,8 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       input.dodge = true;
     } else if (action === 'potion') {
       input.potion = true;
+    } else if (action === 'interact') {
+      input.interact = true;
     } else if (action === 'attack') {
       input.attackHeld = true;
       input.attackTap = true;

@@ -5,6 +5,7 @@ import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
 import type { QuestEvent } from './quests.js';
+import type { Buff, FloorMap, InteractableKind } from './floor-map.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -181,6 +182,12 @@ export interface MonsterEntity {
   ai: MonsterAi;
   traits: MonsterTrait[];
   packId: number;
+  /** Its room on a generated floor (see the floor maps spec); null in the open room. */
+  roomId: number | null;
+  /** Since when it has been beyond its leash (`ai.leashRadius` from its room's centre), else null. */
+  farSince: number | null;
+  /** Leashed: going home along its room's `homeField`, to heal and sleep. */
+  goingHome: boolean;
   x: number;
   y: number;
   radius: number;
@@ -299,6 +306,8 @@ export interface Drop {
   pattern?: string;
   /** The first boss's guaranteed essence: picking it up sets `ArpgWorld.firstEssenceTaken`. */
   firstEssence?: boolean;
+  /** The room of the foe it fell from (none: a hall's, or the open room's): its last kill pulls it in. */
+  roomId?: number;
   amount: number;
   born: number;
   /** Pulled to the hero regardless of distance (floor cleared). */
@@ -338,7 +347,14 @@ export interface HeroEntity {
   radius: number;
   facing: Vec;
   hp: number;
+  /** Its stats: `baseStats` under the floor's blessings (`applyBuffs`). */
   stats: HeroStats;
+  /** Its stats before the floor's blessings: its gear's under the dive's (see the floor maps spec). */
+  baseStats: HeroStats;
+  /** The blessings it took on this floor (a sanctum's shrine). */
+  floorBuffs: Buff[];
+  /** The dive's blessings: those it began the floor with, and any taken on it. */
+  diveBuffs: Buff[];
   /** The one mana pool: basic hits fill it, abilities spend it. */
   mana: number;
   manaMax: number;
@@ -498,6 +514,8 @@ export interface ArpgInput {
   potion?: boolean;
   /** Dodge this step (the dash follows `move`, or runs from the nearest foe). */
   dodge?: boolean;
+  /** Use the interactable in reach: a chest, a shrine, an alcove, the gate (a press; see the floor maps spec). */
+  interact?: boolean;
   /**
    * Manual basic attacks: whether the attack is held (or was tapped) this
    * frame. Leave undefined for automatic basic attacks.
@@ -655,6 +673,18 @@ export type ArpgEvent =
       y: number;
       element: ManaType | null;
     }
+  /** An interactable in reach, each step one is: what a press does to it (see the floor maps spec). */
+  | { kind: 'interactPrompt'; id: string; interactable: InteractableKind; text: string }
+  /** The gate was used: the client confirms (`roomsUnexplored`), then `exitFloor`. */
+  | { kind: 'exitRequest'; roomsUnexplored: number }
+  /** An anvil alcove opened: the client (or the bot) offers `alcoveOffers`. */
+  | { kind: 'alcoveOpen'; id: string }
+  | { kind: 'seal'; roomId: number }
+  | { kind: 'unseal'; roomId: number }
+  /** A room's last foe died. */
+  | { kind: 'roomCleared'; roomId: number }
+  /** The exit unfound after `ai.exitHintSeconds`: the compass points at it. */
+  | { kind: 'exitHint'; x: number; y: number }
   | { kind: 'cleared' }
   | { kind: 'revive'; amount: number }
   | { kind: 'heroDeath' };
@@ -694,6 +724,10 @@ export interface WorldPending {
   patterns: string[];
   /** What happened for the quests' objectives, applied when the world banks (see the quests spec). */
   questEvents: QuestEvent[];
+  /** Interactables used since the last bank: `DiveState.used` takes them (see the floor maps spec). */
+  used: string[];
+  /** Dive blessings taken since the last bank: `DiveState.diveBuffs` takes them. */
+  diveBuffs: Buff[];
   /**
    * The world hasn't banked yet: its first bank starts the dive's haul afresh, so
    * a floor replayed from its seed (left for the Anvil mid-floor) loses its
@@ -747,8 +781,29 @@ export interface ArpgWorld {
   biomeId: string;
   element: ManaType;
   door: DoorDef | null;
+  /** The floor's grid, rooms and doors (see the floor maps spec): `width` and `height` are its size. */
+  map: FloorMap;
   width: number;
   height: number;
+  /** Each cell's fog: 0 unseen, 1 seen, 2 in sight now (the open room's: all 2). */
+  fog: Uint8Array;
+  /** Moves on whenever `fog` changes: the minimap redraws its fog then. */
+  fogVersion: number;
+  /** When `fogTick` next runs (an `ai.fogEvery` mark). */
+  fogAt: number;
+  /** The exit hint has fired. */
+  exitHinted: boolean;
+  /**
+   * The flow fields toward the hero (`flowTick`), one per clearance class (`large`:
+   * big foes'): steps by cell, null until built; rebuilt at `nextAt`.
+   */
+  flow: { small: Uint16Array | null; large: Uint16Array | null; nextAt: number };
+  /** The room whose doors are closing, since when (they wait `ai.sealGrace` for the doorway), or null. */
+  sealing: { roomId: number; since: number } | null;
+  /** A shrine's prayer under way (`interactTick`): its interactable, where and when it began, its end. */
+  channel: { id: string; x: number; y: number; start: number; until: number } | null;
+  /** The hero took the exit (`exitFloor`): a generated floor ends on it, the open room on `cleared`. */
+  exited: boolean;
   hero: HeroEntity;
   monsters: MonsterEntity[];
   projectiles: Projectile[];
@@ -780,6 +835,8 @@ export interface ArpgWorld {
   queuedAttack: { until: number; aim: Vec | null } | null;
   queuedPotion: boolean;
   queuedDodge: boolean;
+  /** An interact press waiting for `interactTick`. */
+  queuedInteract: boolean;
   kills: number;
   bossKilled: boolean;
   /**

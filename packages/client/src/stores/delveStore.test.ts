@@ -71,9 +71,9 @@ describe('delveStore', () => {
   });
 
   it('resets a save of another version, and falls back to a new profile when the save is corrupt', () => {
-    localStorage.setItem(DELVE_SAVE_KEY, '{"version":8,"broken":true}');
-    expect(loadDelveProfile()).toEqual({ reset: true });
     localStorage.setItem(DELVE_SAVE_KEY, '{"version":9,"broken":true}');
+    expect(loadDelveProfile()).toEqual({ reset: true });
+    localStorage.setItem(DELVE_SAVE_KEY, '{"version":10,"broken":true}');
     expect(loadDelveProfile()).toBeNull();
     localStorage.setItem(DELVE_SAVE_KEY, 'not json');
     expect(loadDelveProfile()).toBeNull();
@@ -209,7 +209,7 @@ describe('delveStore', () => {
   });
 
   it('a save of another version starts afresh: written back at once, with one notice', async () => {
-    const old = { ...useDelveStore.getState().profile, version: 8, scrap: 999 };
+    const old = { ...useDelveStore.getState().profile, version: 9, scrap: 999 };
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(old));
     // A fresh module and no cached store, as on a page load.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
@@ -218,9 +218,9 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
-    expect(fresh.getState().profile).toMatchObject({ version: 9, scrap: 50 }); // the kit's
+    expect(fresh.getState().profile).toMatchObject({ version: 10, scrap: 50 }); // the kit's
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
-      version: 9,
+      version: 10,
       scrap: 50,
     });
     // The written-back save loads as it is: no second notice.

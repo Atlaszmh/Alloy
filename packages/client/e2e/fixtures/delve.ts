@@ -13,12 +13,13 @@ export const ARENA_READY = 30_000;
 
 /**
  * Seed a deterministic Delve save (a fire hero, `secondary` bound if given, `over` on top) and
- * let the engine bot play the arena.
+ * let the engine bot play the arena ('ask': the bot plays, but the test presses interact and
+ * answers the gate's and the alcove's dialogs).
  */
 export async function seedProfile(
   page: Page,
   seed = 4242,
-  autopilot = true,
+  autopilot: boolean | 'ask' = true,
   secondary?: ManaType,
   over: Partial<DelveProfile> = {},
 ): Promise<void> {
@@ -32,7 +33,7 @@ export async function seedProfile(
       if (sessionStorage.getItem('delve-e2e')) return;
       localStorage.clear();
       localStorage.setItem(key, value);
-      if (bot) localStorage.setItem('alloy:delve:autopilot', '1');
+      if (bot) localStorage.setItem('alloy:delve:autopilot', bot === 'ask' ? 'ask' : '1');
       localStorage.setItem('alloy:delve:timescale', '2');
       localStorage.setItem('alloy:muted', 'true');
       sessionStorage.setItem('delve-e2e', '1');

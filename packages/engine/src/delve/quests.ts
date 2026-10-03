@@ -73,6 +73,7 @@ function matches(
     depth: number;
     noPotion: boolean;
     noDamage: boolean;
+    roomsCleared: number;
     reaction: string;
     rarity: Parameters<typeof rarityIndex>[0];
     legendary: boolean;
@@ -85,6 +86,10 @@ function matches(
     (!f.noPotion || !!v.noPotion) &&
     (!f.noDamage || !!v.noDamage) &&
     (f.minDepth === undefined || (v.depth ?? 0) >= f.minDepth) &&
+    // The open room has no rooms to count: it clears whole.
+    (f.minRoomsCleared === undefined ||
+      v.roomsCleared === undefined ||
+      v.roomsCleared >= f.minRoomsCleared) &&
     (!f.reaction || v.reaction === f.reaction) &&
     (!f.pair ||
       (!!primary &&

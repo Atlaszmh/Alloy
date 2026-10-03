@@ -1,6 +1,7 @@
 import type { Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
-import { clamp, clampLen, dirTo } from './geometry.js';
+import { clampLen, dirTo } from './geometry.js';
+import { moveCircle } from './grid.js';
 import { nearestMonster } from './abilities/targeting.js';
 import { cancelSwing, cancelWindup, dropHold } from './action.js';
 
@@ -56,7 +57,12 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
   return true;
 }
 
-/** Refill charges and carry the dash (placed by progress, so it always covers the full distance). */
+/**
+ * Refill charges and carry the dash: each tick on toward where its progress puts
+ * it (so it always covers the full distance), swept from where the hero stands
+ * (see the floor maps spec). Once a wall has held it back, each tick moves only
+ * its own slice, so it never lurches on past a corner.
+ */
 export function dodgeTick(ctx: SimCtx, dt: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
@@ -68,9 +74,16 @@ export function dodgeTick(ctx: SimCtx, dt: number): void {
   }
   const d = h.dodge;
   if (!d || t - dt >= d.until) return;
-  const k = Math.min(1, (t - d.start) / bal.dodge.duration) * bal.dodge.distance;
-  h.x = clamp(d.fromX + d.dir.x * k, h.radius, world.width - h.radius);
-  h.y = clamp(d.fromY + d.dir.y * k, h.radius, world.height - h.radius);
+  const at = (s: number) =>
+    Math.min(1, Math.max(0, (s - d.start) / bal.dodge.duration)) * bal.dodge.distance;
+  const k = at(t);
+  const slice = k - at(t - dt);
+  const tx = d.fromX + d.dir.x * k;
+  const ty = d.fromY + d.dir.y * k;
+  const late = Math.hypot(tx - h.x, ty - h.y) > slice + 1e-9;
+  const dx = late ? d.dir.x * slice : tx - h.x;
+  const dy = late ? d.dir.y * slice : ty - h.y;
+  Object.assign(h, moveCircle(world.map, h, h.radius, dx, dy));
 }
 
 /** Where the dodge began, while its perfect window is open and unused; else null. */

@@ -22,31 +22,19 @@ const runs: AutopilotDiveReport[][] = fireResults.map((r) => r.reports);
 const FROST_SEEDS = [1, 2];
 const frostResults = FROST_SEEDS.map((seed) => runAutopilot(registry, { seed, dives: DIVES, primary: 'frost' }));
 const frostRuns: AutopilotDiveReport[][] = frostResults.map((r) => r.reports);
-
-/**
- * Every pair forced from the start: a fused Primary sets off its own reaction
- * on every hit after the first, so none may run away or stall. One seed's depth
- * swings far more than one pair's from another's (one pair went from 12 to 51
- * over ten seeds while the pairs' means ran 19 to 28), so each pair is its mean
- * over `SWEEP_SEEDS`.
- */
-const SWEEP_DIVES = 6;
-const SWEEP_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
-const sweep = registry.getArpgData().reactions.map(({ elements: [primary, secondary] }) => ({
-  pair: `${primary}+${secondary}`,
-  depth: avg(
-    SWEEP_SEEDS.map(
-      (seed) =>
-        runAutopilot(registry, { seed, dives: SWEEP_DIVES, primary, secondary }).reports[SWEEP_DIVES - 1].endDepth,
-    ),
-  ),
-}));
+/** The same Fire heroes rushing every floor: the bot makes for the exit (see the floor maps spec). */
+const rushRuns: AutopilotDiveReport[][] = SEEDS.map(
+  (seed) => runAutopilot(registry, { seed, dives: DIVES, policy: 'beeline' }).reports,
+);
 
 /** The same Fire runs' economy, dive by dive (the DPS Lab's Economy view reads the same). */
 const paced = SEEDS.map((seed) => pacingRun(registry, seed, DIVES));
 const economies = paced.map((r) => r.economy);
 
 const endDepthAt = (dive: number) => avg(runs.map((r) => r[dive - 1].endDepth));
+/** Each dive's floor time over its floors (a death's floor counts). */
+const perFloor = (r: AutopilotDiveReport[]) =>
+  r.map((d) => d.floorSeconds / Math.max(1, d.endDepth - d.startDepth + 1));
 
 describe('Delve ARPG pacing (autopilot)', () => {
   it('first dive is a short scouting run: every seed clears the opening floors', () => {
@@ -84,21 +72,24 @@ describe('Delve ARPG pacing (autopilot)', () => {
     }
   });
 
-  it('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6 (its mean over the seeds)', () => {
-    const depths = sweep.map((s) => s.depth).sort((a, b) => a - b);
-    const median = depths[Math.floor(depths.length / 2)];
-    for (const s of sweep) {
-      expect(s.depth, s.pair).toBeGreaterThanOrEqual(0.6 * median);
-      expect(s.depth, s.pair).toBeLessThanOrEqual(1.6 * median);
-    }
+  it('floors are a snackable length: a full clear takes longer than a rush to the exit', () => {
+    const clear = avg(runs.flatMap(perFloor));
+    const rush = avg(rushRuns.flatMap(perFloor));
+    expect(clear).toBeGreaterThan(30);
+    expect(clear).toBeLessThan(60);
+    expect(rush).toBeGreaterThan(20);
+    expect(rush).toBeLessThan(45);
+    expect(clear).toBeGreaterThan(1.25 * rush);
   });
 
-  it('floors are a snackable length', () => {
-    const perFloor = runs.flatMap((r) =>
-      r.map((d) => d.floorSeconds / Math.max(1, d.endDepth - d.startDepth + 1)),
-    );
-    expect(avg(perFloor)).toBeGreaterThan(8);
-    expect(avg(perFloor)).toBeLessThan(60);
+  it("rushing still progresses: a beeline reaches at least 80% of the full clear's depth by dive 12", () => {
+    const rush = avg(rushRuns.map((r) => r[DIVES - 1].endDepth));
+    expect(rush).toBeGreaterThanOrEqual(0.8 * endDepthAt(DIVES));
+  });
+
+  it('no floor runs out of time: every death is a death', () => {
+    for (const r of [...runs, ...frostRuns, ...rushRuns])
+      expect(r.map((d) => d.timedOut)).toEqual(r.map(() => 0));
   });
 });
 

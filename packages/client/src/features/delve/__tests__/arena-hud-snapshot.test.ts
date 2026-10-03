@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   beginFloor,
   computeHeroStats,
@@ -6,6 +6,7 @@ import {
   createSandboxWorld,
   defaultChains,
   defaultMoveset,
+  hudMapOf,
   sandboxWeapon,
   startDive,
   stepWorld,
@@ -13,12 +14,20 @@ import {
   type Drop,
   type GearItem,
   type HeroStatsExtra,
+  type HudMap,
   type MonsterEntity,
 } from '@alloy/engine';
 import { snapshot } from '../arena/useArena';
+import { promptAfter, type PromptEvent } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
 import { RARITY_COLOR } from '../format';
 import { FAMILY_STYLE } from '../runes/rune-style';
+
+// The floor flow's map (B3's) is a stub until it lands: each test says what it returns.
+vi.mock('@alloy/engine', async (orig) => ({
+  ...(await orig<typeof import('@alloy/engine')>()),
+  hudMapOf: vi.fn(),
+}));
 
 const registry = getDelveRegistry();
 const STEP = registry.getDelveBalance().arena.step;
@@ -47,7 +56,9 @@ describe('arena HUD snapshot', () => {
     const armed = { ...p, equipped: { ...p.equipped, weapon: { ...weapon, moveset } } };
     const w = beginFloor(registry, startDive(registry, armed, 1));
     w.hero.nextAttackAt = 1e9;
-    stepWorld(registry, w, { move: still, cast: { slot: 0, aim: null } }, STEP);
+    // Aimed: the start room holds no foe for an auto-aimed Bolt.
+    const aim = { x: w.hero.x, y: w.hero.y - 3 };
+    stepWorld(registry, w, { move: still, cast: { slot: 0, aim } }, STEP);
     const wu = w.hero.windup!;
     expect(w.t).toBeLessThan(wu.conjureUntil);
     let hud = snapshot(w, null);
@@ -208,6 +219,16 @@ describe('arena HUD snapshot: buffs and the map', () => {
     expect(snapshot(w, null).buffs.map((b) => b.id)).toEqual(['barrier']);
   });
 
+  it("lists the shrines' blessings after them, the dive's then the floor's, by their shrine's name", () => {
+    const w = sandbox();
+    w.hero.floorBuffs = [{ shrine: 'vigor', effect: { damage: 0.2 } }];
+    w.hero.diveBuffs = [{ shrine: 'devotion', effect: { damage: 0.1 } }];
+    expect(snapshot(w, null).buffs).toEqual([
+      { id: 'shrine', shrine: 'devotion', name: 'Shrine of Devotion', dive: true },
+      { id: 'shrine', shrine: 'vigor', name: 'Shrine of Vigor', dive: false },
+    ]);
+  });
+
   it('maps the floor: the view (the arena with no renderer), the hero, foes by rank, loot by colour', () => {
     const w = sandbox();
     w.monsters.push({ x: 3, y: 4, kind: 'elite' } as MonsterEntity);
@@ -287,5 +308,101 @@ describe('arena HUD snapshot: runes', () => {
       chainStep: 1,
       runes: [split],
     });
+  });
+});
+
+describe('arena HUD snapshot: a generated floor', () => {
+  /** The sandbox's open room marked generated, its fog all unseen: what the HUD reads from a map. */
+  function generated() {
+    const w = sandbox();
+    w.map = { ...w.map, open: false };
+    w.fog = new Uint8Array(w.width * w.height);
+    return w;
+  }
+  const FLOOR: HudMap = {
+    width: 26,
+    height: 40,
+    rooms: [
+      {
+        id: 0,
+        kind: 'combat',
+        rect: { x: 0, y: 0, w: 26, h: 40 },
+        icon: null,
+        used: false,
+        cleared: false,
+        sealed: false,
+      },
+    ],
+    exit: null,
+    hint: { x: 20, y: 2 },
+    foes: [{ x: 3, y: 4, kind: 'elite' }],
+    drops: [],
+    explored: 1,
+    total: 6,
+    fogVersion: 4,
+  };
+  const prompt: PromptEvent = {
+    kind: 'interactPrompt',
+    id: '1:0',
+    interactable: 'shrine',
+    text: 'Shrine of Vigor: +20% damage for this floor',
+  };
+
+  it('maps it from the engine: its rooms, the foes in sight, the seen loot, and the grid and fog as they are', () => {
+    vi.mocked(hudMapOf).mockReturnValue(FLOOR);
+    const w = generated();
+    w.monsters.push({ x: 9, y: 9, kind: 'normal' } as MonsterEntity); // not in sight
+    const at = { born: 0, amount: 0, vacuum: false, dead: false };
+    const rare = { rarity: 'rare' } as GearItem;
+    w.drops.push(
+      { ...at, id: 1, kind: 'item', x: 5.5, y: 6.5, item: rare },
+      { ...at, id: 2, kind: 'item', x: 7.5, y: 8.5, item: rare },
+    );
+    w.fog[6 * w.width + 5] = 1; // the first drop's cell has been seen
+    const map = snapshot(w, null).map;
+    expect(hudMapOf).toHaveBeenCalledWith(w);
+    expect(map.foes).toEqual([{ x: 3, y: 4, rank: 'elite' }]);
+    expect(map.drops).toEqual([{ x: 5.5, y: 6.5, color: RARITY_COLOR.rare }]);
+    expect(map.floor).toMatchObject({
+      explored: 1,
+      total: 6,
+      fogVersion: 4,
+      hint: { x: 20, y: 2 },
+    });
+    expect(map.floor!.fog).toBe(w.fog);
+    expect(map.floor!.cells).toBe(w.map.cells);
+  });
+
+  it('never asks the engine on the open room', () => {
+    vi.mocked(hudMapOf).mockClear();
+    expect(snapshot(sandbox(), null).map.floor).toBeUndefined();
+    expect(hudMapOf).not.toHaveBeenCalled();
+  });
+
+  it("shows the prompt's interactable where it stands, and a shrine's prayer as it goes", () => {
+    const w = sandbox();
+    w.map.rooms[0].interactable = { id: '1:0', kind: 'shrine', x: 10, y: 12, used: false };
+    expect(snapshot(w, null).prompt).toBeUndefined();
+    expect(snapshot(w, null, prompt).prompt).toEqual({
+      id: '1:0',
+      interactable: 'shrine',
+      text: prompt.text,
+      x: 10,
+      y: 12,
+      channel: null,
+    });
+    w.t = 5;
+    w.channel = { id: '1:0', x: 10, y: 12, start: 4.75, until: 5.25 };
+    expect(snapshot(w, null, prompt).prompt!.channel).toBeCloseTo(0.5);
+    // The prayer keeps its plaque, prompt or not.
+    expect(snapshot(w, null).prompt).toMatchObject({ id: '1:0', text: '', channel: 0.5 });
+  });
+
+  it('keeps the prompt through a step that ran no tick, and drops it after a tick without one', () => {
+    const later: PromptEvent = { ...prompt, id: '1:3' };
+    expect(promptAfter(null, [prompt], true)).toBe(prompt);
+    expect(promptAfter(prompt, [], false)).toBe(prompt);
+    expect(promptAfter(prompt, [], true)).toBeNull();
+    expect(promptAfter(prompt, [prompt, later], true)).toBe(later);
   });
 });

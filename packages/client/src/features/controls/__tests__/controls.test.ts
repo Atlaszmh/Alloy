@@ -74,3 +74,18 @@ describe('controls config', () => {
     expect(keyLabel('Digit2')).toBe('2');
   });
 });
+
+describe('interact', () => {
+  it('is A and C, left unbound where a saved setup already uses either', () => {
+    expect([DEFAULT_CONTROLS.pad.interact, DEFAULT_CONTROLS.keys.interact]).toEqual(['a', 'KeyC']);
+    const { interact: _p, ...pad } = DEFAULT_CONTROLS.pad;
+    const { interact: _k, ...keys } = DEFAULT_CONTROLS.keys;
+    expect(parseControls({ ...DEFAULT_CONTROLS, pad, keys })).toEqual(DEFAULT_CONTROLS);
+    const taken = parseControls({
+      ...DEFAULT_CONTROLS,
+      pad: { ...pad, primary: 'a' },
+      keys: { ...keys, potion: 'KeyC' },
+    });
+    expect([taken.pad.interact, taken.keys.interact]).toEqual([null, null]);
+  });
+});

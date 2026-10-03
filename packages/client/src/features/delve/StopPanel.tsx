@@ -29,6 +29,7 @@ import {
   type DiveStop,
   type GearItem,
   type Move,
+  type ProfileActionResult,
   type StopAction,
   type StopKind,
 } from '@alloy/engine';
@@ -81,12 +82,25 @@ export const STOP_TEXT: Record<
   },
 };
 
+/** What a stop's pickers run: the op as a dry run (whether it goes through, and why not), and the take. */
+export interface StopOps {
+  dry: (profile: DelveProfile, action: StopAction) => ProfileActionResult;
+  take: (action: StopAction) => ProfileActionResult;
+}
+
+/** The stop's own: the engine's `takeStop`, the take through the store. */
+const STOP_OPS: StopOps = {
+  dry: (profile, action) => takeStop(getDelveRegistry(), profile, action),
+  take: (action) => useDelveStore.getState().takeStop(action),
+};
+
 /**
  * The stop's power-ups (see the weapon movesets spec): the kinds offered after the depth just
  * cleared, as plate cards. A card expands in place to its picker, its own pad scope with a Back;
- * taking one spends the stop (the engine's `takeStop`), and skipping it is choosing a door.
+ * taking one spends the stop (the engine's `takeStop`), and skipping it is choosing a door. The
+ * Anvil alcove (see the floor maps spec) shows the same cards over its own `ops`.
  */
-export function StopPanel({ stop }: { stop: DiveStop }) {
+export function StopPanel({ stop, ops = STOP_OPS }: { stop: DiveStop; ops?: StopOps }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const upgradeCosts = upgradable(registry, profile).map((i) => upgradeCost(registry, i)!);
@@ -121,7 +135,7 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
         <span className="text-[15px] text-[var(--k-text-3)]">or skip it</span>
       </div>
       {open ? (
-        <StopPicker kind={open} onClose={close} onTaken={taken} />
+        <StopPicker kind={open} onClose={close} onTaken={taken} ops={ops} />
       ) : (
         <div className="grid min-h-0 grid-cols-3 items-start gap-[18px]">
           {stop.offers.map((kind, i) => (
@@ -181,14 +195,16 @@ function StopPicker({
   kind,
   onClose,
   onTaken,
+  ops,
 }: {
   kind: StopKind;
   onClose: () => void;
   onTaken: () => void;
+  ops: StopOps;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const take = (action: StopAction) => {
-    const res = useDelveStore.getState().takeStop(action);
+    const res = ops.take(action);
     if (res.ok) {
       playSound('upgradeTier');
       vibrate('success');
@@ -230,8 +246,8 @@ function StopPicker({
         </Button>
       </div>
       {kind === 'equip' && <EquipPick take={take} />}
-      {kind === 'slot' && <SlotPick take={take} />}
-      {kind === 'move' && <MovePick take={take} />}
+      {kind === 'slot' && <SlotPick take={take} dryRun={ops.dry} />}
+      {kind === 'move' && <MovePick take={take} dryRun={ops.dry} />}
       {kind === 'upgrade' && <UpgradePick take={take} />}
       {kind === 'rune' && <RunePick take={take} />}
       {message && (
@@ -244,6 +260,7 @@ function StopPicker({
 }
 
 type Take = (action: StopAction) => void;
+type DryRun = StopOps['dry'];
 
 /** What the hero has to pay with. */
 function Wallet() {
@@ -294,7 +311,7 @@ function EquipPick({ take }: { take: Take }) {
 }
 
 /** A chain of the equipped weapon to grow by a slot, at its price; one it can't take says why. */
-function SlotPick({ take }: { take: Take }) {
+function SlotPick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const id = useId();
@@ -307,7 +324,7 @@ function SlotPick({ take }: { take: Take }) {
       {CHAIN_SKILLS.filter((s) => slots[s] !== undefined).map((s) => {
         const price = slotPrice(registry, weapon, s);
         // The engine's own op as a dry run: whether it goes through, and why not.
-        const dry = takeStop(registry, profile, { kind: 'slot', skill: s });
+        const dry = dryRun(profile, { kind: 'slot', skill: s });
         const why = !price || dry.ok ? null : dry.reason;
         return (
           <div key={s} className="flex flex-col gap-1">
@@ -343,7 +360,7 @@ function SlotPick({ take }: { take: Take }) {
 }
 
 /** The chain builder, limited to one move: the latest change replaces any earlier one. */
-function MovePick({ take }: { take: Take }) {
+function MovePick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const whyId = useId();
@@ -378,7 +395,7 @@ function MovePick({ take }: { take: Take }) {
   const price =
     edit && changed ? editPrice(registry, profile, { [edit.skill]: chains[edit.skill] }) : 0;
   // The engine's own op as a dry run: whether the change goes through, and why not.
-  const dry = edit && changed ? takeStop(registry, profile, { kind: 'move', ...edit }) : null;
+  const dry = edit && changed ? dryRun(profile, { kind: 'move', ...edit }) : null;
   const why = dry && !dry.ok ? dry.reason : null;
   const elements = pairElements(pair);
   return (

@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import type { ArpgEvent, ManaType, ReactionId } from '@alloy/engine';
+import type { ArpgEvent, FloorMap, ManaType, ReactionId } from '@alloy/engine';
 import { MAX_PARTICLES, PixelWorld, MAT, PROP } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
 import { MAX_STAMPS, applyArenaEvent, arenaToCell } from '../arena/pixel/arena-effects';
+import { ringMap } from './hand-map';
 
 const PPU = 5;
 const MARGIN = 3;
@@ -649,5 +650,127 @@ describe('reactions on the pixel floor', () => {
     applyArenaEvent(f.pw, hit('sunder'), PPU, MARGIN);
     applyArenaEvent(f.pw, hit(), PPU, MARGIN);
     expect(f.stamps).toEqual([{ brush: 'nature', ...arenaToCell(10, 10, PPU, MARGIN), r: 4 }]);
+  });
+});
+
+/** A floor built from `map` (ringMap's by default), with its own seed. */
+function fromMap(map: FloorMap = ringMap(), seed = 7): PixelWorld {
+  return new PixelWorld({
+    width: (map.width + MARGIN * 2) * PPU,
+    height: (map.height + MARGIN * 2) * PPU,
+    margin: MARGIN * PPU,
+    seed,
+    theme: PIXEL_THEMES.sunken_quarry,
+    weather: false,
+    random: seeded(99),
+    plan: { width: map.width, height: map.height, cells: map.cells, rooms: map.rooms, ppu: PPU },
+  });
+}
+
+/** The floor cell in the middle of map cell (mx, my). */
+const mid = (pw: PixelWorld, mx: number, my: number) =>
+  (pw.margin + my * PPU + 2) * pw.width + pw.margin + mx * PPU + 2;
+
+/** Each map cell's room (its index), or −1 in a hall or a wall. */
+function roomsOf(map: FloorMap): number[] {
+  const of: number[] = new Array(map.width * map.height).fill(-1);
+  map.rooms.forEach(({ rect: r }, k) => {
+    for (let y = r.y; y < r.y + r.h; y++)
+      for (let x = r.x; x < r.x + r.w; x++) of[y * map.width + x] = k;
+  });
+  return of;
+}
+
+// Each builds a 64 × 64 floor: about a third of a second, more on a busy machine.
+describe('a floor built from a map', { timeout: 20000 }, () => {
+  it('raises cliffs on its walls, wears paths down its halls and paves its special rooms', () => {
+    const map = ringMap();
+    const pw = fromMap(map);
+    const room = roomsOf(map);
+    const runes = map.rooms.map(() => 0);
+    for (let c = 0; c < map.cells.length; c++) {
+      const i = mid(pw, c % map.width, Math.floor(c / map.width));
+      if (map.cells[c] === 1) {
+        // Rock, or foliage spilling over its top.
+        expect([MAT.WALL, MAT.BUSH]).toContain(pw.mat[i]);
+        expect(pw.edge[i]).toBeGreaterThan(0);
+        continue;
+      }
+      expect(pw.edge[i]).toBe(0);
+      const kind = map.rooms[room[c]]?.kind;
+      if (!kind) expect(pw.mat[i]).toBe(MAT.SOIL);
+      else if (kind === 'vault' || kind === 'sanctum') expect(pw.mat[i]).toBe(MAT.STONE);
+      else expect(pw.mat[i]).not.toBe(MAT.WALL);
+      for (let d = 0; d < PPU * PPU; d++) {
+        const j = i - 2 - 2 * pw.width + (d % PPU) + Math.floor(d / PPU) * pw.width;
+        if (room[c] >= 0 && pw.prop[j] === PROP.RUNE) runes[room[c]]++;
+      }
+    }
+    // The rock deepens away from the floor; a rune circle marks the sanctum, none the vault.
+    expect(pw.edge[mid(pw, 0, 0)]).toBeGreaterThan(10);
+    expect(runes[2]).toBeGreaterThan(10);
+    expect(runes[1]).toBe(0);
+  });
+
+  it('runs rivers and pools through its wild rooms, and keeps the water in them', () => {
+    const map = ringMap();
+    const room = roomsOf(map);
+    let wet = 0;
+    for (let seed = 1; seed <= 2; seed++) {
+      const pw = fromMap(map, seed);
+      for (let s = 0; s < 60; s++) pw.step();
+      const water = map.rooms.map(() => 0);
+      for (let c = 0; c < map.cells.length; c++) {
+        if (map.cells[c] === 1) continue;
+        const f = pw.fluid[mid(pw, c % map.width, Math.floor(c / map.width))];
+        if (room[c] < 0) expect(f).toBeLessThan(0.01);
+        else if (f > 0.01) water[room[c]]++;
+      }
+      // The wild rooms (the start, the exit and the combat room) hold the water; the paved ones none.
+      wet += [0, 3, 4].filter((k) => water[k] > 4).length;
+      expect(water[1] + water[2]).toBe(0);
+    }
+    expect(wet).toBeGreaterThan(3);
+  });
+
+  it('builds the same floor from the same map and seed, and another from another seed', () => {
+    const a = fromMap();
+    expect(Array.from(fromMap().mat)).toEqual(Array.from(a.mat));
+    expect(Array.from(fromMap().fluid)).toEqual(Array.from(a.fluid));
+    expect(Array.from(fromMap(undefined, 8).mat)).not.toEqual(Array.from(a.mat));
+  });
+});
+
+describe("a big floor's chunks", { timeout: 20000 }, () => {
+  it('simulate only near the view and through any room that reaches it; the rest sleep', () => {
+    const map = ringMap();
+    const pw = fromMap(map);
+    const at = (mx: number, my: number) => mid(pw, mx, my);
+    // Fires in the start room's far corner, in the middle of the top hall, and in the sanctum.
+    const near = at(14, 12);
+    const hall = at(30, 8);
+    const far = at(50, 50);
+    for (const i of [near, hall, far]) pw.fire[i] = 100;
+    // Wake round the start room's top-left corner: the whole room wakes, the far end of the map sleeps.
+    const corner = mid(pw, 4, 4);
+    const cx = corner % pw.width;
+    const cy = Math.floor(corner / pw.width);
+    pw.setActive(cx - 10, cy - 10, cx + 10, cy + 10);
+    expect(pw.awake.some((a) => a === 0)).toBe(true);
+    for (let s = 0; s < 10; s++) pw.step();
+    expect(pw.fire[near]).not.toBe(100);
+    expect(pw.fire[hall]).toBe(100);
+    expect(pw.fire[far]).toBe(100);
+    // The view moves on: the sanctum wakes.
+    const fx = far % pw.width;
+    const fy = Math.floor(far / pw.width);
+    pw.setActive(fx - 10, fy - 10, fx + 10, fy + 10);
+    pw.step();
+    expect(pw.fire[far]).not.toBe(100);
+  });
+
+  it('are all awake until the view is set', () => {
+    const pw = fromMap();
+    expect(pw.awake.every((a) => a === 1)).toBe(true);
   });
 });

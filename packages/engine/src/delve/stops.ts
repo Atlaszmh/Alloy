@@ -1,9 +1,12 @@
 import type { DataRegistry } from '../data/registry.js';
-import { carriedByText, movesetOf } from '../loot/moveset.js';
+import type { ArpgWorld } from '../types/arpg.js';
+import type { Interactable } from '../types/floor-map.js';
+import { refreshWorldHero } from '../arpg/world.js';
+import { carriedByText, heroChains, movesetOf } from '../loot/moveset.js';
 import { upgradeCost } from '../loot/smithing.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { runeFits, socketsOf } from '../loot/runes.js';
-import { emptyHaul, stockHaul } from '../loot/materials.js';
+import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
 import type { Haul } from '../types/crafting.js';
 import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, DiveState, DiveStop, StopKind } from '../types/delve.js';
@@ -12,6 +15,9 @@ import type { RuneRef } from '../types/rune.js';
 import { addSlot, moveKey, movesOf, setChain, slotPrice, withMove } from './moveset.js';
 import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
 import { runeTargetOf, socketRune } from './runes.js';
+import { bankWorld } from './dive.js';
+import { openedAlcove } from '../arpg/interact.js';
+import { profileStats } from './pair.js';
 
 /**
  * Stops between depths (see the weapon movesets spec): after a depth is
@@ -155,7 +161,14 @@ export function rollStop(
 ): DiveStop | null {
   const kinds = stopKinds(registry, { ...profile, dive });
   if (kinds.length === 0) return null;
-  const rng = new SeededRNG(dive.seed).fork(`stop:${dive.depth}`);
+  return {
+    offers: pickKinds(kinds, new SeededRNG(dive.seed).fork(`stop:${dive.depth}`)),
+    taken: false,
+  };
+}
+
+/** 2 or 3 of `kinds` at random on `rng` (all of them when fewer), in their order. */
+function pickKinds(kinds: StopKind[], rng: SeededRNG): StopKind[] {
   const count = rng.nextInt(2, 3);
   const pool = [...kinds];
   for (let i = pool.length - 1; i > 0; i--) {
@@ -163,7 +176,7 @@ export function rollStop(
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   const picked = new Set(pool.slice(0, count));
-  return { offers: kinds.filter((k) => picked.has(k)), taken: false };
+  return kinds.filter((k) => picked.has(k));
 }
 
 /** Whether untyped input has a move's shape (a form and elements) or a blow's (an element). */
@@ -253,4 +266,86 @@ export function takeStop(
   const spent = unpool(profile, res.profile, dive.banked);
   const taken = { ...dive, banked: spent.banked, stop: { ...stop, taken: true } };
   return { ...res, profile: { ...spent.profile, dive: taken } };
+}
+
+/**
+ * An anvil alcove's offers (see the floor maps spec): 2 or 3 of the kinds the
+ * hero can take and pay for (`stopKinds`), on `alcove:<depth>:<roomId>`, so a
+ * reopened alcove offers the same.
+ */
+export function alcoveOffers(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  id: string,
+): StopKind[] {
+  const dive = profile.dive;
+  const alcove = alcovesOf(world).find((a) => a.id === id);
+  if (!dive || !alcove) return [];
+  // What the floor has hauled pays too: pooled with the banked (`stopKinds` pools `banked`).
+  const hauled = { ...profile, dive: { ...dive, banked: addHaul(dive.banked, dive.haul) } };
+  return pickKinds(stopKinds(registry, hauled), new SeededRNG(dive.seed).fork(`alcove:${id}`));
+}
+
+/** The world's alcoves not yet used. */
+function alcovesOf(world: ArpgWorld): Interactable[] {
+  return world.map.rooms
+    .map((r) => r.interactable)
+    .filter((i): i is Interactable => i?.kind === 'alcove' && !i.used);
+}
+
+/**
+ * Take the one op of the alcove last opened on `world` (`openedAlcove`)
+ * mid-floor, while the dive is fighting: its kind must be among `alcoveOffers`
+ * for this profile. The world banks first (`bankWorld`), then the op runs at
+ * its price with the dive lock lifted as `takeStop` runs it, paid from
+ * `banked` (as at a stop), then the floor's haul, then the stockpile. A refusal
+ * leaves the profile and the world as they were (the alcove open, nothing
+ * banked); an op taken marks the alcove used (`DiveState.used` and the
+ * world's) and refreshes the hero (`refreshWorldHero` with the new gear and
+ * chains, its blessings kept; a changed Find moves `world.loot.find`).
+ */
+export function takeAlcove(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  action: StopAction,
+): ProfileActionResult {
+  const h = world.hero;
+  const alcove = alcovesOf(world).find((a) => a.id === openedAlcove(world));
+  const live = profile.dive?.phase === 'fighting' && !profile.dive.settled;
+  if (!live || !alcove) return { ok: false, profile, reason: 'No anvil here' };
+  if (!alcoveOffers(registry, profile, world, alcove.id).includes(action.kind))
+    return { ok: false, profile, reason: 'Not offered at this anvil' };
+  const pending = world.pending;
+  const banked = bankWorld(registry, profile, world).profile;
+  const dive = banked.dive!;
+  const withHaul = pooled({ ...banked, dive: { ...dive, banked: dive.haul } });
+  const res = runStop(registry, { ...pooled({ ...withHaul, dive }), dive: null }, action);
+  if (!res.ok) {
+    world.pending = pending; // a refusal leaves the world as it was
+    return { ...res, profile };
+  }
+  // `banked` pays first, as at a stop, then the haul, then the stockpile.
+  const fromBanked = unpool(withHaul, res.profile, dive.banked);
+  const fromHaul = unpool(banked, fromBanked.profile, dive.haul);
+  alcove.used = true;
+  const next: DelveProfile = {
+    ...fromHaul.profile,
+    dive: {
+      ...dive,
+      banked: fromBanked.banked,
+      haul: fromHaul.banked,
+      used: [...dive.used, alcove.id],
+    },
+  };
+  const find = h.stats.magicFind;
+  refreshWorldHero(
+    registry,
+    world,
+    profileStats(registry, next),
+    heroChains(registry, next.equipped, next.pair),
+  );
+  world.loot.find += h.stats.magicFind - find;
+  return { ...res, profile: next };
 }

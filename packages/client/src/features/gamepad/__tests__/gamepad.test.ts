@@ -570,3 +570,17 @@ describe('the hub claims the input lock for the pad on a change, not a steady st
     expect(device()).toBe('gamepad');
   });
 });
+
+describe('interact', () => {
+  it('A interacts by default; a rebound interact follows its button', () => {
+    const prev = readPad(fakePad());
+    const act = (held: number[], cfg = DEFAULT_CONTROLS) => {
+      const next = readPad(fakePad(held));
+      return padToArena(next, edges(prev, next), cfg);
+    };
+    expect(act([0]).interact).toBe(true);
+    expect(act([1]).interact).toBe(false);
+    const onX = bindPad(DEFAULT_CONTROLS, 'interact', 'x');
+    expect([act([0], onX).interact, act([2], onX).interact]).toEqual([false, true]);
+  });
+});

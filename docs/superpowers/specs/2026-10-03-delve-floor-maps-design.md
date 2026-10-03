@@ -120,6 +120,7 @@ interface Interactable { id: string /* `${depth}:${roomId}` */; kind: 'chest' | 
 - **Leash:**
   - **Trigger:** a monster farther than `ai.leashRadius` from its room's centre for more than `ai.leashSeconds` turns home along its room's `homeField`.
   - **On arrival:** it heals to full and sleeps again (`aggro` and `aggroAt` reset, so a boss's enrage timer restarts).
+  - **Hit on the way:** a monster walking home that is hit turns back, its leash counted afresh.
   - **Open layout:** there is no leash.
 - **Spatial hash:** a uniform-grid spatial hash (`arpg/spatial.ts`) replaces all-pairs separation and linear nearest-foe scans.
 
@@ -165,7 +166,7 @@ interface Interactable { id: string /* `${depth}:${roomId}` */; kind: 'chest' | 
   - Find is added to `world.loot.find`.
   - A potion refill sets `hero.potions` to the max.
   - Dive buffs go to `world.pending.diveBuffs` → `DiveState.diveBuffs`, and are applied when each floor's world is built.
-- **Stats:** a pure `applyBuffs(stats: HeroStats, buffs): HeroStats` applies buffs over final stats. `HeroEntity.baseStats` keeps the stats before floor buffs. `worldStats(registry, profile, world)` = `applyBuffs(applyBuffs(profileStats, diveBuffs), world.hero.floorBuffs)` is used by `beginFloor`, `takeAlcove` and the client's loadout refresh, so a profile change mid-floor (a bank, the alcove) never wipes the buffs. In the sim, `applyShrine` uses `applyBuffs` directly (no profile).
+- **Stats:** a pure `applyBuffs(stats: HeroStats, buffs): HeroStats` applies buffs over final stats. `HeroEntity.baseStats` keeps the stats before floor buffs. `createHeroEntity` and `refreshWorldHero` take the gear's stats (`profileStats`) and put the dive's and then the floor's blessings back on (`applyBuffs`), so a profile change mid-floor (a bank, the alcove) never wipes the buffs. In the sim, `applyShrine` uses `applyBuffs` directly (no profile).
 - **One use per dive** (`DiveState.used`).
 
 **Anvil alcove:**
@@ -174,7 +175,7 @@ interface Interactable { id: string /* `${depth}:${roomId}` */; kind: 'chest' | 
 - **Taking one:** `takeAlcove(registry, profile, world, action)` (`delve/stops.ts`).
   - Valid while the dive is `'fighting'`.
   - It banks the world first, then runs the op with the lock lifted, like `takeStop`. Payment comes from `dive.banked` and `dive.haul`, then the stockpile.
-  - It marks the alcove used (in `DiveState.used` and on the world's interactable) and calls `refreshWorldHero` with `worldStats`.
+  - It marks the alcove used (in `DiveState.used` and on the world's interactable) and calls `refreshWorldHero` with `profileStats` (the blessings go back on there).
 - **Pausing:** the client pauses the arena while the dialog is open; the bot calls `takeAlcove` directly.
 - **One use per dive.**
 
@@ -308,7 +309,7 @@ The client redraws the minimap's fog layer only when `fogVersion` changes; the f
 
 | Phase | Area | Owns |
 |---|---|---|
-| **A · Contract** | One area | <ul><li>**Types:** `types/floor-map.ts`; new fields with initialisers on `ArpgWorld` (`map`, `fog`, `fogVersion`, `exited`, flow fields), `MonsterEntity.roomId`, `Drop.roomId`, `HeroEntity.floorBuffs`, `WorldPending.used` / `diveBuffs`, `DiveState.used` / `diveBuffs` (save v10 + reset), `HeroEntity.baseStats`, `applyBuffs` and `worldStats` (implemented); `FloorOptions.layout` / `used` / `diveBuffs` and their pass-through in `beginFloor` (so B1 and B3 never edit `beginFloor`).</li><li>**Inputs and events:** `ArpgInput.interact`; the events (`interactPrompt`, `exitRequest`, `alcoveOpen`, `seal`, `unseal`, `roomCleared`, `exitHint`).</li><li>**Data:** all blocks and schemas with starter content.</li><li>**Grid core, implemented:** `arpg/grid.ts` (`moveCircle`, `lineOfSight`, walkable / snap helpers) and `openRoom` with `FloorOptions.layout` (default open). Every rectangle clamp is swapped for the grid helpers (behaviour identical on `openRoom`; suites green).</li><li>**Typed stubs** in their owners' files: `generateFloor`, `flowField`, `flowTick`, `leashTick`, `sealTick`, `fogTick`, `interactTick`, `applyShrine`, `alcoveOffers`, `takeAlcove`, `exitFloor`, `hudMapOf`, `onMonsterKilled` (called from `killMonster`). `tick()` calls the tick stubs (no-ops on open).</li><li>**Controls:** the `interact` action with the no-clash rule.</li></ul> |
+| **A · Contract** | One area | <ul><li>**Types:** `types/floor-map.ts`; new fields with initialisers on `ArpgWorld` (`map`, `fog`, `fogVersion`, `exited`, flow fields), `MonsterEntity.roomId`, `Drop.roomId`, `HeroEntity.floorBuffs`, `WorldPending.used` / `diveBuffs`, `DiveState.used` / `diveBuffs` (save v10 + reset), `HeroEntity.baseStats` and `applyBuffs` (implemented); `FloorOptions.layout` / `used` / `diveBuffs` and their pass-through in `beginFloor` (so B1 and B3 never edit `beginFloor`).</li><li>**Inputs and events:** `ArpgInput.interact`; the events (`interactPrompt`, `exitRequest`, `alcoveOpen`, `seal`, `unseal`, `roomCleared`, `exitHint`).</li><li>**Data:** all blocks and schemas with starter content.</li><li>**Grid core, implemented:** `arpg/grid.ts` (`moveCircle`, `lineOfSight`, walkable / snap helpers) and `openRoom` with `FloorOptions.layout` (default open). Every rectangle clamp is swapped for the grid helpers (behaviour identical on `openRoom`; suites green).</li><li>**Typed stubs** in their owners' files: `generateFloor`, `flowField`, `flowTick`, `leashTick`, `sealTick`, `fogTick`, `interactTick`, `applyShrine`, `alcoveOffers`, `takeAlcove`, `exitFloor`, `hudMapOf`, `onMonsterKilled` (called from `killMonster`). `tick()` calls the tick stubs (no-ops on open).</li><li>**Controls:** the `interact` action with the no-clash rule.</li></ul> |
 | **B · Engine** (B1, B2, B3 in parallel; B4 after) | **B1** generator | `arpg/layout/*`; `arpg/world.ts` (spawning per room, `roomId`, home fields, the generated path) |
 | | **B2** physics and AI | LOS at every hit site (`impact.ts`, `forms.ts`, `targeting.ts`, `basic.ts`, `combat.ts nearby()` / mastery / Brand, projectiles and monster attacks in `step.ts`); `arpg/flow.ts` (`flowField`, `flowTick`, `leashTick`); monster movement in `step.ts`; `arpg/spatial.ts`; drops' `roomId` and walkable snapping at their spawn sites (`combat.ts` / `material-drops.ts` / `rune-drops.ts`) |
 | | **B3** floor flow | `arpg/interact.ts` (`interactTick`, chest, `applyShrine`, gate, `exitFloor`, `onMonsterKilled` with the room vacuum and `roomCleared`); `delve/stops.ts` (`alcoveOffers`, `takeAlcove`); `arpg/seal.ts` (`sealTick`); `arpg/fog.ts` (`fogTick`, `hudMapOf`); `delve/dive.ts` (`completeFloor` on exit, `clearFloor` with `roomsCleared`, `DiveState.used` / `diveBuffs`); the quest / contract `minRoomsCleared` |

@@ -84,6 +84,15 @@ describe('FloorColumn', () => {
     }
   });
 
+  it('counts the rooms explored on a generated floor, not its foes (it ends at the exit)', () => {
+    const floor = { explored: 2, total: 6 } as NonNullable<HudMap['floor']>;
+    const { rerender } = render(<FloorColumn {...props} />);
+    expect(screen.queryByTestId('rooms-explored')).toBeNull();
+    rerender(<FloorColumn {...props} hud={{ ...HUD, map: { ...MAP, floor } }} />);
+    expect(screen.getByTestId('rooms-explored')).toHaveTextContent('Rooms explored 2 / 6');
+    expect(screen.queryByTestId('monsters-left')).toBeNull();
+  });
+
   it('shows no foe count until the arena reports', () => {
     render(<FloorColumn {...props} hud={null} />);
     expect(screen.queryByTestId('monsters-left')).toBeNull();

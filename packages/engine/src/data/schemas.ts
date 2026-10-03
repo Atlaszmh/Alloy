@@ -682,6 +682,7 @@ export const ObjectiveSchema = z
         noPotion: z.boolean(),
         noDamage: z.boolean(),
         minDepth: z.number().int().min(1),
+        minRoomsCleared: z.number().int().min(1),
         reaction: ReactionIdSchema,
         pair: z.literal(true),
         minRarity: RaritySchema,
@@ -791,6 +792,7 @@ const ContractTemplateSchema = z
         minRarity: z.literal('owned'),
         noPotion: z.literal(true),
         noDamage: z.literal(true),
+        minRoomsCleared: z.number().int().min(1),
       })
       .partial()
       .strict()
@@ -835,6 +837,169 @@ export const QuestsBalanceSchema = z.object({
     essenceChance: z.number().min(0).max(1),
     countScale: z.record(ObjectiveTypeSchema, z.number().min(0)),
   }),
+});
+
+// --- Floor maps (see the floor maps spec) ---
+
+/** A shrine's blessing: at least one part, and nothing else. */
+const ShrineEffectSchema = z
+  .object({
+    damage: z.number().positive().optional(),
+    lifeRegen: z.number().positive().optional(),
+    manaRegen: z.number().positive().optional(),
+    find: z.number().positive().optional(),
+    potions: z.literal(true).optional(),
+  })
+  .strict()
+  .refine((e) => Object.keys(e).length > 0, 'a shrine does something');
+
+/** A blessing on the hero (`HeroEntity.floorBuffs`, `DiveState.diveBuffs`). */
+export const BuffSchema = z.object({ shrine: z.string().min(1), effect: ShrineEffectSchema });
+
+/** `shrines.json`: a potion refill is a floor shrine (it acts at once). */
+export const ShrinesDataSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      text: z.string().min(1),
+      effect: ShrineEffectSchema,
+      duration: z.enum(['floor', 'dive']),
+      weight: z.number().positive(),
+    }),
+  )
+  .min(1)
+  .refine(distinctIds, 'shrine ids differ')
+  .refine(
+    (ss) => ss.every((s) => s.duration === 'floor' || !s.effect.potions),
+    'a refill lasts the floor',
+  );
+
+/** A room template: a mask is `h` rows of `w` cells, each '.', '#' or '%'. */
+const RoomTemplateSchema = z
+  .object({
+    id: z.string().min(1),
+    w: z.number().int().min(4),
+    h: z.number().int().min(4),
+    masks: z.array(z.array(z.string())),
+  })
+  .refine(
+    (t) =>
+      t.masks.every(
+        (m) => m.length === t.h && m.every((row) => row.length === t.w && /^[.#%]+$/.test(row)),
+      ),
+    'a mask is h rows of w cells',
+  )
+  .refine(
+    (t) => t.masks.every((m) => wideMask(m, t.w, t.h)),
+    'a mask keeps 3 open cells to each wall and between its obstacles',
+  );
+
+/**
+ * Every passage through a mask 3 cells wide (a large foe's 3×3, see `arpg/flow.ts`): no
+ * blocked cell within 2 of the room's edge, and blocked cells of different 8-connected
+ * obstacles at least 4 apart (Chebyshev).
+ */
+function wideMask(rows: string[], w: number, h: number): boolean {
+  const cells: { x: number; y: number }[] = [];
+  rows.forEach((row, y) => [...row].forEach((ch, x) => ch !== '.' && cells.push({ x, y })));
+  if (cells.some((c) => c.x < 3 || c.y < 3 || c.x > w - 4 || c.y > h - 4)) return false;
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }, d: number) =>
+    Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= d;
+  // Label the obstacles by flood fill over 8-neighbours.
+  const label = cells.map(() => -1);
+  cells.forEach((_, s) => {
+    if (label[s] !== -1) return;
+    label[s] = s;
+    for (const queue = [s]; queue.length > 0; ) {
+      const a = queue.pop()!;
+      cells.forEach((c, b) => {
+        if (label[b] === -1 && near(cells[a], c, 1)) {
+          label[b] = s;
+          queue.push(b);
+        }
+      });
+    }
+  });
+  return cells.every((a, i) => cells.every((b, j) => label[i] === label[j] || !near(a, b, 3)));
+}
+
+/** `layouts.json` (the generator checks the sizes against `delve.layout`'s coarse grid). */
+export const LayoutsDataSchema = z.object({
+  rooms: z
+    .record(z.string(), z.array(RoomTemplateSchema).min(1))
+    .refine((r) => 'default' in r, 'a default room list'),
+  boss: RoomTemplateSchema,
+  props: z.object({
+    chest: z.number().positive(),
+    shrine: z.number().positive(),
+    alcove_anvil: z.number().positive(),
+    exit_gate: z.number().positive(),
+  }),
+});
+
+/** `balance.json → delve.layout`. */
+export const LayoutBalanceSchema = z
+  .object({
+    coarseCell: z.number().int().positive(),
+    coarseCols: z.number().int().positive(),
+    coarseRows: z.number().int().positive(),
+    rooms: z
+      .object({
+        base: z.number().int().min(2),
+        perDepth: z.number().min(0),
+        max: z.number().int().min(2),
+      })
+      .refine((r) => r.base <= r.max, 'base ≤ max'),
+    hallWidth: z.number().int().positive(),
+    minWall: z.number().int().positive(),
+    loops: z
+      .tuple([z.number().int().min(0), z.number().int().min(0)])
+      .refine(([lo, hi]) => lo <= hi, 'loops run low to high'),
+    kindWeights: z
+      .array(
+        z.object({
+          fromDepth: z.number().int().min(1),
+          weights: z.object({
+            combat: z.number().min(0),
+            den: z.number().min(0),
+            vault: z.number().min(0),
+            sanctum: z.number().min(0),
+            alcove: z.number().min(0),
+          }),
+        }),
+      )
+      .min(1)
+      .refine(
+        (bs) =>
+          bs[0].fromDepth === 1 && bs.every((b, i) => i === 0 || b.fromDepth > bs[i - 1].fromDepth),
+        'bands from depth 1, rising',
+      ),
+    alcoveMax: z.number().int().min(0),
+    deadEndWeight: z.number().min(0),
+    minCombatRooms: z.number().int().min(0),
+    vaultGuardChance: z.number().min(0).max(1),
+    pillarChance: z.number().min(0).max(1),
+    minPackDistance: z.number().positive(),
+    packsPerRoom: z.number().int().positive(),
+    generatedDives: z.boolean(),
+  })
+  .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid');
+
+/** `balance.json → delve.ai`. */
+export const AiBalanceSchema = z.object({
+  flowEvery: z.number().positive(),
+  flowRadius: z.number().int().positive(),
+  directRange: z.number().min(0),
+  leashRadius: z.number().positive(),
+  leashSeconds: z.number().min(0),
+  sealGrace: z.number().min(0),
+  roomVacuum: z.boolean(),
+  sightRadius: z.number().positive(),
+  fogEvery: z.number().positive(),
+  exitHintSeconds: z.number().min(0),
+  interactRadius: z.number().positive(),
+  shrineChannel: z.number().min(0),
 });
 
 /** A count and a power (`split`, `extraShots`). */
@@ -1064,6 +1229,13 @@ export const DropsBalanceSchema = z.object({
     essenceChance: z.number().min(0).max(1),
     patternChance: z.number().min(0).max(1),
   }),
+  vault: z.object({
+    flux: DropEntrySchema,
+    shards: DropEntrySchema,
+    shardTierUp: z.number().int().min(0),
+    essenceChance: z.number().min(0).max(1),
+  }),
+  den: z.object({ gearBonus: z.number().min(0).max(1) }),
   scrapByKind: perFoe(z.number().min(0)),
   scrapPickups: perFoe(z.number().int().min(1)),
   metalUpChance: z.number().min(0).max(1),
@@ -1447,12 +1619,14 @@ const DelveBalanceSchema = z.object({
   crafting: CraftingBalanceSchema,
   drops: DropsBalanceSchema,
   quests: QuestsBalanceSchema,
+  layout: LayoutBalanceSchema,
+  ai: AiBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
-    width: z.number().positive(),
-    height: z.number().positive(),
+    // The open room's grid: whole cells.
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
     packSpacing: z.number().positive(),
-    minPackDistance: z.number().positive(),
   }),
 });
 

@@ -1,3 +1,4 @@
+import type { Rect, RoomKind } from '@alloy/engine';
 import type { PixelTheme, RGB } from './themes';
 
 /**
@@ -82,7 +83,40 @@ export interface PixelWorldOptions {
   fireSpread?: number;
   /** Fuel burned per step by a burning cell (higher = shorter fires). */
   burnRate?: number;
+  /** A generated floor's map: the floor is built from it (without one, today's open arena). */
+  plan?: MapPlan;
 }
+
+/**
+ * A floor map as the pixel floor builds it (plain data: it crosses to the
+ * worker). Map cell (mx, my) covers floor cells from (margin + mx × ppu,
+ * margin + my × ppu), `ppu` on a side.
+ */
+export interface MapPlan {
+  /** Map size in map cells (units). */
+  width: number;
+  height: number;
+  /** The map's cells, row by row: 0 floor, 1 wall, 2 door. */
+  cells: Uint8Array;
+  rooms: { kind: RoomKind; rect: Rect }[];
+  /** Floor cells per map cell. */
+  ppu: number;
+}
+
+/** Simulation chunks are CHUNK × CHUNK cells; an asleep chunk's fluid, fields and fire hold still. */
+export const CHUNK = 32;
+
+/** Rooms paved in stone (the sealed arenas and the special rooms); the rest are wild ground. */
+const PAVED: ReadonlySet<RoomKind> = new Set(['den', 'boss', 'vault', 'sanctum', 'alcove']);
+/** Paved rooms with a rune circle at their centre. */
+const RUNED: ReadonlySet<RoomKind> = new Set(['sanctum', 'boss']);
+
+/** A room's dressing, in floor cells: paved, a river running through it, a pool, or wild ground. */
+type RoomLook =
+  | { kind: 'paved'; x0: number; y0: number }
+  | { kind: 'river'; x: (y: number) => number }
+  | { kind: 'pool'; x: number; y: number; rx: number; ry: number }
+  | { kind: 'wild' };
 
 export const MAX_PARTICLES = 7000;
 const MAX_RIPPLES = 140;
@@ -171,8 +205,26 @@ export class PixelWorld {
   readonly tone: Uint8Array;
   readonly noise: Float32Array;
   readonly rubble: Uint32Array;
+  /** How many cells into the cliffs (0 on open ground): the render darkens the deep rock. */
+  readonly edge: Uint8Array;
+  /** The map this floor was built from, or null (the open arena). */
+  readonly plan: MapPlan | null;
   /** Cells where the river enters; fluid is added here every step. */
   readonly springs: number[] = [];
+  /** Cells where fluid drains away every step: the arena's bottom rows, or each river's mouth. */
+  readonly drains: number[] = [];
+  /** Chunks across and down. */
+  readonly chunksW: number;
+  readonly chunksH: number;
+  /** 1 where a chunk simulates: all of them until `setActive`. */
+  readonly awake: Uint8Array;
+  /** The awake cells' indices, in order: `active` is the start of `order`. */
+  private readonly order: Int32Array;
+  private active: Int32Array;
+  /** The chunk-aligned rectangle `setActive` last woke round. */
+  private woke = '';
+  /** The awake chunks' bounds (cells, ends exclusive): the weather falls there. */
+  box: { x0: number; y0: number; x1: number; y1: number };
 
   readonly pT = new Uint8Array(MAX_PARTICLES);
   readonly pX = new Float32Array(MAX_PARTICLES);
@@ -237,7 +289,16 @@ export class PixelWorld {
     this.tone = new Uint8Array(n);
     this.noise = new Float32Array(n);
     this.rubble = new Uint32Array(n);
-    this.generate();
+    this.edge = new Uint8Array(n);
+    this.plan = opts.plan ?? null;
+    this.chunksW = Math.ceil(this.width / CHUNK);
+    this.chunksH = Math.ceil(this.height / CHUNK);
+    this.awake = new Uint8Array(this.chunksW * this.chunksH).fill(1);
+    this.order = new Int32Array(n).map((_, i) => i);
+    this.active = this.order;
+    this.box = { x0: 0, y0: 0, x1: this.width, y1: this.height };
+    if (this.plan) this.generatePlan(this.plan);
+    else this.generate();
   }
 
   get isLava(): boolean {
@@ -306,8 +367,11 @@ export class PixelWorld {
 
     for (let y = 0; y < H; y++) {
       const rxAtY = riverX(y);
+      const ey = y < M ? M - y : y >= H - M ? y - (H - M - 1) : 0;
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
+        const ex = x < M ? M - x : x >= W - M ? x - (W - M - 1) : 0;
+        this.edge[i] = ex > ey ? ex : ey;
         this.noise[i] = hash2(x, y, this.seed);
         const base = 0.36 * (1 - y / H);
         let hh = base + (nz(x / 15, y / 15) - 0.5) * 0.05;
@@ -373,10 +437,181 @@ export class PixelWorld {
     const sx = Math.round(riverX(1));
     for (let dx = -Math.floor(rw / 2); dx <= Math.floor(rw / 2); dx++)
       this.springs.push(W + sx + dx);
+    // …and it drains off the bottom edge.
+    for (let i = this.size - W * 2; i < this.size; i++) this.drains.push(i);
 
-    this.placeProps(rng, nz);
+    this.placeProps(rng, nz, [this.plaza]);
+    this.settle();
+    this.seedMotes(rng);
+  }
 
-    // Let the river settle into its bed before the first frame.
+  /**
+   * A generated floor from its map: blocked cells become the biome's cliffs
+   * (pillars and rubble too), halls worn paths, and each room is dressed: the
+   * sealed arenas and special rooms paved (a rune circle in a sanctum and the
+   * boss's room), the rest wild ground with a river running through, a pool,
+   * or neither.
+   */
+  private generatePlan(plan: MapPlan): void {
+    const { width: W, height: H, margin: M, theme: th } = this;
+    const P = plan.ppu;
+    const rng = mulberry32(this.seed);
+    const ox = rng() * 1000;
+    const oy = rng() * 1000;
+    const nz = (x: number, y: number) => fbm(x + ox, y + oy);
+    const grassThr = 0.5 + (0.5 - th.grassCover) * 0.36;
+    const bushThr = 0.5 + (0.5 - th.bushCover) * 0.36;
+    /** The map cell a floor cell lies in, or −1 outside the map. */
+    const mapCell = (x: number, y: number) => {
+      const mx = Math.floor((x - M) / P);
+      const my = Math.floor((y - M) / P);
+      return mx < 0 || my < 0 || mx >= plan.width || my >= plan.height ? -1 : my * plan.width + mx;
+    };
+    const roomOf = new Int16Array(plan.width * plan.height).fill(-1);
+    plan.rooms.forEach(({ rect: r }, k) => {
+      for (let y = r.y; y < r.y + r.h; y++)
+        for (let x = r.x; x < r.x + r.w; x++) roomOf[y * plan.width + x] = k;
+    });
+
+    // How deep each cell lies in rock: 0 on open ground, then the chessboard distance to it.
+    const edge = this.edge;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const c = mapCell(x, y);
+        edge[y * W + x] = c < 0 || plan.cells[c] === 1 ? 255 : 0;
+      }
+    const relax = (i: number, j: number) => {
+      if (edge[j] + 1 < edge[i]) edge[i] = edge[j] + 1;
+    };
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (x > 0) relax(i, i - 1);
+        if (y > 0) {
+          relax(i, i - W);
+          if (x > 0) relax(i, i - W - 1);
+          if (x < W - 1) relax(i, i - W + 1);
+        }
+      }
+    for (let y = H - 1; y >= 0; y--)
+      for (let x = W - 1; x >= 0; x--) {
+        const i = y * W + x;
+        if (x < W - 1) relax(i, i + 1);
+        if (y < H - 1) {
+          relax(i, i + W);
+          if (x < W - 1) relax(i, i + W + 1);
+          if (x > 0) relax(i, i + W - 1);
+        }
+      }
+
+    const rw = th.riverWidth;
+    const circles: { x: number; y: number }[] = [];
+    const looks: RoomLook[] = plan.rooms.map(({ kind, rect }) => {
+      const x0 = M + rect.x * P;
+      const y0 = M + rect.y * P;
+      const w = rect.w * P;
+      const h = rect.h * P;
+      if (PAVED.has(kind)) {
+        if (RUNED.has(kind)) circles.push({ x: Math.round(x0 + w / 2), y: Math.round(y0 + h / 2) });
+        return { kind: 'paved', x0, y0 };
+      }
+      const roll = rng();
+      if (roll < 0.4 && w >= rw * 2 + 16) {
+        const cx = x0 + w / 2;
+        const amp = 2 + rng() * (w / 2 - rw - 8);
+        const per = 8 + rng() * 6;
+        const ph = rng() * Math.PI * 2;
+        const x = (y: number) =>
+          clamp(cx + amp * Math.sin(y / per + ph), x0 + rw + 4, x0 + w - rw - 4);
+        // It wells up at the room's top wall, and its bottom rows drain.
+        for (let dx = -Math.floor(rw / 2); dx <= Math.floor(rw / 2); dx++)
+          this.springs.push(y0 * W + Math.round(x(y0)) + dx);
+        for (let y = y0 + h - 2; y < y0 + h; y++)
+          for (let dx = 0; dx < w; dx++) this.drains.push(y * W + x0 + dx);
+        return { kind: 'river', x };
+      }
+      if (roll < 0.75 && th.pools > 0)
+        return {
+          kind: 'pool',
+          x: x0 + w * (0.3 + rng() * 0.4),
+          y: y0 + h * (0.3 + rng() * 0.4),
+          rx: Math.min(18, w / 4),
+          ry: Math.min(14, h / 4),
+        };
+      return { kind: 'wild' };
+    });
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        this.noise[i] = hash2(x, y, this.seed);
+        const base = 0.36 * (1 - y / H);
+        let hh = base + (nz(x / 15, y / 15) - 0.5) * 0.05;
+        const c = mapCell(x, y);
+        const look =
+          c < 0 || plan.cells[c] === 1 ? null : roomOf[c] < 0 ? 'hall' : looks[roomOf[c]];
+        const wild = () =>
+          nz(x / 18 + 20, y / 18 + 7) > grassThr
+            ? nz(x / 9 + 40, y / 9 + 13) > bushThr
+              ? MAT.BUSH
+              : MAT.GRASS
+            : MAT.SOIL;
+        let m: number;
+        let f = 0;
+        if (look === null) {
+          m = MAT.WALL;
+          hh = 0.6 + nz(x / 8, y / 8) * 0.12;
+          this.tone[i] = Math.min(2, (nz(x / 5 + 3, y / 5 + 9) * 3.2) | 0);
+          // Foliage spills over the cliff tops, as round the open arena.
+          const e = edge[i];
+          if (th.grassCover > 0.3 && e < 5 && nz(x / 4 + 11, y / 4 + 5) > 0.5 + (e - 1) * 0.06) {
+            m = MAT.BUSH;
+            this.detail[i] |= DETAIL.OVERHANG;
+          }
+        } else if (look === 'hall') {
+          // A worn path: bare ground, a step up from the rooms so their water stays in them.
+          m = MAT.SOIL;
+          hh += 0.1;
+        } else if (look.kind === 'paved') {
+          m = MAT.STONE;
+          hh = base + 0.018;
+          const fx = x - look.x0;
+          const fy = y - look.y0;
+          const row = Math.floor(fy / 6);
+          const off = (row % 2) * 4;
+          const col = Math.floor((fx + off) / 9);
+          if (fy % 6 === 0 || (fx + off) % 9 === 0) this.detail[i] |= DETAIL.MORTAR;
+          if (nz(x / 4 + 90, y / 4 + 30) > 0.62) this.detail[i] |= DETAIL.MOSS;
+          this.tone[i] = (hash2(col, row, this.seed + 1) * 255) | 0;
+        } else if (look.kind === 'river') {
+          const dr = Math.abs(x - look.x(y));
+          hh -= 0.06 * Math.max(0, 1 - dr / (rw + 3));
+          m = dr < rw + 2 ? MAT.BANK : wild();
+          if (dr < rw) f = 0.018 + 0.012 * (1 - dr / rw);
+        } else if (look.kind === 'pool') {
+          const pd = Math.hypot((x - look.x) / look.rx, (y - look.y) / look.ry);
+          hh -= 0.1 * Math.max(0, 1 - pd);
+          m = pd < 1.18 ? MAT.BANK : wild();
+          if (pd < 0.9) f = 0.1 * (1 - pd) - 0.012;
+        } else m = wild();
+        if (m !== MAT.WALL && m !== MAT.STONE && !(this.detail[i] & DETAIL.OVERHANG))
+          this.tone[i] = Math.min(3, (nz(x / 3 + 7, y / 3 + 3) * 4) | 0);
+        if (m === MAT.BUSH && !(this.detail[i] & DETAIL.OVERHANG)) hh += 0.014;
+        this.mat[i] = m;
+        this.terrain[i] = hh;
+        this.fuel[i] =
+          m === MAT.GRASS ? 150 + ((this.noise[i] * 90) | 0) : m === MAT.BUSH ? 255 : 0;
+        if (f > 0) this.fluid[i] = f;
+      }
+    }
+
+    this.placeProps(rng, nz, circles);
+    this.settle();
+    this.seedMotes(rng);
+  }
+
+  /** Let the rivers settle into their beds before the first frame. */
+  private settle(): void {
     for (let s = 0; s < 160; s++) {
       this.feedSprings();
       this.flowFluid(this.isLava ? 0.08 : 0.24);
@@ -385,59 +620,65 @@ export class PixelWorld {
     }
     this.flow.fill(0);
     this.wet.fill(0);
+  }
 
-    if (th.motes) {
-      for (let k = 0; k < 36; k++) {
-        this.spawn(
-          PART.MOTE,
-          M + rng() * (W - 2 * M),
-          M + rng() * (H - 2 * M),
-          2 + rng() * 5,
-          (rng() - 0.5) * 0.2,
-          (rng() - 0.5) * 0.2,
-          0,
-          1e9,
-          0,
-        );
-      }
+  private seedMotes(rng: () => number): void {
+    const { width: W, height: H, margin: M } = this;
+    if (!this.theme.motes) return;
+    for (let k = 0; k < 36; k++) {
+      this.spawn(
+        PART.MOTE,
+        M + rng() * (W - 2 * M),
+        M + rng() * (H - 2 * M),
+        2 + rng() * 5,
+        (rng() - 0.5) * 0.2,
+        (rng() - 0.5) * 0.2,
+        0,
+        1e9,
+        0,
+      );
     }
   }
 
-  private placeProps(rng: () => number, nz: (x: number, y: number) => number): void {
+  private placeProps(
+    rng: () => number,
+    nz: (x: number, y: number) => number,
+    circles: readonly { x: number; y: number }[],
+  ): void {
     const { width: W, height: H, margin: M, theme: th } = this;
-    // Rune circle and glyph in the plaza.
-    const { x: cx, y: cy } = this.plaza;
-    for (let dy = -9; dy <= 9; dy++) {
-      for (let dx = -9; dx <= 9; dx++) {
-        const x = cx + dx;
-        const y = cy + dy;
-        const i = y * W + x;
-        if (!this.inBounds(x, y) || this.mat[i] !== MAT.STONE) continue;
-        const d = Math.hypot(dx, dy);
-        const a = Math.atan2(dy, dx);
-        const ring = Math.abs(d - 7.5) < 0.7 && Math.sin(a * 8) > -0.55;
-        // Inner triangle: distance to each edge of an equilateral triangle of radius 5.
-        let tri = false;
-        for (let k = 0; k < 3; k++) {
-          const a0 = -Math.PI / 2 + (k * Math.PI * 2) / 3;
-          const a1 = a0 + (Math.PI * 2) / 3;
-          const x0 = Math.cos(a0) * 5;
-          const y0 = Math.sin(a0) * 5;
-          const x1 = Math.cos(a1) * 5;
-          const y1 = Math.sin(a1) * 5;
-          const t = clamp(
-            ((dx - x0) * (x1 - x0) + (dy - y0) * (y1 - y0)) / ((x1 - x0) ** 2 + (y1 - y0) ** 2),
-            0,
-            1,
-          );
-          if (Math.hypot(dx - (x0 + t * (x1 - x0)), dy - (y0 + t * (y1 - y0))) < 0.55) tri = true;
-        }
-        if (ring || tri || d < 0.8) {
-          this.prop[i] = PROP.RUNE;
-          this.detail[i] &= ~DETAIL.MOSS;
+    // A rune circle and glyph in each plaza.
+    for (const { x: cx, y: cy } of circles)
+      for (let dy = -9; dy <= 9; dy++) {
+        for (let dx = -9; dx <= 9; dx++) {
+          const x = cx + dx;
+          const y = cy + dy;
+          const i = y * W + x;
+          if (!this.inBounds(x, y) || this.mat[i] !== MAT.STONE) continue;
+          const d = Math.hypot(dx, dy);
+          const a = Math.atan2(dy, dx);
+          const ring = Math.abs(d - 7.5) < 0.7 && Math.sin(a * 8) > -0.55;
+          // Inner triangle: distance to each edge of an equilateral triangle of radius 5.
+          let tri = false;
+          for (let k = 0; k < 3; k++) {
+            const a0 = -Math.PI / 2 + (k * Math.PI * 2) / 3;
+            const a1 = a0 + (Math.PI * 2) / 3;
+            const x0 = Math.cos(a0) * 5;
+            const y0 = Math.sin(a0) * 5;
+            const x1 = Math.cos(a1) * 5;
+            const y1 = Math.sin(a1) * 5;
+            const t = clamp(
+              ((dx - x0) * (x1 - x0) + (dy - y0) * (y1 - y0)) / ((x1 - x0) ** 2 + (y1 - y0) ** 2),
+              0,
+              1,
+            );
+            if (Math.hypot(dx - (x0 + t * (x1 - x0)), dy - (y0 + t * (y1 - y0))) < 0.55) tri = true;
+          }
+          if (ring || tri || d < 0.8) {
+            this.prop[i] = PROP.RUNE;
+            this.detail[i] &= ~DETAIL.MOSS;
+          }
         }
       }
-    }
 
     const glowKind = th.prop === 'mushroom' ? PROP.MUSHROOM : PROP.CRYSTAL;
     for (let y = M; y < H - M; y++) {
@@ -473,18 +714,70 @@ export class PixelWorld {
         }
       }
     }
-    // Crystals studding the cliffs along the arena edge.
+    // Crystals studding the cliffs along the floor's edge.
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
         if (this.mat[i] !== MAT.WALL) continue;
-        const toEdge = Math.min(x - (M - 1), W - M - x, y - (M - 1), H - M - y);
-        if (toEdge > -4 && toEdge <= 0 && hash2(x, y, this.seed + 9) > 0.965) {
+        if (this.edge[i] < 5 && hash2(x, y, this.seed + 9) > 0.965) {
           this.prop[i] = PROP.CRYSTAL;
           this.propColor[i] = (hash2(y, x, this.seed) * th.propColors.length) | 0;
         }
       }
     }
+  }
+
+  /**
+   * Simulate only the chunks under the cells [x0, x1) × [y0, y1), and every
+   * room those chunks reach, whole (its river runs from its spring to its
+   * mouth); the rest sleep. A generated floor's view calls it every frame;
+   * the open arena stays awake.
+   */
+  setActive(x0: number, y0: number, x1: number, y1: number): void {
+    const { width: W, height: H, chunksW: CW, chunksH: CH, awake, margin: M, plan } = this;
+    const cx0 = Math.max(0, Math.floor(x0 / CHUNK));
+    const cy0 = Math.max(0, Math.floor(y0 / CHUNK));
+    const cx1 = Math.min(CW, Math.ceil(x1 / CHUNK));
+    const cy1 = Math.min(CH, Math.ceil(y1 / CHUNK));
+    const key = `${cx0},${cy0},${cx1},${cy1}`;
+    if (key === this.woke) return;
+    this.woke = key;
+    awake.fill(0);
+    /** Wake the chunks under cells [ax, bx) × [ay, by). */
+    const wake = (ax: number, ay: number, bx: number, by: number) => {
+      for (let cy = Math.floor(ay / CHUNK); cy < Math.min(CH, Math.ceil(by / CHUNK)); cy++)
+        for (let cx = Math.floor(ax / CHUNK); cx < Math.min(CW, Math.ceil(bx / CHUNK)); cx++)
+          awake[cy * CW + cx] = 1;
+    };
+    wake(cx0 * CHUNK, cy0 * CHUNK, cx1 * CHUNK, cy1 * CHUNK);
+    for (const { rect: r } of plan?.rooms ?? []) {
+      const [ax, ay] = [M + r.x * plan!.ppu, M + r.y * plan!.ppu];
+      const [bx, by] = [ax + r.w * plan!.ppu, ay + r.h * plan!.ppu];
+      if (ax < cx1 * CHUNK && bx > cx0 * CHUNK && ay < cy1 * CHUNK && by > cy0 * CHUNK)
+        wake(ax, ay, bx, by);
+    }
+    let n = 0;
+    const box = { x0: W, y0: H, x1: 0, y1: 0 };
+    for (let y = 0; y < H; y++) {
+      const row = ((y / CHUNK) | 0) * CW;
+      for (let cx = 0; cx < CW; cx++) {
+        if (!awake[row + cx]) continue;
+        const a = cx * CHUNK;
+        const b = Math.min(W, a + CHUNK);
+        for (let x = a; x < b; x++) this.order[n++] = y * W + x;
+        box.x0 = Math.min(box.x0, a);
+        box.x1 = Math.max(box.x1, b);
+        box.y0 = Math.min(box.y0, y);
+        box.y1 = y + 1;
+      }
+    }
+    this.active = this.order.subarray(0, n);
+    this.box = box;
+  }
+
+  private isAwake(i: number): boolean {
+    const W = this.width;
+    return this.awake[((i / W / CHUNK) | 0) * this.chunksW + (((i % W) / CHUNK) | 0)] === 1;
   }
 
   // ── Stepping ────────────────────────────────────────────────────────────
@@ -511,19 +804,25 @@ export class PixelWorld {
 
   private feedSprings(): void {
     const rate = this.isLava ? 0.012 : 0.022;
-    for (const s of this.springs) this.fluid[s] += rate;
+    // A room's river wells up no deeper than this, so it never climbs into the hall above.
+    const cap = this.plan ? 0.05 : Infinity;
+    for (const s of this.springs)
+      if (this.isAwake(s)) this.fluid[s] = Math.min(cap, this.fluid[s] + rate);
   }
 
   private drainEdges(): void {
-    const start = this.size - this.width * 2;
-    for (let i = start; i < this.size; i++) this.fluid[i] = 0;
+    for (const i of this.drains) this.fluid[i] = 0;
   }
 
   private flowFluid(rate: number): void {
-    const { width: W, size: N, terrain: h, fluid: w, dw, frost } = this;
-    dw.fill(0);
+    const { width: W, size: N, terrain: h, fluid: w, dw, frost, active } = this;
+    // Awake cells only (a cell clears its own as it wakes): the cost follows the view, not the map.
+    for (let k = 0; k < active.length; k++) dw[active[k]] = 0;
     const surf = (j: number) => (frost[j] > 0.5 && w[j] > 0.003 ? Infinity : h[j] + w[j]);
-    for (let i = 0; i < N; i++) {
+    // ponytail: water flowing into an asleep chunk is dropped (its dw is never applied); rooms
+    // wake whole, so only a hall or a clipped room loses any. Gate the edges if it ever shows.
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       const wi = w[i];
       if (wi < 1e-4) continue;
       if (frost[i] > 0.5) continue;
@@ -573,7 +872,8 @@ export class PixelWorld {
       dw[i] -= move;
       if (move > this.flow[i]) this.flow[i] = move;
     }
-    for (let i = 0; i < N; i++) {
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       const d = dw[i];
       if (d !== 0) {
         const v = w[i] + d;
@@ -601,7 +901,9 @@ export class PixelWorld {
     } = this;
     const lava = this.isLava;
     const snowing = this.weather && this.theme.weather === 'snow';
-    for (let i = 0; i < N; i++) {
+    const active = this.active;
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       let f = fluid[i];
       if (f > 0) {
         f -= f < 0.008 ? 0.00006 : 0.000012;
@@ -650,9 +952,10 @@ export class PixelWorld {
   }
 
   private stepFire(): void {
-    const { width: W, height: H, size: N, fire, fuel, fluid, mat, frost } = this;
+    const { width: W, height: H, fire, fuel, fluid, mat, frost, active } = this;
     const wind = this.wind;
-    for (let i = 0; i < N; i++) {
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       const f = fire[i];
       if (!f) continue;
       const x = i % W;
@@ -791,7 +1094,12 @@ export class PixelWorld {
   }
 
   private spawnWeather(): void {
-    const { width: W, height: H, margin: M, rand: r } = this;
+    // It falls round the awake chunks (all of the open arena).
+    const { x0: X, y0: Y } = this.box;
+    const W = this.box.x1 - X;
+    const H = this.box.y1 - Y;
+    const M = this.plan ? 0 : this.margin;
+    const r = this.rand;
     switch (this.theme.weather) {
       case 'rain':
       case 'storm': {
@@ -799,8 +1107,8 @@ export class PixelWorld {
         for (let k = 0; k < n; k++) {
           this.spawn(
             PART.RAIN,
-            r() * (W + 40) - 20 - this.wind * 30,
-            r() * H,
+            X + r() * (W + 40) - 20 - this.wind * 30,
+            Y + r() * H,
             30 + r() * 30,
             this.wind * 1.2,
             0.25,
@@ -820,8 +1128,8 @@ export class PixelWorld {
         for (let k = 0; k < 9; k++) {
           this.spawn(
             PART.SNOW,
-            r() * (W + 30) - 15 - this.wind * 20,
-            r() * H,
+            X + r() * (W + 30) - 15 - this.wind * 20,
+            Y + r() * H,
             25 + r() * 35,
             this.wind * 0.35,
             0.05,
@@ -833,8 +1141,8 @@ export class PixelWorld {
         break;
       case 'embers':
         for (let k = 0; k < (r() < 0.6 ? 1 : 0); k++) {
-          const x = M + r() * (W - 2 * M);
-          const y = M + r() * (H - 2 * M);
+          const x = X + M + r() * (W - 2 * M);
+          const y = Y + M + r() * (H - 2 * M);
           this.spawn(
             PART.EMBER,
             x,
@@ -855,8 +1163,8 @@ export class PixelWorld {
           if (mist < 160) {
             this.spawn(
               PART.MIST,
-              r() * W,
-              r() * H,
+              X + r() * W,
+              Y + r() * H,
               1 + r() * 3,
               this.wind * 0.12 + (r() - 0.5) * 0.05,
               (r() - 0.5) * 0.03,
@@ -975,7 +1283,7 @@ export class PixelWorld {
 
   private rainLands(i: number, x: number, y: number, fx: number, fy: number): void {
     const r = this.rand;
-    if (this.mat[i] === MAT.WALL) return;
+    if (this.mat[i] === MAT.WALL || !this.isAwake(i)) return;
     if (this.fluid[i] > 0.004) {
       if (this.isLava) {
         if (r() < 0.3) this.spawnSteam(x, y);

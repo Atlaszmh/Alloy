@@ -34,7 +34,7 @@ export interface SkillDockProps {
 const SLOT_ACTION = ['primary', 'defensive', 'ultimate'] as const;
 
 /** An action's key and pad button from the player's setup. */
-const bindingOf = (cfg: ControlsConfig, action: ControlAction): Binding => ({
+export const bindingOf = (cfg: ControlsConfig, action: ControlAction): Binding => ({
   key: cfg.keys[action] ?? undefined,
   pad: cfg.pad[action] ?? undefined,
 });

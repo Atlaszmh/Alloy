@@ -32,7 +32,8 @@ function tint(color: string, share = 0.18): string {
 
 /**
  * The HUD's right column: the floor panel (depth, biome, minimap, what the floor resists and is
- * weak to, foes left, the bounty), the tracked quests, and "Found this floor".
+ * weak to, a generated floor's rooms explored or the open room's foes left, the bounty), the
+ * tracked quests, and "Found this floor".
  */
 export function FloorColumn({
   dive,
@@ -75,8 +76,16 @@ export function FloorColumn({
             );
           })}
         </div>
+        {hud?.map.floor && (
+          <span className="text-[15px] text-[var(--k-text-3)]" data-testid="rooms-explored">
+            Rooms explored{' '}
+            <b className="k-disp text-[20px] text-[var(--k-text)]">
+              {hud.map.floor.explored} / {hud.map.floor.total}
+            </b>
+          </span>
+        )}
         <div className="flex items-baseline justify-between text-[15px] text-[var(--k-text-3)]">
-          {hud && (
+          {hud && !hud.map.floor && (
             <span data-testid="monsters-left">
               <b className="k-disp text-[20px] text-[var(--k-text)]">{hud.monstersLeft}</b> foes
               left

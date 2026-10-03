@@ -10,6 +10,7 @@ import type { ManaType } from '../../types/mana.js';
 import { hasMastery } from '../../delve/hero-stats.js';
 import { hitMonster, type HitOpts, type SimCtx } from '../combat.js';
 import { dirTo, dist } from '../geometry.js';
+import { clipSight, sees, shift, snapToWalkable } from '../grid.js';
 import { alive, nearestMonster, spawnProjectile } from './targeting.js';
 
 /** Pyroclasm's embers come off these forms' impacts. */
@@ -149,13 +150,13 @@ export function leaveZone(
   });
 }
 
-/** Drag foes toward a point (bosses don't budge, elites half as far). */
+/** Drag the foes a point sees toward it, never through a wall (bosses don't budge, elites half as far). */
 function pull(ctx: SimCtx, x: number, y: number, reach: number, strength: number): void {
+  const map = ctx.world.map;
   for (const m of alive(ctx)) {
-    if (m.kind === 'boss' || dist(x, y, m.x, m.y) > reach) continue;
+    if (m.kind === 'boss' || dist(x, y, m.x, m.y) > reach || !sees(map, { x, y }, m)) continue;
     const k = strength * (m.kind === 'elite' ? 0.5 : 1);
-    m.x += (x - m.x) * k;
-    m.y += (y - m.y) * k;
+    shift(map, m, m.radius, (x - m.x) * k, (y - m.y) * k);
   }
 }
 
@@ -211,7 +212,8 @@ export function knobHitOpts(k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'man
 /**
  * Where every offensive ability deals its damage: scatter, pull, the area
  * hit, chains, lingering ground and Pyroclasm's embers all happen here, so
- * any element or fusion works on any form. Returns the foes hit.
+ * any element or fusion works on any form. It hits the foes its centre sees.
+ * Returns the foes hit.
  */
 export function impact(
   ctx: SimCtx,
@@ -228,8 +230,9 @@ export function impact(
     const reach = k.scatter * radius * ctx.bal.abilities.scatterReach;
     const a = world.rng.next() * Math.PI * 2;
     const r = reach * (0.3 + 0.7 * world.rng.next());
-    x = Math.max(0, Math.min(world.width, x + Math.cos(a) * r));
-    y = Math.max(0, Math.min(world.height, y + Math.sin(a) * r));
+    // Where the first point sees.
+    const to = snapToWalkable(world.map, x + Math.cos(a) * r, y + Math.sin(a) * r);
+    ({ x, y } = clipSight(world.map, { x, y }, to));
     radius *= 1 + (world.rng.next() * 2 - 1) * 0.3 * k.scatter;
   }
   if (k.pull) pull(ctx, x, y, radius * 2.2, o.tick ? 0.15 : 0.75);
@@ -244,7 +247,9 @@ export function impact(
       infusion: o.tick ? null : (ab.elements[1] ?? null),
     });
 
-  const hits = alive(ctx).filter((m) => dist(x, y, m.x, m.y) <= radius + m.radius);
+  const hits = alive(ctx).filter(
+    (m) => dist(x, y, m.x, m.y) <= radius + m.radius && sees(world.map, { x, y }, m),
+  );
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
 

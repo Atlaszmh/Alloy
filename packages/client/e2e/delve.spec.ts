@@ -64,9 +64,9 @@ test.describe('Delve loot loop', () => {
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
     page,
   }) => {
-    // Only elites and bosses drop gear: seed 8's first floor holds two elites, and the bot's
-    // clear of it drops gear at any frame rate (pinned in the engine's delve-banking test).
-    await seedProfile(page, 8);
+    // Only elites and bosses drop gear: seed 39's first floor, played by the bot to the exit,
+    // drops gear at any frame rate (pinned in the engine's delve-banking test).
+    await seedProfile(page, 39);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
 
@@ -135,7 +135,7 @@ test.describe('Delve loot loop', () => {
     await door.locator('[data-testid^="door-"]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
-    await expect(page.getByTestId('monsters-left')).toContainText('foes');
+    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored');
   });
 
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
@@ -150,7 +150,9 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('dive-again').click();
     await expect(summary).toBeHidden();
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
-    await expect(page.getByTestId('monsters-left')).toContainText('foes', { timeout: ARENA_READY });
+    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored', {
+      timeout: ARENA_READY,
+    });
   });
 
   test("D11: materials ride the floor's haul, bank at the stop, and an abandon loses a share", async ({
@@ -324,5 +326,49 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('material-metal-rusty')).toContainText('Rusty bar ×4');
     await page.getByTestId('tab-loadout').click();
     await expect(page.getByTestId('tab-loadout')).toContainText('NEW 1');
+  });
+
+  test("D12: a generated floor's vault opens on the interact key, and the gate asks before leaving", async ({
+    page,
+  }) => {
+    // Seed 4's first floor holds a vault. The bot walks the floor, but stands at each
+    // interactable until C is pressed, and the gate and an alcove open their dialogs.
+    await seedProfile(page, 4, 'ask');
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+
+    const plaque = page.getByTestId('interact-plaque');
+    const confirm = page.getByTestId('exit-confirm');
+    const door = page.getByTestId('door-choice');
+    const used: string[] = [];
+    let asked = 0;
+    const deadline = Date.now() + 90_000;
+    while (!(await door.isVisible())) {
+      expect(Date.now()).toBeLessThan(deadline);
+      if (await confirm.isVisible()) {
+        await expect(confirm.getByTestId('exit-unexplored')).toHaveText(
+          /^(Every room explored\.|\d+ rooms? unexplored\.)$/,
+        );
+        if (asked++ === 0) {
+          // Back has the focus (a second A never leaves); Esc stays on the floor.
+          await expect(confirm.getByRole('button', { name: 'Back' })).toBeFocused();
+          await page.keyboard.press('Escape');
+          await expect(confirm).toBeHidden();
+        } else {
+          await confirm.getByTestId('exit-leave').click();
+        }
+      } else if (await page.getByTestId('alcove-dialog').isVisible()) {
+        await page.keyboard.press('Escape');
+      } else if (await plaque.isVisible()) {
+        const kind = (await plaque.getAttribute('data-interactable'))!;
+        if (kind === 'chest') await expect(plaque).toContainText('Open');
+        if (!used.includes(kind)) used.push(kind);
+        await page.keyboard.press('c');
+      }
+      await page.waitForTimeout(100);
+    }
+    expect(used).toContain('chest');
+    expect(asked).toBe(2);
+    await expect(door.getByRole('heading', { level: 1 })).toHaveText('Depth 1 cleared');
   });
 });

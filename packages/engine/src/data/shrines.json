@@ -1,0 +1,62 @@
+[
+  {
+    "id": "vigor",
+    "name": "Shrine of Vigor",
+    "text": "+20% damage for this floor",
+    "effect": {
+      "damage": 0.2
+    },
+    "duration": "floor",
+    "weight": 3
+  },
+  {
+    "id": "renewal",
+    "name": "Shrine of Renewal",
+    "text": "Regain 1% of your life a second for this floor",
+    "effect": {
+      "lifeRegen": 0.01
+    },
+    "duration": "floor",
+    "weight": 3
+  },
+  {
+    "id": "clarity",
+    "name": "Shrine of Clarity",
+    "text": "+50% mana regen for this floor",
+    "effect": {
+      "manaRegen": 0.5
+    },
+    "duration": "floor",
+    "weight": 3
+  },
+  {
+    "id": "fortune",
+    "name": "Shrine of Fortune",
+    "text": "+50 Find for this floor",
+    "effect": {
+      "find": 50
+    },
+    "duration": "floor",
+    "weight": 2
+  },
+  {
+    "id": "mercy",
+    "name": "Shrine of Mercy",
+    "text": "Refill your potions",
+    "effect": {
+      "potions": true
+    },
+    "duration": "floor",
+    "weight": 2
+  },
+  {
+    "id": "devotion",
+    "name": "Shrine of Devotion",
+    "text": "+10% damage for the rest of the dive",
+    "effect": {
+      "damage": 0.1
+    },
+    "duration": "dive",
+    "weight": 1
+  }
+]

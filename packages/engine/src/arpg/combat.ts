@@ -18,12 +18,14 @@ import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
+import { clipSight, sees, snapToWalkable } from './grid.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
 import { dropRune } from './rune-drops.js';
 import { dropMaterials } from './material-drops.js';
+import { onMonsterKilled } from './interact.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -309,10 +311,17 @@ function noteReaction(ctx: SimCtx, reaction: ReactionId, m: MonsterEntity, pairs
   if (!ctx.world.sandbox) ctx.world.pending.questEvents.push({ type: 'reaction', reaction });
 }
 
-/** Every other living foe within `radius` of `m` (edge to centre, as Overload always measured). */
+/**
+ * Every other living foe within `radius` of `m` (edge to centre, as Overload always measured)
+ * that `m` sees: the one choke point for the reactions' splash.
+ */
 function nearby(ctx: SimCtx, m: MonsterEntity, radius: number): MonsterEntity[] {
   return ctx.world.monsters.filter(
-    (o) => !o.dead && o.id !== m.id && dist(o.x, o.y, m.x, m.y) <= radius + o.radius,
+    (o) =>
+      !o.dead &&
+      o.id !== m.id &&
+      dist(o.x, o.y, m.x, m.y) <= radius + o.radius &&
+      sees(ctx.world.map, m, o),
   );
 }
 
@@ -453,7 +462,7 @@ function react(
       m.status.sunderUntil = t + r.sunderDuration;
       return amount;
     case 'seedling':
-      spawnDrop(ctx, 'orb', m.x, m.y, { amount: r.seedlingHeal, mana: 'nature' });
+      spawnDrop(ctx, 'orb', m, m.x, m.y, { amount: r.seedlingHeal, mana: 'nature' });
       return amount;
     case 'siphon': {
       // Three motes round the foe (fixed, no rng), pulled to the hero wherever it stands.
@@ -462,7 +471,7 @@ function react(
         const a = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
         const x = m.x + Math.cos(a) * 0.4;
         const y = m.y + Math.sin(a) * 0.4;
-        spawnDrop(ctx, 'mote', x, y, { amount: each, mana: 'shadow', vacuum: true });
+        spawnDrop(ctx, 'mote', m, x, y, { amount: each, mana: 'shadow', vacuum: true });
       }
       return amount;
     }
@@ -562,6 +571,8 @@ export function hitMonster(
   m.hp -= amount;
   m.lastHitAt = world.t;
   if (!m.aggro) aggroPack(ctx, m);
+  // A leashed foe walking home turns back on whoever hits it, its leash counted afresh.
+  if (m.goingHome) Object.assign(m, { goingHome: false, farSince: null });
   ctx.events.push({
     kind: 'hit',
     id: m.id,
@@ -657,16 +668,22 @@ export function hitMonster(
   return amount;
 }
 
+/**
+ * A drop from foe `from` thrown toward (x, y): it lands short of any wall
+ * between them, and belongs to the foe's room (see the floor maps spec).
+ */
 function spawnDrop(
   ctx: SimCtx,
   kind: DropKind,
-  x: number,
-  y: number,
+  from: MonsterEntity,
+  tx: number,
+  ty: number,
   /** `vacuum`: pulled to the hero from anywhere (default: once the floor is cleared). */
   extra: { item?: GearItem; mana?: ManaType; amount: number; vacuum?: boolean },
 ): void {
   const { world } = ctx;
   const id = world.nextId++;
+  const { x, y } = clipSight(world.map, from, { x: tx, y: ty });
   world.drops.push({
     id,
     kind,
@@ -674,6 +691,7 @@ function spawnDrop(
     y,
     item: extra.item,
     mana: extra.mana,
+    ...(from.roomId !== null && { roomId: from.roomId }),
     amount: extra.amount,
     born: world.t,
     vacuum: extra.vacuum ?? world.cleared,
@@ -727,10 +745,11 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     }
   }
 
-  // Fire mastery: flames spread from burning corpses.
+  // Fire mastery: flames spread from burning corpses to the foes they see.
   if (isBurning(ctx, m) && mastery(ctx, 'fire')) {
     for (const o of world.monsters)
-      if (!o.dead && dist(o.x, o.y, m.x, m.y) <= 2.5) spreadStacks(ctx, m, o, 'fire');
+      if (!o.dead && dist(o.x, o.y, m.x, m.y) <= 2.5 && sees(world.map, m, o))
+        spreadStacks(ctx, m, o, 'fire');
   }
 
   if (!world.sandbox) {
@@ -749,13 +768,14 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     dropMaterials(ctx, m, scrap, given);
   }
 
-  // Hellfire Brand: branded corpses explode and brand their neighbours.
+  // Hellfire Brand: branded corpses explode and brand the neighbours they see.
   if (t < m.status.brandUntil) {
     const radius = 2.6;
     const blast = h.stats.weaponDamage * h.stats.damageMult * 1.5;
     ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire', infusion: null });
     for (const o of world.monsters) {
-      if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius) continue;
+      if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius || !sees(world.map, m, o))
+        continue;
       hitMonster(ctx, o, blast, 'fire', {
         source: 'skill',
         canCrit: true,
@@ -763,6 +783,8 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
       });
     }
   }
+  // Its room's hook, once everything the death drops is down (see the floor maps spec).
+  onMonsterKilled(ctx, m);
 }
 
 /** Items, a mana mote and health orbs burst from a dying foe. */
@@ -771,6 +793,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
+  // An elite den's foes find gear more often (see the floor maps spec).
+  const den = world.map.rooms.find((r) => r.id === m.roomId)?.kind === 'den';
   const drops = given
     ? { items: [], nextUid: loot.nextUid }
     : rollEncounterDrops(
@@ -779,6 +803,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
           depth: world.depth,
           kind: m.kind,
           gear: world.door?.mods.gear ?? 1,
+          ...(den && { gearBonus: bal.drops.den.gearBonus }),
           nextUid: loot.nextUid,
           biomeMana: world.element,
           pair: loot.pair,
@@ -790,9 +815,13 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
   drops.items.forEach((item, i) => {
     const angle = (Math.PI * 2 * i) / Math.max(1, drops.items.length) + lootRng.next() * 0.8;
     const r = 0.6 + lootRng.next() * 0.9;
-    const x = Math.max(1, Math.min(world.width - 1, m.x + Math.cos(angle) * r));
-    const y = Math.max(1, Math.min(world.height - 1, m.y + Math.sin(angle) * r));
-    spawnDrop(ctx, 'item', x, y, { item, amount: 1 });
+    const { x, y } = snapToWalkable(
+      world.map,
+      m.x + Math.cos(angle) * r,
+      m.y + Math.sin(angle) * r,
+      1,
+    );
+    spawnDrop(ctx, 'item', m, x, y, { item, amount: 1 });
   });
 
   const mote =
@@ -801,7 +830,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
       : m.kind === 'elite'
         ? bal.mana.eliteMote
         : bal.mana.moteAmount;
-  spawnDrop(ctx, 'mote', m.x + (lootRng.next() - 0.5), m.y + (lootRng.next() - 0.5), {
+  spawnDrop(ctx, 'mote', m, m.x + (lootRng.next() - 0.5), m.y + (lootRng.next() - 0.5), {
     mana: m.element,
     amount: mote,
   });
@@ -814,7 +843,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
           ? 1
           : 0;
   for (let i = 0; i < orbs; i++) {
-    spawnDrop(ctx, 'orb', m.x + (lootRng.next() - 0.5) * 2, m.y + (lootRng.next() - 0.5) * 2, {
+    const x = m.x + (lootRng.next() - 0.5) * 2;
+    spawnDrop(ctx, 'orb', m, x, m.y + (lootRng.next() - 0.5) * 2, {
       amount: bal.dive.healthOrbHeal,
     });
   }

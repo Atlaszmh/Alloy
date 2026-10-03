@@ -7,10 +7,12 @@ import type {
   MonsterEntity,
   MonsterKind,
   StatusState,
+  Vec,
   WorldPending,
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
+import type { Buff, FloorLayout, Rect } from '../types/floor-map.js';
 import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
@@ -19,10 +21,12 @@ import {
   type Chains,
   type ResolvedChain,
 } from '../types/ability.js';
-import { manaPool } from '../delve/hero-stats.js';
+import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
+import { openRoom, snapToWalkable } from './grid.js';
+import { floorPacks, planFloor } from './layout/generate.js';
 import { emptyHaul } from '../loot/materials.js';
 
 export interface FloorOptions {
@@ -41,6 +45,16 @@ export interface FloorOptions {
   loot: LootContext;
   /** No packs and no boss (the Training Grounds' open arena). */
   empty?: boolean;
+  /**
+   * The map: `'open'` (the default: today's arena, `openRoom`) or `'generated'` (dives:
+   * `planFloor`'s rooms and halls, the packs spawned room by room), which builds the open
+   * room too while `delve.layout.generatedDives` is off.
+   */
+  layout?: FloorLayout;
+  /** The dive's blessings (`DiveState.diveBuffs`): the hero wears them from the start (default none). */
+  diveBuffs?: Buff[];
+  /** The interactables used this dive (`DiveState.used`): a generated floor marks them used (default none). */
+  used?: string[];
 }
 
 export function emptyStatus(): StatusState {
@@ -88,6 +102,8 @@ interface MonsterSpawn {
   x: number;
   y: number;
   packId: number;
+  /** Its room on a generated floor (default none). */
+  roomId?: number | null;
 }
 
 export function createMonsterEntity(
@@ -153,6 +169,9 @@ export function createMonsterEntity(
     ai,
     traits,
     packId: spawn.packId,
+    roomId: spawn.roomId ?? null,
+    farSince: null,
+    goingHome: false,
     x: spawn.x,
     y: spawn.y,
     radius,
@@ -204,10 +223,20 @@ function resolveAll(
 
 export function createHeroEntity(
   registry: DataRegistry,
-  stats: HeroStats,
+  unbuffed: HeroStats,
   chains: Partial<Pick<Chains, AbilitySlot>>,
-  opts: { hpFrac: number; potions: number; phoenixAvailable: boolean; x: number; y: number },
+  opts: {
+    hpFrac: number;
+    potions: number;
+    phoenixAvailable: boolean;
+    x: number;
+    y: number;
+    /** The dive's blessings, worn from the start. */
+    diveBuffs?: Buff[];
+  },
 ): HeroEntity {
+  const diveBuffs = [...(opts.diveBuffs ?? [])];
+  const stats = applyBuffs(unbuffed, diveBuffs);
   const pool = manaPool(stats, registry);
   const resolved = resolveAll(registry, chains, stats);
   return {
@@ -217,6 +246,9 @@ export function createHeroEntity(
     facing: { x: 0, y: -1 },
     hp: Math.max(1, stats.maxHp * Math.min(1, opts.hpFrac)),
     stats,
+    baseStats: stats,
+    floorBuffs: [],
+    diveBuffs,
     mana: pool.max,
     manaMax: pool.max,
     manaRegen: pool.regen,
@@ -265,14 +297,18 @@ export function createHeroEntity(
  * drops its wind-up (as a dodge does), its hold, its beat, its waiting press
  * and its queued echo, and a new Defensive ends the old one's buff and Ward at once, without
  * bursting. A skill left out has no chain (and so no cooldowns or charge).
+ * `unbuffed` is the hero's gear (`profileStats`): its dive's and floor's
+ * blessings go back on (see the floor maps spec), so a refresh never wipes them.
  */
 export function refreshWorldHero(
   registry: DataRegistry,
   world: ArpgWorld,
-  stats: HeroStats,
+  unbuffed: HeroStats,
   chains: Partial<Pick<Chains, AbilitySlot>>,
 ): void {
   const h = world.hero;
+  const base = applyBuffs(unbuffed, h.diveBuffs);
+  const stats = applyBuffs(base, h.floorBuffs);
   const frac = h.hp / h.stats.maxHp;
   const pool = manaPool(stats, registry);
   // A different weapon, or a basic chain whose blows changed (their kinds or number), starts
@@ -303,6 +339,7 @@ export function refreshWorldHero(
     h.ward = null;
   }
   h.stats = stats;
+  h.baseStats = base;
   h.hp = h.hp > 0 ? Math.max(1, frac * stats.maxHp) : h.hp;
   h.manaMax = pool.max;
   h.manaRegen = pool.regen;
@@ -348,19 +385,31 @@ export function emptyPending(newFloor = false): WorldPending {
     haul: emptyHaul(),
     patterns: [],
     questEvents: [],
+    used: [],
+    diveBuffs: [],
     newFloor,
   };
 }
 
-/** Build the arena for one depth: hero at the bottom, monster packs spread above. */
+/**
+ * Build the arena for one depth: the open room (the hero at the bottom, packs spread
+ * above) or a generated floor (`planFloor`: the hero at its start, packs room by room).
+ */
 export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): ArpgWorld {
   const bal = registry.getDelveBalance();
   const rng = new SeededRNG(opts.seed);
   const spawnRng = rng.fork('spawn');
   const biome = registry.getBiomeForDepth(opts.depth);
-  const { width, height } = bal.arena;
-  const heroX = width / 2;
-  const heroY = height - 4;
+  const plan =
+    opts.layout === 'generated' && bal.layout.generatedDives
+      ? planFloor(registry, opts.seed, opts.depth, biome, opts.door)
+      : null;
+  const map = plan?.map ?? openRoom(bal.arena.width, bal.arena.height);
+  for (const room of map.rooms)
+    if (room.interactable && opts.used?.includes(room.interactable.id))
+      room.interactable.used = true;
+  const { width, height } = map;
+  const { x: heroX, y: heroY } = map.start;
 
   const world: ArpgWorld = {
     t: 0,
@@ -375,21 +424,36 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     biomeId: biome.id,
     element: biome.mana,
     door: opts.door,
+    map,
     width,
     height,
+    fog: new Uint8Array(width * height).fill(map.open ? 2 : 0),
+    fogVersion: 0,
+    fogAt: 0,
+    exitHinted: false,
+    flow: { small: null, large: null, nextAt: 0 },
+    sealing: null,
+    channel: null,
+    exited: false,
     hero: createHeroEntity(registry, opts.stats, opts.chains, {
       hpFrac: opts.heroHpFrac,
       potions: opts.potions,
       phoenixAvailable: opts.phoenixAvailable,
       x: heroX,
       y: heroY,
+      diveBuffs: opts.diveBuffs,
     }),
     monsters: [],
     projectiles: [],
     zones: [],
     drops: [],
     nextId: 1,
-    loot: { ...opts.loot, dropsGiven: [...opts.loot.dropsGiven] },
+    loot: {
+      ...opts.loot,
+      // A blessing's Find counts all dive.
+      find: (opts.diveBuffs ?? []).reduce((f, b) => f + (b.effect.find ?? 0), opts.loot.find),
+      dropsGiven: [...opts.loot.dropsGiven],
+    },
     pending: emptyPending(true),
     totalMonsters: 0,
     bossId: null,
@@ -400,6 +464,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     queuedAttack: null,
     queuedPotion: false,
     queuedDodge: false,
+    queuedInteract: false,
     kills: 0,
     bossKilled: false,
     firstEssenceTaken: false,
@@ -413,13 +478,17 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
 
   const mods = opts.door?.mods ?? {};
   const boss = isBossFloor(registry, opts.depth);
-  const basePacks = boss
-    ? 2
-    : Math.min(bal.dive.packsMax, bal.dive.packsBase + opts.depth * bal.dive.packsPerDepth);
-  const packs = opts.empty ? 0 : Math.max(1, Math.round(basePacks * (mods.packs ?? 1)));
+  const packs = opts.empty ? 0 : floorPacks(registry, opts.depth, opts.door);
   const eliteChance = Math.max(bal.dive.eliteChance, mods.eliteChance ?? 0);
 
-  const spawn = (def: MonsterDef, kind: MonsterKind, x: number, y: number, packId: number) => {
+  const spawn = (
+    def: MonsterDef,
+    kind: MonsterKind,
+    x: number,
+    y: number,
+    packId: number,
+    roomId: number | null = null,
+  ) => {
     const m = createMonsterEntity(
       registry,
       {
@@ -432,6 +501,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
         x,
         y,
         packId,
+        roomId,
       },
       spawnRng,
     );
@@ -439,38 +509,62 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     return m;
   };
 
+  /** A pack 3 cells inside `area`, away from the hero and the other `centers`; an elite leads it at `eliteChance` (always when `elite`). */
+  const pack = (
+    area: Rect,
+    centers: Vec[],
+    packId: number,
+    roomId: number | null,
+    elite = false,
+  ) => {
+    let cx = 0;
+    let cy = 0;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      cx = area.x + 3 + spawnRng.next() * (area.w - 6);
+      cy = area.y + 3 + spawnRng.next() * (area.h - 6);
+      const farFromHero = dist(cx, cy, heroX, heroY) >= bal.layout.minPackDistance;
+      const farFromPacks = centers.every((c) => dist(c.x, c.y, cx, cy) >= 5.5);
+      if (farFromHero && farFromPacks) break;
+    }
+    centers.push({ x: cx, y: cy });
+    const size = spawnRng.nextInt(bal.dive.packSize[0], bal.dive.packSize[1]);
+    const elitePack = spawnRng.next() < eliteChance || elite;
+    for (let i = 0; i < size; i++) {
+      const angle = (Math.PI * 2 * i) / size + spawnRng.next() * 0.6;
+      const r = i === 0 && elitePack ? 0 : bal.arena.packSpacing * (0.7 + spawnRng.next() * 0.6);
+      const def = biome.monsters[spawnRng.nextInt(0, biome.monsters.length - 1)];
+      const at = snapToWalkable(map, cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+      spawn(def, i === 0 && elitePack ? 'elite' : 'normal', at.x, at.y, packId, roomId);
+    }
+  };
+
+  // A generated floor: the boss at its room's centre, each room's packs in it (a den's
+  // elite-led), every foe knowing its room.
+  if (plan) {
+    let packId = 0;
+    for (const room of opts.empty ? [] : map.rooms) {
+      const { x, y, w, h } = room.rect;
+      if (room.kind === 'boss') {
+        const at = snapToWalkable(map, x + w / 2, y + h / 2);
+        world.bossId = spawn(biome.boss, 'boss', at.x, at.y, 0, room.id).id;
+      }
+      const centers: Vec[] = [];
+      for (let p = 0; p < plan.packs[room.id]; p++)
+        pack(room.rect, centers, ++packId, room.id, room.kind === 'den');
+    }
+    world.totalMonsters = world.monsters.length;
+    return world;
+  }
+
   if (boss && !opts.empty) {
     const b = spawn(biome.boss, 'boss', width / 2, 9, 0);
     world.bossId = b.id;
   }
 
   const centers: { x: number; y: number }[] = boss ? [{ x: width / 2, y: 9 }] : [];
-  for (let p = 0; p < packs; p++) {
-    let cx = 0;
-    let cy = 0;
-    for (let attempt = 0; attempt < 40; attempt++) {
-      cx = 3 + spawnRng.next() * (width - 6);
-      cy = 3 + spawnRng.next() * (height - 13);
-      const farFromHero = dist(cx, cy, heroX, heroY) >= bal.arena.minPackDistance;
-      const farFromPacks = centers.every((c) => dist(c.x, c.y, cx, cy) >= 5.5);
-      if (farFromHero && farFromPacks) break;
-    }
-    centers.push({ x: cx, y: cy });
-    const size = spawnRng.nextInt(bal.dive.packSize[0], bal.dive.packSize[1]);
-    const elitePack = spawnRng.next() < eliteChance;
-    for (let i = 0; i < size; i++) {
-      const angle = (Math.PI * 2 * i) / size + spawnRng.next() * 0.6;
-      const r = i === 0 && elitePack ? 0 : bal.arena.packSpacing * (0.7 + spawnRng.next() * 0.6);
-      const def = biome.monsters[spawnRng.nextInt(0, biome.monsters.length - 1)];
-      spawn(
-        def,
-        i === 0 && elitePack ? 'elite' : 'normal',
-        cx + Math.cos(angle) * r,
-        cy + Math.sin(angle) * r,
-        p + 1,
-      );
-    }
-  }
+  // The open room: the packs above the hero (the bottom 7 rows kept clear).
+  for (let p = 0; p < packs; p++)
+    pack({ x: 0, y: 0, w: width, h: height - 7 }, centers, p + 1, null);
 
   world.totalMonsters = world.monsters.length;
   return world;

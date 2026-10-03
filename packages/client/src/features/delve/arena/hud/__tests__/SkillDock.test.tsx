@@ -432,4 +432,21 @@ describe('the dodge, potion and attack slots', () => {
     render(dock({ buffs: [{ id: 'barrier', left: 5, total: 6 }] }));
     expect(screen.getByRole('img', { name: 'Barrier, 5s left' })).toBeInTheDocument();
   });
+
+  it("shows a shrine's blessing as a tile with no countdown: for the floor or the dive", () => {
+    render(
+      dock({
+        buffs: [
+          { id: 'shrine', shrine: 'devotion', name: 'Shrine of Devotion', dive: true },
+          { id: 'shrine', shrine: 'vigor', name: 'Shrine of Vigor', dive: false },
+        ],
+      }),
+    );
+    const dive = screen.getByRole('img', { name: 'Shrine of Devotion, this dive' });
+    const floor = screen.getByRole('img', { name: 'Shrine of Vigor, this floor' });
+    expect(dive.querySelector('[data-glyph="shrine"]')).not.toBeNull();
+    expect(dive).toHaveStyle({ borderColor: '#feae34' });
+    expect(floor).toHaveStyle({ borderColor: '#2ce8f5' });
+    expect(floor).not.toHaveTextContent(/\ds/);
+  });
 });

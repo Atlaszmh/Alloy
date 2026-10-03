@@ -13,11 +13,13 @@ const atlas = JSON.parse(
 
 describe('delve sprite atlas', () => {
   const registry = getDelveRegistry();
+  /** The floor-map props' sizes in units (`layouts.json → props`). */
+  const props = registry.getDelveData().layouts.props;
   const monsterIds = new Set(
     registry.getDelveData().biomes.flatMap((b) => [...b.monsters.map((m) => m.id), b.boss.id]),
   );
-  /** Everything drawn from the atlas: the hero, the training dummy (size 1), the monsters and Hesta, the Anvil-keeper. */
-  const known = new Set(['hero', 'dummy', 'hesta', ...monsterIds]);
+  /** Everything drawn from the atlas: the hero, the training dummy (size 1), the monsters, Hesta, the Anvil-keeper, and the floor-map props. */
+  const known = new Set(['hero', 'dummy', 'hesta', ...monsterIds, ...Object.keys(props)]);
 
   it('only holds sprites the game can use', () => {
     for (const id of Object.keys(atlas.animations)) {
@@ -32,7 +34,13 @@ describe('delve sprite atlas', () => {
     }
   });
 
-  it('keeps one pixel density: every canvas is 16 px per unit of monster size', () => {
+  it('holds every floor-map prop with its two states', () => {
+    for (const id of Object.keys(props)) {
+      expect(atlas.animations[id]?.length, id).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('keeps one pixel density: every canvas is 16 px per unit of monster or prop size', () => {
     // A size-1 monster is 16 px, a size-3 giant 48 px, and every sprite pixel is the same
     // SPRITE_PIXEL in the world. Canvases follow size, so art and hitboxes stay in proportion.
     const sizes = new Map(
@@ -44,6 +52,7 @@ describe('delve sprite atlas', () => {
     sizes.set('hero', 1);
     sizes.set('dummy', 1);
     sizes.set('hesta', 1.6);
+    for (const [id, size] of Object.entries(props)) sizes.set(id, size);
     for (const [id, names] of Object.entries(atlas.animations)) {
       const want = Math.round(16 * sizes.get(id)!);
       for (const n of names) {

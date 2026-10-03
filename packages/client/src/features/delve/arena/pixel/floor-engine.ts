@@ -1,5 +1,5 @@
 import type { ArpgEvent, ArpgWorld, ManaType, Rarity } from '@alloy/engine';
-import { PixelWorld, type PixelLight } from './world';
+import { PixelWorld, type MapPlan, type PixelLight } from './world';
 import { renderPixelWorld, type RenderView } from './render';
 import { themeForBiome, type RGB } from './themes';
 import { applyArenaEvent, arenaToCell } from './arena-effects';
@@ -27,6 +27,9 @@ export interface FloorInit {
   arenaHeight: number;
   biomeId: string;
   depth: number;
+  /** A generated floor's map (without one, the open arena), and the floor's own seed. */
+  plan?: MapPlan;
+  seed?: number;
 }
 
 /** Everything the floor needs from one game frame, as plain data (it crosses to a worker). */
@@ -112,6 +115,31 @@ function hashString(s: string): number {
   return h >>> 0;
 }
 
+/**
+ * What a world's floor is built from: the open arena by its size (seeded by
+ * its depth and biome, as ever); a generated floor by its map, seeded by the
+ * map's cells, the floor seed's own (its `layout` fork).
+ */
+export function floorInit(w: ArpgWorld): FloorInit {
+  const init = { arenaWidth: w.width, arenaHeight: w.height, biomeId: w.biomeId, depth: w.depth };
+  const map = w.map;
+  if (map.open) return init;
+  let seed = 2166136261 ^ w.depth;
+  for (const c of map.cells) seed = Math.imul(seed ^ c, 16777619);
+  return {
+    ...init,
+    seed: seed >>> 0,
+    // Plain data: no fields the floor never reads (the rooms' home fields).
+    plan: {
+      width: map.width,
+      height: map.height,
+      cells: map.cells,
+      rooms: map.rooms.map(({ kind, rect }) => ({ kind, rect })),
+      ppu: FLOOR_PPU,
+    },
+  };
+}
+
 /** Capture what the floor needs from the arena this frame. */
 export function snapshotArena(
   w: ArpgWorld,
@@ -172,11 +200,12 @@ export class FloorEngine {
       width: (init.arenaWidth + FLOOR_MARGIN * 2) * FLOOR_PPU,
       height: (init.arenaHeight + FLOOR_MARGIN * 2) * FLOOR_PPU,
       margin: FLOOR_MARGIN * FLOOR_PPU,
-      seed: (Math.imul(init.depth, 7919) + hashString(init.biomeId)) >>> 0,
+      seed: init.seed ?? (Math.imul(init.depth, 7919) + hashString(init.biomeId)) >>> 0,
       theme: themeForBiome(init.biomeId),
       // Blasts leave burning patches instead of torching the whole arena.
       fireSpread: 0.12,
       burnRate: 3,
+      plan: init.plan,
     });
   }
 
@@ -188,6 +217,12 @@ export class FloorEngine {
   /** Apply a frame; returns a fresh picture when one is due, else null. */
   frame(f: FloorFrame, reuse?: Uint8ClampedArray): FloorPicture | null {
     for (const e of f.events) applyArenaEvent(this.world, e, FLOOR_PPU, FLOOR_MARGIN);
+    // A generated floor simulates the chunks under the view, and the rooms they reach, only.
+    if (this.world.plan) {
+      const a = this.cell(f.view.left, f.view.top);
+      const b = this.cell(f.view.right, f.view.bottom);
+      this.world.setActive(a.x, a.y, b.x, b.y);
+    }
     if (f.dt > 0) {
       this.acc += f.dt;
       let steps = 0;

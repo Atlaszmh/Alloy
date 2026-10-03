@@ -4,13 +4,14 @@ import type { ComboStepDef, DelveBalance, HeroBlow, HeroWeapon } from '../types/
 import type { ManaType } from '../types/mana.js';
 import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
+import { sees } from './grid.js';
 import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
 import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
-import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
+import { alive, muzzle, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
  * The basic attack: each blow of the hero's basic chain (its kind's row, in
@@ -25,7 +26,7 @@ function haste(ctx: SimCtx): number {
   return surge ? 1 + surge.effect : 1;
 }
 
-/** The nearest foe within `range` inside the arc around `dir` (where a manual lunge stops). */
+/** The nearest foe the hero sees within `range` inside the arc around `dir` (where a manual lunge stops). */
 function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): MonsterEntity | null {
   const h = ctx.world.hero;
   const half = (arcDeg * Math.PI) / 360;
@@ -35,6 +36,7 @@ function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): Monster
     const d = dist(h.x, h.y, m.x, m.y) - m.radius;
     if (d > range || d >= bestD) continue;
     if (arcDeg < 360 && angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > half) continue;
+    if (!sees(ctx.world.map, h, m)) continue;
     best = m;
     bestD = d;
   }
@@ -271,8 +273,8 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
 /**
  * A blow's damage from where the hero stands now, along `dir`, struck as `kind`
  * (a held blow's stage's: its row follows), at `powerMult` × its power. A melee
- * blow hits every foe in its reach (× its `area`) and arc, the swing's
- * `targetId` whatever its angle, with one crit roll; a shot blow fires its shot.
+ * blow hits every foe the hero sees in its reach (× its `area`) and arc, the
+ * swing's `targetId` whatever its angle, with one crit roll; a shot blow fires its shot.
  * Every hit carries the blow's knobs (`knobHitOpts`). `twin`: Twin Fang's share
  * on the chain's last blow (its extra hit or shot carries no runes). Returns
  * whether it landed: a melee blow that connected, or a shot with a foe in range.
@@ -322,6 +324,7 @@ export function landBlow(
         angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc
       )
         continue;
+      if (!sees(world.map, h, m)) continue;
       landed = true;
       first ??= m;
       struck.add(m.id);
@@ -374,8 +377,7 @@ export function landBlow(
         form: null,
         ability: null,
         homingId: null,
-        x: h.x + d.x * 0.5,
-        y: h.y + d.y * 0.5,
+        ...muzzle(ctx, d, 0.5),
         vx: d.x * speed,
         vy: d.y * speed,
         radius: 0.3 * size,
@@ -489,7 +491,7 @@ export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntit
 
 /**
  * A basic shot with an explosion bursts over the foe it struck and every foe
- * around it (each once); with knobs, they act after the burst (`shotLands`).
+ * around it that it sees (each once); with knobs, they act after the burst (`shotLands`).
  */
 export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | null = null): void {
   p.dead = true;
@@ -503,7 +505,11 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
   });
   const hit: MonsterEntity[] = struck ? [struck] : [];
   for (const m of alive(ctx)) {
-    if (m !== struck && dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;
+    if (
+      m !== struck &&
+      (dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius || !sees(ctx.world.map, p, m))
+    )
+      continue;
     if (m !== struck) hit.push(m);
     hitMonster(ctx, m, p.damage, p.element, {
       source: 'basic',

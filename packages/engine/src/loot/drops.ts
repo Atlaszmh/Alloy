@@ -11,6 +11,8 @@ export interface DropContext {
   kind: MonsterKind;
   /** The door's `gear`: multiplies an elite's gear chance (1 = normal). */
   gear: number;
+  /** Added to an elite's gear chance (an elite den's `drops.den.gearBonus`). */
+  gearBonus?: number;
   nextUid: number;
   /** The biome's mana; item affinities lean toward it. */
   biomeMana?: ManaType;
@@ -31,13 +33,14 @@ export function stochasticRound(value: number, rng: SeededRNG): number {
 
 /**
  * How many gear items a foe drops (see the crafting spec's drop tables): a
- * normal foe none, an elite one at `drops.elite.gearChance` × the door's
- * `gear` (at most 1), a boss `drops.boss.gear`.
+ * normal foe none, an elite one at (`drops.elite.gearChance` + `gearBonus`) ×
+ * the door's `gear` (at most 1), a boss `drops.boss.gear`.
  */
 function gearCount(registry: DataRegistry, ctx: DropContext, rng: SeededRNG): number {
   const { elite, boss } = registry.getDelveBalance().drops;
   if (ctx.kind === 'boss') return boss.gear;
-  if (ctx.kind === 'elite') return rng.next() < Math.min(1, elite.gearChance * ctx.gear) ? 1 : 0;
+  const chance = (elite.gearChance + (ctx.gearBonus ?? 0)) * ctx.gear;
+  if (ctx.kind === 'elite') return rng.next() < Math.min(1, chance) ? 1 : 0;
   return 0;
 }
 
