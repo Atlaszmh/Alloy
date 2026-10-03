@@ -144,6 +144,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     world.queuedPotion = false;
     if (h.potions > 0 && h.hp < h.stats.maxHp) {
       h.potions--;
+      world.potionDrunk = true;
       healHero(ctx, h.stats.maxHp * bal.dive.potionHeal, 'potion');
     }
   }
