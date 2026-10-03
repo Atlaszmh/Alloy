@@ -86,6 +86,8 @@ export interface AutopilotDiveReport {
   power: number;
   kills: number;
   floorSeconds: number;
+  /** Floors that ran to `maxFloorSeconds` (each counted as a death). */
+  timedOut: number;
   legendariesOwned: number;
   reactionsSeen: number;
   scrap: number;
@@ -120,7 +122,7 @@ function playFloor(
   profile: DelveProfile,
   maxSeconds: number,
   policy: BotPolicy,
-): { profile: DelveProfile; seconds: number; died: boolean } {
+): { profile: DelveProfile; seconds: number; died: boolean; timedOut: boolean } {
   let p = profile;
   const world = beginFloor(registry, p);
   while (!world.heroDead && world.t < maxSeconds) {
@@ -130,9 +132,15 @@ function playFloor(
     if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;
   }
   if (world.heroDead || !(world.cleared || world.exited)) {
-    return { profile: failFloor(registry, p, world).profile, seconds: world.t, died: true };
+    const { profile: failed } = failFloor(registry, p, world);
+    return { profile: failed, seconds: world.t, died: true, timedOut: !world.heroDead };
   }
-  return { profile: completeFloor(registry, p, world).profile, seconds: world.t, died: false };
+  return {
+    profile: completeFloor(registry, p, world).profile,
+    seconds: world.t,
+    died: false,
+    timedOut: false,
+  };
 }
 
 /**
@@ -851,6 +859,7 @@ export function runAutopilot(
     const startDepth = options[options.length - 1];
     p = startDive(registry, p, startDepth);
     let seconds = 0;
+    let timedOut = 0;
     let result: AutopilotDiveReport['result'] = 'dead';
     let stops = emptyHaul();
 
@@ -859,6 +868,7 @@ export function runAutopilot(
         const played = playFloor(registry, p, maxFloorSeconds, opts.policy ?? 'thorough');
         p = played.profile;
         seconds += played.seconds;
+        if (played.timedOut) timedOut++;
         continue;
       }
       const before = p;
@@ -887,6 +897,7 @@ export function runAutopilot(
       power: profilePower(registry, p),
       kills: dive.kills,
       floorSeconds: Math.round(seconds),
+      timedOut,
       legendariesOwned: Object.keys(p.codex).length,
       reactionsSeen: p.reactionsSeen.length,
       scrap: p.scrap,
