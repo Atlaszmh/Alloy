@@ -5,6 +5,7 @@ import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
 import type { QuestEvent } from './quests.js';
+import type { FloorMap } from './floor-map.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -181,6 +182,12 @@ export interface MonsterEntity {
   ai: MonsterAi;
   traits: MonsterTrait[];
   packId: number;
+  /** Its room on a generated floor (see the floor maps spec); null in the open room. */
+  roomId: number | null;
+  /** Since when it has been beyond its leash (`ai.leashRadius` from its room's centre), else null. */
+  farSince: number | null;
+  /** Leashed: going home along its room's `homeField`, to heal and sleep. */
+  goingHome: boolean;
   x: number;
   y: number;
   radius: number;
@@ -299,6 +306,8 @@ export interface Drop {
   pattern?: string;
   /** The first boss's guaranteed essence: picking it up sets `ArpgWorld.firstEssenceTaken`. */
   firstEssence?: boolean;
+  /** The room of the foe it fell from (none: a hall's, or the open room's): its last kill pulls it in. */
+  roomId?: number;
   amount: number;
   born: number;
   /** Pulled to the hero regardless of distance (floor cleared). */
@@ -747,8 +756,29 @@ export interface ArpgWorld {
   biomeId: string;
   element: ManaType;
   door: DoorDef | null;
+  /** The floor's grid, rooms and doors (see the floor maps spec): `width` and `height` are its size. */
+  map: FloorMap;
   width: number;
   height: number;
+  /** Each cell's fog: 0 unseen, 1 seen, 2 in sight now (the open room's: all 2). */
+  fog: Uint8Array;
+  /** Moves on whenever `fog` changes: the minimap redraws its fog then. */
+  fogVersion: number;
+  /** When `fogTick` next runs (an `ai.fogEvery` mark). */
+  fogAt: number;
+  /** The exit hint has fired. */
+  exitHinted: boolean;
+  /**
+   * The flow fields toward the hero (`flowTick`), one per clearance class (`large`:
+   * big foes'): steps by cell, null until built; rebuilt at `nextAt`.
+   */
+  flow: { small: Uint16Array | null; large: Uint16Array | null; nextAt: number };
+  /** The room whose doors are closing, since when (they wait `ai.sealGrace` for the doorway), or null. */
+  sealing: { roomId: number; since: number } | null;
+  /** A shrine's prayer under way (`interactTick`): its interactable, where and when it began, its end. */
+  channel: { id: string; x: number; y: number; start: number; until: number } | null;
+  /** The hero took the exit (`exitFloor`): a generated floor ends on it, the open room on `cleared`. */
+  exited: boolean;
   hero: HeroEntity;
   monsters: MonsterEntity[];
   projectiles: Projectile[];

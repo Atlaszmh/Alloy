@@ -11,6 +11,7 @@ import type {
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
+import type { FloorLayout } from '../types/floor-map.js';
 import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
@@ -23,6 +24,7 @@ import { manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
+import { openRoom } from './grid.js';
 import { emptyHaul } from '../loot/materials.js';
 
 export interface FloorOptions {
@@ -41,6 +43,11 @@ export interface FloorOptions {
   loot: LootContext;
   /** No packs and no boss (the Training Grounds' open arena). */
   empty?: boolean;
+  /**
+   * The map: `'open'` (the default: today's arena, `openRoom`) or `'generated'` (dives;
+   * the generated path is the generator's to add, so until then every floor is open).
+   */
+  layout?: FloorLayout;
 }
 
 export function emptyStatus(): StatusState {
@@ -88,6 +95,8 @@ interface MonsterSpawn {
   x: number;
   y: number;
   packId: number;
+  /** Its room on a generated floor (default none). */
+  roomId?: number | null;
 }
 
 export function createMonsterEntity(
@@ -153,6 +162,9 @@ export function createMonsterEntity(
     ai,
     traits,
     packId: spawn.packId,
+    roomId: spawn.roomId ?? null,
+    farSince: null,
+    goingHome: false,
     x: spawn.x,
     y: spawn.y,
     radius,
@@ -358,9 +370,9 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
   const rng = new SeededRNG(opts.seed);
   const spawnRng = rng.fork('spawn');
   const biome = registry.getBiomeForDepth(opts.depth);
-  const { width, height } = bal.arena;
-  const heroX = width / 2;
-  const heroY = height - 4;
+  const map = openRoom(bal.arena.width, bal.arena.height);
+  const { width, height } = map;
+  const { x: heroX, y: heroY } = map.start;
 
   const world: ArpgWorld = {
     t: 0,
@@ -375,8 +387,17 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     biomeId: biome.id,
     element: biome.mana,
     door: opts.door,
+    map,
     width,
     height,
+    fog: new Uint8Array(width * height).fill(2),
+    fogVersion: 0,
+    fogAt: 0,
+    exitHinted: false,
+    flow: { small: null, large: null, nextAt: 0 },
+    sealing: null,
+    channel: null,
+    exited: false,
     hero: createHeroEntity(registry, opts.stats, opts.chains, {
       hpFrac: opts.heroHpFrac,
       potions: opts.potions,
