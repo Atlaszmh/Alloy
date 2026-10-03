@@ -3,6 +3,7 @@ import {
   beginFloor,
   createDelveProfile,
   generateFloor,
+  openRoom,
   startDive,
   type ArpgEvent,
   type FloorMap,
@@ -173,10 +174,12 @@ describe('snapshotArena', () => {
 });
 
 describe('a generated floor', { timeout: 20000 }, () => {
-  /** Today's first floor of a dive, on `map` (the generator is B1's; until then the dive is the open room). */
+  /** A dive's first floor, on `map`, or on the open arena without one. */
   function onMap(map?: FloorMap) {
     const world = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
-    if (map) Object.assign(world, { map, width: map.width, height: map.height });
+    const { width, height } = registry.getDelveBalance().arena;
+    const on = map ?? openRoom(width, height);
+    Object.assign(world, { map: on, width: on.width, height: on.height });
     return world;
   }
 
