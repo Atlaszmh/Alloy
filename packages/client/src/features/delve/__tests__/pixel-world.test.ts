@@ -740,3 +740,37 @@ describe('a floor built from a map', { timeout: 20000 }, () => {
     expect(Array.from(fromMap(undefined, 8).mat)).not.toEqual(Array.from(a.mat));
   });
 });
+
+describe("a big floor's chunks", { timeout: 20000 }, () => {
+  it('simulate only near the view and through any room that reaches it; the rest sleep', () => {
+    const map = ringMap();
+    const pw = fromMap(map);
+    const at = (mx: number, my: number) => mid(pw, mx, my);
+    // Fires in the start room's far corner, in the middle of the top hall, and in the sanctum.
+    const near = at(14, 12);
+    const hall = at(30, 8);
+    const far = at(50, 50);
+    for (const i of [near, hall, far]) pw.fire[i] = 100;
+    // Wake round the start room's top-left corner: the whole room wakes, the far end of the map sleeps.
+    const corner = mid(pw, 4, 4);
+    const cx = corner % pw.width;
+    const cy = Math.floor(corner / pw.width);
+    pw.setActive(cx - 10, cy - 10, cx + 10, cy + 10);
+    expect(pw.awake.some((a) => a === 0)).toBe(true);
+    for (let s = 0; s < 10; s++) pw.step();
+    expect(pw.fire[near]).not.toBe(100);
+    expect(pw.fire[hall]).toBe(100);
+    expect(pw.fire[far]).toBe(100);
+    // The view moves on: the sanctum wakes.
+    const fx = far % pw.width;
+    const fy = Math.floor(far / pw.width);
+    pw.setActive(fx - 10, fy - 10, fx + 10, fy + 10);
+    pw.step();
+    expect(pw.fire[far]).not.toBe(100);
+  });
+
+  it('are all awake until the view is set', () => {
+    const pw = fromMap();
+    expect(pw.awake.every((a) => a === 1)).toBe(true);
+  });
+});

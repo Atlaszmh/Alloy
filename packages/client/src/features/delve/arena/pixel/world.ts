@@ -103,6 +103,9 @@ export interface MapPlan {
   ppu: number;
 }
 
+/** Simulation chunks are CHUNK × CHUNK cells; an asleep chunk's fluid, fields and fire hold still. */
+export const CHUNK = 32;
+
 /** Rooms paved in stone (the sealed arenas and the special rooms); the rest are wild ground. */
 const PAVED: ReadonlySet<RoomKind> = new Set(['den', 'boss', 'vault', 'sanctum', 'alcove']);
 /** Paved rooms with a rune circle at their centre. */
@@ -210,6 +213,18 @@ export class PixelWorld {
   readonly springs: number[] = [];
   /** Cells where fluid drains away every step: the arena's bottom rows, or each river's mouth. */
   readonly drains: number[] = [];
+  /** Chunks across and down. */
+  readonly chunksW: number;
+  readonly chunksH: number;
+  /** 1 where a chunk simulates: all of them until `setActive`. */
+  readonly awake: Uint8Array;
+  /** The awake cells' indices, in order: `active` is the start of `order`. */
+  private readonly order: Int32Array;
+  private active: Int32Array;
+  /** The chunk-aligned rectangle `setActive` last woke round. */
+  private woke = '';
+  /** The awake chunks' bounds (cells, ends exclusive): the weather falls there. */
+  box: { x0: number; y0: number; x1: number; y1: number };
 
   readonly pT = new Uint8Array(MAX_PARTICLES);
   readonly pX = new Float32Array(MAX_PARTICLES);
@@ -276,6 +291,12 @@ export class PixelWorld {
     this.rubble = new Uint32Array(n);
     this.edge = new Uint8Array(n);
     this.plan = opts.plan ?? null;
+    this.chunksW = Math.ceil(this.width / CHUNK);
+    this.chunksH = Math.ceil(this.height / CHUNK);
+    this.awake = new Uint8Array(this.chunksW * this.chunksH).fill(1);
+    this.order = new Int32Array(n).map((_, i) => i);
+    this.active = this.order;
+    this.box = { x0: 0, y0: 0, x1: this.width, y1: this.height };
     if (this.plan) this.generatePlan(this.plan);
     else this.generate();
   }
@@ -706,6 +727,59 @@ export class PixelWorld {
     }
   }
 
+  /**
+   * Simulate only the chunks under the cells [x0, x1) × [y0, y1), and every
+   * room those chunks reach, whole (its river runs from its spring to its
+   * mouth); the rest sleep. A generated floor's view calls it every frame;
+   * the open arena stays awake.
+   */
+  setActive(x0: number, y0: number, x1: number, y1: number): void {
+    const { width: W, height: H, chunksW: CW, chunksH: CH, awake, margin: M, plan } = this;
+    const cx0 = Math.max(0, Math.floor(x0 / CHUNK));
+    const cy0 = Math.max(0, Math.floor(y0 / CHUNK));
+    const cx1 = Math.min(CW, Math.ceil(x1 / CHUNK));
+    const cy1 = Math.min(CH, Math.ceil(y1 / CHUNK));
+    const key = `${cx0},${cy0},${cx1},${cy1}`;
+    if (key === this.woke) return;
+    this.woke = key;
+    awake.fill(0);
+    /** Wake the chunks under cells [ax, bx) × [ay, by). */
+    const wake = (ax: number, ay: number, bx: number, by: number) => {
+      for (let cy = Math.floor(ay / CHUNK); cy < Math.min(CH, Math.ceil(by / CHUNK)); cy++)
+        for (let cx = Math.floor(ax / CHUNK); cx < Math.min(CW, Math.ceil(bx / CHUNK)); cx++)
+          awake[cy * CW + cx] = 1;
+    };
+    wake(cx0 * CHUNK, cy0 * CHUNK, cx1 * CHUNK, cy1 * CHUNK);
+    for (const { rect: r } of plan?.rooms ?? []) {
+      const [ax, ay] = [M + r.x * plan!.ppu, M + r.y * plan!.ppu];
+      const [bx, by] = [ax + r.w * plan!.ppu, ay + r.h * plan!.ppu];
+      if (ax < cx1 * CHUNK && bx > cx0 * CHUNK && ay < cy1 * CHUNK && by > cy0 * CHUNK)
+        wake(ax, ay, bx, by);
+    }
+    let n = 0;
+    const box = { x0: W, y0: H, x1: 0, y1: 0 };
+    for (let y = 0; y < H; y++) {
+      const row = ((y / CHUNK) | 0) * CW;
+      for (let cx = 0; cx < CW; cx++) {
+        if (!awake[row + cx]) continue;
+        const a = cx * CHUNK;
+        const b = Math.min(W, a + CHUNK);
+        for (let x = a; x < b; x++) this.order[n++] = y * W + x;
+        box.x0 = Math.min(box.x0, a);
+        box.x1 = Math.max(box.x1, b);
+        box.y0 = Math.min(box.y0, y);
+        box.y1 = y + 1;
+      }
+    }
+    this.active = this.order.subarray(0, n);
+    this.box = box;
+  }
+
+  private isAwake(i: number): boolean {
+    const W = this.width;
+    return this.awake[((i / W / CHUNK) | 0) * this.chunksW + (((i % W) / CHUNK) | 0)] === 1;
+  }
+
   // ── Stepping ────────────────────────────────────────────────────────────
 
   step(): void {
@@ -732,7 +806,8 @@ export class PixelWorld {
     const rate = this.isLava ? 0.012 : 0.022;
     // A room's river wells up no deeper than this, so it never climbs into the hall above.
     const cap = this.plan ? 0.05 : Infinity;
-    for (const s of this.springs) this.fluid[s] = Math.min(cap, this.fluid[s] + rate);
+    for (const s of this.springs)
+      if (this.isAwake(s)) this.fluid[s] = Math.min(cap, this.fluid[s] + rate);
   }
 
   private drainEdges(): void {
@@ -740,10 +815,14 @@ export class PixelWorld {
   }
 
   private flowFluid(rate: number): void {
-    const { width: W, size: N, terrain: h, fluid: w, dw, frost } = this;
-    dw.fill(0);
+    const { width: W, size: N, terrain: h, fluid: w, dw, frost, active } = this;
+    // Awake cells only (a cell clears its own as it wakes): the cost follows the view, not the map.
+    for (let k = 0; k < active.length; k++) dw[active[k]] = 0;
     const surf = (j: number) => (frost[j] > 0.5 && w[j] > 0.003 ? Infinity : h[j] + w[j]);
-    for (let i = 0; i < N; i++) {
+    // ponytail: water flowing into an asleep chunk is dropped (its dw is never applied); rooms
+    // wake whole, so only a hall or a clipped room loses any. Gate the edges if it ever shows.
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       const wi = w[i];
       if (wi < 1e-4) continue;
       if (frost[i] > 0.5) continue;
@@ -793,7 +872,8 @@ export class PixelWorld {
       dw[i] -= move;
       if (move > this.flow[i]) this.flow[i] = move;
     }
-    for (let i = 0; i < N; i++) {
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       const d = dw[i];
       if (d !== 0) {
         const v = w[i] + d;
@@ -821,7 +901,9 @@ export class PixelWorld {
     } = this;
     const lava = this.isLava;
     const snowing = this.weather && this.theme.weather === 'snow';
-    for (let i = 0; i < N; i++) {
+    const active = this.active;
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       let f = fluid[i];
       if (f > 0) {
         f -= f < 0.008 ? 0.00006 : 0.000012;
@@ -870,9 +952,10 @@ export class PixelWorld {
   }
 
   private stepFire(): void {
-    const { width: W, height: H, size: N, fire, fuel, fluid, mat, frost } = this;
+    const { width: W, height: H, fire, fuel, fluid, mat, frost, active } = this;
     const wind = this.wind;
-    for (let i = 0; i < N; i++) {
+    for (let k = 0; k < active.length; k++) {
+      const i = active[k];
       const f = fire[i];
       if (!f) continue;
       const x = i % W;
@@ -1011,7 +1094,12 @@ export class PixelWorld {
   }
 
   private spawnWeather(): void {
-    const { width: W, height: H, margin: M, rand: r } = this;
+    // It falls round the awake chunks (all of the open arena).
+    const { x0: X, y0: Y } = this.box;
+    const W = this.box.x1 - X;
+    const H = this.box.y1 - Y;
+    const M = this.plan ? 0 : this.margin;
+    const r = this.rand;
     switch (this.theme.weather) {
       case 'rain':
       case 'storm': {
@@ -1019,8 +1107,8 @@ export class PixelWorld {
         for (let k = 0; k < n; k++) {
           this.spawn(
             PART.RAIN,
-            r() * (W + 40) - 20 - this.wind * 30,
-            r() * H,
+            X + r() * (W + 40) - 20 - this.wind * 30,
+            Y + r() * H,
             30 + r() * 30,
             this.wind * 1.2,
             0.25,
@@ -1040,8 +1128,8 @@ export class PixelWorld {
         for (let k = 0; k < 9; k++) {
           this.spawn(
             PART.SNOW,
-            r() * (W + 30) - 15 - this.wind * 20,
-            r() * H,
+            X + r() * (W + 30) - 15 - this.wind * 20,
+            Y + r() * H,
             25 + r() * 35,
             this.wind * 0.35,
             0.05,
@@ -1053,8 +1141,8 @@ export class PixelWorld {
         break;
       case 'embers':
         for (let k = 0; k < (r() < 0.6 ? 1 : 0); k++) {
-          const x = M + r() * (W - 2 * M);
-          const y = M + r() * (H - 2 * M);
+          const x = X + M + r() * (W - 2 * M);
+          const y = Y + M + r() * (H - 2 * M);
           this.spawn(
             PART.EMBER,
             x,
@@ -1075,8 +1163,8 @@ export class PixelWorld {
           if (mist < 160) {
             this.spawn(
               PART.MIST,
-              r() * W,
-              r() * H,
+              X + r() * W,
+              Y + r() * H,
               1 + r() * 3,
               this.wind * 0.12 + (r() - 0.5) * 0.05,
               (r() - 0.5) * 0.03,
@@ -1195,7 +1283,7 @@ export class PixelWorld {
 
   private rainLands(i: number, x: number, y: number, fx: number, fy: number): void {
     const r = this.rand;
-    if (this.mat[i] === MAT.WALL) return;
+    if (this.mat[i] === MAT.WALL || !this.isAwake(i)) return;
     if (this.fluid[i] > 0.004) {
       if (this.isLava) {
         if (r() < 0.3) this.spawnSteam(x, y);
