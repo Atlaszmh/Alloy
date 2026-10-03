@@ -1,9 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { QuestsTab } from '../QuestsTab';
-import { QUEST_PREVIEW_KEY } from '../../../quests/useQuests';
+import { SAMPLE_QUESTS } from '../../../quests/__tests__/quest-fixture';
+import type { QuestView } from '../../../quests/types';
 import type { Prompt } from '@/features/delve/kit';
 import type { HubLink } from '../../types';
+
+/** The quests the tab's `useQuests` hands it (the engine's own come with B1); tracking is local. */
+const shown = vi.hoisted(() => ({ quests: [] as QuestView[] }));
+vi.mock('../../../quests/useQuests', async () => {
+  const { useCallback, useState } = await import('react');
+  return {
+    useQuests: () => {
+      const [quests, setQuests] = useState(shown.quests);
+      const setTracked = useCallback(
+        (id: string, on: boolean) =>
+          setQuests((qs) => qs.map((q) => (q.id === id ? { ...q, tracked: on } : q))),
+        [],
+      );
+      return { quests, setTracked };
+    },
+  };
+});
 
 const renderTab = (link?: HubLink) => {
   const props = { setPrompts: vi.fn(), setFooterAction: vi.fn(), go: vi.fn(), onDelve: vi.fn() };
@@ -15,7 +33,9 @@ const lastPrompts = (setPrompts: ReturnType<typeof vi.fn>): Prompt[] =>
   setPrompts.mock.calls.at(-1)?.[0] ?? [];
 
 describe('QuestsTab', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    shown.quests = [];
+  });
 
   it('shows the empty state in its three panes while there are no quests', () => {
     const { setPrompts } = renderTab();
@@ -28,13 +48,13 @@ describe('QuestsTab', () => {
     expect(lastPrompts(setPrompts)).toEqual([]);
   });
 
-  it('previews the fixture: the journal by kind, the first quest open, its objectives and rewards', () => {
-    localStorage.setItem(QUEST_PREVIEW_KEY, '1');
+  it('shows the journal by kind, the first quest open, its objectives and rewards', () => {
+    shown.quests = SAMPLE_QUESTS;
     renderTab();
     expect(screen.queryByTestId('quests-empty')).toBeNull();
     const journal = screen.getByTestId('quest-journal');
     const headings = within(journal).getAllByRole('heading');
-    expect(headings.map((h) => h.textContent)).toEqual(['Journal', 'Main', 'Side', 'Bounties']);
+    expect(headings.map((h) => h.textContent)).toEqual(['Journal', 'Main', 'Side', 'Contracts']);
     expect(screen.getByTestId('quests-tracked')).toHaveTextContent('2 tracked of 3');
     expect(screen.getByTestId('quest-frozen-foreman')).toHaveAttribute('aria-current', 'true');
     const detail = screen.getByTestId('quest-detail');
@@ -51,7 +71,7 @@ describe('QuestsTab', () => {
   });
 
   it('tracks on the HUD from the button and from G / Y, three at most', () => {
-    localStorage.setItem(QUEST_PREVIEW_KEY, '1');
+    shown.quests = SAMPLE_QUESTS;
     const { setPrompts } = renderTab({ tab: 'quests', questId: 'deep-roots' });
     const track = () => screen.getByTestId('quest-track');
     const trackPrompt = () => lastPrompts(setPrompts).find((p) => p.id === 'track');

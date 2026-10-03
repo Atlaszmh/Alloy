@@ -1,6 +1,8 @@
-// The quest view a future engine fills (Delve UI v1, decided item 5); nothing here is a rule.
+// The quest view the journal and the HUD draw: an engine QuestState through quest-view.ts. Nothing
+// here is a rule.
+import type { QuestKind } from '@alloy/engine';
 
-export type QuestKind = 'main' | 'side' | 'bounty';
+export type { QuestKind };
 
 export interface QuestObjective {
   id: string;
@@ -41,7 +43,7 @@ export const QUEST_KIND: Record<
 > = {
   main: { tag: 'Main', group: 'Main', swatch: '#feae34', text: '#feae34' },
   side: { tag: 'Side', group: 'Side', swatch: '#2ce8f5', text: '#2ce8f5' },
-  bounty: { tag: 'Bounty', group: 'Bounties', swatch: '#b55088', text: '#d7a6e8' },
+  contract: { tag: 'Contract', group: 'Contracts', swatch: '#b55088', text: '#d7a6e8' },
 };
 
 /** An objective's count: "6 / 8" while it has progress, else nothing. */

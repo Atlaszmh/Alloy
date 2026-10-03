@@ -4,7 +4,7 @@ import { generateItem, MANA_TYPES, SeededRNG, type ManaType } from '@alloy/engin
 import { FloorColumn, type FloorColumnProps } from '../FloorColumn';
 import type { ArenaHud, HudMap } from '../../useArenaCore';
 import { getDelveRegistry } from '../../../registry';
-import { SAMPLE_QUESTS } from '../../../quests/sample';
+import { SAMPLE_QUESTS } from '../../../quests/__tests__/quest-fixture';
 import { useDelveStore } from '@/stores/delveStore';
 import { contrast } from '../../../kit/controls';
 
