@@ -158,7 +158,7 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
       className="box-border grid h-full gap-6 px-8 py-6"
       style={{ gridTemplateColumns: COLUMNS }}
     >
-      {quest ? (
+      {quest && (
         <>
           <Journal
             quests={quests}
@@ -181,24 +181,6 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
             onReroll={onReroll}
             message={message}
           />
-        </>
-      ) : (
-        <>
-          <Panel title="Journal">
-            <div className="flex-1" style={DASHED} />
-          </Panel>
-          <Panel aria-label="Quest">
-            <p
-              className="m-0 p-4 text-[16px] text-[var(--k-text-2)]"
-              style={DASHED}
-              data-testid="quests-empty"
-            >
-              Quests arrive in a later update. The journal and the HUD tracker are ready for them.
-            </p>
-          </Panel>
-          <Panel title="Rewards">
-            <div className="flex-1" style={DASHED} />
-          </Panel>
         </>
       )}
     </div>

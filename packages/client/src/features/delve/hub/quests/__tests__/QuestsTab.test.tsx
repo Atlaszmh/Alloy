@@ -64,21 +64,9 @@ describe('QuestsTab', () => {
   });
   afterEach(() => useDelveStore.setState({ claimQuest, rerollContract: reroll, markQuestSeen }));
 
-  it('shows the empty state in its three panes while there are no quests', () => {
-    const { setPrompts } = renderTab();
-    expect(screen.getByTestId('quests-empty')).toHaveTextContent(
-      'Quests arrive in a later update. The journal and the HUD tracker are ready for them.',
-    );
-    expect(screen.getByRole('region', { name: 'Journal' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Rewards' })).toBeInTheDocument();
-    expect(screen.queryByTestId('quest-journal')).toBeNull();
-    expect(lastPrompts(setPrompts)).toEqual([]);
-  });
-
   it('shows the journal by kind, the first quest open, its objectives and rewards', () => {
     shown.quests = SAMPLE_QUESTS;
     renderTab();
-    expect(screen.queryByTestId('quests-empty')).toBeNull();
     const journal = screen.getByTestId('quest-journal');
     const headings = within(journal).getAllByRole('heading');
     expect(headings.map((h) => h.textContent)).toEqual(['Journal', 'Main', 'Side', 'Contracts']);

@@ -108,7 +108,8 @@ describe('AnvilHub', () => {
     expect(hub).toHaveTextContent('Deepest 0 · 0 of 12 legendaries');
   });
 
-  it('shows each tab: Loadout with the how-to, Skills, Forge, Codex and the Quests empty state', () => {
+  it('shows each tab: Loadout with the how-to, Skills, Forge, Codex and Quests', () => {
+    shown.quests = SAMPLE_QUESTS;
     renderHub();
     expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
     expect(screen.getByTestId('paper-doll')).toBeInTheDocument();
@@ -123,7 +124,7 @@ describe('AnvilHub', () => {
     fireEvent.click(screen.getByTestId('codex-section-reactions'));
     expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(15);
     fireEvent.click(screen.getByTestId('tab-quests'));
-    expect(screen.getByTestId('quests-empty')).toHaveTextContent('Quests arrive in a later update');
+    expect(screen.getByTestId('quest-journal')).toBeInTheDocument();
   });
 
   it("the Loadout's attunement line opens Skills, and the how-to goes after the first dive", () => {
