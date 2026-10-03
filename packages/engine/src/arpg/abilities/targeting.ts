@@ -2,13 +2,13 @@ import type { ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity, Projectile, Vec } from '../../types/arpg.js';
 import type { SimCtx } from '../combat.js';
 import { dirTo, dist } from '../geometry.js';
-import { snapToWalkable } from '../grid.js';
+import { clipSight, sees, snapToWalkable } from '../grid.js';
 
 export function alive(ctx: SimCtx): MonsterEntity[] {
   return ctx.world.monsters.filter((m) => !m.dead);
 }
 
-/** Nearest living monster whose edge is within `range` of (x, y). */
+/** Nearest living monster whose edge is within `range` of (x, y), and that (x, y) sees. */
 export function nearestMonster(
   ctx: SimCtx,
   x: number,
@@ -21,7 +21,7 @@ export function nearestMonster(
   for (const m of ctx.world.monsters) {
     if (m.dead || exclude?.has(m.id)) continue;
     const d = dist(x, y, m.x, m.y) - m.radius;
-    if (d <= range && d < bestD) {
+    if (d <= range && d < bestD && sees(ctx.world.map, { x, y }, m)) {
       best = m;
       bestD = d;
     }
@@ -29,10 +29,12 @@ export function nearestMonster(
   return best;
 }
 
-/** The in-range monster whose surroundings hold the most foes (for placed abilities). */
+/** The in-range monster the hero sees whose surroundings hold the most foes (for placed abilities). */
 export function bestCluster(ctx: SimCtx, range: number, radius: number): MonsterEntity | null {
   const h = ctx.world.hero;
-  const candidates = alive(ctx).filter((m) => dist(h.x, h.y, m.x, m.y) - m.radius <= range);
+  const candidates = alive(ctx).filter(
+    (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= range && sees(ctx.world.map, h, m),
+  );
   let best: MonsterEntity | null = null;
   let bestScore = -1;
   for (const c of candidates) {
@@ -68,12 +70,23 @@ export function spawnProjectile(
   ctx.world.projectiles.push(proj);
   return proj;
 }
+
+/**
+ * Where a shot leaves the hero: `out` along `d`, or the hero's own place when
+ * that point is in a wall or out of its sight (see the floor maps spec).
+ */
+export function muzzle(ctx: SimCtx, d: Vec, out: number): Vec {
+  const h = ctx.world.hero;
+  const p = { x: h.x + d.x * out, y: h.y + d.y * out };
+  return sees(ctx.world.map, h, p) ? p : { x: h.x, y: h.y };
+}
 /** Forms fired along a way from the hero (the rest are placed, self-centred or Blink). */
 export const DIRECTIONAL = new Set(['bolt', 'volley', 'lance', 'strike']);
 const PLACED = new Set(['burst', 'barrage', 'maelstrom']);
 
 /**
- * Where an ability goes. An explicit aim is clamped to range; otherwise
+ * Where an ability goes. An explicit aim is clamped to range and to the
+ * hero's sight (a placed form can't land in an unseen room); otherwise
  * directional forms take the nearest foe, placed forms the densest cluster,
  * Blink runs from the nearest foe, and self-centred forms need nothing.
  * Null means there is nothing to aim at (the cast fails for free).
@@ -86,7 +99,8 @@ export function aimPoint(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): Vec
     const d = dist(h.x, h.y, aim.x, aim.y);
     const reach = ab.range || d;
     const k = d > reach ? reach / d : 1;
-    return snapToWalkable(world.map, h.x + (aim.x - h.x) * k, h.y + (aim.y - h.y) * k);
+    const p = snapToWalkable(world.map, h.x + (aim.x - h.x) * k, h.y + (aim.y - h.y) * k);
+    return clipSight(world.map, h, p);
   }
   if (DIRECTIONAL.has(form)) {
     const m = nearestMonster(ctx, h.x, h.y, ab.range + 1);

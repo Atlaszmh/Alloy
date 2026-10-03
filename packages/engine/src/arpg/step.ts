@@ -21,8 +21,8 @@ import {
   stackIntensity,
   type SimCtx,
 } from './combat.js';
-import { clampLen, dirTo, dist } from './geometry.js';
-import { isWalkable, moveCircle, snapToWalkable } from './grid.js';
+import { clamp, clampLen, dirTo, dist } from './geometry.js';
+import { clipSight, isWalkable, moveCircle, sees, shift, snapToWalkable } from './grid.js';
 import {
   canAfford,
   castAbility,
@@ -43,10 +43,11 @@ import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 import { addMaterial } from '../loot/materials.js';
-import { flowTick, leashTick } from './flow.js';
+import { clearanceOf, downhill, flowTick, homeWay, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
+import { nearIndices, spatialHash } from './spatial.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -349,9 +350,11 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
 
 // ── Projectiles ────────────────────────────────────────────────────────────
 
-/** Volley darts turn toward their foe (or the next nearest once it dies). */
+/** Volley darts turn toward their foe while they see it (else the next nearest they see). */
 function steer(ctx: SimCtx, p: Projectile, dt: number): void {
-  let target = ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead) ?? null;
+  const map = ctx.world.map;
+  let target =
+    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && sees(map, p, m)) ?? null;
   if (!target) {
     target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds));
     p.homingId = target?.id ?? null;
@@ -373,11 +376,14 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
   for (const p of world.projectiles) {
     if (p.dead) continue;
     if (p.homingId !== null) steer(ctx, p, dt);
+    const before = { x: p.x, y: p.y };
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.traveled += Math.hypot(p.vx, p.vy) * dt;
-    // In a wall or off the map.
-    const outside = !isWalkable(world.map, p.x, p.y);
+    // A wall stops it at its face (where a bolt bursts); off the map ends it too.
+    const wall = !sees(world.map, before, p);
+    if (wall) Object.assign(p, clipSight(world.map, before, p));
+    const outside = wall || !isWalkable(world.map, p.x, p.y);
     const expired = p.traveled >= p.maxDist || outside;
 
     if (p.owner === 'monster') {
@@ -469,10 +475,12 @@ function zonesTick(ctx: SimCtx): void {
           element: z.element,
           infusion: null,
         });
+        // The slam reaches only what it sees.
         const o = perfectOrigin(ctx);
-        if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius)
+        if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius && sees(world.map, z, h))
           hurtHero(ctx, z.damage, z.element, null);
-        else if (o && dist(o.x, o.y, z.x, z.y) <= z.radius + h.radius) notePerfect(ctx);
+        else if (o && dist(o.x, o.y, z.x, z.y) <= z.radius + h.radius && sees(world.map, z, o))
+          notePerfect(ctx);
       }
       continue;
     }
@@ -493,10 +501,10 @@ function zonesTick(ctx: SimCtx): void {
     if (z.ability)
       impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { tick: true, silent: true });
     else {
-      // A blow's Linger: each foe inside takes a basic hit (no crit) of its element.
+      // A blow's Linger: each foe inside that it sees takes a basic hit (no crit) of its element.
       const applies = z.element ? [BASIC_STATUS[z.element]] : [];
       for (const m of world.monsters)
-        if (!m.dead && dist(z.x, z.y, m.x, m.y) <= z.radius + m.radius)
+        if (!m.dead && dist(z.x, z.y, m.x, m.y) <= z.radius + m.radius && sees(world.map, z, m))
           hitMonster(ctx, m, z.damage, z.element, { source: 'basic', canCrit: false, applies });
     }
   }
@@ -520,11 +528,40 @@ function gapFromDodge(ctx: SimCtx, m: MonsterEntity): number {
   return o ? dist(m.x, m.y, o.x, o.y) - m.radius - ctx.world.hero.radius : Infinity;
 }
 
-/** Rooted foes stay put (they can still attack in reach). */
+/** Rooted foes stay put (they can still attack in reach); a wall stops the rest. */
 function moveMonster(ctx: SimCtx, m: MonsterEntity, dir: Vec, speed: number, dt: number): void {
   if (isRooted(ctx, m)) return;
-  m.x += dir.x * speed * dt;
-  m.y += dir.y * speed * dt;
+  shift(ctx.world.map, m, m.radius, dir.x * speed * dt, dir.y * speed * dt);
+  keepInRoom(ctx, m);
+}
+
+/** A boss never leaves its room (see the floor maps spec); the open room's has none. */
+function keepInRoom(ctx: SimCtx, m: MonsterEntity): void {
+  if (m.kind !== 'boss' || m.roomId === null) return;
+  const rect = ctx.world.map.rooms.find((r) => r.id === m.roomId)?.rect;
+  if (!rect) return;
+  m.x = clamp(m.x, rect.x + m.radius, rect.x + rect.w - m.radius);
+  m.y = clamp(m.y, rect.y + m.radius, rect.y + rect.h - m.radius);
+}
+
+/**
+ * Go after the hero (see the floor maps spec): straight at it (`toTarget`) in
+ * the open room or when `direct`, else down the foe's clearance class's flow
+ * field; beyond the field it holds its place.
+ */
+function pursue(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  toTarget: Vec,
+  direct: boolean,
+  speed: number,
+  dt: number,
+): void {
+  const { world } = ctx;
+  if (world.map.open || direct) return moveMonster(ctx, m, toTarget, speed, dt);
+  const field = clearanceOf(m) === 'large' ? world.flow.large : world.flow.small;
+  const way = field && downhill(world.map, field, m, world.hero);
+  if (way) moveMonster(ctx, m, way, speed, dt);
 }
 
 function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
@@ -584,8 +621,13 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
           depth: world.depth,
           door: world.door,
           element: world.element,
-          ...snapToWalkable(world.map, m.x + (i === 0 ? -1.8 : 1.8), m.y + 1.2, 1),
+          ...clipSight(
+            world.map,
+            m,
+            snapToWalkable(world.map, m.x + (i === 0 ? -1.8 : 1.8), m.y + 1.2, 1),
+          ),
           packId: m.packId,
+          roomId: m.roomId,
         },
         world.rng,
       );
@@ -631,8 +673,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       m.hp = Math.min(m.maxHp, m.hp + m.maxHp * bal.monster.traits.regenPerSecond * dt);
 
     if (m.kbx !== 0 || m.kby !== 0) {
-      m.x += m.kbx * dt;
-      m.y += m.kby * dt;
+      shift(world.map, m, m.radius, m.kbx * dt, m.kby * dt);
+      keepInRoom(ctx, m);
       const decay = Math.exp(-10 * dt);
       m.kbx = Math.abs(m.kbx * decay) < 0.05 ? 0 : m.kbx * decay;
       m.kby = Math.abs(m.kby * decay) < 0.05 ? 0 : m.kby * decay;
@@ -640,9 +682,16 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     // A training dummy keeps its statuses and its knockback, but never acts.
     if (m.dummy) continue;
+    // A leashed foe walks home and does nothing else (`leashTick`).
+    if (m.goingHome) {
+      const way = isStunned(ctx, m) ? null : homeWay(world.map, m);
+      if (way) moveMonster(ctx, m, way, m.speed, dt);
+      continue;
+    }
 
+    // A foe wakes when it sees the hero near (or is hit), and its pack with it.
     if (!m.aggro) {
-      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius) {
+      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && sees(world.map, m, h)) {
         for (const o of world.monsters) {
           if (!o.dead && !o.aggro && o.packId === m.packId) {
             o.aggro = true;
@@ -656,6 +705,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
+    // It attacks only what it sees; with sight in `ai.directRange` it steers straight at it.
+    const seen = sees(world.map, m, h);
+    const near = seen && dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange;
     const chill = Math.min(bal.stacks.frostSlowCap, s.stacks.frost * bal.stacks.frostSlowPerStack);
     const speed = m.speed * (1 - chill);
 
@@ -681,7 +733,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7.5) moveMonster(ctx, m, toTarget, speed, dt);
+        if (gap > 7.5 || !seen) pursue(ctx, m, toTarget, near, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.75;
@@ -694,6 +746,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           if (world.t >= m.windupUntil) {
             m.windupUntil = 0;
             m.nextAttackAt = world.t + m.attackInterval;
+            // It fires only with sight.
+            if (!seen) break;
             spawnProjectile(ctx, {
               owner: 'monster',
               form: null,
@@ -715,9 +769,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7) moveMonster(ctx, m, toTarget, speed, dt);
+        if (gap > 7 || !seen) pursue(ctx, m, toTarget, seen, speed, dt);
         else if (gap < 3.5) moveMonster(ctx, m, toTarget, -speed * 0.7, dt);
-        if (gap <= 8 && world.t >= m.nextAttackAt) {
+        if (seen && gap <= 8 && world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.5;
         }
@@ -728,12 +782,12 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           if (world.t >= m.windupUntil) {
             m.windupUntil = 0;
             m.nextAttackAt = world.t + m.attackInterval;
-            if (gap <= m.attackRange + 0.5) damageHero(ctx, m, m.damage, true);
+            if (gap <= m.attackRange + 0.5 && seen) damageHero(ctx, m, m.damage, true);
             else if (gapFromDodge(ctx, m) <= m.attackRange + 0.5) notePerfect(ctx);
           }
           break;
         }
-        if (gap > m.attackRange) moveMonster(ctx, m, toTarget, speed, dt);
+        if (gap > m.attackRange || !seen) pursue(ctx, m, toTarget, near, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + bal.monster.windup * (m.kind === 'boss' ? 1.5 : 1);
@@ -745,24 +799,31 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
 // ── Collisions & pickups ───────────────────────────────────────────────────
 
+/**
+ * Foes push apart, and the hero from them, never into a wall. Each pair is
+ * looked at in the list's order, as always, but only neighbours in a spatial
+ * hash whose cells span the widest pair and a unit more for this pass's shoves.
+ */
 function separate(ctx: SimCtx): void {
   const { world } = ctx;
+  const map = world.map;
   const h = world.hero;
   const dashing = isDashing(ctx);
   const ms = world.monsters.filter((m) => !m.dead);
+  // ponytail: a crowd shoved over a unit in one pass could miss a pair; the next tick has it.
+  const hash = spatialHash(ms, 2 * Math.max(0, ...ms.map((m) => m.radius)) + 1);
   for (let i = 0; i < ms.length; i++) {
     const a = ms[i];
-    for (let j = i + 1; j < ms.length; j++) {
+    for (const j of nearIndices(hash, a.x, a.y)) {
+      if (j <= i) continue;
       const b = ms[j];
       const d = dist(a.x, a.y, b.x, b.y);
       const overlap = a.radius + b.radius - d;
       if (overlap <= 0) continue;
       const n = d > 1e-6 ? { x: (b.x - a.x) / d, y: (b.y - a.y) / d } : { x: 1, y: 0 };
       const wa = b.kind === 'boss' ? 1 : a.kind === 'boss' ? 0 : 0.5;
-      a.x -= n.x * overlap * wa;
-      a.y -= n.y * overlap * wa;
-      b.x += n.x * overlap * (1 - wa);
-      b.y += n.y * overlap * (1 - wa);
+      shift(map, a, a.radius, -n.x * overlap * wa, -n.y * overlap * wa);
+      shift(map, b, b.radius, n.x * overlap * (1 - wa), n.y * overlap * (1 - wa));
     }
     // A dashing hero slips through foes.
     if (dashing) continue;
@@ -772,16 +833,17 @@ function separate(ctx: SimCtx): void {
       const n = d > 1e-6 ? { x: (a.x - h.x) / d, y: (a.y - h.y) / d } : { x: 0, y: -1 };
       // A dummy doesn't budge for the hero; a boss mostly doesn't.
       const heroShare = a.dummy ? 1 : a.kind === 'boss' ? 0.8 : 0.2;
-      a.x += n.x * overlap * (1 - heroShare);
-      a.y += n.y * overlap * (1 - heroShare);
-      h.x -= n.x * overlap * heroShare;
-      h.y -= n.y * overlap * heroShare;
+      shift(map, a, a.radius, n.x * overlap * (1 - heroShare), n.y * overlap * (1 - heroShare));
+      shift(map, h, h.radius, -n.x * overlap * heroShare, -n.y * overlap * heroShare);
     }
   }
   // Whatever the moves and pushes left pressed into a wall goes back out.
   for (const m of ms) Object.assign(m, moveCircle(world.map, m, m.radius, 0, 0));
   Object.assign(h, moveCircle(world.map, h, h.radius, 0, 0));
 }
+
+/** A drop's size on the grid, as the magnet and the vacuum slide it along walls. */
+const DROP_RADIUS = 0.25;
 
 /** Gear, runes, patterns and essences are walked over; everything else flies to the hero in the magnet's reach. */
 function walkedOver(d: Drop): boolean {
@@ -797,13 +859,13 @@ function dropsTick(ctx: SimCtx, dt: number): void {
   for (const d of world.drops) {
     if (d.dead) continue;
     const gap = dist(h.x, h.y, d.x, d.y);
-    const magnet = !walkedOver(d) && gap < bal.hero.magnetRadius;
+    // The magnet draws what it sees; the vacuum, anything. Both slide along walls.
+    const magnet = !walkedOver(d) && gap < bal.hero.magnetRadius && sees(world.map, d, h);
     if (d.vacuum || magnet) {
       const dir = dirTo(d.x, d.y, h.x, h.y);
       const speed = d.vacuum ? vacuumSpeed : magnetSpeed;
       const stepLen = Math.min(gap, speed * dt);
-      d.x += dir.x * stepLen;
-      d.y += dir.y * stepLen;
+      shift(world.map, d, DROP_RADIUS, dir.x * stepLen, dir.y * stepLen);
     }
     if (world.t - d.born < pickupDelay) continue;
     if (dist(h.x, h.y, d.x, d.y) > bal.hero.pickupRadius) continue;

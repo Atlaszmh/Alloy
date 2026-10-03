@@ -139,9 +139,17 @@ export function snapToWalkable(map: FloorMap, x: number, y: number, margin = 0):
  * crack. In the open room any two points on the map see each other.
  */
 export function lineOfSight(map: FloorMap, a: Vec, b: Vec): boolean {
+  return blockedAt(map, a, b) === null;
+}
+
+/**
+ * Where along the segment from `a` to `b` (0 at a, 1 at b) it first meets a
+ * blocked cell, as `lineOfSight` walks it; null when nothing blocks it.
+ */
+function blockedAt(map: FloorMap, a: Vec, b: Vec): number | null {
   let cx = cellOf(a.x, map.width);
   let cy = cellOf(a.y, map.height);
-  if (blocked(map, cx, cy) || !isWalkable(map, b.x, b.y)) return false;
+  if (blocked(map, cx, cy)) return 0;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const sx = Math.sign(dx);
@@ -151,10 +159,50 @@ export function lineOfSight(map: FloorMap, a: Vec, b: Vec): boolean {
   const tx = () => (sx ? (cx + (sx > 0 ? 1 : 0) - a.x) / dx : Infinity);
   const ty = () => (sy ? (cy + (sy > 0 ? 1 : 0) - a.y) / dy : Infinity);
   for (let x = tx(), y = ty(); Math.min(x, y) < 1; x = tx(), y = ty()) {
-    if (x === y && (blocked(map, cx + sx, cy) || blocked(map, cx, cy + sy))) return false;
+    if (x === y && (blocked(map, cx + sx, cy) || blocked(map, cx, cy + sy))) return x;
     if (x <= y) cx += sx;
     if (y <= x) cy += sy;
-    if (blocked(map, cx, cy)) return false;
+    if (blocked(map, cx, cy)) return Math.min(x, y);
   }
-  return true;
+  return isWalkable(map, b.x, b.y) ? null : 1;
+}
+
+/**
+ * Whether `a` sees `b` (see the floor maps spec's "Line of sight"): every hit
+ * site asks this. The open room has no walls, so there anything sees anything.
+ */
+export function sees(map: FloorMap, a: Vec, b: Vec): boolean {
+  return map.open || lineOfSight(map, a, b);
+}
+
+/**
+ * `b` if `a` sees it, else the last point before the segment from `a` meets
+ * its first blocked cell (`a` itself in a wall): where a beam ends, a shot
+ * bursts, Blink lands, and an aim point or a scattered impact is clipped to.
+ */
+export function clipSight(map: FloorMap, a: Vec, b: Vec): Vec {
+  if (map.open) return b;
+  const at = blockedAt(map, a, b);
+  if (at === null) return b;
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  // A hair short of the blocked cell, so the point stands in the last open one.
+  const k = len > 0 ? Math.max(0, at - 1e-6 / len) : 0;
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+}
+
+/**
+ * Move a body by (dx, dy) on the grid (`moveCircle`); in the open room it
+ * moves freely, as it always has (the end of the tick puts a foe back inside).
+ */
+export function shift(
+  map: FloorMap,
+  body: { x: number; y: number },
+  radius: number,
+  dx: number,
+  dy: number,
+): void {
+  if (map.open) {
+    body.x += dx;
+    body.y += dy;
+  } else Object.assign(body, moveCircle(map, body, radius, dx, dy));
 }
