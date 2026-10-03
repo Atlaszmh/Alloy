@@ -26,9 +26,20 @@ export function applyShrine(_registry: DataRegistry, _world: ArpgWorld, _shrine:
 }
 
 /** Take the exit: `world.exited` (the client after its confirm, the bot at once). */
-export function exitFloor(_world: ArpgWorld): void {
-  throw new Error('exitFloor: not implemented');
+export function exitFloor(world: ArpgWorld): void {
+  world.exited = true;
 }
 
-/** `killMonster`'s room hook: a room's last foe pulls its foes' drops in (`ai.roomVacuum`) and fires `roomCleared`. */
-export function onMonsterKilled(_ctx: SimCtx, _m: MonsterEntity): void {}
+/**
+ * `killMonster`'s room hook: when a room's last foe dies, the room is cleared
+ * (`roomCleared`) and its foes' drops are pulled to the hero (`ai.roomVacuum`).
+ */
+export function onMonsterKilled(ctx: SimCtx, m: MonsterEntity): void {
+  const { world, bal, events } = ctx;
+  if (m.roomId === null || world.monsters.some((o) => !o.dead && o.roomId === m.roomId)) return;
+  const room = world.map.rooms.find((r) => r.id === m.roomId);
+  if (!room || room.cleared) return;
+  room.cleared = true;
+  if (bal.ai.roomVacuum) for (const d of world.drops) if (d.roomId === m.roomId) d.vacuum = true;
+  events.push({ kind: 'roomCleared', roomId: room.id });
+}
