@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { flowField } from '../src/arpg/flow.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
-import { arena, bal, dummy, run } from './fixtures/arena.js';
+import { arena, bal, dummy, registry, run } from './fixtures/arena.js';
 import { onMap } from './fixtures/maps.js';
 
 // The leash (see the floor maps spec's "Leash"): a foe kept far from its room's
@@ -36,6 +37,18 @@ describe('the leash', () => {
     // A step from the bottom of its home field.
     const cell = Math.floor(m.y) * w.width + Math.floor(m.x);
     expect(w.map.rooms[0].homeField![cell]).toBeLessThanOrEqual(1);
+  });
+
+  it('a foe walking home that is hit turns back on the hero, its leash counted again', () => {
+    const w = homeRoom(onMap(arena([stray()], { noBasic: true }), []));
+    const m = w.monsters[0];
+    run(w, bal.ai.leashSeconds + 0.2);
+    expect(m.goingHome).toBe(true);
+    hitMonster(makeCtx(registry, w, []), m, 10, null, { source: 'skill' });
+    expect(m).toMatchObject({ goingHome: false, farSince: null, aggro: true });
+    run(w, 0.5);
+    expect(m.goingHome).toBe(false);
+    expect(m.farSince).not.toBeNull();
   });
 
   it('coming back within it starts the count again', () => {

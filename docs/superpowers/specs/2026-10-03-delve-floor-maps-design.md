@@ -120,6 +120,7 @@ interface Interactable { id: string /* `${depth}:${roomId}` */; kind: 'chest' | 
 - **Leash:**
   - **Trigger:** a monster farther than `ai.leashRadius` from its room's centre for more than `ai.leashSeconds` turns home along its room's `homeField`.
   - **On arrival:** it heals to full and sleeps again (`aggro` and `aggroAt` reset, so a boss's enrage timer restarts).
+  - **Hit on the way:** a monster walking home that is hit turns back, its leash counted afresh.
   - **Open layout:** there is no leash.
 - **Spatial hash:** a uniform-grid spatial hash (`arpg/spatial.ts`) replaces all-pairs separation and linear nearest-foe scans.
 
