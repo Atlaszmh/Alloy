@@ -17,6 +17,9 @@ import { addToPouch } from '../loot/runes.js';
 import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
 import { stochasticRound } from '../loot/drops.js';
 import type { SetChainsOptions } from './runes.js';
+import { refillBoard } from './contracts.js';
+import { applyQuestEvents, resetDiveQuests } from './quests.js';
+import type { QuestEvent } from '../types/quests.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
   return isBossFloor(registry, depth);
@@ -65,13 +68,15 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
-  return {
+  const started: DelveProfile = {
     ...profile,
     dive,
     diveCount: profile.diveCount + 1,
     bestDepth: Math.max(profile.bestDepth, startDepth),
     stats: { ...profile.stats, dives: profile.stats.dives + 1 },
   };
+  // A dive's dive-scoped objectives start afresh, and it enters its first depth (see the quests spec).
+  return applyQuestEvents(registry, resetDiveQuests(registry, started), [{ type: 'reachDepth', depth: startDepth }]);
 }
 
 /** The dive; with `phase`, one in that phase and not settled (a settled dive goes nowhere). */
@@ -150,7 +155,9 @@ export interface BankResult {
  * cleared floor banks. Call it whenever pickups happen so new gear can be
  * equipped mid-floor, and at floor end. Auto-salvaged weapons' runes follow the
  * parts rule (`opts.unsocket`, else the balance's). A world's first bank starts
- * the haul afresh (`WorldPending.newFloor`).
+ * the haul afresh (`WorldPending.newFloor`). Its quest events apply then, after
+ * what it learned (`applyQuestEvents`), so progress counts at every bank,
+ * whatever follows (see the quests spec).
  */
 export function bankWorld(
   registry: DataRegistry,
@@ -209,6 +216,7 @@ export function bankWorld(
       bestFind,
     },
   };
+  next = applyQuestEvents(registry, next, pending.questEvents);
   world.pending = emptyPending();
 
   return {
@@ -291,15 +299,22 @@ export function completeFloor(
   let checkpoints = banked.profile.checkpoints;
   if (bossKilled && !checkpoints.includes(dive.depth)) checkpoints = [...checkpoints, dive.depth].sort((a, b) => a - b);
 
+  const cleared: DelveProfile = {
+    ...banked.profile,
+    firstEssenceGiven: banked.profile.firstEssenceGiven || essenceBanked,
+    checkpoints,
+    dive: nextDive,
+    stats: { ...banked.profile.stats, bossKills: banked.profile.stats.bossKills + (bossKilled ? 1 : 0) },
+  };
+  // The floor's quest events: a boss counts here, once a floor, never as a kill (the quests spec's S4).
+  const events: QuestEvent[] = [
+    { type: 'clearFloor', biome: world.biomeId, depth: dive.depth, noPotion: !world.potionDrunk, noDamage: !world.hurt },
+  ];
+  if (bossKilled) events.push({ type: 'boss', biome: world.biomeId });
+
   return {
     ...banked,
-    profile: {
-      ...banked.profile,
-      firstEssenceGiven: banked.profile.firstEssenceGiven || essenceBanked,
-      checkpoints,
-      dive: nextDive,
-      stats: { ...banked.profile.stats, bossKills: banked.profile.stats.bossKills + (bossKilled ? 1 : 0) },
-    },
+    profile: applyQuestEvents(registry, cleared, events),
     bountyAdded,
     bossKilled,
   };
@@ -332,7 +347,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
   if (!dive.doorChoices.includes(doorId)) throw new Error(`Door not offered: ${doorId}`);
   const door = registry.getDoor(doorId);
   const depth = dive.depth + 1 + (door.mods.skip ?? 0);
-  return {
+  const entered: DelveProfile = {
     ...profile,
     bestDepth: Math.max(profile.bestDepth, depth),
     dive: {
@@ -347,6 +362,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
       phase: 'fighting',
     },
   };
+  return applyQuestEvents(registry, entered, [{ type: 'reachDepth', depth }]);
 }
 
 /** Leave the depths alive, cash in the bounty and settle what the dive banked (`settleDive`). */
@@ -362,7 +378,8 @@ export function extractDive(registry: DataRegistry, profile: DelveProfile): Delv
       scrapEarned: profile.stats.scrapEarned + dive.bounty,
     },
   };
-  return settleDive(registry, extracted, 'extract');
+  // The extract counts before the settle, so the board's refill there comes after it.
+  return settleDive(registry, applyQuestEvents(registry, extracted, [{ type: 'extract', depth: dive.depth }]), 'extract');
 }
 
 /** `haul` with each count passed through `f`, in a fixed order (its essences left out). */
@@ -404,10 +421,14 @@ export function settleDive(registry: DataRegistry, profile: DelveProfile, outcom
     kept = addHaul(dive.banked, mapCounts(share, (n) => -n));
     lost = addHaul(dive.haul, share);
   }
-  return {
+  // The dive's quest events applied as it banked and extracted: its dive-scoped objectives start afresh.
+  const settled = resetDiveQuests(registry, {
     ...stockHaul(profile, kept),
     dive: { ...dive, haul: emptyHaul(), banked: kept, lost, settled: true },
-  };
+  });
+  // A dive that cleared a depth refills the Contract board (the quests spec's S2), once there are templates.
+  const refill = dive.depthsCleared > 0 && registry.getQuestsData().contractTemplates.length > 0;
+  return refill ? refillBoard(registry, settled) : settled;
 }
 
 /**

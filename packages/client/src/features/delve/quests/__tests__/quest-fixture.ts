@@ -1,6 +1,6 @@
-import type { QuestView } from './types';
+import type { QuestView } from '../types';
 
-/** The dev preview's quests (localStorage `alloy:delve:questPreview` = "1"): the Quests board's fixture. */
+/** Quest views for the journal's and the tracker's tests: a main quest, two side quests and a contract. */
 export const SAMPLE_QUESTS: QuestView[] = [
   {
     id: 'frozen-foreman',
@@ -33,6 +33,8 @@ export const SAMPLE_QUESTS: QuestView[] = [
       { id: 'echo', name: 'Rune · Echo III', sub: 'To your pouch', color: '#feae34' },
     ],
     tracked: true,
+    status: 'active',
+    isNew: false,
   },
   {
     id: 'kindling',
@@ -46,6 +48,8 @@ export const SAMPLE_QUESTS: QuestView[] = [
       { id: 'dust', name: '10 Mana Dust', sub: 'For edits and re-attuning', color: '#e8b796' },
     ],
     tracked: true,
+    status: 'active',
+    isNew: false,
   },
   {
     id: 'deep-roots',
@@ -57,16 +61,20 @@ export const SAMPLE_QUESTS: QuestView[] = [
     ],
     rewards: [{ id: 'links', name: '1 Link', sub: 'For slots and sockets', color: '#2ce8f5' }],
     tracked: false,
+    status: 'active',
+    isNew: false,
   },
   {
     id: 'rat-catcher',
-    kind: 'bounty',
+    kind: 'contract',
     name: 'Rat Catcher',
-    sub: 'Refreshes each day',
+    sub: 'Contract board',
     objectives: [
       { id: 'rats', text: 'Slay mine rats', done: false, progress: { value: 4, max: 30 } },
     ],
     rewards: [{ id: 'scrap', name: '200 scrap', sub: 'To your purse', color: '#c0cbdc' }],
     tracked: false,
+    status: 'active',
+    isNew: false,
   },
 ];

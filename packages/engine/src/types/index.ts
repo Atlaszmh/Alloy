@@ -24,3 +24,4 @@ export * from './delve.js';
 export * from './ability.js';
 export * from './rune.js';
 export * from './crafting.js';
+export * from './quests.js';

@@ -21,6 +21,13 @@
       "file": "sprites/dummy.ts"
     },
     {
+      "id": "hesta",
+      "size": 26,
+      "subject": "Hesta, the Anvil-keeper: a sturdy ember-haired blacksmith woman in a leather apron and rolled linen sleeves, holding a steel smithing hammer",
+      "source": "code",
+      "file": "sprites/hesta.ts"
+    },
+    {
       "id": "mine_rat",
       "size": 10,
       "subject": "a mangy grey mine rat with glowing orange ember eyes and a soot-black tail",

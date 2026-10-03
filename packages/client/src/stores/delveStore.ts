@@ -15,6 +15,10 @@ import {
   imprint as engineImprint,
   refine as engineRefine,
   buyShard as engineBuyShard,
+  claimQuest as engineClaimQuest,
+  rerollContract as engineRerollContract,
+  trackQuest as engineTrackQuest,
+  markQuestSeen as engineMarkQuestSeen,
   fuseRunes as engineFuseRunes,
   setAutoSalvage,
   setChains as engineSetChains,
@@ -47,6 +51,8 @@ import {
   type MaterialRef,
   type ParsedDelveProfile,
   type ProfileActionResult,
+  type ProfileQuests,
+  type QuestDef,
   type Rarity,
   type DraftPrice,
   type RunePouch,
@@ -169,6 +175,34 @@ export function fixNotices(registry: DataRegistry, fixed: ChainFix[], pair: Mana
 export function overtakeNotice(registry: DataRegistry, now: ManaType, was: ManaType): string {
   const name = manaName(registry, now);
   return `${name} now outweighs ${manaName(registry, was)}: ${name} is your primary`;
+}
+
+/**
+ * What quest progress gained between two saves, as toasts (see the quests spec's Notices): "Quest
+ * complete: <name> · claim at the Anvil" for a quest whose last objective is newly done, else
+ * "Objective done: <text>" for each objective newly done. `defs` are the main and side quests
+ * (`getQuestsData().quests`); a contract on the board carries its own name and texts.
+ */
+export function questNotices(
+  defs: readonly QuestDef[],
+  was: ProfileQuests,
+  now: ProfileQuests,
+): string[] {
+  if (was === now) return [];
+  const quests = [
+    ...defs.map((q) => ({ ...q, progress: now.progress[q.id], before: was.progress[q.id] })),
+    ...now.board.flatMap((c) =>
+      c ? [{ ...c, before: was.board.find((b) => b?.id === c.id)?.progress }] : [],
+    ),
+  ];
+  const notices: string[] = [];
+  for (const { name, objectives, progress, before } of quests) {
+    const done = objectives.filter((_, i) => progress?.[i]?.done && !before?.[i]?.done);
+    if (done.length === 0) continue;
+    if (progress.every((p) => p.done)) notices.push(`Quest complete: ${name} · claim at the Anvil`);
+    else for (const o of done) notices.push(`Objective done: ${o.text}`);
+  }
+  return notices;
 }
 
 /** The Anvil builder's unapplied edits (session only): one weapon's, under one pair. */
@@ -415,6 +449,14 @@ interface DelveStore {
   refine: (what: MaterialRef) => ProfileActionResult;
   /** Buy a tier I shard at the shard bench. */
   buyShard: (stat: HeroStatKey) => ProfileActionResult;
+  /** Claim a completed quest or contract at the Anvil: its rewards to the stockpile (see the quests spec). */
+  claimQuest: (id: string) => ProfileActionResult;
+  /** Replace a board slot's contract, for scrap, once an Anvil visit. */
+  rerollContract: (slot: number) => ProfileActionResult;
+  /** Track a quest on the HUD (up to `delve.quests.maxTracked`), or stop. */
+  trackQuest: (id: string, on: boolean) => ProfileActionResult;
+  /** The journal opened a quest: it is NEW no more. */
+  markQuestSeen: (id: string) => void;
   setAutoSalvage: (rarity: Rarity, on: boolean) => void;
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
@@ -469,7 +511,17 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
             floorPatternsFrom: prev.divePatterns.length,
           }
         : {};
-    set(kept ? { profile, ...floor } : { profile, ...floor, chainDraft: null });
+    // Quest progress that finished an objective or a quest becomes a toast, whichever op saved it
+    // (a bank included).
+    const done = prev
+      ? questNotices(getDelveRegistry().getQuestsData().quests, prev.profile.quests, profile.quests)
+      : [];
+    const notices = done.length > 0 ? { notices: [...prev.notices, ...done] } : {};
+    set(
+      kept
+        ? { profile, ...floor, ...notices }
+        : { profile, ...floor, ...notices, chainDraft: null },
+    );
   };
   const registry = () => getDelveRegistry();
   const applyResult = (res: ProfileActionResult) => {
@@ -617,6 +669,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     refine: (what) => applyResult(engineRefine(registry(), get().profile, what)),
 
     buyShard: (stat) => applyResult(engineBuyShard(registry(), get().profile, stat)),
+
+    claimQuest: (id) => applyResult(engineClaimQuest(registry(), get().profile, id)),
+
+    rerollContract: (slot) => applyResult(engineRerollContract(registry(), get().profile, slot)),
+
+    trackQuest: (id, on) => applyResult(engineTrackQuest(registry(), get().profile, id, on)),
+
+    markQuestSeen: (id) => commit(engineMarkQuestSeen(registry(), get().profile, id)),
 
     setAutoSalvage: (rarity, on) => commit(setAutoSalvage(get().profile, rarity, on)),
 

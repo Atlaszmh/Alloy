@@ -35,7 +35,7 @@ describe('economySim', () => {
       expect(Object.keys(d.forged)).toEqual(RARITY_ORDER);
       expect(d.lost === null).toBe(!d.died);
       // Each material exact: the stops' spend is its own, never netted against the Anvil's gains.
-      for (const h of [d.income, d.salvaged, d.spent, d.stops, ...(d.lost ? [d.lost] : [])]) {
+      for (const h of [d.income, d.quests, d.salvaged, d.spent, d.stops, ...(d.lost ? [d.lost] : [])]) {
         const counts = [
           h.scrap,
           h.dust,
@@ -79,16 +79,20 @@ describe('economySim', () => {
     };
     let p = runAutopilot(registry, { seed: 1, dives: 0 }).profile;
     let salvagedAny = false;
+    let questsAny = false;
     for (const d of report.dives) {
       const next = runAutopilot(registry, { seed: 1, dives: 1, profile: p }).profile;
       const delta = minus(flat(stock(next)), flat(stock(p)));
-      const net = minus(minus(flat(d.income), flat(d.spent)), minus({}, flat(d.salvaged)));
+      const came = minus(flat(d.income), minus({}, flat(d.quests)));
+      const net = minus(minus(came, flat(d.spent)), minus({}, flat(d.salvaged)));
+      questsAny ||= Object.keys(flat(d.quests)).length > 0;
       expect(net).toEqual(delta);
       salvagedAny ||= Object.keys(flat(d.salvaged)).length > 0;
       p = next;
     }
     expect(p).toEqual(report.profile);
     expect(salvagedAny).toBe(true);
+    expect(questsAny).toBe(true); // First Steps, claimed after dive 1
   });
 
   it('plays a forced pair', () => {
@@ -102,13 +106,40 @@ describe('the autopilot at the Anvil', () => {
   /** `refs` in a pouch, `n` of each. */
   const pouch = (n: number, ...refs: MaterialRef[]) =>
     refs.reduce((m, ref) => withMaterial(m, ref, n), emptyMaterials());
-  /** A Fire hero, Frost bound, back from a dive to depth 6, holding `over`. */
+  /**
+   * A Fire hero, Frost bound, back from a dive to depth 6, holding `over` (First Steps, done at
+   * depth 2, already claimed: its rewards would muddle the counts).
+   */
   const hero = (over: Partial<DelveProfile> = {}): DelveProfile => {
     const p0 = createDelveProfile(registry, 4, { primary: 'fire' });
     const p = bindSecondary(registry, { ...p0, bestDepth: 6 }, 'frost').profile;
     const stats = { ...p.stats, dives: 1 };
-    return { ...p, materials: emptyMaterials(), scrap: 0, stats, ...over };
+    const quests = { ...p.quests, claimed: ['first_steps'] };
+    return { ...p, materials: emptyMaterials(), scrap: 0, stats, quests, ...over };
   };
+
+  it('claims every completed quest and contract first, so their rewards feed the forge; never rerolls', () => {
+    const p = hero({ patterns: ['sword'] });
+    const contract = p.quests.board[0]!;
+    const count = contract.objectives[0].count;
+    const done = { ...contract, progress: [{ value: count, done: true }] };
+    const ready: DelveProfile = {
+      ...p,
+      quests: { ...p.quests, claimed: [], board: [done, ...p.quests.board.slice(1)] },
+    };
+    expect(ready.quests.progress.first_steps).toEqual([{ value: 2, done: true }]);
+    const after = betweenDives(registry, ready);
+    expect(after.quests.claimed).toContain('first_steps');
+    expect(after.quests.board[0]).toBeNull();
+    expect(after.quests.board.slice(1)).toEqual(p.quests.board.slice(1));
+    expect([after.quests.contractsClaimed, after.quests.boardCount]).toEqual([
+      1,
+      p.quests.boardCount,
+    ]);
+    // First Steps' bars and scrap (it held none) forged a sword.
+    expect(after.materials.metals.iron).toBeLessThan(3);
+    expect(after.equipped.weapon).toMatchObject({ baseId: 'sword', ilvl: 6 });
+  });
 
   it('forges a legendary first, then each slot it can improve: the weapon and two armour pieces in the primary, the rest in the secondary', () => {
     const materials = pouch(

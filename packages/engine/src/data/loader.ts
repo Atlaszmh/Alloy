@@ -7,6 +7,7 @@ import type { DelveData } from '../types/delve.js';
 import type { ArpgData } from '../types/arpg.js';
 import type { RuneDef } from '../types/rune.js';
 import type { CraftingData } from '../types/crafting.js';
+import type { QuestsData } from '../types/quests.js';
 import type { RecipeDefinition } from '../combine/recipe-registry.js';
 import {
   AffixesSchema,
@@ -16,6 +17,7 @@ import {
   CraftingDataSchema,
   CombinationsSchema,
   DelveDataSchema,
+  QuestsDataSchema,
   RecipesSchema,
   RunesSchema,
   SynergiesSchema,
@@ -31,6 +33,7 @@ import rawDelve from './delve.json';
 import rawArpg from './arpg.json';
 import rawRunes from './runes.json';
 import rawCrafting from './crafting.json';
+import rawQuests from './quests.json';
 
 interface RawBaseItemsJSON {
   weapons: unknown[];
@@ -47,6 +50,7 @@ export interface LoadedData {
   delve: DelveData;
   arpg: ArpgData;
   crafting: CraftingData;
+  quests: QuestsData;
 }
 
 export function loadAndValidateData(): LoadedData {
@@ -64,6 +68,18 @@ export function loadAndValidateData(): LoadedData {
     runes: RunesSchema.parse(rawRunes) as unknown as RuneDef[],
   };
   const crafting = CraftingDataSchema.parse(rawCrafting) as CraftingData;
+  const quests = QuestsDataSchema.parse(rawQuests) as QuestsData;
 
-  return { affixes, combinations, recipes, synergies, baseItems, balance, delve, arpg, crafting };
+  return {
+    affixes,
+    combinations,
+    recipes,
+    synergies,
+    baseItems,
+    balance,
+    delve,
+    arpg,
+    crafting,
+    quests,
+  };
 }

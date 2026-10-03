@@ -23,6 +23,7 @@ import type { ChainOrigins } from '../types/rune.js';
 import { isDiveActive } from './dive.js';
 import { inPair } from './pair.js';
 import { withMoveset, type ProfileActionResult } from './profile.js';
+import { applyQuestEvents } from './quests.js';
 import { runeChange, settleParts, type SetChainsOptions } from './runes.js';
 import { socketsOf, takeFromPouch } from '../loot/runes.js';
 
@@ -333,17 +334,20 @@ export function setChains(
   const runes = takeFromPouch(settled.pouch, change.socketed);
   if (!runes) return refuse(profile, 'Not enough runes in your pouch');
   const edited = withMoveset(profile, { ...moveset, chains: next });
+  const paid: DelveProfile = {
+    ...edited,
+    manaDust: profile.manaDust - price,
+    links: profile.links - change.links + change.refundLinks,
+    scrap: profile.scrap - change.scrap,
+    runes,
+  };
+  // Each socket the Apply opens is a quest event (see the quests spec).
+  const opened = Array.from({ length: change.opened }, () => ({ type: 'openSocket' }) as const);
   return {
     ok: true,
     runes: settled.runes,
     destroyed: settled.destroyed,
-    profile: {
-      ...edited,
-      manaDust: profile.manaDust - price,
-      links: profile.links - change.links + change.refundLinks,
-      scrap: profile.scrap - change.scrap,
-      runes,
-    },
+    profile: applyQuestEvents(registry, paid, opened),
   };
 }
 

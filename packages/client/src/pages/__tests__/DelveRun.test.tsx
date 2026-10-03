@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { createDelveProfile, settleDive, startDive, type DelveProfile } from '@alloy/engine';
+import {
+  createDelveProfile,
+  questStates,
+  settleDive,
+  startDive,
+  type DelveProfile,
+  type QuestState,
+} from '@alloy/engine';
 import { createArenaInput } from '@/features/delve/arena/input';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { useDelveStore } from '@/stores/delveStore';
@@ -27,6 +34,8 @@ vi.mock('@alloy/engine', async (orig) => {
   const real = await orig<typeof import('@alloy/engine')>();
   return {
     ...real,
+    // The engine's quests are B1's: each test says what the HUD tracker reads.
+    questStates: vi.fn((): QuestState[] => []),
     settleDive: vi.fn(
       (_registry: unknown, p: DelveProfile) => (
         seen.calls.push('settle'),
@@ -139,6 +148,7 @@ describe('DelveRun', () => {
     seen.paused.length = 0;
     seen.live.length = 0;
     seen.calls.length = 0;
+    vi.mocked(questStates).mockImplementation(() => []);
     const registry = getDelveRegistry();
     useDelveStore.setState({
       profile: startDive(registry, createDelveProfile(registry, 7), 1),
@@ -189,7 +199,10 @@ describe('DelveRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Anvil' }));
     expect(screen.getByTestId('anvil')).toBeInTheDocument();
     expect(useDelveStore.getState().profile.dive).not.toBeNull();
+    // The floor restarts on the way back: what it picked up since the last bank banks first.
+    expect(seen.calls).toEqual(['flush']);
 
+    seen.calls.length = 0;
     cleanup();
     renderRun();
     fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
@@ -231,6 +244,51 @@ describe('DelveRun', () => {
     renderRun();
     act(() => seen.onUi!({ kind: 'patterns', ids: ['maul'] }));
     expect(screen.getByText('Pattern learned: Maul')).toBeInTheDocument();
+  });
+
+  it('the HUD tracker moves as the dive banks, and the bank that finishes a quest toasts it', () => {
+    const first = getDelveRegistry().getQuestsData().quests[0];
+    const { count } = first.objectives[0];
+    // `questStates` as the tracker reads it: the first quest, tracked, its progress the save's.
+    vi.mocked(questStates).mockImplementation((_registry, p: DelveProfile) => [
+      {
+        id: first.id,
+        kind: first.kind,
+        status: 'active',
+        isNew: false,
+        tracked: true,
+        name: first.name,
+        line: first.line,
+        objectives: first.objectives.map((o, i) => ({
+          id: o.id,
+          text: o.text,
+          count: o.count,
+          ...(p.quests.progress[first.id]?.[i] ?? { value: 0, done: false }),
+        })),
+        rewards: [],
+      },
+    ]);
+    /** A bank: the save's progress on each of the first quest's objectives. */
+    const bank = (value: number, done: boolean) =>
+      act(() => {
+        const s = useDelveStore.getState();
+        const progress = { [first.id]: first.objectives.map(() => ({ value, done })) };
+        s.setProfile({ ...s.profile, quests: { ...s.profile.quests, progress } });
+      });
+    bank(0, false);
+    renderRun();
+    const tracked = () => screen.getByTestId(`tracked-${first.id}`);
+    expect(tracked()).toHaveTextContent(`0 / ${count}`);
+    bank(1, false);
+    expect(tracked()).toHaveTextContent(`1 / ${count}`);
+    expect(within(tracked()).getAllByRole('progressbar')[0]).toHaveAttribute('aria-valuenow', '1');
+    bank(count, true);
+    expect(within(tracked()).getAllByRole('img', { name: 'Done' })).toHaveLength(
+      first.objectives.length,
+    );
+    expect(
+      screen.getByText(`Quest complete: ${first.name} · claim at the Anvil`),
+    ).toBeInTheDocument();
   });
 
   it('the Journal opens the pause on Quests', () => {

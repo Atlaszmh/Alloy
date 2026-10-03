@@ -98,4 +98,5 @@ export function notePerfect(ctx: SimCtx): void {
   if (world.t >= h.riposteUntil) refundDodgeCharge(ctx);
   h.riposteUntil = world.t + bal.dodge.riposteWindow;
   ctx.events.push({ kind: 'perfectDodge', x: h.x, y: h.y });
+  if (!world.sandbox) world.pending.questEvents.push({ type: 'perfectDodge' });
 }

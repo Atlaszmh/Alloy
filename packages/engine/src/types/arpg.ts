@@ -4,6 +4,7 @@ import type { GearItem, Rarity } from './gear.js';
 import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
+import type { QuestEvent } from './quests.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -691,6 +692,8 @@ export interface WorldPending {
   haul: Haul;
   /** Patterns picked up, learned when they bank. */
   patterns: string[];
+  /** What happened for the quests' objectives, applied when the world banks (see the quests spec). */
+  questEvents: QuestEvent[];
   /**
    * The world hasn't banked yet: its first bank starts the dive's haul afresh, so
    * a floor replayed from its seed (left for the Anvil mid-floor) loses its
@@ -787,6 +790,10 @@ export interface ArpgWorld {
   cleared: boolean;
   clearedAt: number;
   heroDead: boolean;
+  /** A potion was drunk on this floor: a `clearFloor` objective's `noPotion` (see the quests spec). */
+  potionDrunk: boolean;
+  /** The hero took damage on this floor: `noDamage`. */
+  hurt: boolean;
   /** The Training Grounds' toggles, or null in a dive. Change them with `setSandboxToggles`. */
   sandbox: SandboxToggles | null;
 }

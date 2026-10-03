@@ -49,6 +49,7 @@ describe.skipIf(!process.env.RUNE_COST_GATE)('the rune costs gate (depth 10, eig
     d.delve,
     d.arpg,
     d.crafting,
+    d.quests,
   );
   const byKey = new Map(dpsCombos(registry).map((s) => [dpsKey(s), s]));
   const baseOf = (s: DpsSetup) => byKey.get(s.base!)!;

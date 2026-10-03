@@ -306,6 +306,7 @@ export function freeze(ctx: SimCtx, m: MonsterEntity, seconds: number): void {
 function noteReaction(ctx: SimCtx, reaction: ReactionId, m: MonsterEntity, pairs: number): void {
   ctx.events.push({ kind: 'reaction', reaction, x: m.x, y: m.y, pairs });
   if (!ctx.world.pending.reactions.includes(reaction)) ctx.world.pending.reactions.push(reaction);
+  if (!ctx.world.sandbox) ctx.world.pending.questEvents.push({ type: 'reaction', reaction });
 }
 
 /** Every other living foe within `radius` of `m` (edge to centre, as Overload always measured). */
@@ -733,6 +734,14 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   }
 
   if (!world.sandbox) {
+    // A boss counts for the quests only when its floor completes (`boss`), so a replay can't double it.
+    if (m.kind !== 'boss')
+      world.pending.questEvents.push({
+        type: 'kill',
+        kind: m.kind,
+        biome: world.biomeId,
+        element: m.element,
+      });
     // A replayed floor's foe that already gave gear or a pattern this dive gives neither again.
     const given = world.loot.dropsGiven.includes(m.id);
     dropLoot(ctx, m, given);
@@ -844,6 +853,7 @@ export function hurtHero(
   if (!opts.unavoidable) dmg *= 1 - armorReduction(bal, h.stats.armor, world.depth);
   dmg = shieldHero(ctx, dmg, source, !!opts.melee);
   if (dmg <= 0) return;
+  world.hurt = true;
   // Invulnerable (Training Grounds): the hit lands and reports its damage, but takes no life.
   const blocked = !!world.sandbox?.invulnerable;
   if (!blocked) h.hp -= dmg;

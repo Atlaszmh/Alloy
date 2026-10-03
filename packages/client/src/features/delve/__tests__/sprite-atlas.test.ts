@@ -16,8 +16,8 @@ describe('delve sprite atlas', () => {
   const monsterIds = new Set(
     registry.getDelveData().biomes.flatMap((b) => [...b.monsters.map((m) => m.id), b.boss.id]),
   );
-  /** Everything the arena draws from the atlas: the hero, the training dummy (size 1) and the monsters. */
-  const known = new Set(['hero', 'dummy', ...monsterIds]);
+  /** Everything drawn from the atlas: the hero, the training dummy (size 1), the monsters and Hesta, the Anvil-keeper. */
+  const known = new Set(['hero', 'dummy', 'hesta', ...monsterIds]);
 
   it('only holds sprites the game can use', () => {
     for (const id of Object.keys(atlas.animations)) {
@@ -25,9 +25,9 @@ describe('delve sprite atlas', () => {
     }
   });
 
-  it('covers the hero, the training dummy and the whole first biome', () => {
+  it('covers the hero, the training dummy, Hesta and the whole first biome', () => {
     const first = registry.getDelveData().biomes[0];
-    for (const id of ['hero', 'dummy', ...first.monsters.map((m) => m.id), first.boss.id]) {
+    for (const id of ['hero', 'dummy', 'hesta', ...first.monsters.map((m) => m.id), first.boss.id]) {
       expect(atlas.animations[id]?.length, id).toBeGreaterThanOrEqual(2);
     }
   });
@@ -43,6 +43,7 @@ describe('delve sprite atlas', () => {
     );
     sizes.set('hero', 1);
     sizes.set('dummy', 1);
+    sizes.set('hesta', 1.6);
     for (const [id, names] of Object.entries(atlas.animations)) {
       const want = Math.round(16 * sizes.get(id)!);
       for (const n of names) {

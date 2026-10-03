@@ -210,7 +210,11 @@ export function DelveRun() {
   );
   const openJournal = useCallback(() => openPause({ tab: 'quests' }), [openPause]);
   const resume = useCallback(() => setPause(null), []);
-  const toAnvil = useCallback(() => navigate('/delve'), [navigate]);
+  /** The floor restarts when the dive resumes: what it picked up since the last bank banks first. */
+  const toAnvil = useCallback(() => {
+    arenaRef.current?.flush();
+    navigate('/delve');
+  }, [navigate]);
   /** Abandon counts as a death (the crafting spec's S2): the dive settles, and the summary shows its losses. */
   const abandon = useCallback(() => {
     setPause(null);

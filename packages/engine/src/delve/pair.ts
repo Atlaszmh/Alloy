@@ -8,6 +8,7 @@ import type { ManaType } from '../types/mana.js';
 import { isDiveActive } from './dive.js';
 import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
 import { findItem, replaceItem, withMoveset, type ProfileActionResult } from './profile.js';
+import { applyQuestEvents } from './quests.js';
 import { settleParts, type SetChainsOptions } from './runes.js';
 
 /**
@@ -170,7 +171,7 @@ export function chooseStartingMana(
 
 /** Bind a second element: free, once, between dives. Every move keeps its elements. */
 export function bindSecondary(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
   mana: ManaType,
 ): ProfileActionResult {
@@ -179,7 +180,8 @@ export function bindSecondary(
   if (!primary) return refuse(profile, 'Choose your mana first');
   if (secondary) return refuse(profile, 'Your second element is already bound');
   if (mana === primary) return refuse(profile, 'That is already your primary');
-  return { ok: true, profile: { ...profile, pair: { primary, secondary: mana } } };
+  const bound = { ...profile, pair: { primary, secondary: mana } };
+  return { ok: true, profile: applyQuestEvents(registry, bound, [{ type: 'bind' }]) };
 }
 
 /**
