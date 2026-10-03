@@ -217,6 +217,8 @@ export function bankWorld(
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
       dropsGiven: [...world.loot.dropsGiven],
+      used: [...dive.used, ...pending.used],
+      diveBuffs: [...dive.diveBuffs, ...pending.diveBuffs],
       found,
       bestFind,
     },
