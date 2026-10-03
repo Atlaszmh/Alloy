@@ -241,7 +241,9 @@ describe('rerollContract', () => {
     const board = p.quests.board.slice();
     board[2] = null;
     expect(refused({ ...p, quests: { ...p.quests, board } }, 2)).toBe('No contract to reroll');
-    const complete = board.map((c) => c && { ...c, progress: [{ value: c.objectives[0].count, done: true }] });
+    const complete = board.map(
+      (c) => c && { ...c, progress: [{ value: c.objectives[0].count, done: true }] },
+    );
     expect(refused({ ...p, quests: { ...p.quests, board: complete } })).toBe('Claim it first');
     expect(refused({ ...p, quests: { ...p.quests, rerollUsed: true } })).toBe(
       'One reroll a visit: clear a depth to reroll again',

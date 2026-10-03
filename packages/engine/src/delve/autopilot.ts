@@ -44,6 +44,7 @@ import { addSlot, movesOf, setChain, transferMoveset, withMove } from './moveset
 import { fuseRunes, openSocket } from './runes.js';
 import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
 import { takeStop, type StopAction } from './stops.js';
+import { claimQuest, questStates } from './quests.js';
 import { MAX_CHAIN, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import { RUNE_TIERS, type RuneRef, type RuneTarget, type RuneTier } from '../types/rune.js';
 import type { EconomyDive } from './economy.js';
@@ -54,7 +55,8 @@ import type { EconomyDive } from './economy.js';
  * doors, extracts when spent, and between dives (and once before the first)
  * visits the Anvil: forges its gear from materials, moves its moveset to a
  * better weapon, salvages what it doesn't wear, adds slots and sockets runes,
- * hones and upgrades. Used by the pacing test, `economySim` and for balance sweeps.
+ * hones and upgrades (claiming its completed quests and contracts first, never
+ * rerolling). Used by the pacing test, `economySim` and for balance sweeps.
  */
 
 export interface AutopilotOptions {
@@ -146,6 +148,20 @@ function fusePrimary(registry: DataRegistry, p: DelveProfile): DelveProfile {
   const moves = chain.moves.map((m) => ({ ...m, elements: [primary, secondary] }));
   const res = setChain(registry, p, 'primary', { ...chain, moves });
   return res.ok ? res.profile : p;
+}
+
+/**
+ * Claim every completed quest and contract, in the journal's order, until none
+ * is left (a claimed main quest can unlock one already done: an early bind).
+ */
+function claimAll(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  for (;;) {
+    const done = questStates(registry, p).find((q) => q.status === 'complete');
+    const res = done && claimQuest(registry, p, done.id);
+    if (!res?.ok) return p;
+    p = res.profile;
+  }
 }
 
 /** Between dives: a visit to the Anvil (`anvilVisit`). */
@@ -683,9 +699,11 @@ function outflow(before: DelveProfile, after: DelveProfile): Haul {
   return mapHaul(diff, (n) => Math.max(0, n));
 }
 
-/** What a visit to the Anvil did: the profile after it, what it spent and the items it forged. */
+/** What a visit to the Anvil did: the profile after it, what it claimed and spent, and the items it forged. */
 interface AnvilVisit {
   profile: DelveProfile;
+  /** What its claims put in the stockpile: quest and contract rewards. */
+  quests: Haul;
   /** Each step's net outflow from the stockpile, summed (salvage gives; it spends nothing). */
   spent: Haul;
   forged: GearItem[];
@@ -693,7 +711,9 @@ interface AnvilVisit {
 
 /**
  * The Anvil, between dives, as a player would: an overtaking secondary swaps
- * in and a second element is bound (before anything is salvaged); it melts
+ * in and a second element is bound (before anything is salvaged); it claims
+ * every completed quest and contract (`claimAll`), so their rewards feed what
+ * follows; it melts
  * the gear it doesn't wear, refines flux and bars up, forges (a legendary
  * first), moves its moveset to a better weapon and equips upgrades, melts
  * what they replaced; spends Links on slots up to `SOCKETS_AFTER` a chain,
@@ -704,7 +724,9 @@ interface AnvilVisit {
  * forge); and builds the Primary of whatever weapon it wields from both elements.
  */
 function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
-  let p = bindPair(registry, resolveOvertake(registry, profile).profile);
+  const bound = bindPair(registry, resolveOvertake(registry, profile).profile);
+  let p = claimAll(registry, bound);
+  const quests = outflow(p, bound); // what came in: the claims spend nothing
   let spent = emptyHaul();
   const pay = (next: DelveProfile) => {
     spent = addHaul(spent, outflow(p, next));
@@ -734,7 +756,7 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
     pay(upgradeAll(registry, p));
   }
   pay(fusePrimary(registry, p));
-  return { profile: p, spent, forged };
+  return { profile: p, quests, spent, forged };
 }
 /** What a dive brought into the stockpile: what it banked and kept, and an extract's bounty. */
 function diveIncome(p: DelveProfile): Haul {
@@ -809,6 +831,7 @@ export function runAutopilot(
     economy.push({
       dive: n + 1,
       income: diveIncome(p),
+      quests: visit.quests,
       spent: visit.spent,
       stops,
       lost: dive.lost,
