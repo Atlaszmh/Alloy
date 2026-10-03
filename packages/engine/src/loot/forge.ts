@@ -10,8 +10,8 @@ import type {
   ShardRef,
 } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { GearItem, HeroStatKey, Moveset, Rarity, StatRoll } from '../types/gear.js';
-import { MANA_TYPES, type ManaType } from '../types/mana.js';
+import type { GearItem, Moveset, Rarity, StatRoll } from '../types/gear.js';
+import type { ManaType } from '../types/mana.js';
 import { isDiveActive } from '../delve/dive.js';
 import { movesOf } from '../delve/moveset.js';
 import { inPair, profileStats } from '../delve/pair.js';
@@ -19,6 +19,7 @@ import {
   affixValue,
   baseDisplayName,
   eligibleAffixes,
+  foreignElementStats,
   generateRareName,
   implicitValue,
   rollAffix,
@@ -241,9 +242,7 @@ export function forgeItem(
   const implicits = base.implicits.map((t) => rollImplicit(registry, t, p.ilvl, p.rarity, rng));
   const affixes: StatRoll[] = [];
   // A random line never rolls another element's Power or Attunement: only the item's own.
-  const foreign = MANA_TYPES.filter((m) => m !== p.element).flatMap(
-    (m) => [`${m}Power`, `${m}Attune`] as HeroStatKey[],
-  );
+  const foreign = foreignElementStats(p.element);
   for (const line of p.lines) {
     const opts = { band: line.shard ? line.band : undefined, floor: p.floor };
     const def = line.shard

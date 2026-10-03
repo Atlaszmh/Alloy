@@ -71,13 +71,13 @@ describe('crafting.json', () => {
     ]);
   });
 
-  it("knows the starter kit: the sword's, the cuirass's and the dagger's patterns, 5 Rusty bars, 3 uncommon flux and 60 scrap", () => {
+  it("knows the starter kit: the sword's, the cuirass's and the dagger's patterns, 5 Rusty bars, 5 uncommon flux and 50 scrap", () => {
     expect(data.startingPatterns).toEqual(['sword', 'cuirass', 'dagger']);
     for (const id of data.startingPatterns) expect(registry.getGearBase(id).id).toBe(id);
     expect(data.startingMaterials).toEqual({
       metals: { rusty: 5 },
-      flux: { uncommon: 3 },
-      scrap: 60,
+      flux: { uncommon: 5 },
+      scrap: 50,
     });
   });
 });
@@ -132,7 +132,7 @@ describe('balance: delve.crafting and delve.drops', () => {
         slots: bal.movesets.extraSlots[r][0],
         sockets: bal.runes.socketDrops[r][0],
       });
-    expect(bal.drops.scrapByKind).toEqual({ normal: 6, elite: 18, boss: 60 });
+    expect(bal.drops.scrapByKind).toEqual({ normal: 9, elite: 27, boss: 90 });
     expect([bal.drops.magnetSpeed, bal.drops.vacuumSpeed, bal.drops.pickupDelay]).toEqual([
       10, 18, 0.35,
     ]);

@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { runAutopilot, type AutopilotDiveReport } from '../src/delve/autopilot.js';
-import { economySim, type EconomyDive } from '../src/delve/economy.js';
-import { GEAR_SLOTS, type Rarity } from '../src/types/gear.js';
-import { RARITY_ORDER, rarityIndex } from '../src/types/gem.js';
+import { GEAR_SLOTS } from '../src/types/gear.js';
+import { essenceForgedAtOnce, firstEpicDive, pacingRun } from './fixtures/pacing.js';
 
 /**
  * Guard rails for the Delve ARPG progression curve. The autopilot plays the
@@ -13,6 +12,7 @@ import { RARITY_ORDER, rarityIndex } from '../src/types/gem.js';
  */
 
 const registry = createDefaultRegistry();
+const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const SEEDS = [1, 2, 3, 4];
 const DIVES = 12;
 
@@ -24,23 +24,29 @@ const frostResults = FROST_SEEDS.map((seed) => runAutopilot(registry, { seed, di
 const frostRuns: AutopilotDiveReport[][] = frostResults.map((r) => r.reports);
 
 /**
- * Every pair forced from the start (one seed each): a fused Primary sets off
- * its own reaction on every hit after the first, so none may run away or stall.
+ * Every pair forced from the start: a fused Primary sets off its own reaction
+ * on every hit after the first, so none may run away or stall. One seed's depth
+ * swings far more than one pair's from another's (one pair went from 12 to 51
+ * over ten seeds while the pairs' means ran 19 to 28), so each pair is its mean
+ * over `SWEEP_SEEDS`.
  */
 const SWEEP_DIVES = 6;
+const SWEEP_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const sweep = registry.getArpgData().reactions.map(({ elements: [primary, secondary] }) => ({
   pair: `${primary}+${secondary}`,
-  depth: runAutopilot(registry, { seed: 1, dives: SWEEP_DIVES, primary, secondary }).reports[SWEEP_DIVES - 1].endDepth,
+  depth: avg(
+    SWEEP_SEEDS.map(
+      (seed) =>
+        runAutopilot(registry, { seed, dives: SWEEP_DIVES, primary, secondary }).reports[SWEEP_DIVES - 1].endDepth,
+    ),
+  ),
 }));
 
 /** The same Fire runs' economy, dive by dive (the DPS Lab's Economy view reads the same). */
-const economies = SEEDS.map((seed) => economySim(registry, seed, DIVES));
+const paced = SEEDS.map((seed) => pacingRun(registry, seed, DIVES));
+const economies = paced.map((r) => r.economy);
 
-const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const endDepthAt = (dive: number) => avg(runs.map((r) => r[dive - 1].endDepth));
-/** Whether the Anvil visit after a dive forged an item of `rarity` or rarer. */
-const forgedAtLeast = (d: EconomyDive, rarity: Rarity) =>
-  RARITY_ORDER.some((r) => rarityIndex(r) >= rarityIndex(rarity) && d.forged[r] > 0);
 
 describe('Delve ARPG pacing (autopilot)', () => {
   it('first dive is a short scouting run: every seed clears the opening floors', () => {
@@ -78,7 +84,7 @@ describe('Delve ARPG pacing (autopilot)', () => {
     }
   });
 
-  it('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6', () => {
+  it('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6 (its mean over the seeds)', () => {
     const depths = sweep.map((s) => s.depth).sort((a, b) => a - b);
     const median = depths[Math.floor(depths.length / 2)];
     for (const s of sweep) {
@@ -101,12 +107,13 @@ describe('Delve ARPG pacing (autopilot)', () => {
  * "over 12 dives, depth progression at least matches today's rails", is the rails above.
  */
 describe('Delve crafting pacing targets (economySim)', () => {
-  it('after dive 1, enough to forge a magic item: the Anvil visit after it forges one (or better)', () => {
-    for (const e of economies) expect(forgedAtLeast(e.dives[0], 'magic'), `seed ${e.seed}`).toBe(true);
+  it("before dive 1 the kit forges; after it, dive 1's own income (with what the kit left) pays for a magic item, and the Anvil forges one", () => {
+    for (const [i, { first }] of paced.entries())
+      expect(first, `seed ${SEEDS[i]}`).toEqual({ opened: true, kitAlone: false, withDive1: true, forged: true });
   });
 
   it('a first epic (or a legendary) is forged by about dive 5', () => {
-    const first = economies.map((e) => e.dives.findIndex((d) => forgedAtLeast(d, 'epic')) + 1);
+    const first = economies.map(firstEpicDive);
     for (const [i, dive] of first.entries()) {
       expect(dive, `seed ${SEEDS[i]}`).toBeGreaterThan(0);
       expect(dive, `seed ${SEEDS[i]}`).toBeLessThanOrEqual(6);
@@ -115,10 +122,6 @@ describe('Delve crafting pacing targets (economySim)', () => {
   });
 
   it("the first boss's essence becomes a forged legendary on the Anvil visit after its dive", () => {
-    for (const e of economies) {
-      const first = e.dives.find((d) => Object.values(d.income.essences).some((n) => n > 0));
-      expect(first, `seed ${e.seed}`).toBeDefined();
-      expect(first!.forged.legendary, `seed ${e.seed}`).toBeGreaterThan(0);
-    }
+    for (const e of economies) expect(essenceForgedAtOnce(e), `seed ${e.seed}`).toBe(true);
   });
 });

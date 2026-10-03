@@ -130,6 +130,22 @@ describe('Reforge', () => {
     }
   });
 
+  it("never rolls another element's Power or Attunement, as forging doesn't; the item's own element's stay", () => {
+    const elemental = /^(fire|frost|storm|earth|shadow|nature)(Power|Attune)$/;
+    const ring = generateItem(
+      registry,
+      { uid: 'r2', ilvl: 10, rarity: 'rare', slot: 'ring', mana: 'frost' },
+      new SeededRNG(2),
+    );
+    const stats = Array.from(
+      { length: 300 },
+      (_, i) => reforgeAffix(registry, ring, 0, new SeededRNG(i + 1)).affixes[0].stat,
+    );
+    const own = stats.filter((s) => elemental.test(s));
+    expect(own.length).toBeGreaterThan(0);
+    for (const s of own) expect(s.startsWith('frost')).toBe(true);
+  });
+
   it("at the Anvil takes the hero's floor for the item's element", () => {
     const min = bal.loot.minRoll.rare;
     let p: DelveProfile = { ...hero(100), bag: [gloves()], scrap: 1e6 };

@@ -11,13 +11,13 @@ const registry = createDefaultRegistry();
 const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 
 describe('save v8', () => {
-  it('starts with the starter kit: three patterns, 5 Rusty bars, 3 uncommon flux and 60 scrap', () => {
+  it('starts with the starter kit: three patterns, 5 Rusty bars, 5 uncommon flux and 50 scrap', () => {
     const p = createDelveProfile(registry, 7, { primary: 'fire' });
     expect(p.version).toBe(8);
     expect(p.patterns).toEqual(['sword', 'cuirass', 'dagger']);
     expect(p.materials.metals).toMatchObject({ rusty: 5, iron: 0 });
-    expect(p.materials.flux).toEqual({ uncommon: 3, magic: 0, rare: 0, epic: 0 });
-    expect(p.scrap).toBe(60);
+    expect(p.materials.flux).toEqual({ uncommon: 5, magic: 0, rare: 0, epic: 0 });
+    expect(p.scrap).toBe(50);
     expect([p.materials.shards, p.materials.essences, p.essencesSeen]).toEqual([{}, {}, []]);
     expect(p.firstEssenceGiven).toBe(false);
     expect('pity' in p || 'firstBossLegendaryGiven' in p).toBe(false);

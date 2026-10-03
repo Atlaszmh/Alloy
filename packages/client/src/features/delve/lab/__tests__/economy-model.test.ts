@@ -27,6 +27,7 @@ function dive(n: number, over: Partial<EconomyRow> = {}): EconomyRow {
     income: haul(),
     salvaged: haul(),
     spent: haul(),
+    stops: haul(),
     forged: NONE,
     depth: n,
     died: false,

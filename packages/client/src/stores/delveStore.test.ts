@@ -218,10 +218,10 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
-    expect(fresh.getState().profile).toMatchObject({ version: 8, scrap: 60 }); // the kit's
+    expect(fresh.getState().profile).toMatchObject({ version: 8, scrap: 50 }); // the kit's
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
       version: 8,
-      scrap: 60,
+      scrap: 50,
     });
     // The written-back save loads as it is: no second notice.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(

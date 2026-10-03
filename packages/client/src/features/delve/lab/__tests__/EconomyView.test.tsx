@@ -43,6 +43,7 @@ function report(seed: number, depths: number[]): EconomyReport {
         income: { ...emptyHaul(), scrap: 100 * seed },
         salvaged: { ...emptyHaul(), scrap: 5 },
         spent: { ...emptyHaul(), scrap: 10 },
+        stops: emptyHaul(),
         forged: { ...NONE, rare: seed },
         depth,
         died,
