@@ -50,6 +50,8 @@ export interface FloorOptions {
   layout?: FloorLayout;
   /** The dive's blessings (`DiveState.diveBuffs`): the hero wears them from the start (default none). */
   diveBuffs?: Buff[];
+  /** The interactables used this dive (`DiveState.used`): a generated floor marks them used (default none). */
+  used?: string[];
 }
 
 export function emptyStatus(): StatusState {
@@ -380,6 +382,8 @@ export function emptyPending(newFloor = false): WorldPending {
     haul: emptyHaul(),
     patterns: [],
     questEvents: [],
+    used: [],
+    diveBuffs: [],
     newFloor,
   };
 }

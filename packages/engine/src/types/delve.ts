@@ -5,7 +5,7 @@ import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
-import type { AiBalance, LayoutBalance, LayoutsData, ShrineDef } from './floor-map.js';
+import type { AiBalance, Buff, LayoutBalance, LayoutsData, ShrineDef } from './floor-map.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -796,6 +796,13 @@ export interface DiveState {
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;
+  /**
+   * The interactables used this dive (`${depth}:${roomId}`; see the floor maps
+   * spec): a replayed floor finds them used.
+   */
+  used: string[];
+  /** The dive's blessings: each floor's hero wears them from the start. */
+  diveBuffs: Buff[];
 }
 
 /** The hero's two elements (`DelveProfile.pair`). */
@@ -822,7 +829,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 9;
+  version: 10;
   seed: number;
   diveCount: number;
   forgeCount: number;

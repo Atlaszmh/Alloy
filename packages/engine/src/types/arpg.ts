@@ -710,6 +710,10 @@ export interface WorldPending {
   patterns: string[];
   /** What happened for the quests' objectives, applied when the world banks (see the quests spec). */
   questEvents: QuestEvent[];
+  /** Interactables used since the last bank: `DiveState.used` takes them (see the floor maps spec). */
+  used: string[];
+  /** Dive blessings taken since the last bank: `DiveState.diveBuffs` takes them. */
+  diveBuffs: Buff[];
   /**
    * The world hasn't banked yet: its first bank starts the dive's haul afresh, so
    * a floor replayed from its seed (left for the Anvil mid-floor) loses its
