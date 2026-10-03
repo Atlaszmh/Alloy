@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { applyShrine } from '../src/arpg/interact.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { bankWorld, beginFloor, completeFloor, startDive } from '../src/delve/dive.js';
-import { profileStats } from '../src/delve/pair.js';
+import { profileStats, worldStats } from '../src/delve/pair.js';
 import { createDelveProfile } from '../src/delve/profile.js';
 import { applyQuestEvents } from '../src/delve/quests.js';
+import { alcoveOffers, takeAlcove } from '../src/delve/stops.js';
 import { generateItem } from '../src/loot/item-generator.js';
+import { upgradeCost } from '../src/loot/smithing.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
@@ -150,5 +152,84 @@ describe('the floor clear counts its rooms (S3)', () => {
     const dryRun = data.contractTemplates.find((t) => t.id === 'dry_run')!;
     expect(untouchable.filter!.minRoomsCleared).toBeGreaterThan(0);
     expect(dryRun.filter!.minRoomsCleared).toBeGreaterThan(0);
+  });
+});
+
+describe('the anvil alcove', () => {
+  const map = () => twoRooms('alcove', { kind: 'alcove' }, 1);
+  /** The dive's floor with its alcove opened. */
+  const opened = (p: DelveProfile) => {
+    const w = floorOf(p, map());
+    press(w);
+    return w;
+  };
+
+  it('offers 2 or 3 of the kinds that apply, the same each time it opens; none once used', () => {
+    const p = diving();
+    const w = floorOf(p, map());
+    expect(alcoveOffers(registry, p, w, '1:1')).toEqual(['equip', 'upgrade']);
+    expect(alcoveOffers(registry, p, w, '1:1')).toEqual(alcoveOffers(registry, p, w, '1:1'));
+    w.map.rooms[1].interactable!.used = true;
+    expect(alcoveOffers(registry, p, w, '1:1')).toEqual([]);
+    expect(alcoveOffers(registry, { ...p, dive: null }, floorOf(p, map()), '1:1')).toEqual([]);
+  });
+
+  it('takes one op, paid from banked, then the haul, then the stockpile; then it is used', () => {
+    const p0 = diving();
+    const cost = upgradeCost(registry, ring)!;
+    const p: DelveProfile = {
+      ...p0,
+      dive: { ...p0.dive!, banked: { ...p0.dive!.banked, scrap: 5 } },
+    };
+    const w = opened(p);
+    w.pending.scrap = cost - 3;
+    const res = takeAlcove(registry, p, w, { kind: 'upgrade', uid: 'r1' });
+    expect(res.ok).toBe(true);
+    const dive = res.profile.dive!;
+    expect([dive.banked.scrap, dive.haul.scrap, res.profile.scrap]).toEqual([0, 2, 1000]);
+    expect(res.profile.bag[0].upgrade).toBe(1);
+    expect(dive.used).toEqual(['1:1']);
+    expect(w.map.rooms[1].interactable!.used).toBe(true);
+    expect(takeAlcove(registry, res.profile, w, { kind: 'equip', uid: 'r1' })).toMatchObject({
+      ok: false,
+      reason: 'No anvil here',
+    });
+    const again = floorOf(res.profile, map());
+    expect(press(again).some((e) => e.kind === 'interactPrompt')).toBe(false);
+  });
+
+  it("refreshes the hero with the new gear, keeping the floor's blessings", () => {
+    const p = diving();
+    const w = opened(p);
+    applyShrine(registry, w, shrine('vigor'));
+    const find = w.loot.find - w.hero.stats.magicFind;
+    const res = takeAlcove(registry, p, w, { kind: 'equip', uid: 'r1' });
+    expect(res.ok).toBe(true);
+    expect(res.profile.equipped.ring?.uid).toBe('r1');
+    expect(w.hero.stats).toEqual(worldStats(registry, res.profile, w));
+    expect(w.hero.floorBuffs.map((b) => b.shrine)).toEqual(['vigor']);
+    expect(w.loot.find).toBeCloseTo(find + w.hero.stats.magicFind, 9);
+  });
+
+  it('refuses an alcove not opened, a kind not offered, a failed op and a dive not fighting, touching nothing', () => {
+    const p = diving();
+    const shut = floorOf(p, map());
+    expect(takeAlcove(registry, p, shut, { kind: 'equip', uid: 'r1' })).toMatchObject({
+      ok: false,
+      reason: 'No anvil here',
+    });
+    const w = opened(p);
+    expect(takeAlcove(registry, p, w, { kind: 'slot', skill: 'primary' })).toMatchObject({
+      ok: false,
+      reason: 'Not offered at this anvil',
+    });
+    w.pending.scrap = 7;
+    const failed = takeAlcove(registry, p, w, { kind: 'upgrade', uid: 'nope' });
+    expect(failed.ok).toBe(false);
+    expect(failed.profile).toBe(p);
+    expect(w.pending.scrap).toBe(7);
+    expect(w.map.rooms[1].interactable!.used).toBe(false);
+    const choosing = { ...p, dive: { ...p.dive!, phase: 'choosing' as const } };
+    expect(takeAlcove(registry, choosing, w, { kind: 'equip', uid: 'r1' }).ok).toBe(false);
   });
 });
