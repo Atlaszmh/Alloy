@@ -889,7 +889,40 @@ const RoomTemplateSchema = z
         (m) => m.length === t.h && m.every((row) => row.length === t.w && /^[.#%]+$/.test(row)),
       ),
     'a mask is h rows of w cells',
+  )
+  .refine(
+    (t) => t.masks.every((m) => wideMask(m, t.w, t.h)),
+    'a mask keeps 3 open cells to each wall and between its obstacles',
   );
+
+/**
+ * Every passage through a mask 3 cells wide (a large foe's 3×3, see `arpg/flow.ts`): no
+ * blocked cell within 2 of the room's edge, and blocked cells of different 8-connected
+ * obstacles at least 4 apart (Chebyshev).
+ */
+function wideMask(rows: string[], w: number, h: number): boolean {
+  const cells: { x: number; y: number }[] = [];
+  rows.forEach((row, y) => [...row].forEach((ch, x) => ch !== '.' && cells.push({ x, y })));
+  if (cells.some((c) => c.x < 3 || c.y < 3 || c.x > w - 4 || c.y > h - 4)) return false;
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }, d: number) =>
+    Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= d;
+  // Label the obstacles by flood fill over 8-neighbours.
+  const label = cells.map(() => -1);
+  cells.forEach((_, s) => {
+    if (label[s] !== -1) return;
+    label[s] = s;
+    for (const queue = [s]; queue.length > 0; ) {
+      const a = queue.pop()!;
+      cells.forEach((c, b) => {
+        if (label[b] === -1 && near(cells[a], c, 1)) {
+          label[b] = s;
+          queue.push(b);
+        }
+      });
+    }
+  });
+  return cells.every((a, i) => cells.every((b, j) => label[i] === label[j] || !near(a, b, 3)));
+}
 
 /** `layouts.json` (the generator checks the sizes against `delve.layout`'s coarse grid). */
 export const LayoutsDataSchema = z.object({
