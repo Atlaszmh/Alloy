@@ -71,9 +71,9 @@ describe('delveStore', () => {
   });
 
   it('resets a save of another version, and falls back to a new profile when the save is corrupt', () => {
-    localStorage.setItem(DELVE_SAVE_KEY, '{"version":7,"broken":true}');
-    expect(loadDelveProfile()).toEqual({ reset: true });
     localStorage.setItem(DELVE_SAVE_KEY, '{"version":8,"broken":true}');
+    expect(loadDelveProfile()).toEqual({ reset: true });
+    localStorage.setItem(DELVE_SAVE_KEY, '{"version":9,"broken":true}');
     expect(loadDelveProfile()).toBeNull();
     localStorage.setItem(DELVE_SAVE_KEY, 'not json');
     expect(loadDelveProfile()).toBeNull();
@@ -209,7 +209,7 @@ describe('delveStore', () => {
   });
 
   it('a save of another version starts afresh: written back at once, with one notice', async () => {
-    const old = { ...useDelveStore.getState().profile, version: 7, scrap: 999 };
+    const old = { ...useDelveStore.getState().profile, version: 8, scrap: 999 };
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(old));
     // A fresh module and no cached store, as on a page load.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
@@ -218,9 +218,9 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
-    expect(fresh.getState().profile).toMatchObject({ version: 8, scrap: 50 }); // the kit's
+    expect(fresh.getState().profile).toMatchObject({ version: 9, scrap: 50 }); // the kit's
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
-      version: 8,
+      version: 9,
       scrap: 50,
     });
     // The written-back save loads as it is: no second notice.
@@ -237,6 +237,20 @@ describe('delveStore', () => {
     for (const op of [s.forge, s.hone, s.imprint, s.refine, s.buyShard])
       expect(op).toBeTypeOf('function');
     expect('fuse' in s).toBe(false);
+  });
+
+  it('wraps every quest op of the engine (B1 and B2 fill them); a claim waits for the Anvil', () => {
+    const s = useDelveStore.getState();
+    for (const op of [s.claimQuest, s.rerollContract, s.trackQuest, s.markQuestSeen])
+      expect(op).toBeTypeOf('function');
+    s.startDive(1);
+    const diving = useDelveStore.getState().profile;
+    expect(useDelveStore.getState().claimQuest('first_steps')).toEqual({
+      ok: false,
+      profile: diving,
+      reason: 'Claim at the Anvil, between dives',
+    });
+    expect(useDelveStore.getState().profile).toBe(diving);
   });
 
   it('chooses the mana once, binds a second element, and remembers a declined bind this session', () => {
