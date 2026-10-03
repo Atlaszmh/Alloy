@@ -3,13 +3,16 @@ import {
   HeroStatKeySchema as StatKeySchema,
   ManaTypeSchema,
   MoveKindSchema,
+  ObjectiveSchema,
   ReactionIdSchema,
+  RewardSchema,
 } from '../data/schemas.js';
 import { CHAIN_SKILLS, MAX_CHAIN, type AbilitySlot, type FormId } from '../types/ability.js';
 import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
+import { CONTRACT_TIERS } from '../types/quests.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves (version 8 only) — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 9 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
@@ -240,9 +243,37 @@ const PairSchema = z
     'a secondary needs a different primary',
   );
 
-/** Version 8: materials, patterns and essences (see the crafting spec); older saves reset. */
+const ProgressSchema = z.object({ value: count, done: z.boolean() });
+
+/** A contract on the board, with its own progress. */
+const ContractSchema = z.object({
+  id: z.string(),
+  template: z.string(),
+  tier: z.enum(CONTRACT_TIERS),
+  name: z.string(),
+  line: z.string(),
+  objectives: z.array(ObjectiveSchema).min(1),
+  rewards: z.array(RewardSchema),
+  progress: z.array(ProgressSchema),
+});
+
+/** The quests (see the quests spec). */
+const QuestsSchema = z.object({
+  progress: z.record(z.string(), z.array(ProgressSchema)),
+  unlocked: z.array(z.string()),
+  claimed: z.array(z.string()),
+  tracked: z.array(z.string()),
+  seen: z.array(z.string()),
+  board: z.array(ContractSchema.nullable()),
+  boardCount: count,
+  contractsClaimed: count,
+  rerollUsed: z.boolean(),
+  claimCount: count,
+});
+
+/** Version 9: the quests (see the quests spec); older saves reset. */
 export const DelveProfileSchema = z.object({
-  version: z.literal(8),
+  version: z.literal(9),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
@@ -287,5 +318,6 @@ export const DelveProfileSchema = z.object({
   patterns: z.array(z.string()),
   essencesSeen: z.array(z.string()),
   reactionsSeen: z.array(ReactionIdSchema),
+  quests: QuestsSchema,
   dive: DiveSchema.nullable(),
 });

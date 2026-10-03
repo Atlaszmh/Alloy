@@ -4,7 +4,7 @@ import type { AbilitySlot, ChainSkill, FormId, Knobs, MoveKind } from './ability
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
-import type { QuestsBalance } from './quests.js';
+import type { ProfileQuests, QuestsBalance } from './quests.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -811,7 +811,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 8;
+  version: 9;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -842,5 +842,7 @@ export interface DelveProfile {
   essencesSeen: string[];
   /** Elemental reactions the player has triggered at least once. */
   reactionsSeen: string[];
+  /** Quests, the Contract board and their progress (see the quests spec). */
+  quests: ProfileQuests;
   dive: DiveState | null;
 }

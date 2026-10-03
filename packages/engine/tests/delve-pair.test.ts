@@ -294,10 +294,10 @@ describe('the save and the pair', () => {
     expect(c.defensive.moves.map((m) => m.form)).toEqual(['ward']);
   });
 
-  it('a new profile is version 8 with no pair yet, no Mana Dust, no Links and no runes, and round-trips', () => {
+  it('a new profile is version 9 with no pair yet, no Mana Dust, no Links and no runes, and round-trips', () => {
     const p = createDelveProfile(registry, 3);
     expect(p).toMatchObject({
-      version: 8,
+      version: 9,
       pair: { primary: null, secondary: null },
       manaDust: 0,
       links: 0,
