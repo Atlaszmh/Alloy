@@ -571,6 +571,8 @@ export function hitMonster(
   m.hp -= amount;
   m.lastHitAt = world.t;
   if (!m.aggro) aggroPack(ctx, m);
+  // A leashed foe walking home turns back on whoever hits it, its leash counted afresh.
+  if (m.goingHome) Object.assign(m, { goingHome: false, farSince: null });
   ctx.events.push({
     kind: 'hit',
     id: m.id,

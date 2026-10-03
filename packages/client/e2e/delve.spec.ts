@@ -135,7 +135,7 @@ test.describe('Delve loot loop', () => {
     await door.locator('[data-testid^="door-"]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
-    await expect(page.getByTestId('monsters-left')).toContainText('foes');
+    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored');
   });
 
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
@@ -150,7 +150,9 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('dive-again').click();
     await expect(summary).toBeHidden();
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
-    await expect(page.getByTestId('monsters-left')).toContainText('foes', { timeout: ARENA_READY });
+    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored', {
+      timeout: ARENA_READY,
+    });
   });
 
   test("D11: materials ride the floor's haul, bank at the stop, and an abandon loses a share", async ({

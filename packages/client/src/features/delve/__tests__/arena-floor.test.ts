@@ -77,6 +77,14 @@ describe("a generated floor's requests", () => {
     expect(ui).toEqual([{ kind: 'alcove', offers: ['slot', 'upgrade'] }]);
   });
 
+  it('an alcove with nothing to offer opens no dialog: a notice says so', () => {
+    useDelveStore.getState().takeNotices();
+    vi.mocked(alcoveOffers).mockReturnValue([]);
+    route([{ kind: 'alcoveOpen', id: '2:4' }]);
+    expect(ui).toEqual([]);
+    expect(useDelveStore.getState().takeNotices()).toEqual(['Nothing to forge here yet']);
+  });
+
   it("under the autopilot, the bot takes an alcove's power-up itself, on the save a bank leaves", () => {
     const store = useDelveStore.getState();
     const before = startDive(registry, createDelveProfile(registry, 7), 1);

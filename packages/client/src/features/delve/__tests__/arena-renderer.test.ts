@@ -354,8 +354,8 @@ describe('loot labels', () => {
       .filter((c) => c.visible)
       .flatMap((c) => c.children.filter((t) => t instanceof Text).map((t) => (t as Text).text));
 
-  it('hold Alt shows every drop, and a blur (an Alt+Tab, no keyup) lets go', () => {
-    // jsdom has no canvas: measure text as 7 px a character, 14 tall.
+  // jsdom has no canvas: measure text as 7 px a character, 14 tall.
+  const measure = () =>
     vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
       (text) =>
         ({
@@ -368,6 +368,9 @@ describe('loot labels', () => {
           fontProperties: { ascent: 11, descent: 3, fontSize: 14 },
         }) as unknown as CanvasTextMetrics,
     );
+
+  it('hold Alt shows every drop, and a blur (an Alt+Tab, no keyup) lets go', () => {
+    measure();
     const { app, r } = stage();
     const w = floor(13, 20);
     const item = (id: number, name: string, rarity: GearItem['rarity']) =>
@@ -397,6 +400,21 @@ describe('loot labels', () => {
     frame();
     expect(labels(app)).not.toContain('Rusty Ring');
     detach();
+  });
+
+  it('labels only drops the fog has seen on a generated floor', { timeout: 20000 }, () => {
+    measure();
+    const { app, r } = stage();
+    const w = onMap(ringMap());
+    w.fog.fill(0);
+    w.fog[8 * w.width + 8] = 1; // seen once, out of sight now
+    const legendary = { name: 'Sunfang', rarity: 'legendary' } as GearItem;
+    w.drops.push(
+      drop({ id: 1, kind: 'item', x: 8.5, y: 8.5, item: legendary }),
+      drop({ id: 2, kind: 'item', x: 50.5, y: 50.5, item: { ...legendary, name: 'Unseen' } }),
+    );
+    show(r, w);
+    expect(labels(app)).toEqual(['Sunfang']);
   });
 
   it('overlapping labels stack upward, lowest first; apart ones stay', () => {

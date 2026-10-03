@@ -9,7 +9,7 @@ const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 
 describe('ExitConfirm', () => {
-  it('asks before leaving: the rooms unexplored, Leave first, Back stays', () => {
+  it('asks before leaving: the rooms unexplored, Back focused (A-A never leaves), Back stays', () => {
     const onLeave = vi.fn();
     const onStay = vi.fn();
     render(<ExitConfirm unexplored={2} onLeave={onLeave} onStay={onStay} />);
@@ -17,7 +17,7 @@ describe('ExitConfirm', () => {
     expect(dialog).toHaveTextContent('Leave the floor?');
     expect(screen.getByTestId('exit-unexplored')).toHaveTextContent('2 rooms unexplored.');
     expect(dialog).toHaveTextContent('Loot left on the floor is lost.');
-    expect(screen.getByTestId('exit-leave')).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onStay).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByTestId('exit-leave'));

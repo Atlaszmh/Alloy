@@ -133,6 +133,32 @@ describe('moveCircle', () => {
       expect(overlaps(map, p, r), `${p.x}, ${p.y} r ${r}`).toBe(false);
     }
   });
+
+  it('never puts a body wider than a gap into the pillar beside it, moving or pressed', () => {
+    // A one-cell gap at column 5, row 3, between pillars at columns 4 and 6.
+    const map = mapOf([
+      '..........',
+      '..........',
+      '..........',
+      '....#.#...',
+      '..........',
+      '..........',
+      '..........',
+    ]);
+    for (const r of [0.6, 1, 1.2, 1.4])
+      for (const x of [5.1, 5.5, 5.9])
+        for (const y of [2.6, 3.5, 4.4])
+          for (const [dx, dy] of [
+            [0, 0],
+            [0, -1],
+            [0, 1],
+            [0.3, 0],
+            [-0.3, 0],
+          ]) {
+            const p = moveCircle(map, { x, y }, r, dx, dy);
+            expect(isWalkable(map, p.x, p.y), `${x}, ${y} r ${r} → ${p.x}, ${p.y}`).toBe(true);
+          }
+  });
 });
 
 describe('snapToWalkable', () => {

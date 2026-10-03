@@ -85,7 +85,8 @@ export function stepWorld(
   if (input.interact) world.queuedInteract = true;
   // Nothing is paid until a hold fires: dropping one costs nothing.
   if (input.cancelHold) dropHold(world);
-  if (world.heroDead) return events;
+  // A dead hero, or one who took the exit: the floor is over and stands still.
+  if (world.heroDead || world.exited) return events;
 
   const ctx = makeCtx(registry, world, events);
   const step = ctx.bal.arena.step;

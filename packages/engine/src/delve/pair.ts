@@ -1,5 +1,4 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { ArpgWorld } from '../types/arpg.js';
 import { roleHeir } from '../arpg/abilities/resolve.js';
 import { defaultMoveset, extraSlots, heroChains, movesetOf, weaponParts } from '../loot/moveset.js';
 import { ABILITY_SLOTS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
@@ -7,7 +6,7 @@ import type { DelveProfile, HeroStats, ManaPair } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem, type HeroStatKey, type StatRoll } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { isDiveActive } from './dive.js';
-import { applyBuffs, computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
+import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
 import { findItem, replaceItem, withMoveset, type ProfileActionResult } from './profile.js';
 import { applyQuestEvents } from './quests.js';
 import { settleParts, type SetChainsOptions } from './runes.js';
@@ -43,19 +42,6 @@ export function profileStats(
 ): HeroStats {
   const basic = heroChains(registry, profile.equipped, profile.pair).basic;
   return computeHeroStats(profile.equipped, registry, pairExtra(profile.pair, basic));
-}
-
-/**
- * The hero's stats in `world` (see the floor maps spec): its real stats under its
- * blessings, the dive's and then the floor's, as `refreshWorldHero` puts them on.
- */
-export function worldStats(
-  registry: DataRegistry,
-  profile: Pick<DelveProfile, 'equipped' | 'pair'>,
-  world: ArpgWorld,
-): HeroStats {
-  const h = world.hero;
-  return applyBuffs(applyBuffs(profileStats(registry, profile), h.diveBuffs), h.floorBuffs);
 }
 
 /** Mana Dust from salvaging `item`: its rarity's share when its mana is outside the pair (none before the choice). */

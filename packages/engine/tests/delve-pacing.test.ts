@@ -86,6 +86,11 @@ describe('Delve ARPG pacing (autopilot)', () => {
     const rush = avg(rushRuns.map((r) => r[DIVES - 1].endDepth));
     expect(rush).toBeGreaterThanOrEqual(0.8 * endDepthAt(DIVES));
   });
+
+  it('no floor runs out of time: every death is a death', () => {
+    for (const r of [...runs, ...frostRuns, ...rushRuns])
+      expect(r.map((d) => d.timedOut)).toEqual(r.map(() => 0));
+  });
 });
 
 /**
