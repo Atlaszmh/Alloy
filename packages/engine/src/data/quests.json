@@ -296,5 +296,219 @@
       ]
     }
   ],
-  "contractTemplates": []
+  "contractTemplates": [
+    {
+      "id": "elite_cull",
+      "name": "Elite Cull",
+      "line": "The big ones are getting bold. Thin them out.",
+      "type": "kill",
+      "filter": { "kind": "elite", "biome": "reached" },
+      "count": { "easy": [4, 6], "normal": [8, 12], "hard": [14, 20] },
+      "scope": "total",
+      "text": "Slay {count} elites in {biome}",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 50 },
+          { "kind": "metal", "id": "depth", "count": 2 }
+        ],
+        "normal": [
+          { "kind": "scrap", "count": 80 },
+          { "kind": "flux", "grade": "uncommon", "count": 1 }
+        ],
+        "hard": [
+          { "kind": "scrap", "count": 120 },
+          { "kind": "flux", "grade": "magic", "count": 1 }
+        ]
+      }
+    },
+    {
+      "id": "element_hunt",
+      "name": "Element Hunt",
+      "line": "I need cores that still hum with their element. Bring down the ones that carry it.",
+      "type": "kill",
+      "filter": { "element": "reached" },
+      "count": { "easy": [12, 18], "normal": [25, 35], "hard": [45, 60] },
+      "scope": "total",
+      "text": "Slay {count} {element} foes",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 40 },
+          { "kind": "dust", "count": 5 }
+        ],
+        "normal": [
+          { "kind": "dust", "count": 10 },
+          { "kind": "shard", "family": "element", "tier": 2, "count": 1 }
+        ],
+        "hard": [
+          { "kind": "dust", "count": 15 },
+          { "kind": "shard", "family": "element", "tier": 3, "count": 1 }
+        ]
+      }
+    },
+    {
+      "id": "reaction_drill",
+      "name": "Reaction Drill",
+      "line": "Do it until your hands know it. Then do it again.",
+      "type": "reaction",
+      "filter": { "reaction": "known" },
+      "count": { "easy": [5, 8], "normal": [10, 15], "hard": [20, 30] },
+      "scope": "total",
+      "text": "Trigger {reaction} {count} times",
+      "rewards": {
+        "easy": [{ "kind": "dust", "count": 8 }],
+        "normal": [
+          { "kind": "dust", "count": 12 },
+          { "kind": "links", "count": 1 }
+        ],
+        "hard": [
+          { "kind": "dust", "count": 20 },
+          { "kind": "links", "count": 2 }
+        ]
+      }
+    },
+    {
+      "id": "light_feet",
+      "name": "Light Feet",
+      "line": "A smith who can't step aside loses fingers. Practise.",
+      "type": "perfectDodge",
+      "count": { "easy": [3, 5], "normal": [6, 10], "hard": [12, 18] },
+      "scope": "total",
+      "text": "Make {count} perfect dodges",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 40 },
+          { "kind": "shard", "family": "defense", "tier": 1, "count": 1 }
+        ],
+        "normal": [
+          { "kind": "scrap", "count": 60 },
+          { "kind": "shard", "family": "defense", "tier": 2, "count": 1 }
+        ],
+        "hard": [
+          { "kind": "scrap", "count": 90 },
+          { "kind": "shard", "family": "defense", "tier": 3, "count": 1 }
+        ]
+      }
+    },
+    {
+      "id": "deep_haul",
+      "name": "Deep Haul",
+      "line": "Go past where you're comfortable, and walk back out with it.",
+      "type": "extract",
+      "filter": { "minDepth": "window" },
+      "count": { "easy": [1, 1], "normal": [1, 1], "hard": [1, 1] },
+      "scope": "total",
+      "text": "Extract from depth {depth} or deeper",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 60 },
+          { "kind": "metal", "id": "depth", "count": 2 }
+        ],
+        "normal": [
+          { "kind": "scrap", "count": 90 },
+          { "kind": "flux", "grade": "uncommon", "count": 1 },
+          { "kind": "metal", "id": "depth", "count": 2 }
+        ],
+        "hard": [
+          { "kind": "scrap", "count": 140 },
+          { "kind": "flux", "grade": "magic", "count": 1 },
+          { "kind": "metal", "id": "depth", "count": 3 }
+        ]
+      }
+    },
+    {
+      "id": "dry_run",
+      "name": "Dry Run",
+      "line": "Potions are a crutch. Clear a floor without one and tell me how it felt.",
+      "type": "clearFloor",
+      "filter": { "noPotion": true, "minDepth": "flag" },
+      "count": { "easy": [1, 1], "normal": [2, 3], "hard": [4, 5] },
+      "scope": "total",
+      "text": "Clear floors of depth {depth} or deeper without a potion",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 50 },
+          { "kind": "shard", "family": "sustain", "tier": 1, "count": 1 }
+        ],
+        "normal": [
+          { "kind": "scrap", "count": 80 },
+          { "kind": "shard", "family": "sustain", "tier": 2, "count": 1 }
+        ],
+        "hard": [
+          { "kind": "scrap", "count": 120 },
+          { "kind": "shard", "family": "sustain", "tier": 3, "count": 1 }
+        ]
+      }
+    },
+    {
+      "id": "warden_bounty",
+      "name": "Warden's Due",
+      "line": "Every biome has a warden who thinks the place is theirs. Remind one.",
+      "type": "boss",
+      "filter": { "biome": "reached" },
+      "count": { "easy": [1, 1], "normal": [1, 1], "hard": [1, 1] },
+      "scope": "total",
+      "text": "Defeat the boss of {biome}",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 80 },
+          { "kind": "flux", "grade": "uncommon", "count": 1 }
+        ],
+        "normal": [
+          { "kind": "scrap", "count": 120 },
+          { "kind": "flux", "grade": "magic", "count": 1 }
+        ],
+        "hard": [
+          { "kind": "scrap", "count": 160 },
+          { "kind": "flux", "grade": "rare", "count": 1 }
+        ]
+      }
+    },
+    {
+      "id": "fine_work",
+      "name": "Fine Work",
+      "line": "A buyer wants quality, not quantity. Well, some quantity.",
+      "type": "forge",
+      "filter": { "minRarity": "owned" },
+      "count": { "easy": [1, 1], "normal": [2, 2], "hard": [3, 3] },
+      "scope": "total",
+      "text": "Forge items of {rarity} rarity or better",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 30 },
+          { "kind": "metal", "id": "depth", "count": 2 }
+        ],
+        "normal": [
+          { "kind": "scrap", "count": 50 },
+          { "kind": "shard", "family": "utility", "tier": 2, "count": 1 }
+        ],
+        "hard": [
+          { "kind": "scrap", "count": 80 },
+          { "kind": "shard", "family": "offense", "tier": 3, "count": 1 }
+        ]
+      }
+    },
+    {
+      "id": "smelting_order",
+      "name": "Smelting Order",
+      "line": "My furnace is idle and that offends me. Refine something.",
+      "type": "refine",
+      "count": { "easy": [2, 3], "normal": [4, 6], "hard": [8, 10] },
+      "scope": "total",
+      "text": "Refine {count} times",
+      "rewards": {
+        "easy": [
+          { "kind": "scrap", "count": 30 },
+          { "kind": "dust", "count": 5 }
+        ],
+        "normal": [
+          { "kind": "scrap", "count": 50 },
+          { "kind": "metal", "id": "depth", "count": 3 }
+        ],
+        "hard": [
+          { "kind": "scrap", "count": 80 },
+          { "kind": "flux", "grade": "uncommon", "count": 2 }
+        ]
+      }
+    }
+  ]
 }

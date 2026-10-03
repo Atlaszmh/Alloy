@@ -47,6 +47,20 @@ describe("quests.json's content", () => {
     });
   });
 
+  it('holds the nine contract templates, one per kind of goal', () => {
+    expect(contractTemplates.map((t) => [t.type, t.filter ?? {}])).toEqual([
+      ['kill', { kind: 'elite', biome: 'reached' }],
+      ['kill', { element: 'reached' }],
+      ['reaction', { reaction: 'known' }],
+      ['perfectDodge', {}],
+      ['extract', { minDepth: 'window' }],
+      ['clearFloor', { noPotion: true, minDepth: 'flag' }],
+      ['boss', { biome: 'reached' }],
+      ['forge', { minRarity: 'owned' }],
+      ['refine', {}],
+    ]);
+  });
+
   it("gives every quest and template Hesta's line: one or two short sentences, no emoji", () => {
     for (const { id, line } of [...quests, ...contractTemplates]) {
       expect(line.split(/[.!?](\s|$)/).filter((s) => s.trim()).length, id).toBeLessThanOrEqual(2);
