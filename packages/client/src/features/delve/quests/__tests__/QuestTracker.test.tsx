@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useControlsStore } from '@/stores/controlsStore';
 import { DEFAULT_CONTROLS } from '@/features/controls/controls';
 import { QuestTracker } from '../QuestTracker';
-import { SAMPLE_QUESTS } from '../sample';
+import { SAMPLE_QUESTS } from './quest-fixture';
 import type { QuestView } from '../types';
 
 const tracked = (q: QuestView, id = q.id): QuestView => ({ ...q, id, tracked: true });
@@ -18,10 +18,10 @@ describe('QuestTracker', () => {
   });
 
   it('shows up to three tracked quests with their kind, name and objectives', () => {
-    const [main, side, , bounty] = SAMPLE_QUESTS;
+    const [main, side, , contract] = SAMPLE_QUESTS;
     render(
       <QuestTracker
-        quests={[tracked(main), tracked(side), tracked(bounty), tracked(side, 'fourth')]}
+        quests={[tracked(main), tracked(side), tracked(contract), tracked(side, 'fourth')]}
       />,
     );
     const tracker = screen.getByTestId('quest-tracker');
@@ -34,7 +34,7 @@ describe('QuestTracker', () => {
     expect(first).toHaveTextContent('Descend to depth 8');
     expect(first).toHaveTextContent('6 / 8');
     expect(within(first).getByRole('img', { name: 'Done' })).toBeInTheDocument();
-    expect(screen.getByTestId('tracked-rat-catcher')).toHaveTextContent('Bounty');
+    expect(screen.getByTestId('tracked-rat-catcher')).toHaveTextContent('Contract');
     expect(screen.getByTestId('tracked-kindling')).toHaveTextContent('12 / 20');
   });
 

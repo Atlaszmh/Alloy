@@ -1,6 +1,6 @@
-import type { QuestView } from './types';
+import type { QuestView } from '../types';
 
-/** The dev preview's quests (localStorage `alloy:delve:questPreview` = "1"): the Quests board's fixture. */
+/** Quest views for the journal's and the tracker's tests: a main quest, two side quests and a contract. */
 export const SAMPLE_QUESTS: QuestView[] = [
   {
     id: 'frozen-foreman',
@@ -60,9 +60,9 @@ export const SAMPLE_QUESTS: QuestView[] = [
   },
   {
     id: 'rat-catcher',
-    kind: 'bounty',
+    kind: 'contract',
     name: 'Rat Catcher',
-    sub: 'Refreshes each day',
+    sub: 'Contract board',
     objectives: [
       { id: 'rats', text: 'Slay mine rats', done: false, progress: { value: 4, max: 30 } },
     ],

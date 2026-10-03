@@ -18,6 +18,7 @@ import type { FormId } from '../types/ability.js';
 import type { RuneDef, RuneId } from '../types/rune.js';
 import type { ManaType } from '../types/mana.js';
 import type { CraftingData } from '../types/crafting.js';
+import type { QuestsData } from '../types/quests.js';
 import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
 
 function combinationKey(id1: string, id2: string): string {
@@ -49,6 +50,7 @@ export class DataRegistry {
     private readonly delveData: DelveData | null = null,
     private readonly arpgData: ArpgData | null = null,
     private readonly craftingData: CraftingData | null = null,
+    private readonly questsData: QuestsData | null = null,
   ) {
     // Build affix maps
     this.affixMap = new Map(affixes.map((a) => [a.id, a]));
@@ -258,6 +260,12 @@ export class DataRegistry {
   getCraftingData(): CraftingData {
     if (!this.craftingData) throw new Error('Crafting data not loaded — pass it to DataRegistry');
     return this.craftingData;
+  }
+
+  /** `quests.json`: the giver, the main and side quests, and the contract templates (see the quests spec). */
+  getQuestsData(): QuestsData {
+    if (!this.questsData) throw new Error('Quests data not loaded — pass it to DataRegistry');
+    return this.questsData;
   }
 
   getDelveBalance(): DelveBalance {

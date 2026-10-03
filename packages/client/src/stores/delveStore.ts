@@ -15,6 +15,10 @@ import {
   imprint as engineImprint,
   refine as engineRefine,
   buyShard as engineBuyShard,
+  claimQuest as engineClaimQuest,
+  rerollContract as engineRerollContract,
+  trackQuest as engineTrackQuest,
+  markQuestSeen as engineMarkQuestSeen,
   fuseRunes as engineFuseRunes,
   setAutoSalvage,
   setChains as engineSetChains,
@@ -415,6 +419,14 @@ interface DelveStore {
   refine: (what: MaterialRef) => ProfileActionResult;
   /** Buy a tier I shard at the shard bench. */
   buyShard: (stat: HeroStatKey) => ProfileActionResult;
+  /** Claim a completed quest or contract at the Anvil: its rewards to the stockpile (see the quests spec). */
+  claimQuest: (id: string) => ProfileActionResult;
+  /** Replace a board slot's contract, for scrap, once an Anvil visit. */
+  rerollContract: (slot: number) => ProfileActionResult;
+  /** Track a quest on the HUD (up to `delve.quests.maxTracked`), or stop. */
+  trackQuest: (id: string, on: boolean) => ProfileActionResult;
+  /** The journal opened a quest: it is NEW no more. */
+  markQuestSeen: (id: string) => void;
   setAutoSalvage: (rarity: Rarity, on: boolean) => void;
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
@@ -617,6 +629,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     refine: (what) => applyResult(engineRefine(registry(), get().profile, what)),
 
     buyShard: (stat) => applyResult(engineBuyShard(registry(), get().profile, stat)),
+
+    claimQuest: (id) => applyResult(engineClaimQuest(registry(), get().profile, id)),
+
+    rerollContract: (slot) => applyResult(engineRerollContract(registry(), get().profile, slot)),
+
+    trackQuest: (id, on) => applyResult(engineTrackQuest(registry(), get().profile, id, on)),
+
+    markQuestSeen: (id) => commit(engineMarkQuestSeen(registry(), get().profile, id)),
 
     setAutoSalvage: (rarity, on) => commit(setAutoSalvage(get().profile, rarity, on)),
 

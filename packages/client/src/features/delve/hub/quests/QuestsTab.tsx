@@ -12,15 +12,14 @@ import {
 import type { HubTabProps } from '../types';
 
 const COLUMNS = '400px minmax(0,1fr) 440px';
-const KINDS: QuestKind[] = ['main', 'side', 'bounty'];
+const KINDS: QuestKind[] = ['main', 'side', 'contract'];
 export const TRACK_BINDING: Binding = { key: 'KeyG', pad: 'y' };
 const DASHED: CSSProperties = { border: '3px dashed var(--k-steel-2)' };
 const ROW: CSSProperties = { background: 'var(--k-well)', border: '3px solid var(--k-steel-1)' };
 
 /**
  * The Quests tab: the journal by kind, the open quest (giver, story, objectives) and its rewards
- * with "Tracked on the HUD". v1 has no quests, so it shows the empty state in the same three
- * panes; the dev preview flag fills it from the fixture.
+ * with "Tracked on the HUD"; with no quests, the empty state in the same three panes.
  */
 export function QuestsTab({ setPrompts, link }: HubTabProps): ReactElement {
   const { quests, setTracked } = useQuests();
@@ -150,7 +149,7 @@ function Journal({
 }
 
 function Detail({ quest }: { quest: QuestView }) {
-  const kind = quest.kind === 'bounty' ? 'Bounty' : `${QUEST_KIND[quest.kind].tag} quest`;
+  const kind = quest.kind === 'contract' ? 'Contract' : `${QUEST_KIND[quest.kind].tag} quest`;
   return (
     <Panel aria-label="Quest" testId="quest-detail">
       <div className="flex items-start gap-[22px]">

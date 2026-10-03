@@ -312,3 +312,9 @@ export * from './loot/salvage-yield.js';
 export * from './delve/crafting.js';
 export * from './delve/economy.js';
 export * from './arpg/material-drops.js';
+
+// Quests (see the quests spec): every module whole, so the areas that build them never edit this file.
+export * from './delve/quests.js';
+export * from './delve/rewards.js';
+export * from './delve/contracts.js';
+export { questsDataProblems } from './data/quests-check.js';

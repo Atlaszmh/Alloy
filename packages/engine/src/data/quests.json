@@ -1,0 +1,26 @@
+{
+  "giver": { "name": "Hesta", "sprite": "hesta" },
+  "quests": [
+    {
+      "id": "first_steps",
+      "kind": "main",
+      "name": "First Steps",
+      "chapter": "Embers of the Anvil",
+      "line": "The Anvil wants metal, and the deep has it. Go down a little way, then come back to me.",
+      "objectives": [
+        {
+          "id": "depth",
+          "type": "reachDepth",
+          "count": 2,
+          "scope": "total",
+          "text": "Reach depth 2"
+        }
+      ],
+      "rewards": [
+        { "kind": "metal", "id": "depth", "count": 3 },
+        { "kind": "scrap", "count": 40 }
+      ]
+    }
+  ],
+  "contractTemplates": []
+}

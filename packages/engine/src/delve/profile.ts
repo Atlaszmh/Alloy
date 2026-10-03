@@ -14,11 +14,14 @@ import { isDiveActive } from './dive.js';
 import type { SetChainsOptions } from './runes.js';
 import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
 import { emptyMaterials } from '../loot/materials.js';
+import { applyQuestEvents, emptyQuests } from './quests.js';
+import { refillBoard } from './contracts.js';
 import { rollFloor } from '../loot/forge.js';
 import { applySalvage, salvageRng } from '../loot/salvage-yield.js';
 import { addToPouch, socketCap } from '../loot/runes.js';
 import type { RuneRef } from '../types/rune.js';
 import type { ShardRef } from '../types/crafting.js';
+import type { RewardGrant } from '../types/quests.js';
 import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 
 export interface ProfileActionResult {
@@ -34,6 +37,8 @@ export interface ProfileActionResult {
   runes?: RuneRef[];
   /** Runes the op destroyed. */
   destroyed?: RuneRef[];
+  /** What a claim gave (see the quests spec). */
+  rewards?: RewardGrant[];
 }
 
 function perRarity<T>(value: T): Record<Rarity, T> {
@@ -66,7 +71,7 @@ export function createDelveProfile(
   Object.assign(materials.metals, kit.startingMaterials.metals);
   Object.assign(materials.flux, kit.startingMaterials.flux);
   const profile: DelveProfile = {
-    version: 8,
+    version: 9,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -96,9 +101,14 @@ export function createDelveProfile(
     patterns: [...kit.startingPatterns],
     essencesSeen: [],
     reactionsSeen: [],
+    quests: emptyQuests(registry),
     dive: null,
   };
-  return opts.primary ? chooseStartingMana(registry, profile, opts.primary).profile : profile;
+  // The first unlocks, and a full Contract board once there are templates (see the quests spec).
+  let started = applyQuestEvents(registry, profile, []);
+  if (registry.getQuestsData().contractTemplates.length > 0)
+    started = refillBoard(registry, started);
+  return opts.primary ? chooseStartingMana(registry, started, opts.primary).profile : started;
 }
 
 /** `profile` with its equipped weapon's moveset replaced (it has a weapon). */
@@ -198,13 +208,13 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
 }
 
 /**
- * Validate an unknown JSON blob as a save. A version 8 save is fitted to the
+ * Validate an unknown JSON blob as a save. A version 9 save is fitted to the
  * data (`fitMovesets`); a save of any other version is `{ reset: true }`. Null
- * when it isn't an object, or a version 8 save doesn't fit the schema.
+ * when it isn't an object, or a version 9 save doesn't fit the schema.
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  if ((raw as { version?: unknown }).version !== 8) return { reset: true };
+  if ((raw as { version?: unknown }).version !== 9) return { reset: true };
   const parsed = DelveProfileSchema.safeParse(raw);
   return parsed.success ? { profile: fitMovesets(registry, parsed.data as DelveProfile) } : null;
 }

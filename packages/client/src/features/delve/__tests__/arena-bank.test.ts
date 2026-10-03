@@ -19,6 +19,7 @@ const pending = (over: Partial<WorldPending> = {}): WorldPending => ({
   runes: [],
   haul: emptyHaul(),
   patterns: [],
+  questEvents: [],
   newFloor: false,
   ...over,
 });
