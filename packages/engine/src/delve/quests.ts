@@ -1,13 +1,19 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { DelveProfile } from '../types/delve.js';
-import type {
-  ProfileQuests,
-  QuestEvent,
-  QuestId,
-  QuestState,
-  Reward,
-  RewardGrant,
+import { rarityIndex } from '../types/gem.js';
+import {
+  OBJECTIVE_RULES,
+  type Objective,
+  type ObjectiveProgress,
+  type ObjectiveType,
+  type ProfileQuests,
+  type QuestDef,
+  type QuestEvent,
+  type QuestId,
+  type QuestState,
+  type Reward,
+  type RewardGrant,
 } from '../types/quests.js';
 import { isDiveActive } from './dive.js';
 import type { ProfileActionResult } from './profile.js';
@@ -37,22 +43,162 @@ export function emptyQuests(registry: DataRegistry): ProfileQuests {
   };
 }
 
+function questDef(registry: DataRegistry, id: QuestId): QuestDef | undefined {
+  return registry.getQuestsData().quests.find((q) => q.id === id);
+}
+
+function withQuests(profile: DelveProfile, quests: Partial<ProfileQuests>): DelveProfile {
+  return { ...profile, quests: { ...profile.quests, ...quests } };
+}
+
+/** Whether `e` counts for `o`: its type, and every filter `o` gives (`pair`: the pair's reaction). */
+function matches(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  o: Objective,
+  e: QuestEvent,
+): boolean {
+  if (e.type !== o.type) return false;
+  const f = o.filter ?? {};
+  const v = e as Partial<{
+    kind: string;
+    biome: string;
+    element: string;
+    depth: number;
+    noPotion: boolean;
+    noDamage: boolean;
+    reaction: string;
+    rarity: Parameters<typeof rarityIndex>[0];
+    legendary: boolean;
+  }>;
+  const { primary, secondary } = profile.pair;
+  return (
+    (!f.kind || v.kind === f.kind) &&
+    (!f.biome || v.biome === f.biome) &&
+    (!f.element || v.element === f.element) &&
+    (!f.noPotion || !!v.noPotion) &&
+    (!f.noDamage || !!v.noDamage) &&
+    (f.minDepth === undefined || (v.depth ?? 0) >= f.minDepth) &&
+    (!f.reaction || v.reaction === f.reaction) &&
+    (!f.pair ||
+      (!!primary &&
+        !!secondary &&
+        v.reaction === registry.getReactionFor(primary, secondary).id)) &&
+    (!f.minRarity || (!!v.rarity && rarityIndex(v.rarity) >= rarityIndex(f.minRarity))) &&
+    (!f.legendary || !!v.legendary)
+  );
+}
+
+/** A state type's value, read from the profile. */
+function stateValue(profile: DelveProfile, type: ObjectiveType): number {
+  if (type === 'bind') return profile.pair.secondary ? 1 : 0;
+  if (type === 'knowPatterns') return profile.patterns.length;
+  if (type === 'discoverReaction') return profile.reactionsSeen.length;
+  return 0;
+}
+
+/**
+ * `objectives`' progress with `events` applied: a sum adds each matching
+ * event, `reachDepth` (max) takes the deepest depth entered (a `total` one
+ * also `bestDepth`), a state type reads the profile; capped at the count. A
+ * done objective stays as it is.
+ */
+function advance(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  objectives: readonly Objective[],
+  progress: readonly ObjectiveProgress[] | undefined,
+  events: readonly QuestEvent[],
+): ObjectiveProgress[] {
+  return objectives.map((o, i) => {
+    const was = progress?.[i] ?? { value: 0, done: false };
+    if (was.done) return was;
+    const rule = OBJECTIVE_RULES[o.type].progress;
+    const hits = events.filter((e) => matches(registry, profile, o, e));
+    const grown =
+      rule === 'state'
+        ? stateValue(profile, o.type)
+        : rule === 'max'
+          ? Math.max(
+              was.value,
+              o.scope === 'total' ? profile.bestDepth : 0,
+              ...hits.map((e) => (e.type === 'reachDepth' ? e.depth : 0)),
+            )
+          : was.value + hits.length;
+    const value = Math.min(o.count, grown);
+    return { value, done: value >= o.count };
+  });
+}
+
+function unlockMet(def: QuestDef, profile: DelveProfile): boolean {
+  const u = def.unlock ?? {};
+  return (
+    (!u.after || profile.quests.claimed.includes(u.after)) &&
+    profile.bestDepth >= (u.bestDepth ?? 0) &&
+    profile.reactionsSeen.length >= (u.reactionsSeen ?? 0) &&
+    profile.patterns.length >= (u.patterns ?? 0) &&
+    (!u.pair || profile.pair.secondary !== null)
+  );
+}
+
 /**
  * The profile with `events` applied: every unlocked, unclaimed quest's
  * matching objectives (the board's contracts' too) advance, the state types
- * are read again from the profile, then the unlocks run (a newly unlocked
- * main quest takes the old main's tracked slot, or the first free one). Pure
- * and deterministic: every op that emits calls it and returns its result, and
- * an op that only changes a state calls it with no events. Stub (B1): until
- * then it applies nothing and returns `profile`, so the calls already wired
- * to it (`createDelveProfile`'s first unlocks) change nothing.
+ * are read again from the profile, then the unlocks run: a newly unlocked
+ * quest starts with its state types read (an early bind counts at once), and
+ * a newly unlocked main quest takes the tracked slot of the quest it comes
+ * after, or the first free one. Pure and deterministic: every op that emits
+ * calls it and returns its result, and an op that only changes a state calls
+ * it with no events.
  */
 export function applyQuestEvents(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
-  _events: readonly QuestEvent[],
+  events: readonly QuestEvent[],
 ): DelveProfile {
-  return profile;
+  const q = profile.quests;
+  const progress = { ...q.progress };
+  for (const id of q.unlocked) {
+    const def = questDef(registry, id);
+    if (def && !q.claimed.includes(id))
+      progress[id] = advance(registry, profile, def.objectives, progress[id], events);
+  }
+  const board = q.board.map(
+    (c) => c && { ...c, progress: advance(registry, profile, c.objectives, c.progress, events) },
+  );
+  const unlocked = [...q.unlocked];
+  const tracked = [...q.tracked];
+  const { maxTracked } = registry.getDelveBalance().quests;
+  for (const def of registry.getQuestsData().quests) {
+    if (unlocked.includes(def.id) || !unlockMet(def, profile)) continue;
+    unlocked.push(def.id);
+    progress[def.id] = advance(registry, profile, def.objectives, undefined, []);
+    if (def.kind !== 'main') continue;
+    const slot = def.unlock?.after ? tracked.indexOf(def.unlock.after) : -1;
+    if (slot >= 0) tracked[slot] = def.id;
+    else if (tracked.length < maxTracked) tracked.push(def.id);
+  }
+  return withQuests(profile, { progress, board, unlocked, tracked });
+}
+
+/**
+ * Every unfinished `dive`-scoped objective back to 0 (a done one stays done):
+ * a dive's start and its settle call it.
+ */
+export function resetDiveQuests(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const q = profile.quests;
+  const reset = (objectives: readonly Objective[], progress: readonly ObjectiveProgress[]) =>
+    progress.map((p, i) =>
+      objectives[i]?.scope === 'dive' && !p.done ? { value: 0, done: false } : p,
+    );
+  const progress = Object.fromEntries(
+    Object.entries(q.progress).map(([id, p]) => {
+      const def = questDef(registry, id);
+      return [id, def ? reset(def.objectives, p) : p];
+    }),
+  );
+  const board = q.board.map((c) => c && { ...c, progress: reset(c.objectives, c.progress) });
+  return withQuests(profile, { progress, board });
 }
 
 /**
