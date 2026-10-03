@@ -37,6 +37,7 @@ import {
 export type { AimView } from './fx/draw-world';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
+import { floorInit } from './pixel/floor-engine';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
@@ -228,12 +229,7 @@ export class ArenaRenderer {
     this.floats = [];
     this.drawFloor();
     this.pixelFloor?.destroy();
-    this.pixelFloor = new PixelFloor({
-      arenaWidth: world.width,
-      arenaHeight: world.height,
-      biomeId: biome.id,
-      depth: world.depth,
-    });
+    this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
