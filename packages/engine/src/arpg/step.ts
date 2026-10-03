@@ -43,7 +43,7 @@ import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 import { addMaterial } from '../loot/materials.js';
-import { clearanceOf, downhill, flowTick, leashTick } from './flow.js';
+import { clearanceOf, downhill, flowTick, homeWay, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
@@ -682,6 +682,12 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     // A training dummy keeps its statuses and its knockback, but never acts.
     if (m.dummy) continue;
+    // A leashed foe walks home and does nothing else (`leashTick`).
+    if (m.goingHome) {
+      const way = isStunned(ctx, m) ? null : homeWay(world.map, m);
+      if (way) moveMonster(ctx, m, way, m.speed, dt);
+      continue;
+    }
 
     // A foe wakes when it sees the hero near (or is hit), and its pack with it.
     if (!m.aggro) {

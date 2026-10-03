@@ -1,7 +1,7 @@
 import type { MonsterEntity, Vec } from '../types/arpg.js';
-import type { FloorMap } from '../types/floor-map.js';
+import type { FloorMap, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
-import { dirTo } from './geometry.js';
+import { dirTo, dist } from './geometry.js';
 import { blocked } from './grid.js';
 
 /**
@@ -123,5 +123,56 @@ export function flowTick(ctx: SimCtx): void {
   flow.large = flowField(world.map, world.hero, flowRadius, Math.min(LARGE, bal.layout.hallWidth));
 }
 
-/** Send foes past their leash home, and heal and sleep them there (`farSince`, `goingHome`). */
-export function leashTick(_ctx: SimCtx): void {}
+/** A foe's room and its centre, where it leashes to; null for one with no room. */
+function homeOf(map: FloorMap, m: MonsterEntity): { room: Room; at: Vec } | null {
+  const room = m.roomId === null ? undefined : map.rooms.find((r) => r.id === m.roomId);
+  if (!room) return null;
+  const { x, y, w, h } = room.rect;
+  return { room, at: { x: x + w / 2, y: y + h / 2 } };
+}
+
+/** A leashed foe's way home: down its room's `homeField` (straight without one); null when lost. */
+export function homeWay(map: FloorMap, m: MonsterEntity): Vec | null {
+  const home = homeOf(map, m);
+  if (!home) return null;
+  const field = home.room.homeField;
+  return field ? downhill(map, field, m, home.at) : dirTo(m.x, m.y, home.at.x, home.at.y);
+}
+
+/** Home: a step from the bottom of its room's `homeField` (a unit from the centre without one). */
+function atHome(map: FloorMap, m: MonsterEntity, home: { room: Room; at: Vec }): boolean {
+  const field = home.room.homeField;
+  if (!field) return dist(m.x, m.y, home.at.x, home.at.y) <= 1;
+  return field[cellAt(m.y, map.height) * map.width + cellAt(m.x, map.width)] <= 1;
+}
+
+/**
+ * The leash (see the floor maps spec): an awake foe farther than `ai.leashRadius`
+ * from its room's centre for more than `ai.leashSeconds` turns home
+ * (`goingHome`, walked in `monstersTick`); home, it heals to full and sleeps
+ * again (`aggro` and `aggroAt` reset, so a boss's enrage restarts). None in the
+ * open room.
+ */
+export function leashTick(ctx: SimCtx): void {
+  const { world, bal } = ctx;
+  if (world.map.open) return;
+  const { leashRadius, leashSeconds } = bal.ai;
+  for (const m of world.monsters) {
+    if (m.dead || m.dummy) continue;
+    const home = homeOf(world.map, m);
+    if (!home) continue;
+    if (m.goingHome) {
+      if (!atHome(world.map, m, home)) continue;
+      Object.assign(m, { goingHome: false, farSince: null, aggro: false, aggroAt: 0 });
+      m.hp = m.maxHp;
+      continue;
+    }
+    if (!m.aggro || dist(m.x, m.y, home.at.x, home.at.y) <= leashRadius) m.farSince = null;
+    else if (m.farSince === null) m.farSince = world.t;
+    else if (world.t - m.farSince > leashSeconds) {
+      m.goingHome = true;
+      m.windupUntil = 0;
+      m.chargeUntil = 0;
+    }
+  }
+}
