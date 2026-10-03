@@ -41,7 +41,7 @@ export interface Prompt {
 
 export type GlyphId =
   | 'scrap' | 'link' | 'dust' | 'rune' | 'potion' | 'dodge' | 'attack' | 'lock' | 'check'
-  | 'skull' | 'anvil' | 'chest' | 'up' | 'down' | 'new' | 'potential'
+  | 'skull' | 'anvil' | 'chest' | 'shrine' | 'up' | 'down' | 'new' | 'potential'
   | 'controls' | 'settings' | 'training' | 'menu' | 'journal' | 'lab' | 'door' | 'extract'
   | 'riposte' | 'quick' | 'barrier' | 'galvanize' // buffs
   | `rune-${RuneFamily}` // the four rune families

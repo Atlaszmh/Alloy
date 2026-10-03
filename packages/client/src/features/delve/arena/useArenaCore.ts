@@ -106,14 +106,17 @@ export interface AbilityHud {
   runes: RuneRef[];
 }
 
-/** A timed buff on the hero, for the HUD's buff row. No Galvanize: its spark is on the slots. */
-export interface HudBuff {
-  id: 'riposte' | 'quick' | 'barrier';
-  /** Seconds left, from riposteUntil, quickUntil and barrier.until. */
-  left: number;
-  /** Its whole length when the balance fixes one; null for the barrier (its source sets it). */
-  total: number | null;
-}
+/** A buff on the hero, for the HUD's buff row. No Galvanize: its spark is on the slots. */
+export type HudBuff =
+  | {
+      id: 'riposte' | 'quick' | 'barrier';
+      /** Seconds left, from riposteUntil, quickUntil and barrier.until. */
+      left: number;
+      /** Its whole length when the balance fixes one; null for the barrier (its source sets it). */
+      total: number | null;
+    }
+  /** A shrine's blessing (see the floor maps spec): for this floor or the rest of the dive. */
+  | { id: 'shrine'; shrine: string; name: string; dive: boolean };
 
 /** The minimap's floor, in world units. */
 export interface HudMap {
@@ -295,6 +298,19 @@ function promptOf(world: ArpgWorld, e: PromptEvent | null): InteractHud | undefi
   };
 }
 
+/** The shrines' blessings on the hero, the dive's then the floor's, by their shrine's name. */
+function blessings(h: ArpgWorld['hero']): HudBuff[] {
+  const shrines = getDelveRegistry().getDelveData().shrines;
+  return [h.diveBuffs, h.floorBuffs].flatMap((list, i) =>
+    list.map((b) => ({
+      id: 'shrine' as const,
+      shrine: b.shrine,
+      name: shrines.find((s) => s.id === b.shrine)?.name ?? b.shrine,
+      dive: i === 0,
+    })),
+  );
+}
+
 /** Whether a generated floor's fog has seen the cell at (x, y). */
 function seenAt(world: ArpgWorld, x: number, y: number): boolean {
   const cx = Math.min(world.width - 1, Math.max(0, Math.floor(x)));
@@ -394,13 +410,16 @@ export function snapshot(
         ? null
         : h.reactionReadyAt.galvanize - bal.reactions.reactionCooldown,
     t,
-    buffs: (
-      [
-        ['riposte', h.riposteUntil, bal.dodge.riposteWindow],
-        ['quick', h.quickUntil, bal.reactions.lightningRodDuration],
-        ['barrier', h.barrier?.until ?? 0, null],
-      ] as const
-    ).flatMap(([id, until, total]) => (until > t ? [{ id, left: until - t, total }] : [])),
+    buffs: [
+      ...(
+        [
+          ['riposte', h.riposteUntil, bal.dodge.riposteWindow],
+          ['quick', h.quickUntil, bal.reactions.lightningRodDuration],
+          ['barrier', h.barrier?.until ?? 0, null],
+        ] as const
+      ).flatMap(([id, until, total]) => (until > t ? [{ id, left: until - t, total }] : [])),
+      ...blessings(h),
+    ],
     map: {
       width: world.width,
       height: world.height,

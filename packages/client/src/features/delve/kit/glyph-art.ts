@@ -109,6 +109,11 @@ export const GLYPH_ART: Record<GlyphId, GlyphArt> = {
       '.kkkkkkkkkk.',
     ],
   },
+  // A sanctum's shrine: a mana crystal on a stone altar (the floor maps' rooms, the buff row).
+  shrine: {
+    palette: { c: '#2ce8f5', g: '#8b9bb4' },
+    rows: ['...c...', '..ccc..', '..ccc..', '...c...', '.ggggg.', '..ggg..', '.ggggg.'],
+  },
   // ── marks ──
   up: {
     color: '#63c74d',

@@ -217,6 +217,16 @@ describe('arena HUD snapshot: buffs and the map', () => {
     expect(snapshot(w, null).buffs.map((b) => b.id)).toEqual(['barrier']);
   });
 
+  it("lists the shrines' blessings after them, the dive's then the floor's, by their shrine's name", () => {
+    const w = sandbox();
+    w.hero.floorBuffs = [{ shrine: 'vigor', effect: { damage: 0.2 } }];
+    w.hero.diveBuffs = [{ shrine: 'devotion', effect: { damage: 0.1 } }];
+    expect(snapshot(w, null).buffs).toEqual([
+      { id: 'shrine', shrine: 'devotion', name: 'Shrine of Devotion', dive: true },
+      { id: 'shrine', shrine: 'vigor', name: 'Shrine of Vigor', dive: false },
+    ]);
+  });
+
   it('maps the floor: the view (the arena with no renderer), the hero, foes by rank, loot by colour', () => {
     const w = sandbox();
     w.monsters.push({ x: 3, y: 4, kind: 'elite' } as MonsterEntity);
