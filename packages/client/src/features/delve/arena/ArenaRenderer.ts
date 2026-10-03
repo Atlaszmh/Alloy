@@ -1,4 +1,12 @@
-import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import {
+  Application,
+  BufferImageSource,
+  Container,
+  Graphics,
+  Sprite,
+  Text,
+  Texture,
+} from 'pixi.js';
 import {
   activeMove,
   type ArpgEvent,
@@ -6,6 +14,7 @@ import {
   type BiomeDef,
   type Door,
   type Drop,
+  type FloorMap,
   type GearItem,
   type InteractableKind,
   type ManaType,
@@ -40,7 +49,7 @@ import {
 export type { AimView } from './fx/draw-world';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
-import { floorInit } from './pixel/floor-engine';
+import { FLOOR_MARGIN, floorInit } from './pixel/floor-engine';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
@@ -96,6 +105,15 @@ interface FloatText {
   pop: boolean;
 }
 
+/** A generated floor's fog: one pixel a cell, over the map and the cliffs round it. */
+interface FogLayer {
+  sprite: Sprite;
+  source: BufferImageSource;
+  pixels: Uint8Array;
+  /** The world's `fogVersion` it shows. */
+  version: number;
+}
+
 interface Dying {
   root: Container;
   life: number;
@@ -110,6 +128,9 @@ const DOOR_IRON = 0x8b9bb4;
 const DOOR_SEAL = 0xe43b44;
 /** Seconds a door's bars take to slide shut, or back open. */
 const DOOR_SECONDS = 0.25;
+
+/** The fog's darkness (alpha) by a cell's fog: unseen black, seen but out of sight dimmed, in sight clear. */
+const FOG_ALPHA = [255, 150, 0];
 
 /** Each interactable's prop in the atlas. */
 const PROP_SPRITE: Record<InteractableKind, PropId> = {
@@ -166,6 +187,8 @@ export class ArenaRenderer {
   private doorShut = new Map<number, number>();
   /** The rooms' props by interactable id, with their atlas frames. */
   private props = new Map<string, { sprite: Sprite; frames: Texture[] }>();
+  /** A generated floor's fog. */
+  private fog: FogLayer | null = null;
   private dropLayer = new Container();
   private entities = new Container();
   private textLayer = new Container();
@@ -255,6 +278,8 @@ export class ArenaRenderer {
     this.drawFloor();
     this.doorShut.clear();
     this.makeProps(world);
+    this.fog?.sprite.destroy({ texture: true, textureSource: true });
+    this.fog = world.map.open ? null : this.makeFog(world.map);
     this.pixelFloor?.destroy();
     this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
@@ -282,6 +307,25 @@ export class ArenaRenderer {
       this.entities.addChild(sprite);
       this.props.set(it.id, { sprite, frames });
     }
+  }
+
+  /** The fog layer, over everything on the floor (the labels and numbers stay above it). */
+  private makeFog(map: FloorMap): FogLayer {
+    const pad = FLOOR_MARGIN;
+    const width = map.width + pad * 2;
+    const height = map.height + pad * 2;
+    const pixels = new Uint8Array(width * height * 4);
+    const source = new BufferImageSource({
+      resource: pixels,
+      width,
+      height,
+      format: 'rgba8unorm',
+      scaleMode: 'nearest',
+    });
+    const sprite = new Sprite(new Texture({ source }));
+    sprite.position.set(-pad, -pad);
+    this.root.addChild(sprite);
+    return { sprite, source, pixels, version: -1 };
   }
 
   private emoji(glyph: string): Texture {
@@ -379,6 +423,8 @@ export class ArenaRenderer {
     for (const e of events) {
       switch (e.kind) {
         case 'hit': {
+          // Out of sight, a hit shows nothing (its number would give the foe away).
+          if (!inSight(w, e.x, e.y)) break;
           const color = elemColor(e.element);
           this.fx.burst(e.x, e.y, color, e.crit ? 7 : 3, e.crit ? 5 : 3);
           if (e.reaction) {
@@ -708,11 +754,21 @@ export class ArenaRenderer {
     this.syncDrops(w);
     this.syncProps(w);
     this.drawDoors(w, dt);
+    const fog = this.fog;
+    if (fog && fog.version !== w.fogVersion) {
+      paintFog(w.map, w.fog, FLOOR_MARGIN, fog.pixels);
+      fog.source.update();
+      fog.version = w.fogVersion;
+    }
+    // A foe out of sight shows nothing: not its marks, nor its wind-ups.
+    const seen = w.map.open
+      ? w
+      : { ...w, monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)) };
     drawZones(ground, w, this.time);
     drawLobs(ground, air, w, this.time);
-    drawTelegraphs(ground, w, this.time);
+    drawTelegraphs(ground, seen, this.time);
     drawFooting(ground, w, this.time);
-    drawMonsterMarks(ground, air, w, this.time);
+    drawMonsterMarks(ground, air, seen, this.time);
     this.lifecycles.update(w, this.fx, this.time);
     drawProjectiles(air, w, this.time, this.trails, (id) => this.lifecycles.bornAt(id));
     drawGuard(air, w, this.time);
@@ -859,6 +915,7 @@ export class ArenaRenderer {
     const s = m.status;
     v.root.position.set(m.x, m.y);
     v.root.zIndex = m.y;
+    v.root.visible = inSight(w, m.x, m.y);
     const flip = w.hero.x > m.x ? -1 : 1;
     const hit = t - m.lastHitAt < 0.09;
     const frozen = t < s.freezeUntil;
@@ -1082,6 +1139,36 @@ export function drawDoor(g: Graphics, d: Door, shut: number, time: number): void
     if (across) g.rect(x0 + 0.1 + k * 0.3, y0, 0.1, h * shut).fill({ color: DOOR_IRON });
     else g.rect(x0, y0 + 0.1 + k * 0.3, w * shut, 0.1).fill({ color: DOOR_IRON });
   }
+}
+
+/** Whether the hero sees a point now (on the open room, always). */
+export function inSight(w: ArpgWorld, x: number, y: number): boolean {
+  if (w.map.open) return true;
+  const { width: W, height: H } = w.map;
+  const cx = Math.min(W - 1, Math.max(0, Math.floor(x)));
+  const cy = Math.min(H - 1, Math.max(0, Math.floor(y)));
+  return w.fog[cy * W + cx] === 2;
+}
+
+/**
+ * The fog layer's pixels (black, at `FOG_ALPHA`), one a cell over the map and
+ * `pad` cells round it. A wall takes the clearest fog of the floor beside it,
+ * so the walls round what the hero sees show; past the map's edge, the edge's.
+ */
+export function paintFog(map: FloorMap, fog: Uint8Array, pad: number, out: Uint8Array): void {
+  const { width: W, height: H, cells } = map;
+  const OW = W + pad * 2;
+  for (let oy = 0; oy < H + pad * 2; oy++)
+    for (let ox = 0; ox < OW; ox++) {
+      const x = Math.min(W - 1, Math.max(0, ox - pad));
+      const y = Math.min(H - 1, Math.max(0, oy - pad));
+      let f = fog[y * W + x];
+      if (cells[y * W + x] === 1)
+        for (let ny = Math.max(0, y - 1); ny <= Math.min(H - 1, y + 1); ny++)
+          for (let nx = Math.max(0, x - 1); nx <= Math.min(W - 1, x + 1); nx++)
+            if (cells[ny * W + nx] !== 1) f = Math.max(f, fog[ny * W + nx]);
+      out[(oy * OW + ox) * 4 + 3] = FOG_ALPHA[f];
+    }
 }
 
 /**

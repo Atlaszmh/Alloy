@@ -12,6 +12,7 @@ import {
   computeHeroStats,
   createSandboxWorld,
   defaultChains,
+  spawnDummies,
   type ArpgEvent,
   type ArpgWorld,
   type Door,
@@ -26,6 +27,7 @@ import {
   drawDoor,
   dropPop,
   holdPing,
+  paintFog,
   pickupColor,
   propFrame,
   pruneViews,
@@ -134,7 +136,8 @@ describe('the arena renderer', () => {
 /** A renderer on a stand-in app (no GPU): a `width`×`height` screen at resolution `res`. */
 function stage(width = 1920, height = 1080, res = 1) {
   const app = {
-    renderer: { render() {}, resolution: res },
+    // A creature without art draws its emoji, as a generated texture.
+    renderer: { render() {}, resolution: res, generateTexture: () => Texture.EMPTY },
     stage: new Container(),
     screen: { width, height },
     canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
@@ -507,5 +510,95 @@ describe("a generated floor's doors and props", { timeout: 20000 }, () => {
     w.bossKilled = true;
     r.update(0.1);
     expect(gate.texture).toBe(Texture.EMPTY);
+  });
+});
+
+describe("a generated floor's fog", { timeout: 20000 }, () => {
+  it('blacks out the unseen, dims the seen, clears what is in sight, and shows the walls round it', () => {
+    const map = ringMap();
+    const fog = new Uint8Array(64 * 64);
+    const cells = (k: number) => {
+      const r = map.rooms[k].rect;
+      return Array.from(
+        { length: r.w * r.h },
+        (_, i) => (r.y + Math.floor(i / r.w)) * 64 + r.x + (i % r.w),
+      );
+    };
+    for (const c of cells(0)) fog[c] = 2;
+    for (const c of cells(1)) fog[c] = 1;
+    const pad = 3;
+    const out = new Uint8Array((64 + pad * 2) ** 2 * 4);
+    paintFog(map, fog, pad, out);
+    const alpha = (x: number, y: number) => out[((y + pad) * (64 + pad * 2) + x + pad) * 4 + 3];
+    expect(alpha(8, 8)).toBe(0); // in the start room
+    expect(alpha(3, 8)).toBe(0); // its wall
+    expect(alpha(50, 8)).toBe(150); // the vault, seen before
+    expect(alpha(50, 50)).toBe(255); // the sanctum, never seen
+    expect(alpha(0, 0)).toBe(255);
+    expect(alpha(-3, -3)).toBe(255); // the cliffs past the edge
+    expect(out[(pad * (64 + pad * 2) + pad) * 4]).toBe(0); // black
+  });
+
+  it('lays over a generated floor (none on the open room), and redraws when the fog moves on', () => {
+    const { r } = stage();
+    show(r, floor());
+    expect((r as unknown as { fog: unknown }).fog).toBeNull();
+    const w = onMap(ringMap());
+    w.fog.fill(0);
+    show(r, w);
+    const fog = (r as unknown as { fog: { sprite: Sprite; pixels: Uint8Array } }).fog;
+    expect(fog.sprite.position.x).toBe(-3);
+    const at = (x: number, y: number) => fog.pixels[((y + 3) * 70 + x + 3) * 4 + 3];
+    expect(at(8, 8)).toBe(255);
+    w.fog.fill(2);
+    r.update(0.1);
+    expect(at(8, 8)).toBe(255); // the same fogVersion: not redrawn
+    w.fogVersion++;
+    r.update(0.1);
+    expect(at(8, 8)).toBe(0);
+  });
+
+  it('shows a foe, and the numbers of its hits, only while the hero sees it', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    const [foe] = spawnDummies(getDelveRegistry(), w, { layout: 'single', element: null });
+    Object.assign(foe, { x: 10, y: 8 });
+    show(r, w);
+    const view = () =>
+      (r as unknown as { monsters: Map<number, { root: Container }> }).monsters.get(foe.id)!.root;
+    expect(view().visible).toBe(true);
+    const floats = () => (r as unknown as { floats: unknown[] }).floats.length;
+    const hit: ArpgEvent = {
+      kind: 'hit',
+      id: foe.id,
+      x: 10,
+      y: 8,
+      amount: 12,
+      crit: false,
+      element: null,
+      heft: 0,
+      source: 'basic',
+    };
+    r.handleEvents([hit]);
+    expect(floats()).toBe(1);
+    w.fog[8 * 64 + 10] = 1;
+    r.update(0.1);
+    expect(view().visible).toBe(false);
+    r.handleEvents([hit]);
+    expect(floats()).toBe(1);
+  });
+
+  it("keeps the camera on the map's bounds", () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    Object.assign(w.hero, { x: 2, y: 2 });
+    show(r, w);
+    expect(r.viewRect().left).toBeCloseTo(-1);
+    expect(r.viewRect().top).toBeCloseTo(-1.5);
+    const far = onMap(ringMap());
+    Object.assign(far.hero, { x: 62, y: 62 });
+    show(r, far);
+    expect(r.viewRect().right).toBeCloseTo(65);
+    expect(r.viewRect().bottom).toBeCloseTo(65.5);
   });
 });
