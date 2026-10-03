@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
+import { loadAndValidateData } from '../src/data/loader.js';
+import { questsDataProblems } from '../src/data/quests-check.js';
+import { DataRegistry } from '../src/data/registry.js';
 import { QuestsDataSchema } from '../src/data/schemas.js';
 import questsData from '../src/data/quests.json';
 import {
@@ -48,11 +51,29 @@ const data = (quests: QuestDef[], contractTemplates: ContractTemplate[] = []): Q
   contractTemplates,
 });
 const ok = (d: QuestsData) => QuestsDataSchema.safeParse(d).success;
+/** The registry's checks on `d` in place of quests.json. */
+function problems(d: QuestsData): string[] {
+  const x = loadAndValidateData();
+  const r = new DataRegistry(
+    x.affixes,
+    x.combinations,
+    x.synergies,
+    x.baseItems,
+    x.balance,
+    x.recipes,
+    x.delve,
+    x.arpg,
+    x.crafting,
+    d,
+  );
+  return questsDataProblems(r);
+}
 
 describe('quests.json', () => {
-  it('loads, with Hesta giving', () => {
+  it('loads, Hesta giving, and refers only to data that exists', () => {
     expect(registry.getQuestsData().giver).toEqual({ name: 'Hesta', sprite: 'hesta' });
     expect(registry.getQuestsData().quests.length).toBeGreaterThan(0);
+    expect(questsDataProblems(registry)).toEqual([]);
   });
 
   it('has a rule for each objective type: the Anvil-only ones and the state ones marked', () => {
@@ -147,5 +168,70 @@ describe('QuestsDataSchema', () => {
     ];
     for (const r of bad) expect(ok(rewards(r)), JSON.stringify(r)).toBe(false);
     expect(ok(data([quest('a', { rewards: [] })]))).toBe(false);
+  });
+});
+
+describe("the registry's quests checks", () => {
+  it('finds an unknown biome, pattern, essence or quest to unlock after', () => {
+    expect(problems(data([quest('a')], [template]))).toEqual([]);
+    expect(
+      problems(
+        data([
+          quest('a', {}, { type: 'boss', filter: { biome: 'moon' } }),
+          quest('b', {
+            rewards: [
+              { kind: 'pattern', id: 'spork', count: 1 },
+              { kind: 'essence', id: 'nope', count: 1 },
+              {
+                kind: 'pattern',
+                id: 'unknown',
+                count: 1,
+                fallback: { kind: 'pattern', id: 'x', count: 1 },
+              },
+            ],
+          }),
+          quest('c', { unlock: { after: 'zz' } }),
+        ]),
+      ),
+    ).toEqual([
+      'a: no biome moon',
+      'b: no pattern spork',
+      'b: no legendary nope',
+      'b: no pattern x',
+      'c: no quest zz',
+    ]);
+    expect(
+      problems(
+        data(
+          [],
+          [
+            {
+              ...template,
+              rewards: { ...template.rewards, hard: [{ kind: 'essence', id: 'nope', count: 1 }] },
+            },
+          ],
+        ),
+      ),
+    ).toEqual(['cull: no legendary nope']);
+  });
+
+  it('the main quests form one chain, each unlocking after the one before', () => {
+    const main = (id: string, after?: string) =>
+      quest(id, { kind: 'main', ...(after ? { unlock: { after } } : {}) });
+    expect(
+      problems(
+        data([main('a'), main('c', 'b'), main('b', 'a'), quest('s', { unlock: { after: 'c' } })]),
+      ),
+    ).toEqual([]);
+    expect(problems(data([main('a'), main('b')]))).toEqual([
+      'the main chain has one first quest, with no after',
+    ]);
+    expect(problems(data([main('a'), main('b', 'a'), main('c', 'a')]))).toEqual([
+      'the main chain forks after a',
+      'every main quest is on the one chain',
+    ]);
+    expect(problems(data([main('a'), quest('s'), main('b', 's')]))).toEqual([
+      'every main quest is on the one chain',
+    ]);
   });
 });
