@@ -174,6 +174,8 @@ export interface LayoutBalance {
   minPackDistance: number;
   /** Packs a combat room or den, at most (before the overflow rules). */
   packsPerRoom: number;
+  /** Dives play generated floors (`FloorOptions.layout: 'generated'`); off, they keep the open room. */
+  generatedDives: boolean;
 }
 
 /** How foes move and see, and the floor's timings (see the floor maps spec). */

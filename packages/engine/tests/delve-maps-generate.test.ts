@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { blocked, isWalkable } from '../src/arpg/grid.js';
 import { floorPacks, generateFloor, planFloor } from '../src/arpg/layout/generate.js';
-import { isBossFloor } from '../src/arpg/world.js';
+import { createFloorWorld, isBossFloor, type FloorOptions } from '../src/arpg/world.js';
+import { createDefaultRegistry } from '../src/data/default-registry.js';
+import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { DoorDef } from '../src/types/delve.js';
 import type { FloorMap, Room } from '../src/types/floor-map.js';
-import { bal, registry } from './fixtures/arena.js';
+import { bal, gear, registry } from './fixtures/arena.js';
 
 // The floor generator (see the floor maps spec's "Generator" and "Testing"):
 // rooms and halls on the coarse grid, their kinds, the packs and the world on them.
@@ -21,6 +23,32 @@ const ALL = SEEDS.flatMap((seed) =>
     [null, swarm].map((door) => ({ seed, depth, door, ...plan(seed, depth, door) })),
   ),
 );
+
+/** A registry whose dives are generated (`delve.layout.generatedDives` is off as shipped). */
+const generating = createDefaultRegistry();
+generating.getDelveBalance().layout.generatedDives = true;
+const world = (depth: number, seed: number, opts: Partial<FloorOptions> = {}, reg = generating) =>
+  createFloorWorld(reg, {
+    depth,
+    door: null,
+    stats: computeHeroStats({ weapon: gear('fire') }, registry),
+    chains: {},
+    heroHpFrac: 1,
+    potions: 3,
+    phoenixAvailable: true,
+    seed,
+    layout: 'generated',
+    loot: {
+      nextUid: 1,
+      find: 0,
+      legendaryBoost: 1,
+      firstEssence: false,
+      patterns: [],
+      dropsGiven: [],
+      pair: [],
+    },
+    ...opts,
+  });
 
 /** Steps from the start's cell over every cell that isn't a wall (doors open). */
 function reach(map: FloorMap): Set<number> {
@@ -414,5 +442,77 @@ describe('the packs', () => {
       if (onWay.length >= total) expect(packed.every((r) => onWay.includes(r))).toBe(true);
       else expect(onWay.every((r) => packed.includes(r))).toBe(true);
     }
+  });
+});
+
+describe('the world on a generated map', () => {
+  it('stays the open room while generatedDives is off', () => {
+    expect(L.generatedDives).toBe(false);
+    expect(world(3, 11, {}, registry).map.open).toBe(true);
+  });
+
+  it('starts the hero at the start, sizes the world from the map, and hides it all', () => {
+    const w = world(3, 11);
+    expect(w.map).toMatchObject({ open: false, width: w.width, height: w.height });
+    expect([w.hero.x, w.hero.y]).toEqual([w.map.start.x, w.map.start.y]);
+    expect(w.fog.every((c) => c === 0)).toBe(true);
+    expect(w.map.rooms[0].homeField).toHaveLength(w.width * w.height);
+  });
+
+  it('spawns every foe on a walkable cell of its room, packs away from the start', () => {
+    for (const seed of SEEDS)
+      for (const depth of DEPTHS) {
+        const w = world(depth, seed);
+        expect(w.totalMonsters).toBe(w.monsters.length);
+        for (const m of w.monsters) {
+          expect(isWalkable(w.map, m.x, m.y), `seed ${seed} depth ${depth}`).toBe(true);
+          expect(m.roomId).not.toBeNull();
+          expect(inRect(w.map.rooms[m.roomId!].rect, m.x, m.y)).toBe(true);
+          // Its pack's centre is minPackDistance away; the pack spreads up to 3 from it.
+          const away = Math.hypot(m.x - w.map.start.x, m.y - w.map.start.y);
+          if (m.kind !== 'boss') expect(away).toBeGreaterThanOrEqual(L.minPackDistance - 3);
+        }
+        const { packs } = plan(seed, depth);
+        const packIds = new Set(w.monsters.filter((m) => m.kind !== 'boss').map((m) => m.packId));
+        expect(packIds.size).toBe(packs.reduce((s, n) => s + n, 0));
+      }
+  });
+
+  it("leads every den pack with an elite, and stands a boss floor's boss in the boss room", () => {
+    let dens = 0;
+    for (const seed of SEEDS)
+      for (const depth of [9, 15, 22, 30]) {
+        const w = world(depth, seed);
+        for (const r of w.map.rooms.filter((r) => r.kind === 'den')) {
+          const ms = w.monsters.filter((m) => m.roomId === r.id);
+          dens++;
+          for (const p of new Set(ms.map((m) => m.packId)))
+            expect(ms.some((m) => m.packId === p && m.kind === 'elite')).toBe(true);
+        }
+      }
+    expect(dens).toBeGreaterThan(0);
+    const w = world(5, 3);
+    const boss = w.monsters.find((m) => m.id === w.bossId)!;
+    expect(w.map.rooms[boss.roomId!].kind).toBe('boss');
+    expect(w.monsters.filter((m) => m.roomId === boss.roomId)).toEqual([boss]);
+  });
+
+  it('marks used what the dive used, and spawns nothing when empty', () => {
+    const fresh = world(4, 21);
+    const ids = fresh.map.rooms.flatMap((r) => (r.interactable ? [r.interactable.id] : []));
+    const w = world(4, 21, { used: ids.slice(0, 1) });
+    expect(w.map.rooms.flatMap((r) => (r.interactable?.used ? [r.interactable.id] : []))).toEqual(
+      ids.slice(0, 1),
+    );
+    expect(world(5, 21, { empty: true }).monsters).toHaveLength(0);
+  });
+
+  it('builds the same world for the same seed', () => {
+    const strip = (w: ReturnType<typeof world>) => ({
+      map: w.map,
+      monsters: w.monsters,
+      hero: [w.hero.x, w.hero.y],
+    });
+    expect(strip(world(6, 99))).toEqual(strip(world(6, 99)));
   });
 });

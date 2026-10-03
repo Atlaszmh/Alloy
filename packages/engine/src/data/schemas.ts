@@ -947,6 +947,7 @@ export const LayoutBalanceSchema = z
     pillarChance: z.number().min(0).max(1),
     minPackDistance: z.number().positive(),
     packsPerRoom: z.number().int().positive(),
+    generatedDives: z.boolean(),
   })
   .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid');
 
