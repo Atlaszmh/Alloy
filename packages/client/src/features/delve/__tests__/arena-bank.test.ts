@@ -44,6 +44,14 @@ describe("banking the dive's pickups", () => {
     expect(banksNow(pending({ kills: 3 }), 10)).toBe(false);
   });
 
+  it('banks quest events at most every BANK_EVERY seconds too, so the HUD tracker moves as they come', () => {
+    const dodge = pending({ questEvents: [{ type: 'perfectDodge' }] });
+    expect(banksNow(dodge, BANK_EVERY / 2)).toBe(false);
+    expect(banksNow(dodge, BANK_EVERY)).toBe(true);
+    const kill = { type: 'kill', kind: 'normal', biome: 'cinder_mines', element: 'fire' } as const;
+    expect(banksNow(pending({ kills: 1, questEvents: [kill] }), BANK_EVERY)).toBe(true);
+  });
+
   it('a burst of pickups over a second of frames banks a bounded number of times and loses nothing', () => {
     const registry = getDelveRegistry();
     let p = startDive(registry, createDelveProfile(registry, 7), 1);
