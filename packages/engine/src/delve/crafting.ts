@@ -14,6 +14,7 @@ import type { ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from './dive.js';
+import { applyQuestEvents } from './quests.js';
 import {
   findItem,
   forgeRng,
@@ -56,7 +57,9 @@ export function forge(
     nextUid: profile.nextUid + 1,
     forgeCount: profile.forgeCount + 1,
   };
-  return { ok: true, item, profile: recordFinds(paid, [item]).profile };
+  const forged = recordFinds(paid, [item]).profile;
+  const event = { type: 'forge', rarity: item.rarity, legendary: !!item.legendary } as const;
+  return { ok: true, item, profile: applyQuestEvents(registry, forged, [event]) };
 }
 
 /** Hone affix line `line` of item `uid`, for scrap. */
@@ -127,14 +130,12 @@ export function refine(
   if (materialCount(profile.materials, what) < cost.count)
     return refuse(profile, `Needs ${cost.count} to refine`);
   if (profile.scrap < cost.scrap) return refuse(profile, 'Not enough scrap');
-  return {
-    ok: true,
-    profile: {
-      ...profile,
-      materials: withMaterial(withMaterial(profile.materials, what, -cost.count), next, 1),
-      scrap: profile.scrap - cost.scrap,
-    },
+  const refined: DelveProfile = {
+    ...profile,
+    materials: withMaterial(withMaterial(profile.materials, what, -cost.count), next, 1),
+    scrap: profile.scrap - cost.scrap,
   };
+  return { ok: true, profile: applyQuestEvents(registry, refined, [{ type: 'refine' }]) };
 }
 
 /** Buy a tier I shard of `stat` at the shard bench (`crafting.shardBench`). */
