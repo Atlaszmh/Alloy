@@ -281,7 +281,7 @@
         { "fromDepth": 6, "weights": { "combat": 5, "den": 2, "vault": 1, "sanctum": 1, "alcove": 1 } }
       ],
       "alcoveMax": 1, "deadEndWeight": 3, "minCombatRooms": 2, "vaultGuardChance": 0.35,
-      "pillarChance": 0.3, "minPackDistance": 9, "packsPerRoom": 2
+      "pillarChance": 0.3, "minPackDistance": 9, "packsPerRoom": 2, "generatedDives": false
     },
     "ai": {
       "flowEvery": 0.25, "flowRadius": 30, "directRange": 4, "leashRadius": 12, "leashSeconds": 3, "sealGrace": 0.5,
