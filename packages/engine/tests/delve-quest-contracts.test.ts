@@ -103,23 +103,37 @@ describe('generateContract', () => {
     expect(elites.some((o) => o.filter?.biome === 'storm_foundry')).toBe(true);
   });
 
-  it("draws counts from the tier's range and scales rewards with the best depth", () => {
+  it("draws counts from the tier's range (kills and reactions grown with the best depth) and scales rewards with it", () => {
     const templates = registry.getQuestsData().contractTemplates;
-    const scale = 1 + contracts.depthScale * 20;
-    for (const c of offers({ ...fresh(), bestDepth: 20 })) {
-      const t = templates.find((x) => x.id === c.template)!;
-      const [lo, hi] = t.count[c.tier];
-      expect(c.objectives[0].count).toBeGreaterThanOrEqual(lo);
-      expect(c.objectives[0].count).toBeLessThanOrEqual(hi);
-      const base = t.rewards[c.tier];
-      expect(c.rewards.slice(0, base.length).map((r) => r.count)).toEqual(
-        base.map((r) => Math.round(r.count * scale)),
-      );
-      // Only a hard contract may add an essence.
-      const extra = c.rewards.slice(base.length);
-      expect(extra).toEqual(
-        c.tier === 'hard' && extra.length ? [{ kind: 'essence', id: 'fit', count: 1 }] : [],
-      );
+    const grown = new Set<string>();
+    for (const bestDepth of [0, 20]) {
+      const scale = 1 + contracts.depthScale * bestDepth;
+      for (const c of offers({ ...fresh(), bestDepth, reactionsSeen: ['melt'] })) {
+        const t = templates.find((x) => x.id === c.template)!;
+        const by = 1 + (contracts.countScale[t.type] ?? 0) * bestDepth;
+        if (by > 1) grown.add(t.type);
+        const [lo, hi] = t.count[c.tier];
+        expect(c.objectives[0].count).toBeGreaterThanOrEqual(Math.round(lo * by));
+        expect(c.objectives[0].count).toBeLessThanOrEqual(Math.round(hi * by));
+        const base = t.rewards[c.tier];
+        expect(c.rewards.slice(0, base.length).map((r) => r.count)).toEqual(
+          base.map((r) => Math.max(1, Math.round(r.count * scale))),
+        );
+        // Only a hard contract may add an essence.
+        const extra = c.rewards.slice(base.length);
+        expect(extra).toEqual(
+          c.tier === 'hard' && extra.length ? [{ kind: 'essence', id: 'fit', count: 1 }] : [],
+        );
+      }
+    }
+    expect([...grown].sort()).toEqual(['kill', 'reaction']);
+  });
+
+  it("a new save's kill goals take one or two dives (about 20 foes and 1 elite a floor)", () => {
+    for (const c of offers(fresh())) {
+      const o = c.objectives[0];
+      if (o.type !== 'kill') continue;
+      expect(o.count).toBeLessThanOrEqual(o.filter?.kind === 'elite' ? 6 : 40);
     }
   });
 

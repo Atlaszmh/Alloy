@@ -833,6 +833,7 @@ export const QuestsBalanceSchema = z.object({
     flagDepthBelow: z.number().int().min(0),
     rerollScrap: z.number().min(0),
     essenceChance: z.number().min(0).max(1),
+    countScale: z.record(ObjectiveTypeSchema, z.number().min(0)),
   }),
 });
 

@@ -267,7 +267,7 @@
       "contracts": {
         "slots": 3, "tierWeights": { "easy": 5, "normal": 4, "hard": 2 },
         "depthScale": 0.05, "depthWindow": [-2, 3], "flagDepthBelow": 2,
-        "rerollScrap": 30, "essenceChance": 0.15
+        "rerollScrap": 30, "essenceChance": 0.15, "countScale": { "kill": 0.1, "reaction": 0.1 }
       }
     },
     "sandbox": { "dummyLifeMult": 50, "heroStart": [13, 26], "dummyDistance": 3, "rowSpacing": 1.2, "clumpRadius": 1.2, "groupSpacing": 3.6, "spawnRing": 6, "edgeMargin": 1.5 },

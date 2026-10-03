@@ -88,7 +88,8 @@ function offered(t: ContractTemplate, can: Possible): boolean {
  * The next contract, `contract:<boardCount>`, from a template and a tier
  * (`contracts.tierWeights`) drawn on `contract:<boardCount>` from the profile
  * seed, its filter filled with only what is possible for the hero, its count
- * from the tier's range and its rewards × (1 + depthScale × bestDepth); a
+ * from the tier's range (× (1 + countScale[type] × bestDepth) for the types
+ * `countScale` names) and its rewards × (1 + depthScale × bestDepth); a
  * hard one may add an essence (`essence: 'fit'`) at `essenceChance` × Lucky
  * Charm's boost. A template already on the board is passed over while another
  * can be offered. Its text's `{count}`, `{biome}`, `{element}`, `{reaction}`,
@@ -96,7 +97,8 @@ function offered(t: ContractTemplate, can: Possible): boolean {
  * unless the count is 1. The caller moves `boardCount` on.
  */
 export function generateContract(registry: DataRegistry, profile: DelveProfile): Contract {
-  const { tierWeights, depthScale, essenceChance } = registry.getDelveBalance().quests.contracts;
+  const { tierWeights, depthScale, essenceChance, countScale } =
+    registry.getDelveBalance().quests.contracts;
   const n = profile.quests.boardCount;
   const rng = new SeededRNG(profile.seed).fork(`contract:${n}`);
   const pick = <T>(xs: readonly T[]): T => xs[rng.nextInt(0, xs.length - 1)];
@@ -118,7 +120,8 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
   if (rule.minRarity) filter.minRarity = pick(can.rarities);
   if (rule.noPotion) filter.noPotion = true;
   if (rule.noDamage) filter.noDamage = true;
-  const count = rng.nextInt(...t.count[tier]);
+  const grow = 1 + (countScale[t.type] ?? 0) * profile.bestDepth;
+  const count = Math.max(1, Math.round(rng.nextInt(...t.count[tier]) * grow));
 
   const scale = 1 + depthScale * profile.bestDepth;
   const scaled = (r: Reward): Reward => ({

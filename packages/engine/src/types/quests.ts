@@ -320,5 +320,7 @@ export interface QuestsBalance {
     rerollScrap: number;
     /** A hard contract's chance of an extra essence (× Lucky Charm's `legendaryBoost`), rolled at generation. */
     essenceChance: number;
+    /** A goal's count × (1 + countScale[type] × bestDepth), rounded, for the types it names (deeper heroes dive longer). */
+    countScale: Partial<Record<ObjectiveType, number>>;
   };
 }

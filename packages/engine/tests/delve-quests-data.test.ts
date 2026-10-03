@@ -251,6 +251,7 @@ describe('delve.quests', () => {
         flagDepthBelow: 2,
         rerollScrap: 30,
         essenceChance: 0.15,
+        countScale: { kill: 0.1, reaction: 0.1 },
       },
     });
   });
