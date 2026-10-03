@@ -2,10 +2,10 @@ import type { ResolvedAbility } from '../../types/ability.js';
 import type { Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
 import { angleBetween, dirTo, dist, distToSegment } from '../geometry.js';
-import { moveCircle, snapToWalkable } from '../grid.js';
+import { clipSight, moveCircle, sees, snapToWalkable } from '../grid.js';
 import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
 import { stepBonus, stepHeft } from './resolve.js';
-import { aimPoint, alive, spawnProjectile } from './targeting.js';
+import { aimPoint, alive, muzzle, spawnProjectile } from './targeting.js';
 
 export interface FormResult {
   ok: boolean;
@@ -53,8 +53,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           form: 'bolt',
           ability: ab,
           homingId: null,
-          x: h.x + d.x * 0.6,
-          y: h.y + d.y * 0.6,
+          ...muzzle(ctx, d, 0.6),
           vx: d.x * ab.speed,
           vy: d.y * ab.speed,
           radius: 0.3 + 0.15 * size,
@@ -75,7 +74,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       h.facing = dir;
       const n = ab.count;
       const targets = alive(ctx)
-        .filter((m) => dist(h.x, h.y, m.x, m.y) - m.radius <= ab.range + 2)
+        .filter((m) => dist(h.x, h.y, m.x, m.y) - m.radius <= ab.range + 2 && sees(world.map, h, m))
         .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
       for (let i = 0; i < n; i++) {
         const d = rotate(dir, (i - (n - 1) / 2) * 0.22);
@@ -84,8 +83,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           form: 'volley',
           ability: ab,
           homingId: targets.length > 0 ? targets[i % targets.length].id : null,
-          x: h.x + d.x * 0.5,
-          y: h.y + d.y * 0.5,
+          ...muzzle(ctx, d, 0.5),
           vx: d.x * ab.speed,
           vy: d.y * ab.speed,
           radius: 0.25,
@@ -110,17 +108,21 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       // Multi-shot: 1 + its extra beams in a fan at Volley's spacing. They share one hit set, so
       // a foe is struck once a cast; each beam that hits jumps from its farthest foe and leaves
-      // its zone at its first, as one Lance does.
+      // its zone at its first, as one Lance does. A beam ends at the first wall.
       const n = 1 + (ab.knobs.extraShots?.count ?? 0);
       const struck = new Set<number>();
       for (let i = 0; i < n; i++) {
         const d = n > 1 ? rotate(dir, (i - (n - 1) / 2) * 0.22) : dir;
-        const ex = h.x + d.x * len;
-        const ey = h.y + d.y * len;
+        const { x: ex, y: ey } = clipSight(world.map, h, {
+          x: h.x + d.x * len,
+          y: h.y + d.y * len,
+        });
         const hits = alive(ctx)
           .filter(
             (m) =>
-              !struck.has(m.id) && distToSegment(m.x, m.y, h.x, h.y, ex, ey) <= width + m.radius,
+              !struck.has(m.id) &&
+              distToSegment(m.x, m.y, h.x, h.y, ex, ey) <= width + m.radius &&
+              sees(world.map, h, m),
           )
           .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
         ctx.events.push({
@@ -222,8 +224,12 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       h.defend = null;
       const fromX = h.x;
       const fromY = h.y;
+      // It goes no further than the first wall on its line.
       const d = Math.min(dist(h.x, h.y, p.x, p.y), ab.range);
-      Object.assign(h, moveCircle(world.map, h, h.radius, dir.x * d, dir.y * d));
+      const far = { x: h.x + dir.x * d, y: h.y + dir.y * d };
+      const to = clipSight(world.map, h, far);
+      const k = to === far ? d : dist(h.x, h.y, to.x, to.y);
+      Object.assign(h, moveCircle(world.map, h, h.radius, dir.x * k, dir.y * k));
       h.facing = dir;
       h.invulnUntil = Math.max(h.invulnUntil, t + ab.effect);
       ctx.events.push({
@@ -258,7 +264,12 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           owner: 'hero',
           source: 'barrage',
           ability: ab,
-          ...snapToWalkable(world.map, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r),
+          // Each where the aim point sees.
+          ...clipSight(
+            world.map,
+            p,
+            snapToWalkable(world.map, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r),
+          ),
           radius: ab.radius,
           born: t,
           until: at + 0.1,

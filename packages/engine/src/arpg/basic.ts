@@ -10,7 +10,7 @@ import { holdFull } from './abilities/resolve.js';
 import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
-import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
+import { alive, muzzle, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
  * The basic attack: each blow of the hero's basic chain (its kind's row, in
@@ -374,8 +374,7 @@ export function landBlow(
         form: null,
         ability: null,
         homingId: null,
-        x: h.x + d.x * 0.5,
-        y: h.y + d.y * 0.5,
+        ...muzzle(ctx, d, 0.5),
         vx: d.x * speed,
         vy: d.y * speed,
         radius: 0.3 * size,
