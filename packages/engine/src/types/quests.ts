@@ -214,6 +214,8 @@ export interface ContractTemplate {
 export interface QuestsData {
   /** Hesta, the Anvil-keeper: her name and her sprite's id in the arena's atlas. */
   giver: { name: string; sprite: string };
+  /** Each rarity's name, as a contract's text shows it (`{rarity}`). */
+  rarityNames: Record<Rarity, string>;
   quests: QuestDef[];
   contractTemplates: ContractTemplate[];
 }

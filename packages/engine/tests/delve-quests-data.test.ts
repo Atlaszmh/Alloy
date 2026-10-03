@@ -47,6 +47,7 @@ const template: ContractTemplate = {
 };
 const data = (quests: QuestDef[], contractTemplates: ContractTemplate[] = []): QuestsData => ({
   giver: questsData.giver,
+  rarityNames: questsData.rarityNames,
   quests,
   contractTemplates,
 });

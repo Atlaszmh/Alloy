@@ -114,6 +114,36 @@ describe('generateContract', () => {
   });
 });
 
+describe("a contract's text", () => {
+  it('shows the count of every counted goal, singular or plural, and a rarity by its name', () => {
+    const p: DelveProfile = {
+      ...fresh(),
+      bestDepth: 8,
+      materials: { ...fresh().materials, flux: { uncommon: 1, magic: 1, rare: 0, epic: 0 } },
+    };
+    const cs = offers(p);
+    const names = registry.getQuestsData().rarityNames;
+    expect(names.common).toBe('Common');
+    const of = (template: string) => cs.filter((c) => c.template === template);
+    expect(of('fine_work').length).toBeGreaterThan(0);
+    for (const c of of('fine_work')) {
+      const o = c.objectives[0];
+      const item = o.count === 1 ? 'item' : 'items';
+      expect(o.text).toBe(
+        `Forge ${o.count} ${item} of ${names[o.filter!.minRarity!]} rarity or better`,
+      );
+    }
+    expect(of('dry_run').length).toBeGreaterThan(0);
+    for (const c of of('dry_run')) {
+      const o = c.objectives[0];
+      const floors = o.count === 1 ? 'floor' : 'floors';
+      expect(o.text).toBe(
+        `Clear ${o.count} ${floors} of depth ${o.filter!.minDepth} or deeper without a potion`,
+      );
+    }
+  });
+});
+
 describe('refillBoard', () => {
   /** A save at the Anvil with slot 1 claimed and the visit's reroll spent. */
   const spent = (): DelveProfile => {

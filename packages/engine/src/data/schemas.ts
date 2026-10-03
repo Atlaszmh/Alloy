@@ -812,6 +812,7 @@ const ContractTemplateSchema = z
 /** `quests.json`: shapes and ids (the registry checks its references into the other files: `questsDataProblems`). */
 export const QuestsDataSchema = z.object({
   giver: z.object({ name: z.string().min(1), sprite: z.string().min(1) }),
+  rarityNames: perRarity(z.string().min(1)),
   quests: z.array(QuestDefSchema).refine(distinctIds, 'quest ids differ'),
   contractTemplates: z.array(ContractTemplateSchema).refine(distinctIds, 'template ids differ'),
 });

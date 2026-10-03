@@ -1,5 +1,13 @@
 {
   "giver": { "name": "Hesta", "sprite": "hesta" },
+  "rarityNames": {
+    "common": "Common",
+    "uncommon": "Uncommon",
+    "magic": "Magic",
+    "rare": "Rare",
+    "epic": "Epic",
+    "legendary": "Legendary"
+  },
   "quests": [
     {
       "id": "first_steps",
@@ -305,7 +313,7 @@
       "filter": { "kind": "elite", "biome": "reached" },
       "count": { "easy": [4, 6], "normal": [8, 12], "hard": [14, 20] },
       "scope": "total",
-      "text": "Slay {count} elites in {biome}",
+      "text": "Slay {count} elite{s} in {biome}",
       "rewards": {
         "easy": [
           { "kind": "scrap", "count": 50 },
@@ -423,7 +431,7 @@
       "filter": { "noPotion": true, "minDepth": "flag" },
       "count": { "easy": [1, 1], "normal": [2, 3], "hard": [4, 5] },
       "scope": "total",
-      "text": "Clear floors of depth {depth} or deeper without a potion",
+      "text": "Clear {count} floor{s} of depth {depth} or deeper without a potion",
       "rewards": {
         "easy": [
           { "kind": "scrap", "count": 50 },
@@ -471,7 +479,7 @@
       "filter": { "minRarity": "owned" },
       "count": { "easy": [1, 1], "normal": [2, 2], "hard": [3, 3] },
       "scope": "total",
-      "text": "Forge items of {rarity} rarity or better",
+      "text": "Forge {count} item{s} of {rarity} rarity or better",
       "rewards": {
         "easy": [
           { "kind": "scrap", "count": 30 },
