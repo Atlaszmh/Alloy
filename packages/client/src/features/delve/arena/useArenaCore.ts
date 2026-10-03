@@ -30,7 +30,7 @@ import {
   type Vec,
 } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
-import { ArenaRenderer } from './ArenaRenderer';
+import { ArenaRenderer, seenAt } from './ArenaRenderer';
 import { floatPay } from './hud/floatPay';
 import type { AimView } from './fx/draw-world';
 import type { ViewRect } from './fx/pixel-layer';
@@ -309,13 +309,6 @@ function blessings(h: ArpgWorld['hero']): HudBuff[] {
       dive: i === 0,
     })),
   );
-}
-
-/** Whether a generated floor's fog has seen the cell at (x, y). */
-function seenAt(world: ArpgWorld, x: number, y: number): boolean {
-  const cx = Math.min(world.width - 1, Math.max(0, Math.floor(x)));
-  const cy = Math.min(world.height - 1, Math.max(0, Math.floor(y)));
-  return world.fog[cy * world.width + cx] > 0;
 }
 
 export function snapshot(

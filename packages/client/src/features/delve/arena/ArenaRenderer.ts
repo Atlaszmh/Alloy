@@ -1017,7 +1017,7 @@ export class ArenaRenderer {
       v.y = d.y;
       const plaque = v.plaque;
       if (plaque) {
-        plaque.box.visible = plaque.always || this.labelsHeld;
+        plaque.box.visible = (plaque.always || this.labelsHeld) && seenAt(w, d.x, d.y);
         if (plaque.box.visible) shown.push({ p: plaque, ...this.toScreen(d.x, d.y - pop - 0.9) });
       }
     }
@@ -1141,13 +1141,23 @@ export function drawDoor(g: Graphics, d: Door, shut: number, time: number): void
   }
 }
 
-/** Whether the hero sees a point now (on the open room, always). */
-export function inSight(w: ArpgWorld, x: number, y: number): boolean {
-  if (w.map.open) return true;
+/** The fog at a point: 0 unseen, 1 seen, 2 in sight (on the open room, always 2). */
+function fogAt(w: ArpgWorld, x: number, y: number): number {
+  if (w.map.open) return 2;
   const { width: W, height: H } = w.map;
   const cx = Math.min(W - 1, Math.max(0, Math.floor(x)));
   const cy = Math.min(H - 1, Math.max(0, Math.floor(y)));
-  return w.fog[cy * W + cx] === 2;
+  return w.fog[cy * W + cx];
+}
+
+/** Whether the hero sees a point now (on the open room, always). */
+export function inSight(w: ArpgWorld, x: number, y: number): boolean {
+  return fogAt(w, x, y) === 2;
+}
+
+/** Whether the fog has ever seen a point (on the open room, always): the minimap's rule for drops. */
+export function seenAt(w: ArpgWorld, x: number, y: number): boolean {
+  return fogAt(w, x, y) > 0;
 }
 
 /**
