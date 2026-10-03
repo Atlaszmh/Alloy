@@ -29,11 +29,11 @@ describe('the world on a map', () => {
     expect(w.monsters[0]).toMatchObject({ roomId: null, farSince: null, goingHome: false });
   });
 
-  it('a dive floor is open too until the generator lands, its packs placed as before', () => {
+  it('a dive floor is generated, every foe in a room', () => {
     const w = beginFloor(registry, diving());
-    expect(w.map.open).toBe(true);
+    expect(w.map.open).toBe(false);
     expect(w.monsters.length).toBeGreaterThan(0);
-    expect(w.monsters.every((m) => m.roomId === null)).toBe(true);
+    expect(w.monsters.every((m) => m.roomId !== null)).toBe(true);
   });
 });
 

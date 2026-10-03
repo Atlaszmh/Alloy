@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { openRoom } from '../src/arpg/grid.js';
 import { applyShrine } from '../src/arpg/interact.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { bankWorld, beginFloor, completeFloor, startDive } from '../src/delve/dive.js';
@@ -127,7 +128,7 @@ describe('the floor clear counts its rooms (S3)', () => {
     const roomed = floorOf(p, twoRooms('combat'), reg);
     roomed.map.rooms[1].cleared = true;
     const one = cleared(p, roomed);
-    const open = cleared(p, beginFloor(reg, p));
+    const open = cleared(p, onMap(beginFloor(reg, p), openRoom(bal.arena.width, bal.arena.height)));
     expect([none, one, open].map((q) => [value(q, 'any'), value(q, 'rooms')])).toEqual([
       [1, 0],
       [1, 1],

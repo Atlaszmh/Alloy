@@ -24,7 +24,7 @@ const ALL = SEEDS.flatMap((seed) =>
   ),
 );
 
-/** A registry whose dives are generated (`delve.layout.generatedDives` is off as shipped). */
+/** A registry whose dives are generated (`delve.layout.generatedDives`, on as shipped). */
 const generating = createDefaultRegistry();
 generating.getDelveBalance().layout.generatedDives = true;
 const world = (depth: number, seed: number, opts: Partial<FloorOptions> = {}, reg = generating) =>
@@ -446,9 +446,11 @@ describe('the packs', () => {
 });
 
 describe('the world on a generated map', () => {
-  it('stays the open room while generatedDives is off', () => {
-    expect(L.generatedDives).toBe(false);
-    expect(world(3, 11, {}, registry).map.open).toBe(true);
+  it('is on as shipped; with generatedDives off a dive floor stays the open room', () => {
+    expect(L.generatedDives).toBe(true);
+    const off = createDefaultRegistry();
+    off.getDelveBalance().layout.generatedDives = false;
+    expect(world(3, 11, {}, off).map.open).toBe(true);
   });
 
   it('starts the hero at the start, sizes the world from the map, and hides it all', () => {

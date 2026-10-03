@@ -95,8 +95,13 @@ export function pacingRun(
 export const firstEpicDive = (e: EconomyReport) =>
   e.dives.findIndex((d) => forgedAtLeast(d, 'epic')) + 1;
 
-/** Whether the first dive to bring an essence home forged a legendary on the visit after it (false: none came). */
+/**
+ * Whether the first boss's essence forged a legendary on the visit after the dive that brought it
+ * home (false: none came). It comes with an epic flux, which tells it from a vault's essence.
+ */
 export function essenceForgedAtOnce(e: EconomyReport): boolean {
-  const first = e.dives.find((d) => Object.values(d.income.essences).some((n) => n > 0));
+  const first = e.dives.find(
+    (d) => d.income.flux.epic > 0 && Object.values(d.income.essences).some((n) => n > 0),
+  );
   return first !== undefined && first.forged.legendary > 0;
 }

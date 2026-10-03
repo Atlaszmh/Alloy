@@ -66,7 +66,7 @@ export interface AutopilotOptions {
   dives: number;
   /** Safety cap on depth per dive. */
   maxDepth?: number;
-  /** A floor that runs longer than this counts as a death. */
+  /** A floor that runs longer than this counts as a death (default 420). */
   maxFloorSeconds?: number;
   /** How the bot plays a generated floor (default `thorough`). */
   policy?: BotPolicy;
@@ -137,11 +137,14 @@ function playFloor(
 
 /**
  * The next door, or null to extract: when spent (low on life, no potions, no
- * shrine), or to bring home an essence or epic flux it has banked.
+ * shrine), or to bring home the epic flux it has banked, or an essence it has
+ * the epic flux to forge (a banked essence is never lost, but a vault's alone
+ * isn't worth ending the dive for).
  */
 function pickDoor(profile: DelveProfile): string | null {
   const dive = profile.dive!;
-  if (dive.banked.flux.epic > 0 || Object.values(dive.banked.essences).some((n) => n > 0)) return null;
+  const essence = Object.values(dive.banked.essences).some((n) => n > 0);
+  if (dive.banked.flux.epic > 0 || (essence && profile.materials.flux.epic > 0)) return null;
   if (dive.heroHpFrac < 0.35 && dive.potions === 0 && !dive.doorChoices.includes('shrine')) return null;
   if (dive.heroHpFrac < 0.5 && dive.doorChoices.includes('shrine')) return 'shrine';
   for (const id of DOOR_PREFERENCE) if (dive.doorChoices.includes(id)) return id;
@@ -833,7 +836,7 @@ export function runAutopilot(
   opts: AutopilotOptions,
 ): { profile: DelveProfile; reports: AutopilotDiveReport[]; economy: EconomyDive[] } {
   const maxDepth = opts.maxDepth ?? 100;
-  const maxFloorSeconds = opts.maxFloorSeconds ?? 240;
+  const maxFloorSeconds = opts.maxFloorSeconds ?? 420;
   let p = opts.profile;
   if (!p) {
     p = createDelveProfile(registry, opts.seed, { primary: opts.primary ?? 'fire' });
