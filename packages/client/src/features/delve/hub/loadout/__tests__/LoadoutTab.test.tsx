@@ -177,7 +177,8 @@ describe('LoadoutTab', () => {
 
   it('a precious item salvages on a second press within 2 s, and says the Links it gave', () => {
     vi.useFakeTimers();
-    put(rareSword('w1', { primary: 3 }));
+    // Three extra Primary slots: two Links past the one a rare forge grants free.
+    put(rareSword('w1', { primary: 4 }));
     open({ link: { tab: 'loadout', uid: 'w1' } });
     const salvage = () => fireEvent.click(screen.getByTestId('salvage-button'));
     expect(screen.getByTestId('salvage-button')).toHaveTextContent(

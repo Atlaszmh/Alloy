@@ -24,7 +24,6 @@ import {
   toggleLock,
   upgradeGear,
   reforgeGear,
-  fuseGear,
   setAutoSalvage,
   parseDelveProfile,
   findItem,
@@ -63,7 +62,7 @@ function clearDepth(p: DelveProfile): DelveProfile {
 describe('profile basics', () => {
   it('starts with a fire sword and an earth cuirass, and Fire chains', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.version).toBe(7);
+    expect(p.version).toBe(8);
     expect(p.links).toBe(0);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');
@@ -72,17 +71,12 @@ describe('profile basics', () => {
     expect(p.dive).toBeNull();
   });
 
-  it('round-trips through JSON and rejects garbage and old saves', () => {
+  it('round-trips through JSON, resets old saves and rejects garbage', () => {
     let p = createDelveProfile(registry, 1);
     p = startDive(registry, p, 1);
-    expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))).toEqual({
-      profile: p,
-      fixed: [],
-      dropped: [],
-      movesetReset: false,
-      runesLost: [],
-    });
-    expect(parseDelveProfile(registry, { ...p, version: 1 })).toBeNull();
+    expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))).toEqual({ profile: p });
+    expect(parseDelveProfile(registry, { ...p, version: 1 })).toEqual({ reset: true });
+    expect(parseDelveProfile(registry, { ...p, scrap: -1 })).toBeNull();
     expect(parseDelveProfile(registry, null)).toBeNull();
   });
 });
@@ -116,15 +110,16 @@ describe('dive lifecycle', () => {
     expect(isBossDepth(registry, 5)).toBe(true);
   });
 
-  it('banking moves pickups, scrap, kills and reactions into the profile', () => {
+  it("banking moves gear, kills and reactions into the profile, and scrap into the floor's haul", () => {
     const p = startDive(registry, createDelveProfile(registry, 5), 1);
     const world = beginFloor(registry, p);
-    world.pending = { items: items(2), scrap: 40, kills: 6, reactions: ['melt'], runes: [] };
+    world.pending = { ...world.pending, items: items(2), scrap: 40, kills: 6, reactions: ['melt'] };
     const res = bankWorld(registry, p, world);
     expect(res.kept).toHaveLength(2);
     expect(res.newReactions).toEqual(['melt']);
     expect(res.profile.bag).toHaveLength(2);
-    expect(res.profile.scrap).toBe(40);
+    expect(res.profile.scrap).toBe(p.scrap);
+    expect(res.profile.dive!.haul.scrap).toBe(40);
     expect(res.profile.stats.kills).toBe(6);
     expect(res.profile.reactionsSeen).toEqual(['melt']);
     expect(res.profile.dive!.kills).toBe(6);
@@ -172,14 +167,15 @@ describe('dive lifecycle', () => {
     let p = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
     const bounty = p.dive!.bounty;
     const scrap = p.scrap;
+    const banked = p.dive!.banked.scrap;
     p = extractDive(registry, p);
     expect(p.dive!.phase).toBe('extracted');
-    expect(p.scrap).toBe(scrap + bounty);
+    expect(p.scrap).toBe(scrap + bounty + banked);
     expect(p.stats.extracts).toBe(1);
-    expect(closeDive(p).dive).toBeNull();
+    expect(closeDive(registry, p).dive).toBeNull();
   });
 
-  it('dying forfeits the bounty but keeps what was picked up', () => {
+  it('dying forfeits the bounty and part of what was banked, but keeps the gear picked up', () => {
     let p = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
     p = chooseDoor(registry, p, p.dive!.doorChoices[0]);
     const scrap = p.scrap;
@@ -188,23 +184,23 @@ describe('dive lifecycle', () => {
     world.heroDead = true;
     const res = failFloor(registry, p, world);
     expect(res.profile.dive!.phase).toBe('dead');
-    expect(res.profile.scrap).toBe(scrap);
+    expect(res.profile.dive!.banked.scrap).toBeLessThan(p.dive!.banked.scrap);
+    expect(res.profile.scrap).toBe(scrap + res.profile.dive!.banked.scrap);
     expect(res.profile.bag).toHaveLength(p.bag.length + 1);
     expect(res.profile.stats.deaths).toBe(1);
   });
 
-  it('the first boss ever drops a legendary, grants a checkpoint and a potion', () => {
+  it('the first boss ever drops an essence, grants a checkpoint and a potion', () => {
     let p = startDive(registry, createDelveProfile(registry, 3), 1);
     p = { ...p, dive: { ...p.dive!, depth: 5, potions: 0 } };
     const world = beginFloor(registry, p);
     expect(world.monsters.some((m) => m.kind === 'boss')).toBe(true);
     clearFloor(world);
+    expect(world.loot.firstEssence).toBe(false);
     const res = completeFloor(registry, p, world);
     expect(res.bossKilled).toBe(true);
-    expect([...res.kept, ...res.salvaged].some((i) => i.rarity === 'legendary')).toBe(true);
-    expect(res.newCodex).toHaveLength(1);
     expect(res.profile.checkpoints).toContain(5);
-    expect(res.profile.firstBossLegendaryGiven).toBe(true);
+    expect(res.profile.firstEssenceGiven).toBe(true);
     expect(res.profile.dive!.potions).toBe(bal.dive.bossPotionReward);
     expect(res.profile.stats.bossKills).toBe(1);
   });
@@ -313,7 +309,7 @@ describe('gear management', () => {
   });
 
   it('upgrading costs scrap and fails when broke', () => {
-    let p = createDelveProfile(registry, 3);
+    let p = { ...createDelveProfile(registry, 3), scrap: 0 };
     const uid = p.equipped.weapon!.uid;
     expect(upgradeGear(registry, p, uid).ok).toBe(false);
     p = { ...p, scrap: 10_000 };
@@ -328,14 +324,5 @@ describe('gear management', () => {
     expect(a).toEqual(reforgeGear(registry, p, 'b0', 0));
     expect(a.ok).toBe(true);
     expect(a.profile.forgeCount).toBe(p.forgeCount + 1);
-  });
-
-  it('fusion consumes three items and yields one of the next rarity, keeping a mana type', () => {
-    const p = { ...withBag(9, 'magic'), scrap: 10_000 };
-    const r = fuseGear(registry, p, ['b0', 'b1', 'b2']);
-    expect(r.ok).toBe(true);
-    expect(r.profile.bag).toHaveLength(1);
-    expect(r.profile.bag[0].rarity).toBe('rare');
-    expect(r.profile.bag[0].mana).toBe('fire');
   });
 });

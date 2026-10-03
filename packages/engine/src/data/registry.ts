@@ -17,6 +17,7 @@ import type { ArpgData, FormDef, FusionDef, ReactionDef } from '../types/arpg.js
 import type { FormId } from '../types/ability.js';
 import type { RuneDef, RuneId } from '../types/rune.js';
 import type { ManaType } from '../types/mana.js';
+import type { CraftingData } from '../types/crafting.js';
 import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
 
 function combinationKey(id1: string, id2: string): string {
@@ -47,6 +48,7 @@ export class DataRegistry {
     recipes: RecipeDefinition[] = [],
     private readonly delveData: DelveData | null = null,
     private readonly arpgData: ArpgData | null = null,
+    private readonly craftingData: CraftingData | null = null,
   ) {
     // Build affix maps
     this.affixMap = new Map(affixes.map((a) => [a.id, a]));
@@ -250,6 +252,12 @@ export class DataRegistry {
   getDelveData(): DelveData {
     if (!this.delveData) throw new Error('Delve data not loaded — pass it to DataRegistry');
     return this.delveData;
+  }
+
+  /** `crafting.json`: metals, flux, shard tiers, families and the new save's kit (see the crafting spec). */
+  getCraftingData(): CraftingData {
+    if (!this.craftingData) throw new Error('Crafting data not loaded — pass it to DataRegistry');
+    return this.craftingData;
   }
 
   getDelveBalance(): DelveBalance {

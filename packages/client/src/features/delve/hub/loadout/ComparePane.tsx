@@ -3,10 +3,8 @@ import {
   carriedSkills,
   movesetTransfer,
   profileStats,
-  salvageDust,
-  salvageValue,
+  salvageYield,
   unsocketMode,
-  weaponParts,
   type ManaType,
 } from '@alloy/engine';
 import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
@@ -25,6 +23,7 @@ import { MovesetView } from '../../items/MovesetView';
 import { SKILL_NAME } from '../../chains/chain-text';
 import { SLOT_LABEL, UPGRADE_EPSILON, formatDelta, manaStyle } from '../../format';
 import type { HubLink } from '../types';
+import { shardName } from '../forge/materials-text';
 import { BindChoice, needsBind } from './BindChoice';
 
 /** The item actions the Loadout binds to keys too (LoadoutTab owns them). */
@@ -38,7 +37,8 @@ export interface LoadoutActions {
  * The Loadout's right pane: the hovered (else selected, else worn) item against what's worn in
  * its slot: its Power change (a bag weapon's as it is and as a home for your moveset), the stat
  * table, the attunement it moves, the bind choice for gear outside the pair, a weapon's moveset
- * Transfer, and Equip, Salvage and Lock with their gains; "Forge it ›" opens the Forge with it.
+ * Transfer, and Equip, Salvage (what the engine's `salvageYield` says it gives: currency, a
+ * shard, its pattern, its essence) and Lock with their gains; "Forge it ›" opens the Forge with it.
  * `full` (Shift or LT held) adds its stat lines and a weapon's moveset. Mid-dive or paused, the
  * actions give way to a note.
  */
@@ -95,9 +95,9 @@ export function ComparePane({
   const isUpgrade = !!equipCmp && equipCmp.powerPct > UPGRADE_EPSILON;
   const homeUpgrade = !!transfer && !!cmp && cmp.powerPct > UPGRADE_EPSILON;
   const pull = unsocketMode(registry, unsocket);
-  const parts = weaponParts(registry, item);
-  const melts = pullText(registry, parts.runes, pull);
-  const dust = salvageDust(registry, item, pair);
+  // What salvage gives, as the engine reckons it: only a bag item salvages, and only between dives.
+  const yields = inBag && !locked ? salvageYield(registry, profile, item) : null;
+  const melts = yields ? pullText(registry, yields.runes, pull) : '';
   const binding = inBag && !locked && needsBind(profile, declined, item);
   const attune = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
   const slot = SLOT_LABEL[item.slot].toLowerCase();
@@ -249,7 +249,7 @@ export function ComparePane({
                 </Button>
               )
             )}
-            {inBag && (
+            {yields && (
               <Button
                 variant="danger"
                 binding={{ key: 'Delete', pad: 'x' }}
@@ -263,14 +263,35 @@ export function ComparePane({
                   <>
                     Salvage ·{' '}
                     <Price
-                      scrap={salvageValue(registry, item)}
-                      links={parts.links > 0 ? parts.links : undefined}
-                      dust={dust > 0 ? dust : undefined}
+                      scrap={yields.scrap}
+                      links={yields.links > 0 ? yields.links : undefined}
+                      dust={yields.dust > 0 ? yields.dust : undefined}
                       signed
                     />
                   </>
                 )}
               </Button>
+            )}
+            {yields && (yields.shards.length > 0 || yields.pattern || yields.essence) && (
+              <span
+                className="flex flex-col text-[14px] text-[var(--k-text-2)]"
+                data-testid="salvage-yield"
+              >
+                {yields.shards.length > 0 && (
+                  <span>
+                    Shard: {yields.shards.map((s) => shardName(registry, s)).join(' or ')}
+                    {yields.shards.length > 1 &&
+                      yields.extraShard > 0 &&
+                      ` · ${Math.round(yields.extraShard * 100)}% for a second`}
+                  </span>
+                )}
+                {yields.pattern && (
+                  <span>Teaches the {registry.getGearBase(yields.pattern).name} pattern</span>
+                )}
+                {yields.essence && (
+                  <span>Extracts the {registry.getLegendary(yields.essence).name} essence</span>
+                )}
+              </span>
             )}
             <div className="flex gap-2.5">
               <Button

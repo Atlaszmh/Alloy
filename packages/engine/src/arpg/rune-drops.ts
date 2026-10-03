@@ -12,7 +12,7 @@ import type { SimCtx } from './combat.js';
 export function dropRune(ctx: SimCtx, m: MonsterEntity): void {
   const { world, registry } = ctx;
   const rng = world.runeRng;
-  const ctxDrop = { depth: world.depth, kind: m.kind, dropMult: world.loot.dropMult };
+  const ctxDrop = { depth: world.depth, kind: m.kind, runes: world.door?.mods.runes ?? 1 };
   const rune = rollRuneDrop(registry, ctxDrop, rng);
   if (!rune) return;
   const angle = rng.next() * Math.PI * 2;

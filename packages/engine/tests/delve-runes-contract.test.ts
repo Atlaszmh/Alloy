@@ -615,7 +615,7 @@ describe('the sim and the index: the contract is in place', () => {
   });
 });
 
-describe('save v7', () => {
+describe('save v8: sockets and the pouch', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
   const fresh = () => createDelveProfile(registry, 1, { primary: 'fire' });
   const bolt = (runes: (RuneRef | null)[]): Move => ({
@@ -630,20 +630,12 @@ describe('save v7', () => {
     equipped: { ...p.equipped, weapon: { ...p.equipped.weapon!, rarity: 'rare' } },
   });
 
-  it('a new profile is version 7 with an empty pouch', () => {
-    expect(fresh()).toMatchObject({ version: 7, runes: {} });
-  });
-
-  it('loads a version 6 save as version 7 with an empty pouch, and nothing else changed', () => {
+  it('a new profile is version 8 with an empty pouch; a version 6 or 7 save resets', () => {
     const p = fresh();
+    expect(p).toMatchObject({ version: 8, runes: {} });
     const { runes: _runes, ...v6 } = p;
-    expect(parseDelveProfile(registry, json({ ...v6, version: 6 }))).toEqual({
-      profile: p,
-      fixed: [],
-      dropped: [],
-      movesetReset: false,
-      runesLost: [],
-    });
+    expect(parseDelveProfile(registry, json({ ...v6, version: 6 }))).toEqual({ reset: true });
+    expect(parseDelveProfile(registry, json({ ...p, version: 7 }))).toEqual({ reset: true });
   });
 
   it('round-trips sockets, empty ones included, and the pouch', () => {
@@ -656,7 +648,7 @@ describe('save v7', () => {
     const res = parseDelveProfile(registry, json(p))!;
     expect(chainsOf(res.profile).primary!.moves[0].runes).toEqual([{ id: 'chain', tier: 2 }, null]);
     expect(res.profile.runes).toEqual({ quick: [0, 1, 0, 0, 0] });
-    expect(parseDelveProfile(registry, json(res.profile))).toEqual({ ...res, runesLost: [] });
+    expect(parseDelveProfile(registry, json(res.profile))).toEqual(res);
   });
 
   it('empties unknown and repeated runes and trims sockets past the cap: a Link each, the runes destroyed', () => {
@@ -685,10 +677,7 @@ describe('save v7', () => {
       [{ id: 'quick', tier: 2 }, null],
     ]);
     expect(res.profile.links).toBe(p.links + 1);
-    expect(res.runesLost).toEqual([
-      { id: 'quick', tier: 3 },
-      { id: 'echo', tier: 1 },
-    ]);
+    // The trimmed Quick III and Echo I are destroyed: the pouch keeps only its own Echo.
     expect(res.profile.runes).toEqual({ echo: [0, 0, 1, 0, 0] });
   });
 
@@ -712,7 +701,6 @@ describe('save v7', () => {
       const res = parseDelveProfile(registry, json(p))!;
       expect(chainsOf(res.profile).primary!.moves[0].runes).toEqual([{ id: 'quick', tier: 2 }]);
       expect(res.profile.links).toBe(p.links + 1);
-      expect(res.runesLost).toEqual([]);
       expect(res.profile.runes).toEqual({ echo: [1, 0, 1, 0, 0] });
     } finally {
       bal.runes.unsocket = 'destroy';
@@ -731,7 +719,7 @@ describe('save v7', () => {
     const res = parseDelveProfile(registry, json(p))!;
     expect(res.profile.equipped.weapon!.moveset!.chains.defensive).toBeUndefined();
     expect(res.profile.links).toBe(p.links + 2);
-    expect(res.runesLost).toEqual([{ id: 'guard', tier: 1 }]);
+    expect(res.profile.runes).toEqual({});
   });
 
   it('refuses more than MAX_SOCKETS sockets, a tier past V, or a pouch row of other than five counts', () => {

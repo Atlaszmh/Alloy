@@ -7,6 +7,7 @@ import type {
   MonsterEntity,
   MonsterKind,
   StatusState,
+  WorldPending,
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
@@ -22,6 +23,7 @@ import { manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
+import { emptyHaul } from '../loot/materials.js';
 
 export interface FloorOptions {
   depth: number;
@@ -335,6 +337,20 @@ function sameSockets(a: readonly (RuneRef | null)[], b: readonly (RuneRef | null
   return a.length === b.length && a.every((r, i) => r?.id === b[i]?.id && r?.tier === b[i]?.tier);
 }
 
+/** Nothing collected yet (`newFloor`: the world hasn't banked; see `WorldPending`). */
+export function emptyPending(newFloor = false): WorldPending {
+  return {
+    items: [],
+    scrap: 0,
+    kills: 0,
+    reactions: [],
+    runes: [],
+    haul: emptyHaul(),
+    patterns: [],
+    newFloor,
+  };
+}
+
 /** Build the arena for one depth: hero at the bottom, monster packs spread above. */
 export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): ArpgWorld {
   const bal = registry.getDelveBalance();
@@ -353,6 +369,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     // floor re-fights the same monsters but rolls fresh drops.
     lootRng: rng.fork(`loot:${opts.loot.nextUid}`),
     runeRng: rng.fork(`runes:${opts.loot.nextUid}`),
+    materialRng: rng.fork(`materials:${opts.loot.nextUid}`),
     depth: opts.depth,
     biomeId: biome.id,
     element: biome.mana,
@@ -371,8 +388,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     zones: [],
     drops: [],
     nextId: 1,
-    loot: { ...opts.loot },
-    pending: { items: [], scrap: 0, kills: 0, reactions: [], runes: [] },
+    loot: { ...opts.loot, dropsGiven: [...opts.loot.dropsGiven] },
+    pending: emptyPending(true),
     totalMonsters: 0,
     bossId: null,
     queuedCasts: [],
@@ -384,6 +401,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     queuedDodge: false,
     kills: 0,
     bossKilled: false,
+    firstEssenceTaken: false,
     cleared: false,
     clearedAt: 0,
     heroDead: false,

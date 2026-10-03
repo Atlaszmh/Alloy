@@ -1,0 +1,78 @@
+{
+  "metals": [
+    { "id": "rusty", "name": "Rusty", "band": [1, 4] },
+    { "id": "iron", "name": "Iron", "band": [5, 9] },
+    { "id": "steel", "name": "Steel", "band": [10, 15] },
+    { "id": "mithril", "name": "Mithril", "band": [16, 23] },
+    { "id": "adamant", "name": "Adamant", "band": [24, 33] },
+    { "id": "starforged", "name": "Starforged", "band": [34, 47] },
+    { "id": "voidforged", "name": "Voidforged", "band": [48, null] }
+  ],
+  "flux": [{ "grade": "uncommon" }, { "grade": "magic" }, { "grade": "rare" }, { "grade": "epic" }],
+  "shardTiers": [
+    { "tier": 1, "min": 0, "max": 0.3 },
+    { "tier": 2, "min": 0.2, "max": 0.5 },
+    { "tier": 3, "min": 0.4, "max": 0.7 },
+    { "tier": 4, "min": 0.6, "max": 0.85 },
+    { "tier": 5, "min": 0.8, "max": 1 }
+  ],
+  "affixShardTiers": {
+    "fireAttune": [
+      { "tier": 1, "min": 0, "max": 0.5 },
+      { "tier": 2, "min": 0.5, "max": 1 }
+    ],
+    "frostAttune": [
+      { "tier": 1, "min": 0, "max": 0.5 },
+      { "tier": 2, "min": 0.5, "max": 1 }
+    ],
+    "stormAttune": [
+      { "tier": 1, "min": 0, "max": 0.5 },
+      { "tier": 2, "min": 0.5, "max": 1 }
+    ],
+    "earthAttune": [
+      { "tier": 1, "min": 0, "max": 0.5 },
+      { "tier": 2, "min": 0.5, "max": 1 }
+    ],
+    "shadowAttune": [
+      { "tier": 1, "min": 0, "max": 0.5 },
+      { "tier": 2, "min": 0.5, "max": 1 }
+    ],
+    "natureAttune": [
+      { "tier": 1, "min": 0, "max": 0.5 },
+      { "tier": 2, "min": 0.5, "max": 1 }
+    ]
+  },
+  "families": {
+    "damage": "offense",
+    "damagePct": "offense",
+    "attackSpeedPct": "offense",
+    "critChance": "offense",
+    "critDamage": "offense",
+    "maxHp": "defense",
+    "hpPct": "defense",
+    "armor": "defense",
+    "dodge": "defense",
+    "thorns": "defense",
+    "lifesteal": "sustain",
+    "healOnKill": "sustain",
+    "manaRegen": "sustain",
+    "magicFind": "utility",
+    "scrapFind": "utility",
+    "moveSpeed": "utility",
+    "cooldownReduction": "utility",
+    "firePower": "element",
+    "frostPower": "element",
+    "stormPower": "element",
+    "earthPower": "element",
+    "shadowPower": "element",
+    "naturePower": "element",
+    "fireAttune": "element",
+    "frostAttune": "element",
+    "stormAttune": "element",
+    "earthAttune": "element",
+    "shadowAttune": "element",
+    "natureAttune": "element"
+  },
+  "startingPatterns": ["sword", "cuirass", "dagger"],
+  "startingMaterials": { "metals": { "rusty": 5 }, "flux": { "uncommon": 5 }, "scrap": 50 }
+}

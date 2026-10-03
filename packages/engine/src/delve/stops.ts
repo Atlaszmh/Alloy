@@ -3,6 +3,8 @@ import { carriedByText, movesetOf } from '../loot/moveset.js';
 import { upgradeCost } from '../loot/smithing.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { runeFits, socketsOf } from '../loot/runes.js';
+import { emptyHaul, stockHaul } from '../loot/materials.js';
+import type { Haul } from '../types/crafting.js';
 import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, DiveState, DiveStop, StopKind } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem } from '../types/gear.js';
@@ -29,14 +31,69 @@ export type StopAction =
   | { kind: 'rune'; skill: ChainSkill; index: number; socket: number; rune: RuneRef };
 
 /**
+ * `profile` with its dive's banked scrap, Mana Dust, Links and runes in the
+ * stockpile: a stop spends from both (see the crafting spec's S9).
+ */
+function pooled(profile: DelveProfile): DelveProfile {
+  const b = profile.dive?.banked;
+  if (!b) return profile;
+  const currencies = {
+    ...emptyHaul(),
+    scrap: b.scrap,
+    dust: b.dust,
+    links: b.links,
+    runes: b.runes,
+  };
+  return { ...stockHaul(profile, currencies), stats: profile.stats };
+}
+
+/**
+ * After a stop's op on the pooled profile (`after`): what it spent comes out of
+ * `banked` first, the rest out of `before`'s stockpile. Returns the stockpile and
+ * what stays banked.
+ */
+function unpool(
+  before: DelveProfile,
+  after: DelveProfile,
+  banked: Haul,
+): { profile: DelveProfile; banked: Haul } {
+  // What stays banked: the part of `now` (pooled, after the op) above the old stockpile.
+  const keep = (stock: number, now: number, b: number) => Math.min(b, Math.max(0, now - stock));
+  const scrap = keep(before.scrap, after.scrap, banked.scrap);
+  const dust = keep(before.manaDust, after.manaDust, banked.dust);
+  const links = keep(before.links, after.links, banked.links);
+  const runes = { ...after.runes };
+  const bankedRunes: Haul['runes'] = {};
+  for (const [id, counts] of Object.entries(banked.runes)) {
+    const left = counts.map((b, t) =>
+      keep(before.runes[id]?.[t] ?? 0, after.runes[id]?.[t] ?? 0, b),
+    );
+    bankedRunes[id] = left;
+    if (runes[id]) runes[id] = runes[id].map((n, t) => n - (left[t] ?? 0));
+  }
+  return {
+    profile: {
+      ...after,
+      scrap: after.scrap - scrap,
+      manaDust: after.manaDust - dust,
+      links: after.links - links,
+      runes,
+    },
+    banked: { ...banked, scrap, dust, links, runes: bankedRunes },
+  };
+}
+
+/**
  * The kinds whose cheapest action `profile` can take and pay for now: `equip`
  * with an item in the bag; `slot` with a chain of the equipped weapon below
  * its cap whose next slot's Links and scrap the hero has; `move` with a weapon
  * equipped and `editDust` in Mana Dust (or free edits, before the first dive);
  * `upgrade` with an item, equipped or in the bag, whose next upgrade it can
- * pay; `rune` with an empty socket and a pouch rune for it (`canSocket`).
+ * pay; `rune` with an empty socket and a pouch rune for it (`canSocket`). It
+ * counts what the dive has banked with the stockpile.
  */
-export function stopKinds(registry: DataRegistry, profile: DelveProfile): StopKind[] {
+export function stopKinds(registry: DataRegistry, stockpile: DelveProfile): StopKind[] {
+  const profile = pooled(stockpile);
   const weapon = profile.equipped.weapon;
   const items = [...GEAR_SLOTS.map((s) => profile.equipped[s]), ...profile.bag].filter(
     (i): i is GearItem => !!i,
@@ -96,7 +153,7 @@ export function rollStop(
   profile: DelveProfile,
   dive: DiveState,
 ): DiveStop | null {
-  const kinds = stopKinds(registry, profile);
+  const kinds = stopKinds(registry, { ...profile, dive });
   if (kinds.length === 0) return null;
   const rng = new SeededRNG(dive.seed).fork(`stop:${dive.depth}`);
   const count = rng.nextInt(2, 3);
@@ -175,8 +232,10 @@ function runStop(
  * taken. The op runs at its normal price with the dive lock lifted for it
  * alone (equipping is free, and a weapon brings its own moveset); `move`
  * changes one move of one chain (its sockets and runes stay as saved); `rune`
- * sockets a pouch rune into an empty socket, free. A refused op leaves the
- * stop open; one taken marks it taken. Skipping is choosing a door.
+ * sockets a pouch rune into an empty socket, free. It spends what the dive
+ * has banked first, then the stockpile (so a rune found this dive can be
+ * socketed). A refused op leaves the stop open; one taken marks it taken.
+ * Skipping is choosing a door.
  */
 export function takeStop(
   registry: DataRegistry,
@@ -184,12 +243,14 @@ export function takeStop(
   action: StopAction,
 ): ProfileActionResult {
   const dive = profile.dive;
-  const stop = dive?.phase === 'choosing' ? dive.stop : null;
+  const stop = dive?.phase === 'choosing' && !dive.settled ? dive.stop : null;
   if (!dive || !stop) return { ok: false, profile, reason: 'No stop here' };
   if (stop.taken) return { ok: false, profile, reason: "This stop's power-up is taken" };
   if (!stop.offers.includes(action.kind))
     return { ok: false, profile, reason: 'Not offered at this stop' };
-  const res = runStop(registry, { ...profile, dive: null }, action);
+  const res = runStop(registry, { ...pooled(profile), dive: null }, action);
   if (!res.ok) return { ...res, profile };
-  return { ...res, profile: { ...res.profile, dive: { ...dive, stop: { ...stop, taken: true } } } };
+  const spent = unpool(profile, res.profile, dive.banked);
+  const taken = { ...dive, banked: spent.banked, stop: { ...stop, taken: true } };
+  return { ...res, profile: { ...spent.profile, dive: taken } };
 }

@@ -16,7 +16,7 @@ export interface RunePaneProps {
 }
 
 /**
- * The Forge's rune pane: every rune held, by tier, with its count, effect and
+ * The Materials pane's runes: every rune held, by tier, with its count, effect and
  * raw price (its full load: no move, no ease), and "Fuse 3 → 1" at its scrap
  * price where enough are held (never at tier V).
  * Locked mid-dive, as the rest of the forge; a fuse it can't pay says why.
@@ -33,7 +33,7 @@ export function RunePane({ pouch, fuseCount, fusePrice, scrap, locked, onFuse }:
       ),
     );
   return (
-    <Panel title="Runes" testId="rune-pouch">
+    <Panel title="Runes" material="well" testId="rune-pouch">
       {locked && (
         <p id={`${id}-locked`} className="k-body-2" data-testid="rune-pouch-locked">
           A dive is under way: fuse runes between dives.

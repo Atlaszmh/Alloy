@@ -2,14 +2,12 @@ import { createDefaultRegistry } from '../../src/data/default-registry.js';
 import { SeededRNG } from '../../src/rng/seeded-rng.js';
 import { createFloorWorld, createMonsterEntity } from '../../src/arpg/world.js';
 import { stepWorld } from '../../src/arpg/step.js';
-import { defaultChains } from '../../src/arpg/abilities/resolve.js';
 import { withMoveset } from '../../src/delve/profile.js';
 import { computeHeroStats, type HeroStatsExtra } from '../../src/delve/hero-stats.js';
 import { generateItem } from '../../src/loot/item-generator.js';
 import { heroChains, movesetOf } from '../../src/loot/moveset.js';
 import {
   CHAIN_SKILLS,
-  type AbilityBuilds,
   type AbilityCast,
   type AbilityPayment,
   type AbilitySlot,
@@ -19,7 +17,7 @@ import {
 } from '../../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../../src/types/arpg.js';
 import type { DelveProfile } from '../../src/types/delve.js';
-import type { EquippedGear, GearItem } from '../../src/types/gear.js';
+import type { EquippedGear } from '../../src/types/gear.js';
 import type { ManaType } from '../../src/types/mana.js';
 
 export const registry = createDefaultRegistry();
@@ -44,49 +42,6 @@ export const DEFAULT_CHAINS: Pick<Chains, AbilitySlot> = {
   defensive: { moves: [{ kind: 'medium', form: 'ward', elements: ['frost'] }], payment: 'mana' },
   ultimate: { moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }], payment: 'charge' },
 };
-
-/** A version 4 save's default builds (all Fire), for the migration tests. */
-export const OLD_BUILDS: AbilityBuilds = {
-  primary: { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' },
-  defensive: { form: 'ward', elements: ['fire'], weight: 0, payment: 'mana' },
-  ultimate: { form: 'nova', elements: ['fire'], weight: 0, payment: 'charge' },
-};
-
-/** An item as an older save held it: no moveset. */
-function bare({ moveset: _m, ...item }: GearItem): GearItem {
-  return item;
-}
-
-/**
- * `p` as a version 5 save: no Links, no movesets, and `chains` on the profile
- * (by default all four of the primary's defaults on its weapon, as a version 5
- * hero began) with the balance's caps.
- */
-export function asV5(
-  p: DelveProfile,
-  chains: Chains = defaultChains(
-    registry,
-    p.pair.primary ?? 'fire',
-    p.equipped.weapon?.baseId ?? null,
-  ),
-) {
-  const { links: _links, ...rest } = p;
-  const equipped = Object.fromEntries(Object.entries(p.equipped).map(([s, i]) => [s, bare(i)]));
-  return {
-    ...rest,
-    version: 5,
-    equipped,
-    bag: p.bag.map(bare),
-    chains,
-    chainCaps: { ...bal.chains.cap },
-  };
-}
-
-/** `p` as a version 4 save: `abilities` instead of its chains and caps. */
-export function asV4(p: DelveProfile, abilities: AbilityBuilds = OLD_BUILDS) {
-  const { chains: _chains, chainCaps: _caps, ...rest } = asV5(p);
-  return { ...rest, version: 4, abilities };
-}
 
 /** The hero's chains: its weapon's moveset's (unarmed, the defaults on the pair). */
 export function chainsOf(p: DelveProfile): Partial<Chains> {
@@ -155,12 +110,12 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
     phoenixAvailable: true,
     seed: 77,
     loot: {
-      pity: 0,
       nextUid: 100,
-      magicFind: 0,
+      find: 0,
       legendaryBoost: 1,
-      dropMult: 1,
-      forceLegendary: false,
+      firstEssence: false,
+      patterns: [],
+      dropsGiven: [],
       pair: [],
     },
   });

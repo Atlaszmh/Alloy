@@ -10,7 +10,11 @@ import {
   equipBest as engineEquipBest,
   upgradeGear,
   reforgeGear,
-  fuseGear,
+  forge as engineForge,
+  hone as engineHone,
+  imprint as engineImprint,
+  refine as engineRefine,
+  buyShard as engineBuyShard,
   fuseRunes as engineFuseRunes,
   setAutoSalvage,
   setChains as engineSetChains,
@@ -34,10 +38,13 @@ import {
   type ChainSkill,
   type DataRegistry,
   type DelveProfile,
+  type ForgeRequest,
   type GearItem,
   type GearSlot,
+  type HeroStatKey,
   type ManaPair,
   type ManaType,
+  type MaterialRef,
   type ParsedDelveProfile,
   type ProfileActionResult,
   type Rarity,
@@ -45,6 +52,7 @@ import {
   type RunePouch,
   type RuneRef,
   type SetChainsOptions,
+  type ShardRef,
   type StopAction,
   type UnsocketMode,
 } from '@alloy/engine';
@@ -84,26 +92,21 @@ function loadUnsocket(): UnsocketMode | null {
 }
 
 /**
- * The saved profile (migrated when older, with the moves it fixed), or null;
- * `gainedPair` when the save predates the pair (version 3 or older).
+ * The saved profile, `{ reset: true }` for a save of another version (no
+ * migrations: see the crafting spec), or null with no save or a broken one.
  */
-export function loadDelveProfile(): (ParsedDelveProfile & { gainedPair: boolean }) | null {
+export function loadDelveProfile(): ParsedDelveProfile | null {
   try {
     const raw = localStorage.getItem(DELVE_SAVE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw);
-    const parsed = parseDelveProfile(getDelveRegistry(), data);
-    return (
-      parsed && { ...parsed, gainedPair: typeof data?.version === 'number' && data.version < 4 }
-    );
+    return parseDelveProfile(getDelveRegistry(), JSON.parse(raw));
   } catch {
     return null;
   }
 }
 
-/** Shown once when an older save gains a pair: the gear it no longer counts explains the Power drop. */
-export const BIND_HINT =
-  'Your gear now counts only for your two elements: bind a second one in the Mana view (Abilities tab) to count more of it';
+/** Shown once when a save of another version starts afresh. */
+export const RESET_NOTICE = 'The forge changed: your save was reset';
 
 function saveProfile(profile: DelveProfile): void {
   try {
@@ -160,31 +163,6 @@ export function fixNotices(registry: DataRegistry, fixed: ChainFix[], pair: Mana
     const uses = group.length > 1 ? 'they now use' : 'it now uses';
     return `Your ${owner}'s ${nths} ${noun} used ${manaNames(registry, first.removed)}${clause}; ${uses} ${manaNames(registry, now(first))}`;
   });
-}
-
-/**
- * What the move to weapon movesets (save version 6) changed: the chains the
- * equipped weapon can't carry went (`dropped`, their extra moves back as
- * `links`), or an unarmed save's built chains were reset (`reset`).
- */
-export function movesetNotices(dropped: ChainSkill[], reset: boolean, links: number): string[] {
-  const out: string[] = [];
-  if (dropped.length > 0) {
-    const names = listed(dropped.map((s) => SKILL_NAME[s]));
-    const many = dropped.length > 1;
-    const back =
-      links > 0
-        ? `, and ${many ? 'their' : 'its'} ${links} extra move${links === 1 ? '' : 's'} came back as ${links} Link${links === 1 ? '' : 's'}`
-        : '';
-    out.push(
-      `Your chains live on your weapon now, and yours can't carry your ${names}: ${many ? 'they' : 'it'} went${back}`,
-    );
-  }
-  if (reset)
-    out.push(
-      'Your chains live on your weapon now: with no weapon equipped, yours were reset to the defaults',
-    );
-  return out;
 }
 
 /** "Storm now outweighs Fire: Storm is your primary" (`now` is the new primary). */
@@ -332,13 +310,6 @@ export function applyLabel(registry: DataRegistry, price: DraftPrice | null): st
     .join(' · ');
 }
 
-/** The runes a load-time trim destroyed: "Split III was lost: its socket no longer exists". */
-export function runeLostNotices(registry: DataRegistry, lost: readonly RuneRef[]): string[] {
-  return lost
-    .filter((r) => registry.findRune(r.id))
-    .map((r) => `${runeName(registry, r)} was lost: its socket no longer exists`);
-}
-
 /**
  * What became of the runes an op's parts brought back (salvage, a fuse, a transfer):
  * "Split I back to your pouch", "2 runes back to your pouch · destroys Quick III"; null for none.
@@ -374,15 +345,19 @@ interface DelveStore {
   diveDrops: string[];
   /** Runes picked up this dive, newest first (session only). */
   diveRunes: RuneRef[];
+  /** Patterns learned this dive (base ids), newest first (session only). */
+  divePatterns: string[];
   /**
    * The lengths of `diveDrops` and `diveRunes` when this floor began: the floor's finds are
    * `diveDrops.slice(0, diveDrops.length - floorDropsFrom)` (the Found log, the stop).
    */
   floorDropsFrom: number;
   floorRunesFrom: number;
+  /** The length of `divePatterns` when this floor began. */
+  floorPatternsFrom: number;
   /** Basic attacks on a button instead of automatic (a device preference). */
   manualAttack: boolean;
-  /** Toasts waiting for a Delve screen to show them (session only): overtakes, fixed moves. */
+  /** Toasts waiting for a Delve screen to show them (session only): overtakes, fixed moves, a reset save. */
   notices: string[];
   /** Elements whose bind prompt was answered "Not now" this session (never saved). */
   bindDeclined: ManaType[];
@@ -396,7 +371,10 @@ interface DelveStore {
   resetProfile: (seed?: number, primary?: ManaType) => void;
   /** Start a dive; refused (false) while the chain builder holds unapplied changes. */
   startDive: (depth: number) => boolean;
-  /** Close the finished (or abandoned) dive; a secondary that has overtaken swaps in, with a notice. */
+  /**
+   * Close the finished (or abandoned) dive (the engine settles an abandoned one); a secondary that
+   * has overtaken swaps in, with a notice.
+   */
   closeDive: () => void;
   /** The one-time "Choose your mana". */
   chooseMana: (mana: ManaType) => ProfileActionResult;
@@ -410,23 +388,39 @@ interface DelveStore {
   equip: (uid: string) => void;
   unequip: (slot: GearSlot) => void;
   toggleLock: (uid: string) => void;
-  /** Melt bag items; what they gave (their runes back to the pouch, or destroyed, by the rule). */
+  /**
+   * Melt bag items; what they gave (their runes back to the pouch, or destroyed, by the rule; their
+   * shards, patterns and essences: see the crafting spec's Salvage).
+   */
   salvage: (uids: string[]) => {
     scrap: number;
     dust: number;
     links: number;
     runes: RuneRef[];
     destroyed: RuneRef[];
+    shards: ShardRef[];
+    patterns: string[];
+    essences: string[];
   };
   equipBest: () => GearItem[];
   upgrade: (uid: string) => ProfileActionResult;
   reforge: (uid: string, affixIndex: number) => ProfileActionResult;
-  fuse: (uids: string[]) => ProfileActionResult;
+  /** Forge an item at the bench (see the crafting spec); it comes marked new. */
+  forge: (req: ForgeRequest) => ProfileActionResult;
+  /** Hone affix line `line` of item `uid`. */
+  hone: (uid: string, line: number) => ProfileActionResult;
+  /** Imprint `shard` on affix line `line` of item `uid`. */
+  imprint: (uid: string, line: number, shard: ShardRef) => ProfileActionResult;
+  /** Refine a bar, a flux or a shard into one of the next grade. */
+  refine: (what: MaterialRef) => ProfileActionResult;
+  /** Buy a tier I shard at the shard bench. */
+  buyShard: (stat: HeroStatKey) => ProfileActionResult;
   setAutoSalvage: (rarity: Rarity, on: boolean) => void;
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
   pushDiveDrops: (uids: string[]) => void;
   pushDiveRunes: (runes: RuneRef[]) => void;
+  pushDivePatterns: (ids: string[]) => void;
   /** Fuse `fuseCount` of a rune and tier into one of the next tier, for scrap (the Forge tab). */
   fuseRunes: (ref: RuneRef) => ProfileActionResult;
   /** Set the equipped weapon's changed chains, for Mana Dust: all or nothing. */
@@ -469,7 +463,11 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     const now = profile.dive;
     const floor =
       prev && now?.phase === 'fighting' && (was?.phase !== 'fighting' || was.depth !== now.depth)
-        ? { floorDropsFrom: prev.diveDrops.length, floorRunesFrom: prev.diveRunes.length }
+        ? {
+            floorDropsFrom: prev.diveDrops.length,
+            floorRunesFrom: prev.diveRunes.length,
+            floorPatternsFrom: prev.divePatterns.length,
+          }
         : {};
     set(kept ? { profile, ...floor } : { profile, ...floor, chainDraft: null });
   };
@@ -483,27 +481,24 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
   const pull = () => pullOpts(get());
 
   const loaded = loadDelveProfile();
-  // A migrated save is written back at once.
-  if (loaded) saveProfile(loaded.profile);
+  // A save of another version starts afresh (no migrations), with a notice; either is written back at once.
+  const profile =
+    loaded && 'profile' in loaded
+      ? loaded.profile
+      : createDelveProfile(getDelveRegistry(), freshSeed());
+  if (loaded) saveProfile(profile);
 
   return {
-    profile: loaded?.profile ?? createDelveProfile(getDelveRegistry(), freshSeed()),
+    profile,
     newUids: {},
     diveDrops: [],
     diveRunes: [],
+    divePatterns: [],
     floorDropsFrom: 0,
     floorRunesFrom: 0,
+    floorPatternsFrom: 0,
     manualAttack: loadManualAttack(),
-    notices: loaded
-      ? [
-          ...(loaded.gainedPair && loaded.profile.pair.primary && !loaded.profile.pair.secondary
-            ? [BIND_HINT]
-            : []),
-          ...movesetNotices(loaded.dropped, loaded.movesetReset, loaded.profile.links),
-          ...fixNotices(getDelveRegistry(), loaded.fixed, loaded.profile.pair),
-          ...runeLostNotices(getDelveRegistry(), loaded.runesLost),
-        ]
-      : [],
+    notices: loaded && 'reset' in loaded ? [RESET_NOTICE] : [],
     bindDeclined: [],
     chainDraft: null,
     unsocket: loadUnsocket(),
@@ -516,8 +511,10 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
         newUids: {},
         diveDrops: [],
         diveRunes: [],
+        divePatterns: [],
         floorDropsFrom: 0,
         floorRunesFrom: 0,
+        floorPatternsFrom: 0,
         notices: [],
         bindDeclined: [],
         chainDraft: null,
@@ -532,15 +529,17 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       set({
         diveDrops: [],
         diveRunes: [],
+        divePatterns: [],
         floorDropsFrom: 0,
         floorRunesFrom: 0,
+        floorPatternsFrom: 0,
         chainDraft: null,
       });
       return true;
     },
 
     closeDive: () => {
-      const res = resolveOvertake(registry(), engineCloseDive(get().profile));
+      const res = resolveOvertake(registry(), engineCloseDive(registry(), get().profile));
       commit(res.profile);
       const { primary, secondary } = res.profile.pair;
       if (res.swapped) notify(overtakeNotice(registry(), primary!, secondary!));
@@ -581,8 +580,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       const res = salvageItems(registry(), get().profile, uids, pull());
       commit(res.profile);
       set({ newUids: withoutUids(get().newUids, uids) });
-      const { scrap, dust, links, runes, destroyed } = res;
-      return { scrap, dust, links, runes, destroyed };
+      const { scrap, dust, links, runes, destroyed, shards, patterns, essences } = res;
+      return { scrap, dust, links, runes, destroyed, shards, patterns, essences };
     },
 
     equipBest: () => {
@@ -604,12 +603,20 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     reforge: (uid, affixIndex) =>
       applyResult(reforgeGear(registry(), get().profile, uid, affixIndex)),
 
-    fuse: (uids) => {
-      const res = applyResult(fuseGear(registry(), get().profile, uids, pull()));
-      if (res.ok && res.item)
-        set({ newUids: { ...withoutUids(get().newUids, uids), [res.item.uid]: true } });
+    forge: (req) => {
+      const res = applyResult(engineForge(registry(), get().profile, req));
+      if (res.ok && res.item) set({ newUids: { ...get().newUids, [res.item.uid]: true } });
       return res;
     },
+
+    hone: (uid, line) => applyResult(engineHone(registry(), get().profile, uid, line)),
+
+    imprint: (uid, line, shard) =>
+      applyResult(engineImprint(registry(), get().profile, uid, line, shard)),
+
+    refine: (what) => applyResult(engineRefine(registry(), get().profile, what)),
+
+    buyShard: (stat) => applyResult(engineBuyShard(registry(), get().profile, stat)),
 
     setAutoSalvage: (rarity, on) => commit(setAutoSalvage(get().profile, rarity, on)),
 
@@ -644,6 +651,10 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
         diveRunes: all.slice(0, 60),
         floorRunesFrom: Math.max(0, get().floorRunesFrom - cut),
       });
+    },
+
+    pushDivePatterns: (ids) => {
+      if (ids.length > 0) set({ divePatterns: [...ids.slice().reverse(), ...get().divePatterns] });
     },
 
     setManualAttack: (on) => {

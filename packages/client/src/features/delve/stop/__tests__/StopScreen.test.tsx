@@ -1,7 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
-import { generateItem, isBossDepth, SeededRNG, type DiveState, type StopKind } from '@alloy/engine';
+import {
+  addMaterial,
+  emptyHaul,
+  generateItem,
+  isBossDepth,
+  SeededRNG,
+  type DiveState,
+  type Haul,
+  type StopKind,
+} from '@alloy/engine';
 import { ARM_MS, StopScreen } from '../StopScreen';
+import { doorLoot } from '../DoorPane';
 import { padPrompts } from '../../kit/prompts';
 import type { PadButton } from '@/features/gamepad/gamepad';
 import { getDelveRegistry } from '../../registry';
@@ -30,9 +40,13 @@ const arm = () => act(() => vi.advanceTimersByTime(ARM_MS));
 /**
  * Depth 1 cleared, at a stop offering `offers`: the bag holds a helm, a weapon and a ring, and
  * the floor found the helm and the weapon (the ring was an earlier floor's), Split III twice and
- * Quick I (Widen was an earlier floor's).
+ * Quick I (Widen was an earlier floor's), and the floor's haul `haul`.
  */
-function atStop(offers: StopKind[] | null, over: Partial<DiveState> = {}) {
+function atStop(
+  offers: StopKind[] | null,
+  over: Partial<DiveState> = {},
+  haul: Haul | null = null,
+) {
   store().setProfile({
     ...store().profile,
     bag: [item('h1', 'helm', 4), item('w1', 'weapon', 5), item('r1', 'ring', 6)],
@@ -70,7 +84,7 @@ function atStop(offers: StopKind[] | null, over: Partial<DiveState> = {}) {
   };
   const Stop = () => {
     const d = useDelveStore((s) => s.profile.dive!);
-    return <StopScreen dive={d} {...props} />;
+    return <StopScreen dive={d} haul={haul} {...props} />;
   };
   render(<Stop />);
   return props;
@@ -91,7 +105,9 @@ describe('StopScreen (between depths)', () => {
     expect(root).toHaveAttribute('data-pad-scope');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Depth 1 cleared');
     expect(root).toHaveTextContent(registry.getBiomeForDepth(1).name);
-    expect(screen.getByTestId('floor-counts')).toHaveTextContent('26 scrap bounty2 items3 runes');
+    expect(screen.getByTestId('floor-counts')).toHaveTextContent(
+      '26 scrap bounty0 materials2 items3 runes',
+    );
     expect(screen.queryByTestId('boss-slain')).toBeNull();
   });
 
@@ -104,7 +120,7 @@ describe('StopScreen (between depths)', () => {
     );
   });
 
-  it("lists this floor's items with their marks and its runes grouped, already banked", () => {
+  it("lists this floor's items with their marks and its runes grouped, over the risk line", () => {
     const { onInspect } = atStop(['equip']);
     const found = screen.getByTestId('floor-finds');
     const items = within(found).getAllByTestId('loot-item');
@@ -117,9 +133,44 @@ describe('StopScreen (between depths)', () => {
       'Quick IRune, to your pouch',
       'Split III ×2Rune, to your pouch',
     ]);
-    expect(found).toHaveTextContent('Already banked: yours even if you abandon.');
+    const loss = Math.round(registry.getDelveBalance().crafting.deathLoss * 100);
+    expect(within(found).getByTestId('risk-line')).toHaveTextContent(
+      `Banked this dive · dying loses ${loss}% of it`,
+    );
     fireEvent.click(items[1]);
     expect(onInspect).toHaveBeenCalledWith('h1');
+  });
+
+  it("groups the floor's materials and currencies above its items, its essences below them, and counts them", () => {
+    let haul = addMaterial(emptyHaul(), { kind: 'metal', metal: 'iron' }, 3);
+    haul = addMaterial(haul, { kind: 'flux', grade: 'magic' });
+    haul = addMaterial(haul, { kind: 'essence', essence: 'twin_fang' });
+    haul = addMaterial(haul, { kind: 'links' }, 2);
+    atStop(['equip'], {}, haul);
+    const found = screen.getByTestId('floor-finds');
+    const rows = [
+      ...found.querySelectorAll(
+        '[data-testid="loot-material"], [data-testid="loot-currency"], [data-testid="loot-item"], [data-testid="loot-essence"]',
+      ),
+    ];
+    expect(rows.map((r) => r.getAttribute('data-testid'))).toEqual([
+      'loot-material',
+      'loot-material',
+      'loot-currency',
+      'loot-item',
+      'loot-item',
+      'loot-essence',
+    ]);
+    expect(rows.map((r) => r.textContent)).toEqual([
+      'Iron bar ×3Material',
+      'Magic fluxMaterial',
+      'Links ×2Currency',
+      expect.any(String),
+      expect.any(String),
+      'Twin Fang essenceForges a legendary',
+    ]);
+    // Bars, flux, shards and essences count as materials.
+    expect(screen.getByTestId('floor-counts')).toHaveTextContent('5 materials');
   });
 
   it('shows the doors with their art and depth, Extract with the hero, and the potion', () => {
@@ -129,6 +180,14 @@ describe('StopScreen (between depths)', () => {
     const door = screen.getByTestId(`door-${first}`);
     expect(door).toHaveTextContent(registry.getDoor(first).name);
     expect(door.querySelector('[data-sprite], [data-glyph="chest"]')).not.toBeNull();
+    // Each door shows its loot multipliers; the plain one has none.
+    const loot = (id: string) =>
+      [...screen.getByTestId(`door-${id}`).querySelectorAll('[data-door-loot]')].map(
+        (el) => el.textContent,
+      );
+    expect(loot('gilded')).toEqual(doorLoot(registry.getDoor('gilded').mods));
+    expect(loot('gilded').length).toBeGreaterThan(0);
+    expect(loot('winding')).toEqual([]);
     fireEvent.click(door);
     expect(onChoose).toHaveBeenCalledWith(first);
     const extract = screen.getByTestId('extract-button');
@@ -221,6 +280,28 @@ describe('StopScreen (between depths)', () => {
     atStop(['equip'], { stop: { offers: ['equip'], taken: true } });
     const first = store().profile.dive!.doorChoices[0];
     expect(screen.getByTestId(`door-${first}`)).toHaveAttribute('data-pad-first');
+  });
+
+  it("words a door's loot multipliers from its mods, leaving out what it doesn't change", () => {
+    expect(doorLoot({})).toEqual([]);
+    expect(
+      doorLoot({
+        materials: 1.3,
+        runes: 0.5,
+        gear: 1,
+        flux: 1.5,
+        essence: 2,
+        find: 75,
+        shardTier: 0.35,
+      }),
+    ).toEqual([
+      'Materials ×1.3',
+      'Runes ×0.5',
+      'Flux ×1.5',
+      'Essences ×2',
+      'Find +75%',
+      'Tier up 35%',
+    ]);
   });
 
   it('with no power-up to offer, says so', () => {

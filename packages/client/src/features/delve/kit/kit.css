@@ -393,8 +393,11 @@ html[data-input='gamepad'] .delve-ui :focus {
 
 .k-promptbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 28px;
+  gap: 6px 28px;
+  /* In a footer, the prompts wrap before the actions beside them run off the screen. */
+  min-width: 0;
 }
 
 .k-prompt {
@@ -686,6 +689,8 @@ html[data-input='gamepad'] .delve-ui :focus {
   inset: 0;
   display: grid;
   grid-template-rows: 72px minmax(0, 1fr) 76px;
+  /* As wide as the screen: a crowded header gives way (its subtitle) rather than widen every row. */
+  grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
 }
 

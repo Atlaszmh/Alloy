@@ -64,7 +64,9 @@ test.describe('Delve loot loop', () => {
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
     page,
   }) => {
-    await seedProfile(page);
+    // Only elites and bosses drop gear: seed 8's first floor holds two elites, and the bot's
+    // clear of it drops gear at any frame rate (pinned in the engine's delve-banking test).
+    await seedProfile(page, 8);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
 
@@ -81,9 +83,12 @@ test.describe('Delve loot loop', () => {
     await expect(pause.getByTestId('equip-button')).toHaveCount(0);
     await expect(pause.getByTestId('equip-locked')).toHaveText('Locked during the dive');
 
-    // Abandon the dive (items are kept), and equip it at the Anvil (answering an off-pair
-    // item's bind choice, which the compare pane shows in place of Equip; the pane stays).
-    await pause.getByRole('button', { name: 'Abandon · lose bounty' }).click();
+    // Abandon the dive (items are kept; it counts as a death: the summary, then the Anvil), and
+    // equip it at the Anvil (answering an off-pair item's bind choice, which the compare pane
+    // shows in place of Equip; the pane stays).
+    await pause.getByRole('button', { name: 'Abandon · counts as a death' }).click();
+    await expect(page.getByTestId('dive-summary')).toContainText('ABANDONED');
+    await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     const sheet = page.getByTestId('item-sheet');
     await page.getByTestId('bag-item').first().click();
@@ -103,8 +108,8 @@ test.describe('Delve loot loop', () => {
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: 60_000 });
     await expect(door.getByRole('heading', { level: 1 })).toHaveText('Depth 1 cleared');
-    await expect(door.getByTestId('floor-finds')).toContainText(
-      'Already banked: yours even if you abandon.',
+    await expect(door.getByTestId('risk-line')).toHaveText(
+      /^Banked this dive · dying loses \d+% of it$/,
     );
     // At 1280×720 every door fits in its list, above Extract, without scrolling.
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -146,6 +151,41 @@ test.describe('Delve loot loop', () => {
     await expect(summary).toBeHidden();
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
     await expect(page.getByTestId('monsters-left')).toContainText('foes', { timeout: ARENA_READY });
+  });
+
+  test("D11: materials ride the floor's haul, bank at the stop, and an abandon loses a share", async ({
+    page,
+  }) => {
+    await seedProfile(page);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+
+    // Picked up mid-floor: the purse counts this dive's materials, the Found log groups them.
+    await expect(page.getByTestId('purse-materials')).toContainText(/\+[1-9]/, {
+      timeout: 60_000,
+    });
+    await expect(
+      page.getByTestId('pickup-feed').getByTestId('feed-material').first(),
+    ).toBeVisible();
+
+    // Banked at the clear: the stop lists the floor's materials over the risk line.
+    const door = page.getByTestId('door-choice');
+    await expect(door).toBeVisible({ timeout: 60_000 });
+    await expect(door.getByTestId('loot-material').first()).toBeVisible();
+    await expect(door.getByTestId('risk-line')).toBeVisible();
+
+    // Abandon counts as a death: the summary shows what the dive brought home and what it lost.
+    await door.getByRole('button', { name: 'Menu' }).click();
+    await page
+      .getByTestId('dive-pause')
+      .getByRole('button', { name: 'Abandon · counts as a death' })
+      .click();
+    const summary = page.getByTestId('dive-summary');
+    await expect(summary).toContainText('ABANDONED');
+    await expect(summary.getByTestId('dive-home')).toBeVisible();
+    await expect(summary.getByTestId('dive-lost').getByTestId('haul-row').first()).toBeVisible();
+    await page.getByTestId('return-camp').click();
+    await expect(page.getByTestId('delve-camp')).toBeVisible();
   });
 
   test('D06: the ability bar fits on screen', async ({ page }) => {
@@ -210,6 +250,8 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('move-add')).toHaveCount(0);
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('forge-panel')).toBeVisible();
+    await expect(page.getByTestId('pattern-list')).toBeVisible();
+    await page.getByTestId('bench-temper').click();
     await expect(page.getByTestId('temper-row')).toHaveCount(2);
     await page.getByTestId('tab-codex').click();
     await expect(page.getByTestId('codex-unknown')).toHaveCount(12);
@@ -265,5 +307,22 @@ test.describe('Delve loot loop', () => {
     await expect(menu).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
+  });
+
+  test('D10: forging an item at the Anvil from the starting bars and flux', async ({ page }) => {
+    // A new save knows the cuirass and holds 5 Rusty bars and uncommon flux (the starter kit).
+    await seedProfile(page, 4242, false, undefined, { scrap: 500 });
+    await page.goto('/delve');
+    await page.getByTestId('tab-forge').click();
+    await expect(page.getByTestId('bench-forge')).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('pattern-cuirass').click();
+    await page.getByTestId('flux-uncommon').click();
+    await expect(page.getByTestId('forge-title')).toHaveText('Uncommon Cuirass');
+    await expect(page.getByTestId('forge-refused')).toHaveCount(0);
+    await page.getByTestId('forge-button').click();
+    await expect(page.getByTestId('forge-bench').getByRole('status')).toContainText('Forged');
+    await expect(page.getByTestId('material-metal-rusty')).toContainText('Rusty bar ×4');
+    await page.getByTestId('tab-loadout').click();
+    await expect(page.getByTestId('tab-loadout')).toContainText('NEW 1');
   });
 });

@@ -69,7 +69,7 @@ describe('the stop after a cleared depth', () => {
 
   it('offers only what the hero can take and pay for: a bag item, a slot, an edit, an upgrade', () => {
     const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
-    const p = { ...p0, stats: { ...p0.stats, dives: 1 } }; // past the free edits
+    const p = { ...p0, scrap: 0, stats: { ...p0.stats, dives: 1 } }; // past the free edits
     expect(upgradeCost(registry, p.equipped.chest!)).toBe(10);
     expect(stopKinds(registry, p)).toEqual([]); // no bag, Links, scrap or Mana Dust
     const rich = { ...p, bag: [ring('r1')], links: 1, scrap: 20, manaDust: bal.movesets.editDust };
@@ -88,6 +88,26 @@ describe('the stop after a cleared depth', () => {
     };
     expect(stopKinds(registry, spent)).toEqual([]);
     expect(rollStop(registry, spent, startDive(registry, spent, 1).dive!)).toBeNull();
+  });
+
+  it('counts and spends what the dive banked first, then the stockpile (S9)', () => {
+    const p = atStop(hero(), { offers: ['slot'], taken: false });
+    const banking = (links: number, scrap: number, on: DelveProfile = p) => ({
+      ...on,
+      dive: { ...on.dive!, banked: { ...on.dive!.banked, links, scrap } },
+    });
+    const broke = { ...p, links: 0, scrap: 0 };
+    expect(stopKinds(registry, broke)).not.toContain('slot');
+    expect(stopKinds(registry, banking(1, 20, broke))).toContain('slot');
+    // The slot's Link and 20 scrap: the banked Link and 15 scrap, then 5 of the stockpile's.
+    const res = takeStop(registry, banking(1, 15, { ...p, links: 2, scrap: 100 }), {
+      kind: 'slot',
+      skill: 'primary',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.profile).toMatchObject({ links: 2, scrap: 95 });
+    expect(res.profile.dive!.banked).toMatchObject({ links: 0, scrap: 0 });
+    expect(res.profile.dive!.stop!.taken).toBe(true);
   });
 
   it('offers 2 or 3 at random in the kinds order, all of them when only two apply', () => {

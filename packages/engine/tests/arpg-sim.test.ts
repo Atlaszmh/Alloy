@@ -40,12 +40,11 @@ function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): 
     phoenixAvailable: true,
     seed: 77,
     loot: {
-      pity: 0,
       nextUid: 100,
-      magicFind: 0,
+      find: 0,
       legendaryBoost: 1,
-      dropMult: 1,
       forceLegendary: false,
+      dropsGiven: [],
       pair: [],
     },
     ...opts,
@@ -106,11 +105,10 @@ describe('floor generation', () => {
 
   it('re-entering a floor meets the same monsters but rolls fresh loot', () => {
     const loot = {
-      pity: 0,
-      magicFind: 0,
+      find: 0,
       legendaryBoost: 1,
-      dropMult: 1,
       forceLegendary: false,
+      dropsGiven: [],
       pair: [],
     };
     const first = world({ loot: { ...loot, nextUid: 100 } });
@@ -283,7 +281,7 @@ describe('monsters', () => {
 
   it('kills drop mana motes and items, which the hero picks up', () => {
     const w = arena([{ x: 13, y: 33, hp: 1, maxHp: 1 }]);
-    w.loot.dropMult = 20;
+    w.door = { ...registry.getDoor('swarm'), mods: { materials: 20 } };
     const events = run(w, 3);
     expect(events.some((e) => e.kind === 'death')).toBe(true);
     expect(events.some((e) => e.kind === 'drop' && e.dropKind === 'mote')).toBe(true);
@@ -294,14 +292,15 @@ describe('monsters', () => {
 
   it('clearing the floor vacuums up the loot', () => {
     const w = arena([{ x: 13, y: 20, hp: 1, maxHp: 1 }]);
-    w.loot.dropMult = 20;
+    w.door = { ...registry.getDoor('swarm'), mods: { materials: 20 } };
     const ctx = makeCtx(registry, w, []);
     hitMonster(ctx, w.monsters[0], 10, null, { source: 'skill' });
     const events = run(w, 3);
     expect(events.some((e) => e.kind === 'cleared')).toBe(true);
     expect(w.cleared).toBe(true);
     expect(w.drops).toHaveLength(0);
-    expect(w.pending.items.length).toBeGreaterThan(0);
+    expect(Object.values(w.pending.haul.metals).some((n) => n > 0)).toBe(true);
+    expect(w.pending.scrap).toBeGreaterThan(0);
   });
 
   it('boss slams hurt only inside the telegraph', () => {

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { createDelveProfile, startDive } from '@alloy/engine';
+import {
+  addMaterial,
+  createDelveProfile,
+  emptyHaul,
+  emptyMaterials,
+  startDive,
+  type MaterialRef,
+} from '@alloy/engine';
 import { HudGrid } from '../HudGrid';
 import { PurseBar } from '../PurseBar';
 import { getDelveRegistry } from '../../../registry';
@@ -113,6 +120,7 @@ describe('HudGrid', () => {
 
 describe('PurseBar', () => {
   const registry = getDelveRegistry();
+  const iron: MaterialRef = { kind: 'metal', metal: 'iron' };
 
   beforeEach(() => {
     useInputDeviceStore.setState({ device: 'keyboard' });
@@ -122,13 +130,20 @@ describe('PurseBar', () => {
       links: 5,
       manaDust: 40,
       runes: { quick: [2, 1, 0, 0, 0] },
+      materials: { ...emptyMaterials(), metals: { ...emptyMaterials().metals, steel: 7 } },
     };
     const dived = startDive(registry, profile, 1);
+    // This floor's haul so far, and what the dive's cleared floors banked.
+    const haul = addMaterial(addMaterial(emptyHaul(), iron, 3), { kind: 'dust' }, 2);
+    const banked = {
+      ...addMaterial(emptyHaul(), { kind: 'flux', grade: 'magic' }),
+      scrap: 30,
+      dust: 4,
+      links: 1,
+      runes: { split: [0, 0, 1, 0, 0] },
+    };
     useDelveStore.setState({
-      profile: {
-        ...dived,
-        dive: { ...dived.dive!, bounty: 26, linksEarned: 1, dustEarned: 6, runesEarned: 1 },
-      },
+      profile: { ...dived, dive: { ...dived.dive!, bounty: 26, haul, banked } },
       diveDrops: ['a', 'b', 'c', 'd'],
     });
   });
@@ -146,13 +161,25 @@ describe('PurseBar', () => {
       expect(within(el).getByRole('img', { name })).toBeInTheDocument();
       expect(el).toHaveTextContent(text);
     };
-    row('scrap', 'Scrap', '2,412+26');
+    row('scrap', 'Scrap', '2,412+30');
     row('links', 'Links', '5+1');
     row('dust', 'Mana Dust', '40+6');
+    row('materials', 'Materials', '7+4');
     row('runes', 'Runes', '3+1');
     row('items', 'Items', `${bag} / ${cap}+4`);
     expect(screen.getByTestId('bounty')).toHaveTextContent('+26');
     expect(screen.getByTestId('purse-bar')).toHaveTextContent('+26 banks on extract');
+  });
+
+  it("the materials' tooltip lists what this dive found and what waits at the Anvil", () => {
+    render(purse());
+    fireEvent.mouseEnter(screen.getByTestId('purse-materials'));
+    const card = within(screen.getByTestId('purse-bar')).getByRole('tooltip');
+    const rows = within(card)
+      .getAllByTestId('haul-row')
+      .map((r) => r.textContent);
+    expect(rows).toEqual(['Iron bar×3', 'Magic flux×1', 'Steel bar×7']);
+    expect(card).toHaveTextContent(/This dive.*At the Anvil/);
   });
 
   it('"Dive menu" carries the menu marker and presses onMenu; Journal waits for 3b', () => {

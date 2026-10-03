@@ -23,6 +23,7 @@ import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
 import { dropRune } from './rune-drops.js';
+import { dropMaterials } from './material-drops.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -68,8 +69,6 @@ export interface HitOpts {
    */
   stacks?: number;
 }
-
-const KILL_SCRAP_MULT = { normal: 1, elite: 3, boss: 10 } as const;
 
 /** The status each element's hits apply: its stacks (Earth's `stagger` only from an Earth source). */
 export const BASIC_STATUS: Record<ManaType, StatusId> = {
@@ -703,16 +702,16 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (m.kind === 'boss') world.bossKilled = true;
   if (m.id === world.bossId) world.bossId = livingBossId(world);
 
-  // The Training Grounds drop nothing from kills: no scrap, items, motes or orbs.
+  // The Training Grounds drop nothing from kills: no scrap, items, motes, orbs or materials.
+  // The kill's scrap bursts out as pickups (`dropMaterials`).
   const scrap = world.sandbox
     ? 0
     : Math.round(
         bal.loot.scrapPerKill *
           scrapLevelFactor(registry, world.depth) *
-          KILL_SCRAP_MULT[m.kind] *
+          bal.drops.scrapByKind[m.kind] *
           (1 + h.stats.scrapFind / 100),
       );
-  world.pending.scrap += scrap;
   ctx.events.push({ kind: 'death', id: m.id, x: m.x, y: m.y, monsterKind: m.kind, scrap });
 
   if (h.stats.healOnKill > 0) healHero(ctx, h.stats.maxHp * h.stats.healOnKill, 'kill');
@@ -734,8 +733,11 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   }
 
   if (!world.sandbox) {
-    dropLoot(ctx, m);
+    // A replayed floor's foe that already gave gear or a pattern this dive gives neither again.
+    const given = world.loot.dropsGiven.includes(m.id);
+    dropLoot(ctx, m, given);
     dropRune(ctx, m);
+    dropMaterials(ctx, m, scrap, given);
   }
 
   // Hellfire Brand: branded corpses explode and brand their neighbours.
@@ -755,31 +757,27 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
 }
 
 /** Items, a mana mote and health orbs burst from a dying foe. */
-function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
+function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
   const { world, bal, registry } = ctx;
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
-  const forceLegendary = m.kind === 'boss' && loot.forceLegendary;
-  const drops = rollEncounterDrops(
-    registry,
-    {
-      depth: world.depth,
-      kind: m.kind,
-      magicFind: loot.magicFind,
-      pity: loot.pity,
-      dropMult: loot.dropMult,
-      legendaryBoost: loot.legendaryBoost,
-      forceLegendary,
-      nextUid: loot.nextUid,
-      biomeMana: world.element,
-      pair: loot.pair,
-    },
-    lootRng,
-  );
-  loot.pity = drops.pity;
+  const drops = given
+    ? { items: [], nextUid: loot.nextUid }
+    : rollEncounterDrops(
+        registry,
+        {
+          depth: world.depth,
+          kind: m.kind,
+          gear: world.door?.mods.gear ?? 1,
+          nextUid: loot.nextUid,
+          biomeMana: world.element,
+          pair: loot.pair,
+        },
+        lootRng,
+      );
   loot.nextUid = drops.nextUid;
-  if (forceLegendary) loot.forceLegendary = false;
+  if (drops.items.length > 0 && !loot.dropsGiven.includes(m.id)) loot.dropsGiven.push(m.id);
   drops.items.forEach((item, i) => {
     const angle = (Math.PI * 2 * i) / Math.max(1, drops.items.length) + lootRng.next() * 0.8;
     const r = 0.6 + lootRng.next() * 0.9;

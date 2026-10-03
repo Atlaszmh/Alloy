@@ -7,6 +7,7 @@ import {
   type Drop,
   type GearItem,
   type ManaType,
+  type MaterialRef,
   type MonsterEntity,
   type Vec,
 } from '@alloy/engine';
@@ -40,6 +41,7 @@ import { SPRITE_PIXEL, spriteFrames } from './sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
 import { RARITY_TEXT } from '../format';
+import { PATTERN_COLOR, materialColor, materialLabel } from '../materials/material-style';
 import { contextZoom } from '../kit/zoom';
 import { useUIStore } from '@/stores/uiStore';
 
@@ -66,6 +68,9 @@ interface DropView {
   root: Container;
   gfx: Graphics;
   plaque: Plaque | null;
+  /** Where the drop was last frame: a magnet's pull shows as a trail. */
+  x: number;
+  y: number;
 }
 
 /** A loot label (decided item 22): screen space, `w`×`h` px. */
@@ -491,8 +496,6 @@ export class ArenaRenderer {
             this.fx.ring(e.x, e.y, 5, 0xfde68a, false, 0.8);
             this.addShake(0.5);
           }
-          if (e.scrap > 0 && e.monsterKind !== 'normal')
-            this.floatText(e.x, e.y + 0.4, `+${e.scrap} ⚙`, 0xfcd34d, 16);
           this.killMonsterView(e.id);
           break;
         case 'drop':
@@ -872,12 +875,19 @@ export class ArenaRenderer {
       }
       const age = w.t - d.born;
       const pop = dropPop(d, age);
-      // Items and runes lie still, and so does a Seedling's rooted sprout.
-      const still = d.kind === 'item' || d.kind === 'rune' || isSprout(d);
+      // Items, runes, patterns and essences lie still, and so does a Seedling's rooted sprout.
+      const still =
+        d.kind === 'item' ||
+        d.kind === 'rune' ||
+        d.kind === 'pattern' ||
+        d.material?.kind === 'essence' ||
+        isSprout(d);
       const bob = still ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;
       v.root.position.set(d.x, d.y - pop + bob);
       v.root.zIndex = d.y - 0.5;
-      drawDrop(v.gfx, d, this.time, age);
+      drawDrop(v.gfx, d, this.time, age, { dx: d.x - v.x, dy: d.y - v.y });
+      v.x = d.x;
+      v.y = d.y;
       const plaque = v.plaque;
       if (plaque) {
         plaque.box.visible = plaque.always || this.labelsHeld;
@@ -900,7 +910,7 @@ export class ArenaRenderer {
     root.addChild(gfx);
     this.dropLayer.addChild(root);
     const named = dropPlaque(d, !!d.item && this.isUpgrade(d.item));
-    return { root, gfx, plaque: named && this.makePlaque(named) };
+    return { root, gfx, plaque: named && this.makePlaque(named), x: d.x, y: d.y };
   }
 
   /** A loot label: its text in Jersey 10 at 14 × the HUD scale px on a dark plate, bordered in its colour. */
@@ -974,12 +984,14 @@ export function holdPing(
 }
 
 /**
- * A pickup's sparkle: the item's rarity, a rune's family, else the drop's
- * mana (a mote, a Seedling orb), else red.
+ * A pickup's sparkle: the item's rarity, a rune's family, a material's
+ * colour, else the drop's mana (a mote, a Seedling orb), else red.
  */
 export function pickupColor(e: Extract<ArpgEvent, { kind: 'pickup' }>): number {
   if (e.item) return RARITY_HEX[e.item.rarity];
   if (e.rune) return runeHex(e.rune);
+  if (e.material) return cssToHex(materialColor(getDelveRegistry(), e.material));
+  if (e.pattern) return cssToHex(PATTERN_COLOR);
   if (e.mana) return MANA_HEX[e.mana];
   return e.dropKind === 'orb' ? 0xf87171 : 0xffffff;
 }
@@ -996,8 +1008,11 @@ export function dropPop(d: Drop, age: number): number {
 /**
  * A drop's loot label (decided item 22): an item's name in its rarity's text
  * colour, with ▲ when it is an upgrade as it comes, or a rune's name and tier
- * ("Split III") in its family's. Rare and up, runes and upgrades always show;
- * anything else only while every label does. Null for drops that aren't loot.
+ * ("Split III") in its family's, an essence's name in legendary orange, or a
+ * pattern's base ("Pattern: Maul") in blueprint chalk.
+ * Rare and up, runes, essences, patterns and upgrades always show; anything else only
+ * while every label does. Null for drops that aren't loot, and for every other
+ * material (bars, flux, shards, Mana Dust and Links fly in unlabelled).
  */
 export function dropPlaque(
   d: Drop,
@@ -1011,6 +1026,18 @@ export function dropPlaque(
       always: isUpgrade || r === 'rare' || r === 'epic' || r === 'legendary',
     };
   }
+  if (d.material?.kind === 'essence')
+    return {
+      text: materialLabel(getDelveRegistry(), d.material),
+      color: cssToHex(RARITY_TEXT.legendary),
+      always: true,
+    };
+  if (d.pattern)
+    return {
+      text: `Pattern: ${getDelveRegistry().getGearBase(d.pattern).name}`,
+      color: cssToHex(PATTERN_COLOR),
+      always: true,
+    };
   const def = d.rune ? getDelveRegistry().findRune(d.rune.id) : undefined;
   if (!d.rune || !def) return null;
   return { text: `${def.name} ${TIER_NUMERAL[d.rune.tier]}`, color: runeHex(d.rune), always: true };
@@ -1049,8 +1076,15 @@ export function stackPlaques(boxes: { x: number; y: number; w: number; h: number
 /**
  * A drop's look, `age` seconds after it fell. A Seedling's orb (nature) is a
  * sprout that grows in; a mote wears its mana's colour (a Siphon's is violet).
+ * `moved` is how far it went since the last frame (a material trails it).
  */
-export function drawDrop(g: Graphics, d: Drop, time: number, age: number): void {
+export function drawDrop(
+  g: Graphics,
+  d: Drop,
+  time: number,
+  age: number,
+  moved?: { dx: number; dy: number },
+): void {
   g.clear();
   if (d.kind === 'item' && d.item) {
     const color = RARITY_HEX[d.item.rarity];
@@ -1094,6 +1128,20 @@ export function drawDrop(g: Graphics, d: Drop, time: number, age: number): void 
     g.poly(stone).stroke({ width: 0.05, color });
     for (let i = 0; i < d.rune.tier; i++)
       g.rect(-0.15 + i * 0.07, -0.16, 0.04, 0.1).fill({ color });
+  } else if (d.kind === 'material' && d.material) {
+    drawMaterial(g, d.material, time + d.id, moved);
+  } else if (d.kind === 'pattern') {
+    // A rolled blueprint on whole sprite pixels: dark blue paper, chalk lines, curled ends.
+    const chalk = cssToHex(PATTERN_COLOR);
+    const px = (x: number, y: number, w: number, h: number, color: number, alpha = 1) =>
+      g.rect(x * 0.1, y * 0.1, w * 0.1, h * 0.1).fill({ color, alpha });
+    g.ellipse(0, 0.1, 0.3, 0.1).fill({ color: 0x000000, alpha: 0.4 });
+    g.circle(0, -0.2, 0.42).fill({ color: chalk, alpha: 0.1 + Math.sin(time * 4 + d.id) * 0.05 });
+    px(-3, -4, 6, 4, 0x124e89);
+    px(-2, -3, 4, 1, chalk);
+    px(-2, -1, 3, 1, chalk);
+    px(-4, -4, 1, 4, chalk);
+    px(3, -4, 1, 4, chalk);
   } else if (d.kind === 'orb') {
     g.circle(0, 0, 0.32).fill({ color: 0xef4444, alpha: 0.25 });
     g.circle(0, 0, 0.2).fill({ color: 0xdc2626 });
@@ -1101,6 +1149,62 @@ export function drawDrop(g: Graphics, d: Drop, time: number, age: number): void 
   } else {
     g.circle(0, 0, 0.16).fill({ color: 0xfcd34d });
   }
+}
+
+/**
+ * A material on the floor: a small pickup in its colour, whole sprite pixels (0.1 units) — a
+ * bar, a flux vial, a shard, an essence glowing under its pillar, Mana Dust's motes or a Link —
+ * trailing three fading pixels while the magnet pulls it in.
+ */
+function drawMaterial(
+  g: Graphics,
+  ref: MaterialRef,
+  phase: number,
+  moved?: { dx: number; dy: number },
+): void {
+  const color = cssToHex(materialColor(getDelveRegistry(), ref));
+  const px = (x: number, y: number, w = 1, h = 1, c = color, alpha = 1) =>
+    g.rect(x * 0.1, y * 0.1, w * 0.1, h * 0.1).fill({ color: c, alpha });
+  g.ellipse(0, 0.1, 0.22, 0.08).fill({ color: 0x000000, alpha: 0.35 });
+  switch (ref.kind) {
+    case 'metal':
+      px(-2, -2, 4, 2);
+      px(-2, -2, 4, 1, 0xffffff, 0.35);
+      break;
+    case 'flux':
+      px(-1, -4, 2, 1, 0xc0cbdc);
+      px(-1, -3, 2, 3);
+      break;
+    case 'shard':
+      px(-1, -3, 2, 1);
+      px(-2, -2, 4, 1);
+      px(-1, -1, 2, 1);
+      px(-1, -3, 1, 1, 0xffffff, 0.5);
+      break;
+    case 'essence': {
+      const flicker = 0.75 + Math.sin(phase * 3) * 0.25;
+      g.rect(-0.15, -5, 0.3, 5).fill({ color, alpha: 0.12 * flicker });
+      px(-1, -4, 2, 4);
+      px(-2, -3, 4, 2);
+      px(-1, -3, 1, 1, 0xffffff, 0.8);
+      break;
+    }
+    case 'dust':
+      px(-2, -1);
+      px(1, -2);
+      px(-1, -3);
+      break;
+    case 'links':
+      px(-3, -2, 2, 2);
+      px(1, -2, 2, 2);
+      px(-1, -2, 2, 1);
+      break;
+  }
+  const len = moved ? Math.hypot(moved.dx, moved.dy) : 0;
+  if (!moved || len < 0.01) return;
+  const [ux, uy] = [moved.dx / len, moved.dy / len];
+  for (let i = 1; i <= 3; i++)
+    px(-ux * 1.5 * i - 0.5, -uy * 1.5 * i - 1.5, 1, 1, color, 0.6 - 0.15 * i);
 }
 
 function lighten(color: number): number {

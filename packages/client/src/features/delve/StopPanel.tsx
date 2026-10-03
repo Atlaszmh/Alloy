@@ -24,6 +24,8 @@ import {
   type AbilitySlot,
   type Blow,
   type ChainSkill,
+  type DataRegistry,
+  type DelveProfile,
   type DiveStop,
   type GearItem,
   type Move,
@@ -85,6 +87,9 @@ export const STOP_TEXT: Record<
  * taking one spends the stop (the engine's `takeStop`), and skipping it is choosing a door.
  */
 export function StopPanel({ stop }: { stop: DiveStop }) {
+  const registry = getDelveRegistry();
+  const profile = useDelveStore((s) => s.profile);
+  const upgradeCosts = upgradable(registry, profile).map((i) => upgradeCost(registry, i)!);
   const [open, setOpen] = useState<StopKind | null>(null);
   const section = useRef<HTMLElement | null>(null);
   // Back (the stop not taken): the cards come back, and the focus goes to the one that opened it.
@@ -138,7 +143,16 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
               </span>
               <span className="mt-auto flex justify-between gap-2 bg-[var(--k-well)] px-[14px] py-3 text-[15px]">
                 <span className="text-[var(--k-text-3)]">Price</span>
-                <b className="text-[var(--k-hot-hi)]">{STOP_TEXT[kind].price}</b>
+                <b className="text-[var(--k-hot-hi)]" data-testid="stop-price">
+                  {kind === 'upgrade' && upgradeCosts.length > 0 ? (
+                    <>
+                      {new Set(upgradeCosts).size > 1 && 'from '}
+                      <Price scrap={Math.min(...upgradeCosts)} />
+                    </>
+                  ) : (
+                    STOP_TEXT[kind].price
+                  )}
+                </b>
               </span>
             </button>
           ))}
@@ -415,13 +429,18 @@ function MovePick({ take }: { take: Take }) {
   );
 }
 
+/** The items, worn then in the bag, that an upgrade can take. */
+function upgradable(registry: DataRegistry, profile: DelveProfile): GearItem[] {
+  return [...GEAR_SLOTS.map((s) => profile.equipped[s]), ...profile.bag].filter(
+    (i): i is GearItem => !!i && upgradeCost(registry, i) !== null,
+  );
+}
+
 /** An item, worn or in the bag, to upgrade once at its price. */
 function UpgradePick({ take }: { take: Take }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const items = [...GEAR_SLOTS.map((s) => profile.equipped[s]), ...profile.bag].filter(
-    (i): i is GearItem => !!i && upgradeCost(registry, i) !== null,
-  );
+  const items = upgradable(registry, profile);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-3">

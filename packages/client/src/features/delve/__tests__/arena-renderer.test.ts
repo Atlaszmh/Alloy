@@ -22,6 +22,7 @@ import {
 import { MANA_HEX, cssToHex } from '../arena/palette';
 import { attachKeyboard, createArenaInput } from '../arena/input';
 import { RARITY_TEXT } from '../format';
+import { DUST_COLOR, METAL_COLOR, PATTERN_COLOR } from '../materials/material-style';
 import { runeHex } from '../arena/fx/runes';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
@@ -251,6 +252,70 @@ describe('runes on the floor', () => {
     expect(dropPlaque(item('magic'), false)).toMatchObject({ text: 'Sunfang', always: false });
     expect(dropPlaque(item('magic'), true)).toMatchObject({ text: 'Sunfang ▲', always: true });
     expect(dropPlaque(drop({}), false)).toBeNull();
+  });
+});
+
+describe('materials on the floor', () => {
+  const iron = { kind: 'metal', metal: 'iron' } as const;
+  const bar = drop({ kind: 'material', material: iron, amount: 2 });
+  const ironHex = cssToHex(METAL_COLOR.iron);
+
+  it('draw as small pickups in their colour, trailing three pixels while the magnet pulls them', () => {
+    const still = recorder();
+    drawDrop(still.g, bar, 1, 1);
+    const fills = still.fills.filter((c) => c === ironHex).length;
+    expect(fills).toBeGreaterThan(0);
+    expect(still.fills).not.toContain(0xfcd34d); // not the scrap coin
+    const flying = recorder();
+    drawDrop(flying.g, bar, 1, 1, { dx: 0.3, dy: 0 });
+    expect(flying.fills.filter((c) => c === ironHex)).toHaveLength(fills + 3);
+    const dust = recorder();
+    drawDrop(dust.g, drop({ kind: 'material', material: { kind: 'dust' } }), 1, 1);
+    expect(dust.fills).toContain(cssToHex(DUST_COLOR));
+  });
+
+  it('only an essence is labelled, always, in legendary orange; a pickup sparkles its colour', () => {
+    expect(dropPlaque(bar, false)).toBeNull();
+    const essence = drop({ kind: 'material', material: { kind: 'essence', essence: 'twin_fang' } });
+    expect(dropPlaque(essence, false)).toEqual({
+      text: 'Twin Fang essence',
+      color: cssToHex(RARITY_TEXT.legendary),
+      always: true,
+    });
+    expect(
+      pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'material', amount: 2, material: iron }),
+    ).toBe(ironHex);
+  });
+});
+
+describe('patterns on the floor', () => {
+  const maul = drop({ kind: 'pattern', pattern: 'maul', amount: 1 });
+  const blue = cssToHex(PATTERN_COLOR);
+
+  it('draw as a blueprint scroll in their own colour, named always, and sparkle so when picked up', () => {
+    const scroll = recorder();
+    drawDrop(scroll.g, maul, 1, 1);
+    expect(scroll.fills).toContain(blue);
+    expect(scroll.fills).not.toContain(0xfcd34d); // not the scrap coin
+    expect(dropPlaque(maul, false)).toEqual({ text: 'Pattern: Maul', color: blue, always: true });
+    expect(
+      pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'pattern', amount: 1, pattern: 'maul' }),
+    ).toBe(blue);
+  });
+});
+
+describe('a slain foe', () => {
+  it("floats no scrap: it bursts out as pickups, credited as they're picked up", () => {
+    const { r } = stage();
+    const w = floor();
+    show(r, w);
+    const death = { kind: 'death', id: 999, x: 13, y: 18, scrap: 30 } as const;
+    r.handleEvents([
+      { ...death, monsterKind: 'elite' },
+      { ...death, id: 998, monsterKind: 'boss' },
+    ]);
+    const floats = (r as unknown as { floats: { text: Text }[] }).floats;
+    expect(floats.map((f) => f.text.text).filter((t) => t.includes('⚙'))).toEqual([]);
   });
 });
 

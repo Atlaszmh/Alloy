@@ -103,7 +103,7 @@ export {
 } from './loot/item-generator.js';
 export type { ItemGenOptions, RarityRollContext } from './loot/item-generator.js';
 export { rollEncounterDrops } from './loot/drops.js';
-export { salvageValue, upgradeCost, reforgeCost, fuseCost, checkFusion } from './loot/smithing.js';
+export { salvageValue, upgradeCost, reforgeCost } from './loot/smithing.js';
 export {
   computeHeroStats,
   computeAttunement,
@@ -148,6 +148,7 @@ export {
   chooseDoor,
   extractDive,
   closeDive,
+  settleDive,
   drinkPotionBetweenFloors,
 } from './delve/dive.js';
 export type { BankResult, FloorResult } from './delve/dive.js';
@@ -167,8 +168,6 @@ export {
   EQUIP_BEST_SLOTS,
   upgradeGear,
   reforgeGear,
-  fuseGear,
-  chainFromBuild,
 } from './delve/profile.js';
 export {
   setChain,
@@ -305,3 +304,11 @@ export * from './arpg/abilities/echo.js';
 export * from './arpg/rune-drops.js';
 export { knobHitOpts } from './arpg/abilities/impact.js';
 export { guardLand } from './arpg/abilities/defend.js';
+
+// Crafting (see the crafting spec): every module whole, so the areas that build them never edit this file.
+export * from './loot/materials.js';
+export * from './loot/forge.js';
+export * from './loot/salvage-yield.js';
+export * from './delve/crafting.js';
+export * from './delve/economy.js';
+export * from './arpg/material-drops.js';

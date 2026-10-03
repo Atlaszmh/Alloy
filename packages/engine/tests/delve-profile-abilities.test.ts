@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
-import { defaultChains } from '../src/arpg/abilities/resolve.js';
 import { setChain } from '../src/delve/moveset.js';
 import { createDelveProfile, parseDelveProfile, unequipSlot } from '../src/delve/profile.js';
 import { startDive } from '../src/delve/dive.js';
 import { defaultMoveset } from '../src/loot/moveset.js';
 import type { Chain, Move } from '../src/types/ability.js';
-import { asV4, chainsOf, withChains } from './fixtures/arena.js';
+import { chainsOf, withChains } from './fixtures/arena.js';
 
 const registry = createDefaultRegistry();
 const json = (x: unknown) => JSON.parse(JSON.stringify(x));
@@ -14,7 +13,7 @@ const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 describe('chains on the weapon (save v6)', () => {
   it("a new profile's sword carries its base moveset in the weapon's element", () => {
     const p = createDelveProfile(registry, 1);
-    expect(p.version).toBe(7);
+    expect(p.version).toBe(8);
     const sword = p.equipped.weapon!;
     expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'fire'));
     expect(sword.moveset!.slots).toEqual({ basic: 3, primary: 1 });
@@ -34,13 +33,7 @@ describe('chains on the weapon (save v6)', () => {
     expect(chainsOf(p).primary).toEqual(chain);
     expect(chainsOf(p).basic).toEqual([{ kind: 'heavy', element: 'nature' }]);
     expect(p.equipped.weapon!.moveset!.slots).toEqual({ basic: 3, primary: 2 });
-    expect(parseDelveProfile(registry, json(p))).toEqual({
-      profile: p,
-      fixed: [],
-      dropped: [],
-      movesetReset: false,
-      runesLost: [],
-    });
+    expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p });
   });
 
   it('setChain refuses no moves, more than the slots, an unknown kind, a form from another slot, bad elements or payment', () => {
@@ -84,28 +77,6 @@ describe('chains on the weapon (save v6)', () => {
       profile: diving,
       reason: 'Chains can only change between dives',
     });
-  });
-
-  it("migrates a version 2 save, keeping gear and scrap: its new primary's default chains", () => {
-    const p0 = createDelveProfile(registry, 7);
-    const { abilities: _abilities, ...rest } = asV4(p0);
-    // An epic sword, which carries all four chains.
-    const frost = { ...p0.equipped.weapon!, mana: 'frost' as const, rarity: 'epic' as const };
-    const v2 = {
-      ...rest,
-      version: 2,
-      scrap: 321,
-      equipped: { ...p0.equipped, weapon: frost },
-      skillSlots: ['fireball', null, null],
-      reactionsSeen: ['melt'],
-    };
-    const p = parseDelveProfile(registry, json(v2))?.profile;
-    expect(p).toBeDefined();
-    expect(p!.version).toBe(7);
-    expect(p!.scrap).toBe(321);
-    expect(p!.equipped.weapon!.uid).toBe(p0.equipped.weapon!.uid);
-    expect(chainsOf(p!)).toEqual(defaultChains(registry, 'frost', 'sword'));
-    expect('skillSlots' in p!).toBe(false);
   });
 
   it('remembers the new reactions', () => {

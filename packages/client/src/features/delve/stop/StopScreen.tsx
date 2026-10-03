@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react';
-import { baseDisplayName, isBossDepth, type DiveState } from '@alloy/engine';
+import { baseDisplayName, isBossDepth, type DiveState, type Haul } from '@alloy/engine';
 import { useControlsStore } from '@/stores/controlsStore';
 import { Button, Footer, Glyph, Panel, Screen, usePrompts, type Prompt } from '../kit';
 import { getDelveRegistry } from '../registry';
@@ -9,6 +9,7 @@ import { ItemTooltip } from '../items/ItemTooltip';
 import { RARITY_COLOR, RARITY_LABEL, RARITY_TEXT, formatNumber } from '../format';
 import { FAMILY_STYLE, runeName } from '../runes/rune-style';
 import { MARK, useFloorFinds } from '../arena/hud/FoundLog';
+import { haulRows, materialCount, type HaulRow } from '../materials/material-style';
 import { StopPanel } from '../StopPanel';
 import { DoorPane } from './DoorPane';
 
@@ -17,8 +18,38 @@ export const ARM_MS = 450;
 
 const ROW = 'flex w-full flex-none items-center gap-3 bg-[var(--k-well)] px-3 py-[10px] text-left';
 
+const CAPTION: Record<HaulRow['group'], string> = {
+  material: 'Material',
+  essence: 'Forges a legendary',
+  rune: 'Rune',
+  currency: 'Currency',
+};
+
+/** A material, an essence or a currency of the floor's haul: its swatch, "Iron bar ×3" and what it is. */
+function HaulStopRow({ row }: { row: HaulRow }): ReactElement {
+  return (
+    <div className={ROW} data-testid={`loot-${row.group}`}>
+      <span
+        className="flex size-9 flex-none items-center justify-center border-2"
+        style={{ borderColor: row.color }}
+      >
+        <span aria-hidden className="size-4" style={{ background: row.color }} />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span style={row.group === 'essence' ? { color: RARITY_TEXT.legendary } : undefined}>
+          {row.name}
+          {row.count > 1 && ` ×${formatNumber(row.count)}`}
+        </span>
+        <span className="k-caption">{CAPTION[row.group]}</span>
+      </span>
+    </div>
+  );
+}
+
 export interface StopScreenProps {
   dive: DiveState;
+  /** The floor's haul as the clear banked it; null after a reload (then its items and runes show). */
+  haul: Haul | null;
   onChoose: (doorId: string) => void;
   onExtract: () => void;
   onPotion: () => void;
@@ -30,13 +61,15 @@ export interface StopScreenProps {
 
 /**
  * The stop between depths, over the dimmed arena: "Depth N cleared" with the bounty and the
- * floor's finds; this floor's items and runes on the left; the power-up cards in the centre,
+ * floor's finds; this floor's materials grouped, items, essences and runes on the left, over the
+ * risk line (the dive's banked haul and the share a death loses); the power-up cards in the centre,
  * each expanding in place to its picker; the doors on the right. At its top level there is no
  * back: Esc (or the menu key) and the pad's Menu are its Menu prompt, which opens the pause over
  * it. Its Menu is no `[data-pad-menu]`, so Enter with nothing focused never opens the pause.
  */
 export const StopScreen = memo(function StopScreen({
   dive,
+  haul,
   onChoose,
   onExtract,
   onPotion,
@@ -46,6 +79,10 @@ export const StopScreen = memo(function StopScreen({
   const registry = getDelveRegistry();
   const biome = registry.getBiomeForDepth(dive.depth);
   const { items, runes } = useFloorFinds();
+  const found = haul ? haulRows(registry, haul) : [];
+  const materials = found.filter((r) => r.group === 'material' || r.group === 'currency');
+  const essences = found.filter((r) => r.group === 'essence');
+  const deathLoss = Math.round(registry.getDelveBalance().crafting.deathLoss * 100);
   const [skipped, setSkipped] = useState(false);
   const [armed, setArmed] = useState(false);
   useEffect(() => {
@@ -133,6 +170,12 @@ export const StopScreen = memo(function StopScreen({
               scrap bounty
             </span>
             <span>
+              <b className="k-disp text-[30px] text-[var(--k-text)]">
+                {haul ? materialCount(haul) : 0}
+              </b>{' '}
+              materials
+            </span>
+            <span>
               <b className="k-disp text-[30px] text-[var(--k-text)]">{items.length}</b>{' '}
               {items.length === 1 ? 'item' : 'items'}
             </span>
@@ -147,8 +190,15 @@ export const StopScreen = memo(function StopScreen({
           style={{ gridTemplateColumns: '380px minmax(0,1fr) 420px' }}
         >
           <Panel title="Found this floor" testId="floor-finds">
-            {items.length === 0 && runes.length === 0 && (
+            {items.length + runes.length + found.length === 0 && (
               <span className="k-caption">Nothing found on this floor.</span>
+            )}
+            {materials.length > 0 && (
+              <div className="flex flex-col gap-4" data-testid="loot-materials">
+                {materials.map((r) => (
+                  <HaulStopRow key={r.key} row={r} />
+                ))}
+              </div>
             )}
             {items.map(({ item, delta, asIs }) => {
               const mark = deltaMark(delta, asIs);
@@ -185,6 +235,9 @@ export const StopScreen = memo(function StopScreen({
                 </ItemTooltip>
               );
             })}
+            {essences.map((r) => (
+              <HaulStopRow key={r.key} row={r} />
+            ))}
             {runes.length > 0 && (
               <div className="flex flex-col gap-4" data-testid="loot-runes">
                 {runes.map(({ rune, count }) => {
@@ -209,7 +262,9 @@ export const StopScreen = memo(function StopScreen({
                 })}
               </div>
             )}
-            <span className="k-caption mt-auto">Already banked: yours even if you abandon.</span>
+            <span className="k-caption mt-auto" data-testid="risk-line">
+              Banked this dive · dying loses {deathLoss}% of it
+            </span>
           </Panel>
           <div className="flex min-w-0 flex-col">
             {!stop ? (

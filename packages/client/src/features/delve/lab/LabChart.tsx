@@ -19,7 +19,7 @@ const BOTTOM = 22;
 const SETTLED = 3;
 
 /** Round up to a tidy axis top: 437 → 450, 1046 → 1500. */
-function niceCeil(v: number): number {
+export function niceCeil(v: number): number {
   if (!(v > 0)) return 1;
   const p = 10 ** Math.floor(Math.log10(v));
   return (Math.ceil((v / p) * 2) / 2) * p;

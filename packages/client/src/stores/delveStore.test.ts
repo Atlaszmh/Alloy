@@ -16,19 +16,17 @@ import {
 } from '@alloy/engine';
 import {
   useDelveStore,
-  BIND_HINT,
   DELVE_SAVE_KEY,
   MANUAL_ATTACK_KEY,
+  RESET_NOTICE,
   fixNotices,
   loadDelveProfile,
-  movesetNotices,
   overtakeNotice,
   UNSOCKET_KEY,
   applyLabel,
   draftApply,
   partsText,
   selectDraftApply,
-  runeLostNotices,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 
@@ -53,26 +51,6 @@ function epicSword(over: Partial<Chains> = {}) {
   });
 }
 
-/** The store's save as version 3 (builds, no pair): a Frost Ward and Fire's Bolt and Nova. */
-function v3Save() {
-  const { pair: _pair, manaDust: _dust, links: _links, ...rest } = useDelveStore.getState().profile;
-  const build = (form: string, elements: string[], payment = 'mana') => ({
-    form,
-    elements,
-    weight: 0,
-    payment,
-  });
-  return {
-    ...rest,
-    version: 3,
-    abilities: {
-      primary: build('bolt', ['fire']),
-      defensive: build('ward', ['frost']),
-      ultimate: build('nova', ['fire'], 'charge'),
-    },
-  };
-}
-
 describe('delveStore', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -89,11 +67,13 @@ describe('delveStore', () => {
     useDelveStore.getState().startDive(1);
     const saved = JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!);
     expect(saved.dive.depth).toBe(1);
-    expect(loadDelveProfile()?.profile.dive?.depth).toBe(1);
+    expect(loadDelveProfile()).toMatchObject({ profile: { dive: { depth: 1 } } });
   });
 
-  it('falls back to a new profile when the save is corrupt', () => {
-    localStorage.setItem(DELVE_SAVE_KEY, '{"version":1,"broken":true}');
+  it('resets a save of another version, and falls back to a new profile when the save is corrupt', () => {
+    localStorage.setItem(DELVE_SAVE_KEY, '{"version":7,"broken":true}');
+    expect(loadDelveProfile()).toEqual({ reset: true });
+    localStorage.setItem(DELVE_SAVE_KEY, '{"version":8,"broken":true}');
     expect(loadDelveProfile()).toBeNull();
     localStorage.setItem(DELVE_SAVE_KEY, 'not json');
     expect(loadDelveProfile()).toBeNull();
@@ -122,12 +102,18 @@ describe('delveStore', () => {
     );
     const s = useDelveStore.getState();
     // Frost is outside the fire hero's pair, so it melts into Mana Dust too.
-    s.setProfile({ ...s.profile, bag: [{ ...item, mana: 'frost' }] });
+    s.setProfile({ ...s.profile, bag: [{ ...item, mana: 'frost' }], scrap: 0 });
     const { scrap, dust, links } = useDelveStore.getState().salvage(['x2']);
     expect(scrap).toBeGreaterThan(0);
     expect(dust).toBe(registry.getDelveBalance().pair.salvageDust.magic);
     expect(links).toBe(0); // not a weapon
     expect(useDelveStore.getState().profile).toMatchObject({ scrap, manaDust: dust });
+    // The crafting yields come with stage 4c's B2: none yet.
+    expect(useDelveStore.getState().salvage([])).toMatchObject({
+      shards: [],
+      patterns: [],
+      essences: [],
+    });
     // A weapon gives a Link for each slot past its base.
     const sword = useDelveStore.getState().profile.equipped.weapon!;
     const roomy = {
@@ -141,6 +127,7 @@ describe('delveStore', () => {
   });
 
   it('upgrade reports failure reasons', () => {
+    useDelveStore.getState().setProfile({ ...useDelveStore.getState().profile, scrap: 0 });
     const uid = useDelveStore.getState().profile.equipped.weapon!.uid;
     const res = useDelveStore.getState().upgrade(uid);
     expect(res.ok).toBe(false);
@@ -164,8 +151,9 @@ describe('delveStore', () => {
     const basic = [{ kind: 'hold' as const, element: 'fire' as const }];
     expect(useDelveStore.getState().setChains({ primary: chain, basic }).ok).toBe(true);
     expect(chains().primary).toEqual(chain);
-    const saved = loadDelveProfile()!.profile.equipped.weapon!.moveset!.chains;
-    expect(saved).toMatchObject({ primary: chain, basic });
+    expect(loadDelveProfile()).toMatchObject({
+      profile: { equipped: { weapon: { moveset: { chains: { primary: chain, basic } } } } },
+    });
   });
 
   it('refuses a form from another slot, and changes nothing', () => {
@@ -220,52 +208,35 @@ describe('delveStore', () => {
     expect(useDelveStore.getState().profile.pair.primary).toBeNull();
   });
 
-  it('reads an older save back migrated, with the moves it fixed', () => {
-    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(v3Save()));
-    const loaded = loadDelveProfile()!;
-    expect(loaded.profile).toMatchObject({
-      version: 7,
-      pair: { primary: 'fire', secondary: null },
-    });
-    // The common sword carries no Defensive: the Frost Ward went with it, and nothing needed a fix.
-    expect(loaded.dropped).toEqual(['defensive', 'ultimate']);
-    expect(loaded.fixed).toEqual([]);
-    expect(loaded.gainedPair).toBe(true);
-  });
-
-  it('a new store migrates the save, writes it back and queues the fixed moves as notices', async () => {
-    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(v3Save()));
+  it('a save of another version starts afresh: written back at once, with one notice', async () => {
+    const old = { ...useDelveStore.getState().profile, version: 7, scrap: 999 };
+    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(old));
     // A fresh module and no cached store, as on a page load.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
       'delveStore',
     );
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
-    expect(fresh.getState().notices).toEqual([
-      BIND_HINT,
-      // One move each: nothing came back as Links.
-      "Your chains live on your weapon now, and yours can't carry your Defensive and Ultimate: they went",
-    ]);
-    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(7);
-  });
-
-  it('a save that already has its pair (version 4 or 5) gets no bind hint', async () => {
-    const { links: _links, ...v4 } = useDelveStore.getState().profile;
-    const bolt = { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' };
-    const abilities = {
-      primary: bolt,
-      defensive: { ...bolt, form: 'ward' },
-      ultimate: { ...bolt, form: 'nova' },
-    };
-    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify({ ...v4, version: 4, abilities }));
-    expect(loadDelveProfile()).toMatchObject({ gainedPair: false, profile: { version: 7 } });
-    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(useDelveStore.getState().profile));
+    expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
+    expect(fresh.getState().profile).toMatchObject({ version: 8, scrap: 50 }); // the kit's
+    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
+      version: 8,
+      scrap: 50,
+    });
+    // The written-back save loads as it is: no second notice.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
       'delveStore',
     );
     vi.resetModules();
-    const fresh = (await import('./delveStore')).useDelveStore;
-    expect(fresh.getState().notices).toEqual([]);
+    const again = (await import('./delveStore')).useDelveStore;
+    expect(again.getState().notices).toEqual([]);
+  });
+
+  it('wraps every crafting op of the engine (stage 4c fills them)', () => {
+    const s = useDelveStore.getState();
+    for (const op of [s.forge, s.hone, s.imprint, s.refine, s.buyShard])
+      expect(op).toBeTypeOf('function');
+    expect('fuse' in s).toBe(false);
   });
 
   it('chooses the mana once, binds a second element, and remembers a declined bind this session', () => {
@@ -273,7 +244,7 @@ describe('delveStore', () => {
     s().resetProfile(5);
     expect(s().chooseMana('frost').ok).toBe(true);
     expect(s().profile.pair.primary).toBe('frost');
-    expect(loadDelveProfile()?.profile.pair.primary).toBe('frost');
+    expect(loadDelveProfile()).toMatchObject({ profile: { pair: { primary: 'frost' } } });
     expect(s().chooseMana('fire').ok).toBe(false);
     expect(s().bindSecondary('storm').ok).toBe(true);
     expect(s().profile.pair).toEqual({ primary: 'frost', secondary: 'storm' });
@@ -349,22 +320,6 @@ describe('delveStore', () => {
     expect(s().takeNotices()).toEqual([
       "Your basic attack's 1st, 2nd and 3rd blows used Fire, which isn't in your pair; they now use Frost",
       "Your Bolt's 1st move used Fire, which isn't in your pair; it now uses Frost",
-    ]);
-  });
-
-  it('says what the move to weapon movesets dropped or reset', () => {
-    expect(movesetNotices([], false, 0)).toEqual([]);
-    expect(movesetNotices(['ultimate'], false, 0)).toEqual([
-      "Your chains live on your weapon now, and yours can't carry your Ultimate: it went",
-    ]);
-    expect(movesetNotices(['ultimate'], false, 1)).toEqual([
-      "Your chains live on your weapon now, and yours can't carry your Ultimate: it went, and its 1 extra move came back as 1 Link",
-    ]);
-    expect(movesetNotices(['defensive', 'ultimate'], false, 3)).toEqual([
-      "Your chains live on your weapon now, and yours can't carry your Defensive and Ultimate: they went, and their 3 extra moves came back as 3 Links",
-    ]);
-    expect(movesetNotices([], true, 0)).toEqual([
-      'Your chains live on your weapon now: with no weapon equipped, yours were reset to the defaults',
     ]);
   });
 
@@ -602,7 +557,7 @@ describe('delveStore: runes outside the draft', () => {
     return { ...sword, uid: uid ?? sword.uid, moveset: { ...moveset, chains } };
   }
 
-  it('a rune a load-time trim destroys becomes a notice, its socket a Link', async () => {
+  it('a load-time trim takes a socket past the cap off: a Link, its rune by the rule, no notice', async () => {
     const p = s().profile;
     // Two sockets on a common sword (one a move): the second goes, and its Quick with it.
     const weapon = swordWith([split, quick]);
@@ -615,14 +570,8 @@ describe('delveStore: runes outside the draft', () => {
     );
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
-    expect(fresh.getState().notices).toEqual(['Quick I was lost: its socket no longer exists']);
+    expect(fresh.getState().notices).toEqual([]);
     expect(fresh.getState().profile.links).toBe(p.links + 1);
-    expect(
-      runeLostNotices(registry, [
-        { id: 'split', tier: 3 },
-        { id: 'nope', tier: 1 },
-      ]),
-    ).toEqual(['Split III was lost: its socket no longer exists']);
   });
 
   it('salvage gives a socket back as a Link; its rune follows the pull rule', () => {

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { LegendaryDef, ManaType, Rarity } from '@alloy/engine';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { GearBaseDef, LegendaryDef, ManaType, Rarity } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { Bar, Glyph, Panel, Tabs, type Prompt } from '../../kit';
 import { getDelveRegistry } from '../../registry';
@@ -15,7 +15,7 @@ import {
 import type { HubLink, HubTabProps } from '../types';
 import { ReactionsGrid } from './ReactionsGrid';
 
-type Section = 'legendaries' | 'reactions' | 'records';
+type Section = NonNullable<Extract<HubLink, { tab: 'codex' }>['section']>;
 
 const PROMPTS: Prompt[] = [
   { id: 'select', label: 'Select', binding: { mouse: 'click', pad: 'a' } },
@@ -34,8 +34,14 @@ const SLOT_BASE: Record<string, string> = {
 
 const FOUND: Rarity[] = ['uncommon', 'magic', 'rare', 'epic', 'legendary'];
 
+/** Where an unknown pattern comes from (see the crafting spec's drops and salvage). */
+const PATTERN_SOURCE = 'Salvage one, or find its pattern on an elite or a boss';
+/** Where essences come from. */
+const ESSENCE_SOURCE = 'Bosses drop essences; salvaging a legendary extracts its essence';
+
 /**
- * The Codex tab: the sections (Legendaries n/12, Reactions n/15, Records), the
+ * The Codex tab: the sections (Legendaries n/12, Reactions n/15, Patterns n/13,
+ * Essences n/12, Records), the
  * section's cards, and the card hovered or focused in detail (the section's
  * first until one is). `{ tab: 'codex', section }` links open a section.
  */
@@ -45,6 +51,9 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
   const seenReactions = useDelveStore((s) => s.profile.reactionsSeen);
   const stats = useDelveStore((s) => s.profile.stats);
   const bestDepth = useDelveStore((s) => s.profile.bestDepth);
+  const patterns = useDelveStore((s) => s.profile.patterns);
+  const essencesSeen = useDelveStore((s) => s.profile.essencesSeen);
+  const essencesHeld = useDelveStore((s) => s.profile.materials.essences);
   const linked = (l?: HubLink) => (l?.tab === 'codex' ? l.section : undefined);
   const [section, setSection] = useState<Section>(linked(link) ?? 'legendaries');
   const [active, setActive] = useState<string | null>(null);
@@ -62,13 +71,20 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
 
   const legendaries = registry.getDelveData().legendaries;
   const reactions = registry.getArpgData().reactions;
+  const bases = registry.getDelveData().bases;
   const found = legendaries.filter((l) => codex[l.id]).length;
+  const learned = bases.filter((b) => patterns.includes(b.id)).length;
+  const seenEssences = legendaries.filter((l) => essencesSeen.includes(l.id)).length;
   const progress = {
     legendaries: [found, legendaries.length],
     reactions: [seenReactions.length, reactions.length],
+    patterns: [learned, bases.length],
+    essences: [seenEssences, legendaries.length],
   } as const;
+  // An essence's id is its legendary's (see the crafting spec's S6): one lookup serves both sections.
   const legendary = legendaries.find((l) => l.id === active) ?? legendaries[0];
   const reaction = reactions.find((r) => r.id === active) ?? reactions[0];
+  const base = bases.find((b) => b.id === active) ?? bases[0];
 
   return (
     <div
@@ -99,6 +115,18 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
                 label: 'Reactions',
                 badge: `${seenReactions.length}/${reactions.length}`,
                 testId: 'codex-section-reactions',
+              },
+              {
+                id: 'patterns',
+                label: 'Patterns',
+                badge: `${learned}/${bases.length}`,
+                testId: 'codex-section-patterns',
+              },
+              {
+                id: 'essences',
+                label: 'Essences',
+                badge: `${seenEssences}/${legendaries.length}`,
+                testId: 'codex-section-essences',
               },
               { id: 'records', label: 'Records', testId: 'codex-section-records' },
             ]}
@@ -162,6 +190,62 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
         {section === 'reactions' && (
           <ReactionsGrid reactionsSeen={seenReactions} active={active} onActive={setActive} />
         )}
+        {section === 'patterns' && (
+          <section className="flex flex-col gap-4" aria-label="Patterns">
+            <div className="flex items-baseline justify-between">
+              <span className="k-section">Patterns</span>
+              <span className="k-caption">
+                {learned}/{bases.length} learned
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {bases.map((b) => {
+                const known = patterns.includes(b.id);
+                return (
+                  <EntryCard
+                    key={b.id}
+                    active={active === b.id}
+                    onActive={() => setActive(b.id)}
+                    icon={<ItemIcon baseId={b.id} rarity="common" ghost={!known} />}
+                    name={b.name}
+                    color={known ? 'var(--k-text)' : 'var(--k-text-3)'}
+                    caption={known ? SLOT_LABEL[b.slot] : PATTERN_SOURCE}
+                    testId={known ? 'pattern-learned' : 'pattern-unknown'}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
+        {section === 'essences' && (
+          <section className="flex flex-col gap-4" aria-label="Essences">
+            <div className="flex items-baseline justify-between">
+              <span className="k-section">Essences</span>
+              <span className="k-caption">
+                {seenEssences}/{legendaries.length} seen
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {legendaries.map((l) => {
+                const seen = essencesSeen.includes(l.id);
+                return (
+                  <EntryCard
+                    key={l.id}
+                    active={active === l.id}
+                    onActive={() => setActive(l.id)}
+                    icon={
+                      <ItemIcon baseId={SLOT_BASE[l.slots[0]]} rarity="legendary" ghost={!seen} />
+                    }
+                    name={seen ? l.name : '???'}
+                    color={seen ? RARITY_TEXT.legendary : 'var(--k-text-3)'}
+                    caption={seen ? `Held ×${essencesHeld[l.id] ?? 0}` : forgesOnto(l)}
+                    testId={seen ? 'essence-seen' : 'essence-unknown'}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
         {section === 'records' && (
           <section className="grid grid-cols-3 gap-3" data-testid="codex-records">
             {(
@@ -194,6 +278,14 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
             text={reaction.text}
             elements={reaction.elements}
             seen={seenReactions.includes(reaction.id)}
+          />
+        )}
+        {section === 'patterns' && <PatternDetail def={base} known={patterns.includes(base.id)} />}
+        {section === 'essences' && (
+          <EssenceDetail
+            def={legendary}
+            seen={essencesSeen.includes(legendary.id)}
+            held={essencesHeld[legendary.id] ?? 0}
           />
         )}
         {section === 'records' && (
@@ -269,6 +361,85 @@ function ReactionDetail({
       </span>
       <span className="k-heading">{name}</span>
       <p className="text-[18px]">{text}</p>
+    </div>
+  );
+}
+
+/** One card of a section's grid; hovered or focused, it is the detail's. */
+function EntryCard({
+  active,
+  onActive,
+  icon,
+  name,
+  color,
+  caption,
+  testId,
+}: {
+  active: boolean;
+  onActive: () => void;
+  icon: ReactNode;
+  name: string;
+  color: string;
+  caption: string;
+  testId: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="k-socket flex items-center gap-3 p-3 text-left"
+      style={{ borderColor: active ? 'var(--k-hot)' : undefined }}
+      aria-pressed={active}
+      onMouseEnter={onActive}
+      onFocus={onActive}
+      data-testid={testId}
+    >
+      <span className="h-10 w-10 flex-none">{icon}</span>
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="k-disp truncate text-[20px]" style={{ color }}>
+          {name}
+        </span>
+        <span className="k-caption">{caption}</span>
+      </span>
+    </button>
+  );
+}
+
+function PatternDetail({ def, known }: { def: GearBaseDef; known: boolean }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <span className="h-24 w-24">
+        <ItemIcon baseId={def.id} rarity="common" ghost={!known} />
+      </span>
+      <span className="k-heading" style={{ color: known ? 'var(--k-text)' : 'var(--k-text-3)' }}>
+        {def.name}
+      </span>
+      <p className="text-[18px]">
+        {SLOT_LABEL[def.slot]} · {known ? 'Learned' : 'Not learned'}
+      </p>
+      <p className="k-caption">{known ? 'Forge it at the Forge bench' : PATTERN_SOURCE}</p>
+    </div>
+  );
+}
+
+function forgesOnto(l: LegendaryDef): string {
+  return `Forges onto: ${l.slots.map((s) => SLOT_LABEL[s]).join(', ')}`;
+}
+
+function EssenceDetail({ def, seen, held }: { def: LegendaryDef; seen: boolean; held: number }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <span className="h-24 w-24">
+        <ItemIcon baseId={SLOT_BASE[def.slots[0]]} rarity="legendary" ghost={!seen} />
+      </span>
+      <span
+        className="k-heading"
+        style={{ color: seen ? RARITY_TEXT.legendary : 'var(--k-text-3)' }}
+      >
+        {seen ? `${def.name} essence` : '???'}
+      </span>
+      {seen && <p className="text-[18px]">{def.text.replace('{v}', `${def.min}–${def.max}`)}</p>}
+      <p className="k-caption">{seen ? `Held ×${held} · ${forgesOnto(def)}` : forgesOnto(def)}</p>
+      <p className="k-caption">{ESSENCE_SOURCE}</p>
     </div>
   );
 }

@@ -91,6 +91,11 @@ export interface StatRoll {
   stat: HeroStatKey;
   value: number;
   roll: number;
+  /**
+   * An affix line's roll band, 0–1 in its range: a shard's tier band (see the
+   * crafting spec). Absent: the rarity's default, `[minRoll, 1]`.
+   */
+  band?: [number, number];
 }
 
 export interface LegendaryRoll {
@@ -116,6 +121,8 @@ export interface GearItem {
   upgrade: number;
   /** Number of reforges performed — drives escalating reforge cost. */
   reforges: number;
+  /** Number of hones performed — drives escalating hone cost (see the crafting spec). */
+  hones: number;
   locked: boolean;
   /** Weapons: the chains the weapon carries and their slots (see the weapon movesets spec). */
   moveset?: Moveset;
