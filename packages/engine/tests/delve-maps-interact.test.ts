@@ -80,6 +80,16 @@ describe('the exit', () => {
     exitFloor(w);
     expect(w.exited).toBe(true);
   });
+
+  it('nothing moves once it is taken: a last hit never turns the exit into a death', () => {
+    const w = floorWorld(twoRooms('exit', { kind: 'gate' }), [
+      dummy(5, 6, { damage: 1e6, aggro: true }),
+    ]);
+    exitFloor(w);
+    const t = w.t;
+    expect(run(w, 1)).toEqual([]);
+    expect([w.t, w.heroDead]).toEqual([t, false]);
+  });
 });
 
 describe('the interactable in reach', () => {
