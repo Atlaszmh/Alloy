@@ -120,6 +120,39 @@ describe('the generated map', () => {
     }
   });
 
+  it('keeps every passage 3 cells wide, every room masked: each floor cell in an open 3×3', () => {
+    // A large foe needs a 3×3 open block (see arpg/flow.ts); doors count open.
+    const pillared = createDefaultRegistry();
+    pillared.getDelveBalance().layout.pillarChance = 1;
+    const biomes = pillared.getDelveData().biomes;
+    const bad: string[] = [];
+    for (const seed of SEEDS)
+      for (const depth of DEPTHS)
+        for (const biome of biomes) {
+          const { map } = planFloor(pillared, seed, depth, biome, null);
+          const wall = (x: number, y: number) =>
+            x < 0 ||
+            y < 0 ||
+            x >= map.width ||
+            y >= map.height ||
+            map.cells[y * map.width + x] === 1;
+          const open3 = (x: number, y: number) => {
+            for (let j = y; j < y + 3; j++)
+              for (let i = x; i < x + 3; i++) if (wall(i, j)) return false;
+            return true;
+          };
+          for (let y = 0; y < map.height; y++)
+            for (let x = 0; x < map.width; x++) {
+              if (wall(x, y)) continue;
+              let inBlock = false;
+              for (let j = y - 2; j <= y && !inBlock; j++)
+                for (let i = x - 2; i <= x && !inBlock; i++) inBlock = open3(i, j);
+              if (!inBlock) bad.push(`seed ${seed} depth ${depth} ${biome.id} at ${x},${y}`);
+            }
+        }
+    expect(bad.slice(0, 10), `${bad.length} cells`).toEqual([]);
+  });
+
   it('keeps its counts, sizes and kinds in range for the depth', () => {
     const { layouts } = registry.getDelveData();
     for (const { map, depth } of ALL) {
@@ -320,10 +353,10 @@ describe('the generated map', () => {
       #####################+++########
       ##################........######
       ###............###........######
-      ###............###..#..#..######
+      ###............###........######
+      ###............+.+...##...######
+      ###............+.+...##...######
       ###............+.+........######
-      ###............+.+........######
-      ###............+.+..#..#..######
       ###......S.....###........######
       ###............###........######
       ###............######+++########
