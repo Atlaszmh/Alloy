@@ -21,7 +21,8 @@ import {
   stackIntensity,
   type SimCtx,
 } from './combat.js';
-import { clamp, clampLen, dirTo, dist } from './geometry.js';
+import { clampLen, dirTo, dist } from './geometry.js';
+import { isWalkable, moveCircle, snapToWalkable } from './grid.js';
 import {
   canAfford,
   castAbility,
@@ -42,6 +43,10 @@ import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 import { addMaterial } from '../loot/materials.js';
+import { flowTick, leashTick } from './flow.js';
+import { interactTick } from './interact.js';
+import { sealTick } from './seal.js';
+import { fogTick } from './fog.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -76,6 +81,7 @@ export function stepWorld(
     world.queuedAttack = { until: world.t + buffer, aim: input.attackAim ?? null };
   if (input.potion) world.queuedPotion = true;
   if (input.dodge) world.queuedDodge = true;
+  if (input.interact) world.queuedInteract = true;
   // Nothing is paid until a hold fires: dropping one costs nothing.
   if (input.cancelHold) dropHold(world);
   if (world.heroDead) return events;
@@ -110,19 +116,26 @@ function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   world.t += dt;
   lapseStacks(world);
   heroTick(ctx, input, dt);
+  // The floor map's hooks (see the floor maps spec): each a no-op on the open room.
+  interactTick(ctx);
   projectilesTick(ctx, dt);
   zonesTick(ctx);
+  flowTick(ctx);
   monstersTick(ctx, dt);
+  leashTick(ctx);
   separate(ctx);
+  sealTick(ctx);
   dropsTick(ctx, dt);
+  fogTick(ctx);
 
   world.projectiles = world.projectiles.filter((p) => !p.dead);
   world.zones = world.zones.filter((z) => !z.dead);
   world.drops = world.drops.filter((d) => !d.dead);
   world.monsters = world.monsters.filter((m) => !m.dead);
 
-  // A Training Grounds world never clears (so it never ends).
-  if (!world.sandbox && !world.cleared && world.monsters.length === 0) {
+  // A Training Grounds world never clears (so it never ends); a generated floor ends at its exit
+  // (`exited`), so only the open room clears when its last foe dies.
+  if (!world.sandbox && world.map.open && !world.cleared && world.monsters.length === 0) {
     world.cleared = true;
     world.clearedAt = world.t;
     for (const d of world.drops) d.vacuum = true;
@@ -220,8 +233,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     const quick = t < h.quickUntil ? 1 + bal.reactions.lightningRodMove : 1;
     const pace =
       h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1) * quick * slow;
-    h.x = clamp(h.x + v.x * pace * dt, h.radius, world.width - h.radius);
-    h.y = clamp(h.y + v.y * pace * dt, h.radius, world.height - h.radius);
+    Object.assign(h, moveCircle(world.map, h, h.radius, v.x * pace * dt, v.y * pace * dt));
   }
   if (!dashing) pushesTick(ctx, heading);
   if (acting) h.facing = actionFacing(h) ?? h.facing;
@@ -261,6 +273,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
 
   // Infinite mana (Training Grounds) tops the pool up every tick.
   h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
+  // A blessing's life regen (see the floor maps spec).
+  if (h.stats.lifeRegen)
+    h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.maxHp * h.stats.lifeRegen * dt);
   // No cooldowns (Training Grounds) keeps every charge-paid chain charged.
   if (world.sandbox?.noCooldowns)
     h.chains.forEach((chain, i) => {
@@ -361,7 +376,8 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.traveled += Math.hypot(p.vx, p.vy) * dt;
-    const outside = p.x < 0 || p.y < 0 || p.x > world.width || p.y > world.height;
+    // In a wall or off the map.
+    const outside = !isWalkable(world.map, p.x, p.y);
     const expired = p.traveled >= p.maxDist || outside;
 
     if (p.owner === 'monster') {
@@ -568,8 +584,7 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
           depth: world.depth,
           door: world.door,
           element: world.element,
-          x: clamp(m.x + (i === 0 ? -1.8 : 1.8), 1, world.width - 1),
-          y: clamp(m.y + 1.2, 1, world.height - 1),
+          ...snapToWalkable(world.map, m.x + (i === 0 ? -1.8 : 1.8), m.y + 1.2, 1),
           packId: m.packId,
         },
         world.rng,
@@ -763,12 +778,9 @@ function separate(ctx: SimCtx): void {
       h.y -= n.y * overlap * heroShare;
     }
   }
-  for (const m of ms) {
-    m.x = clamp(m.x, m.radius, world.width - m.radius);
-    m.y = clamp(m.y, m.radius, world.height - m.radius);
-  }
-  h.x = clamp(h.x, h.radius, world.width - h.radius);
-  h.y = clamp(h.y, h.radius, world.height - h.radius);
+  // Whatever the moves and pushes left pressed into a wall goes back out.
+  for (const m of ms) Object.assign(m, moveCircle(world.map, m, m.radius, 0, 0));
+  Object.assign(h, moveCircle(world.map, h, h.radius, 0, 0));
 }
 
 /** Gear, runes, patterns and essences are walked over; everything else flies to the hero in the magnet's reach. */

@@ -5,6 +5,7 @@ import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
+import type { AiBalance, Buff, LayoutBalance, LayoutsData, ShrineDef } from './floor-map.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -195,6 +196,10 @@ export interface DelveData {
   doors: DoorDef[];
   names: { prefixes: string[]; suffixes: Record<GearSlot, string[]> };
   slotWeights: Record<GearSlot, number>;
+  /** `layouts.json`: room templates and prop sizes (see the floor maps spec). */
+  layouts: LayoutsData;
+  /** `shrines.json`: the sanctums' blessings. */
+  shrines: ShrineDef[];
 }
 
 // ── Balance (balance.json → delve) ─────────────────────────────────────────
@@ -645,13 +650,17 @@ export interface DelveBalance {
   drops: DropsBalance;
   /** The quest tracker and the Contract board (see the quests spec). */
   quests: QuestsBalance;
+  /** How a floor is generated (see the floor maps spec). */
+  layout: LayoutBalance;
+  /** How foes path, leash and see, and the floor's timings. */
+  ai: AiBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;
+    /** The open room's size, in cells. */
     width: number;
     height: number;
     packSpacing: number;
-    minPackDistance: number;
   };
 }
 
@@ -719,6 +728,8 @@ export interface HeroStats {
   cooldownMult: number;
   /** Multiply mana regen by this. */
   manaRegenMult: number;
+  /** Life regained a second, as a fraction of max life (a shrine's blessing; see the floor maps spec). */
+  lifeRegen?: number;
   weapon: HeroWeapon;
   /** Total attunement per mana type (item affinities + attunement affixes). */
   attunement: ManaMap;
@@ -785,6 +796,13 @@ export interface DiveState {
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;
+  /**
+   * The interactables used this dive (`${depth}:${roomId}`; see the floor maps
+   * spec): a replayed floor finds them used.
+   */
+  used: string[];
+  /** The dive's blessings: each floor's hero wears them from the start. */
+  diveBuffs: Buff[];
 }
 
 /** The hero's two elements (`DelveProfile.pair`). */
@@ -811,7 +829,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 9;
+  version: 10;
   seed: number;
   diveCount: number;
   forgeCount: number;

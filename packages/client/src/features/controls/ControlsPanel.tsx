@@ -69,6 +69,10 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
   const isCapturing = (kind: Capture['kind'], action: KeyAction) =>
     capturing?.kind === kind && capturing.action === action;
   const caption = 'text-[14px] uppercase tracking-[0.06em] text-[var(--k-text-3)]';
+  // An action left unbound (a new one whose default the setup already used: see `parseControls`).
+  const unbound = CONTROL_ACTIONS.filter(
+    (a) => cfg.pad[a] === null || (a !== 'attack' && cfg.keys[a] === null),
+  );
 
   return (
     <Dialog
@@ -91,6 +95,11 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           Pick a cell, then press the button or key you want (Esc cancels). If another action
           already uses it, the two swap. Changes apply at once.
         </p>
+        {unbound.length > 0 && (
+          <p className="text-[var(--k-bad-text)]" data-testid="controls-unbound">
+            Not bound: {unbound.map((a) => ACTION_LABELS[a]).join(', ')}. Pick a button or key.
+          </p>
+        )}
 
         <Button
           className="self-start"

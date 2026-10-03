@@ -11,6 +11,7 @@ import type {
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
+import type { Buff, FloorLayout } from '../types/floor-map.js';
 import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
@@ -19,10 +20,11 @@ import {
   type Chains,
   type ResolvedChain,
 } from '../types/ability.js';
-import { manaPool } from '../delve/hero-stats.js';
+import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
+import { openRoom } from './grid.js';
 import { emptyHaul } from '../loot/materials.js';
 
 export interface FloorOptions {
@@ -41,6 +43,15 @@ export interface FloorOptions {
   loot: LootContext;
   /** No packs and no boss (the Training Grounds' open arena). */
   empty?: boolean;
+  /**
+   * The map: `'open'` (the default: today's arena, `openRoom`) or `'generated'` (dives;
+   * the generated path is the generator's to add, so until then every floor is open).
+   */
+  layout?: FloorLayout;
+  /** The dive's blessings (`DiveState.diveBuffs`): the hero wears them from the start (default none). */
+  diveBuffs?: Buff[];
+  /** The interactables used this dive (`DiveState.used`): a generated floor marks them used (default none). */
+  used?: string[];
 }
 
 export function emptyStatus(): StatusState {
@@ -88,6 +99,8 @@ interface MonsterSpawn {
   x: number;
   y: number;
   packId: number;
+  /** Its room on a generated floor (default none). */
+  roomId?: number | null;
 }
 
 export function createMonsterEntity(
@@ -153,6 +166,9 @@ export function createMonsterEntity(
     ai,
     traits,
     packId: spawn.packId,
+    roomId: spawn.roomId ?? null,
+    farSince: null,
+    goingHome: false,
     x: spawn.x,
     y: spawn.y,
     radius,
@@ -204,10 +220,20 @@ function resolveAll(
 
 export function createHeroEntity(
   registry: DataRegistry,
-  stats: HeroStats,
+  unbuffed: HeroStats,
   chains: Partial<Pick<Chains, AbilitySlot>>,
-  opts: { hpFrac: number; potions: number; phoenixAvailable: boolean; x: number; y: number },
+  opts: {
+    hpFrac: number;
+    potions: number;
+    phoenixAvailable: boolean;
+    x: number;
+    y: number;
+    /** The dive's blessings, worn from the start. */
+    diveBuffs?: Buff[];
+  },
 ): HeroEntity {
+  const diveBuffs = [...(opts.diveBuffs ?? [])];
+  const stats = applyBuffs(unbuffed, diveBuffs);
   const pool = manaPool(stats, registry);
   const resolved = resolveAll(registry, chains, stats);
   return {
@@ -217,6 +243,9 @@ export function createHeroEntity(
     facing: { x: 0, y: -1 },
     hp: Math.max(1, stats.maxHp * Math.min(1, opts.hpFrac)),
     stats,
+    baseStats: stats,
+    floorBuffs: [],
+    diveBuffs,
     mana: pool.max,
     manaMax: pool.max,
     manaRegen: pool.regen,
@@ -265,14 +294,18 @@ export function createHeroEntity(
  * drops its wind-up (as a dodge does), its hold, its beat, its waiting press
  * and its queued echo, and a new Defensive ends the old one's buff and Ward at once, without
  * bursting. A skill left out has no chain (and so no cooldowns or charge).
+ * `unbuffed` is the hero's gear (`profileStats`): its dive's and floor's
+ * blessings go back on (see the floor maps spec), so a refresh never wipes them.
  */
 export function refreshWorldHero(
   registry: DataRegistry,
   world: ArpgWorld,
-  stats: HeroStats,
+  unbuffed: HeroStats,
   chains: Partial<Pick<Chains, AbilitySlot>>,
 ): void {
   const h = world.hero;
+  const base = applyBuffs(unbuffed, h.diveBuffs);
+  const stats = applyBuffs(base, h.floorBuffs);
   const frac = h.hp / h.stats.maxHp;
   const pool = manaPool(stats, registry);
   // A different weapon, or a basic chain whose blows changed (their kinds or number), starts
@@ -303,6 +336,7 @@ export function refreshWorldHero(
     h.ward = null;
   }
   h.stats = stats;
+  h.baseStats = base;
   h.hp = h.hp > 0 ? Math.max(1, frac * stats.maxHp) : h.hp;
   h.manaMax = pool.max;
   h.manaRegen = pool.regen;
@@ -348,6 +382,8 @@ export function emptyPending(newFloor = false): WorldPending {
     haul: emptyHaul(),
     patterns: [],
     questEvents: [],
+    used: [],
+    diveBuffs: [],
     newFloor,
   };
 }
@@ -358,9 +394,9 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
   const rng = new SeededRNG(opts.seed);
   const spawnRng = rng.fork('spawn');
   const biome = registry.getBiomeForDepth(opts.depth);
-  const { width, height } = bal.arena;
-  const heroX = width / 2;
-  const heroY = height - 4;
+  const map = openRoom(bal.arena.width, bal.arena.height);
+  const { width, height } = map;
+  const { x: heroX, y: heroY } = map.start;
 
   const world: ArpgWorld = {
     t: 0,
@@ -375,21 +411,36 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     biomeId: biome.id,
     element: biome.mana,
     door: opts.door,
+    map,
     width,
     height,
+    fog: new Uint8Array(width * height).fill(2),
+    fogVersion: 0,
+    fogAt: 0,
+    exitHinted: false,
+    flow: { small: null, large: null, nextAt: 0 },
+    sealing: null,
+    channel: null,
+    exited: false,
     hero: createHeroEntity(registry, opts.stats, opts.chains, {
       hpFrac: opts.heroHpFrac,
       potions: opts.potions,
       phoenixAvailable: opts.phoenixAvailable,
       x: heroX,
       y: heroY,
+      diveBuffs: opts.diveBuffs,
     }),
     monsters: [],
     projectiles: [],
     zones: [],
     drops: [],
     nextId: 1,
-    loot: { ...opts.loot, dropsGiven: [...opts.loot.dropsGiven] },
+    loot: {
+      ...opts.loot,
+      // A blessing's Find counts all dive.
+      find: (opts.diveBuffs ?? []).reduce((f, b) => f + (b.effect.find ?? 0), opts.loot.find),
+      dropsGiven: [...opts.loot.dropsGiven],
+    },
     pending: emptyPending(true),
     totalMonsters: 0,
     bossId: null,
@@ -400,6 +451,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     queuedAttack: null,
     queuedPotion: false,
     queuedDodge: false,
+    queuedInteract: false,
     kills: 0,
     bossKilled: false,
     firstEssenceTaken: false,
@@ -451,7 +503,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     for (let attempt = 0; attempt < 40; attempt++) {
       cx = 3 + spawnRng.next() * (width - 6);
       cy = 3 + spawnRng.next() * (height - 13);
-      const farFromHero = dist(cx, cy, heroX, heroY) >= bal.arena.minPackDistance;
+      const farFromHero = dist(cx, cy, heroX, heroY) >= bal.layout.minPackDistance;
       const farFromPacks = centers.every((c) => dist(c.x, c.y, cx, cy) >= 5.5);
       if (farFromHero && farFromPacks) break;
     }

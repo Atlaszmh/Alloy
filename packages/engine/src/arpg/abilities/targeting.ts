@@ -1,7 +1,8 @@
 import type { ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity, Projectile, Vec } from '../../types/arpg.js';
 import type { SimCtx } from '../combat.js';
-import { clamp, dirTo, dist } from '../geometry.js';
+import { dirTo, dist } from '../geometry.js';
+import { snapToWalkable } from '../grid.js';
 
 export function alive(ctx: SimCtx): MonsterEntity[] {
   return ctx.world.monsters.filter((m) => !m.dead);
@@ -85,10 +86,7 @@ export function aimPoint(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): Vec
     const d = dist(h.x, h.y, aim.x, aim.y);
     const reach = ab.range || d;
     const k = d > reach ? reach / d : 1;
-    return {
-      x: clamp(h.x + (aim.x - h.x) * k, 0, world.width),
-      y: clamp(h.y + (aim.y - h.y) * k, 0, world.height),
-    };
+    return snapToWalkable(world.map, h.x + (aim.x - h.x) * k, h.y + (aim.y - h.y) * k);
   }
   if (DIRECTIONAL.has(form)) {
     const m = nearestMonster(ctx, h.x, h.y, ab.range + 1);

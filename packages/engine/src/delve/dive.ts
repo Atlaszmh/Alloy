@@ -67,6 +67,8 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     dropsGiven: [],
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
+    used: [],
+    diveBuffs: [],
   };
   const started: DelveProfile = {
     ...profile,
@@ -93,7 +95,7 @@ export function floorSeed(dive: DiveState): number {
   return new SeededRNG(dive.seed).fork(`floor:${dive.depth}`).nextInt(1, 0x7fffffff);
 }
 
-/** Build the arena for the dive's current depth. */
+/** Build the arena for the dive's current depth: a generated floor, with what the dive used and its blessings. */
 export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgWorld {
   const dive = requireDive(profile, 'fighting');
   const stats = profileStats(registry, profile);
@@ -107,6 +109,9 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     potions: dive.potions,
     phoenixAvailable: !dive.phoenixUsed,
     seed: floorSeed(dive),
+    layout: 'generated',
+    used: [...dive.used],
+    diveBuffs: [...dive.diveBuffs],
     loot: {
       nextUid: profile.nextUid,
       find: stats.magicFind + (mods.find ?? 0),

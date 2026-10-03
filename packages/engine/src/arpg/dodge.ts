@@ -1,6 +1,7 @@
 import type { Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
-import { clamp, clampLen, dirTo } from './geometry.js';
+import { clampLen, dirTo } from './geometry.js';
+import { moveCircle } from './grid.js';
 import { nearestMonster } from './abilities/targeting.js';
 import { cancelSwing, cancelWindup, dropHold } from './action.js';
 
@@ -69,8 +70,9 @@ export function dodgeTick(ctx: SimCtx, dt: number): void {
   const d = h.dodge;
   if (!d || t - dt >= d.until) return;
   const k = Math.min(1, (t - d.start) / bal.dodge.duration) * bal.dodge.distance;
-  h.x = clamp(d.fromX + d.dir.x * k, h.radius, world.width - h.radius);
-  h.y = clamp(d.fromY + d.dir.y * k, h.radius, world.height - h.radius);
+  // Swept from where it began, so a wall stops it.
+  const from = { x: d.fromX, y: d.fromY };
+  Object.assign(h, moveCircle(world.map, from, h.radius, d.dir.x * k, d.dir.y * k));
 }
 
 /** Where the dodge began, while its perfect window is open and unused; else null. */

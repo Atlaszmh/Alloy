@@ -6,13 +6,14 @@ import {
   ObjectiveSchema,
   ReactionIdSchema,
   RewardSchema,
+  BuffSchema,
 } from '../data/schemas.js';
 import { CHAIN_SKILLS, MAX_CHAIN, type AbilitySlot, type FormId } from '../types/ability.js';
 import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import { CONTRACT_TIERS } from '../types/quests.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves (version 9 only) — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 10 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
@@ -233,6 +234,8 @@ const DiveSchema = z.object({
   dropsGiven: z.array(z.number().int()).default([]),
   found: PerRarityCount,
   bestFind: GearItemSchema.nullable(),
+  used: z.array(z.string()),
+  diveBuffs: z.array(BuffSchema),
 });
 
 /** The hero's pair: a secondary only once there is a primary, and never the same element. */
@@ -271,9 +274,9 @@ const QuestsSchema = z.object({
   claimCount: count,
 });
 
-/** Version 9: the quests (see the quests spec); older saves reset. */
+/** Version 10: the dive's used interactables and blessings (see the floor maps spec); older saves reset. */
 export const DelveProfileSchema = z.object({
-  version: z.literal(9),
+  version: z.literal(10),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),

@@ -18,12 +18,14 @@ import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
+import { snapToWalkable } from './grid.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
 import { dropRune } from './rune-drops.js';
 import { dropMaterials } from './material-drops.js';
+import { onMonsterKilled } from './interact.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -763,6 +765,8 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
       });
     }
   }
+  // Its room's hook, once everything the death drops is down (see the floor maps spec).
+  onMonsterKilled(ctx, m);
 }
 
 /** Items, a mana mote and health orbs burst from a dying foe. */
@@ -790,8 +794,12 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
   drops.items.forEach((item, i) => {
     const angle = (Math.PI * 2 * i) / Math.max(1, drops.items.length) + lootRng.next() * 0.8;
     const r = 0.6 + lootRng.next() * 0.9;
-    const x = Math.max(1, Math.min(world.width - 1, m.x + Math.cos(angle) * r));
-    const y = Math.max(1, Math.min(world.height - 1, m.y + Math.sin(angle) * r));
+    const { x, y } = snapToWalkable(
+      world.map,
+      m.x + Math.cos(angle) * r,
+      m.y + Math.sin(angle) * r,
+      1,
+    );
     spawnDrop(ctx, 'item', x, y, { item, amount: 1 });
   });
 

@@ -13,6 +13,7 @@ import {
 import type { DoorDef } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
 import type { SimCtx } from './combat.js';
+import { snapToWalkable } from './grid.js';
 
 /**
  * A slain foe's materials (see the crafting spec's drop tables): the rolls
@@ -203,8 +204,12 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
   ) => {
     const angle = rng.next() * Math.PI * 2;
     const r = 0.6 + rng.next() * 0.9;
-    const x = Math.max(1, Math.min(world.width - 1, m.x + Math.cos(angle) * r));
-    const y = Math.max(1, Math.min(world.height - 1, m.y + Math.sin(angle) * r));
+    const { x, y } = snapToWalkable(
+      world.map,
+      m.x + Math.cos(angle) * r,
+      m.y + Math.sin(angle) * r,
+      1,
+    );
     const id = world.nextId++;
     world.drops.push({ id, x, y, ...extra, born: world.t, vacuum: world.cleared, dead: false });
     ctx.events.push({ kind: 'drop', dropId: id, x, y, dropKind: extra.kind });

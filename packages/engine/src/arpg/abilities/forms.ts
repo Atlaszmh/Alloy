@@ -1,7 +1,8 @@
 import type { ResolvedAbility } from '../../types/ability.js';
 import type { Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
-import { angleBetween, clamp, dirTo, dist, distToSegment } from '../geometry.js';
+import { angleBetween, dirTo, dist, distToSegment } from '../geometry.js';
+import { moveCircle, snapToWalkable } from '../grid.js';
 import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
 import { stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, alive, spawnProjectile } from './targeting.js';
@@ -222,8 +223,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       const fromX = h.x;
       const fromY = h.y;
       const d = Math.min(dist(h.x, h.y, p.x, p.y), ab.range);
-      h.x = clamp(h.x + dir.x * d, h.radius, world.width - h.radius);
-      h.y = clamp(h.y + dir.y * d, h.radius, world.height - h.radius);
+      Object.assign(h, moveCircle(world.map, h, h.radius, dir.x * d, dir.y * d));
       h.facing = dir;
       h.invulnUntil = Math.max(h.invulnUntil, t + ab.effect);
       ctx.events.push({
@@ -258,8 +258,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           owner: 'hero',
           source: 'barrage',
           ability: ab,
-          x: clamp(p.x + Math.cos(a) * r, 0, world.width),
-          y: clamp(p.y + Math.sin(a) * r, 0, world.height),
+          ...snapToWalkable(world.map, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r),
           radius: ab.radius,
           born: t,
           until: at + 0.1,
