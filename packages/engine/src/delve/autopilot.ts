@@ -14,8 +14,10 @@ import {
 import { upgradeCost } from '../loot/smithing.js';
 import { honeCost, previewForge } from '../loot/forge.js';
 import { addHaul, emptyHaul } from '../loot/materials.js';
-import { botInput } from '../arpg/bot.js';
+import { botInput, type BotPolicy } from '../arpg/bot.js';
+import { exitFloor } from '../arpg/interact.js';
 import { stepWorld } from '../arpg/step.js';
+import type { ArpgWorld } from '../types/arpg.js';
 import {
   bankWorld,
   beginFloor,
@@ -43,7 +45,7 @@ import { buyShard, forge, hone, refine } from './crafting.js';
 import { addSlot, movesOf, setChain, transferMoveset, withMove } from './moveset.js';
 import { fuseRunes, openSocket } from './runes.js';
 import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
-import { takeStop, type StopAction } from './stops.js';
+import { alcoveOffers, takeAlcove, takeStop, type StopAction } from './stops.js';
 import { claimQuest, questStates } from './quests.js';
 import { MAX_CHAIN, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import { RUNE_TIERS, type RuneRef, type RuneTarget, type RuneTier } from '../types/rune.js';
@@ -66,6 +68,8 @@ export interface AutopilotOptions {
   maxDepth?: number;
   /** A floor that runs longer than this counts as a death. */
   maxFloorSeconds?: number;
+  /** How the bot plays a generated floor (default `thorough`). */
+  policy?: BotPolicy;
   /** Continue from an existing profile instead of a fresh one (no opening Anvil visit). */
   profile?: DelveProfile;
   /** A fresh profile's starting mana (default fire). */
@@ -90,19 +94,42 @@ export interface AutopilotDiveReport {
 const DOOR_PREFERENCE = ['winding', 'gilded', 'swarm', 'champions', 'cursed', 'plunge', 'shrine'];
 const STEP = 1 / 30;
 
+/**
+ * One step of the bot on `world` (`dt` seconds): its input, then what the
+ * step asks of it: the gate's `exitRequest` takes the exit at once
+ * (`exitFloor`) and an alcove's `alcoveOpen` takes its pick (`takeBestAlcove`).
+ * Returns the profile, changed only by an alcove's op.
+ */
+export function botStep(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  dt: number,
+  policy?: BotPolicy,
+): DelveProfile {
+  let p = profile;
+  for (const e of stepWorld(registry, world, botInput(registry, world, policy), dt)) {
+    if (e.kind === 'exitRequest') exitFloor(world);
+    else if (e.kind === 'alcoveOpen') p = takeBestAlcove(registry, p, world, e.id);
+  }
+  return p;
+}
+
 function playFloor(
   registry: DataRegistry,
   profile: DelveProfile,
   maxSeconds: number,
+  policy: BotPolicy,
 ): { profile: DelveProfile; seconds: number; died: boolean } {
   let p = profile;
   const world = beginFloor(registry, p);
   while (!world.heroDead && world.t < maxSeconds) {
-    stepWorld(registry, world, botInput(registry, world), STEP);
+    p = botStep(registry, p, world, STEP, policy);
     if (world.pending.items.length > 0) p = bankWorld(registry, p, world).profile;
+    if (world.exited) break;
     if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;
   }
-  if (world.heroDead || !world.cleared) {
+  if (world.heroDead || !(world.cleared || world.exited)) {
     return { profile: failFloor(registry, p, world).profile, seconds: world.t, died: true };
   }
   return { profile: completeFloor(registry, p, world).profile, seconds: world.t, died: false };
@@ -402,12 +429,48 @@ function runeStop(
  * item; else add an affordable slot (in `SLOT_ORDER`); else skip (the door).
  */
 export function takeBestStop(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  const stop = profile.dive?.stop;
-  if (!stop || stop.taken) return profile;
-  const take = (action: StopAction) => {
+  return bestStop(registry, profile, (action) => {
     const res = takeStop(registry, profile, action);
     return res.ok ? res.profile : null;
-  };
+  });
+}
+
+/**
+ * At an anvil alcove mid-floor, the bot's pick (the stop's preference ladder over
+ * `alcoveOffers`), taken through `takeAlcove`; the profile unchanged when it takes nothing.
+ * The ladder runs on a dry run: the profile as if at a stop offering the alcove's kinds,
+ * its floor's haul banked.
+ */
+export function takeBestAlcove(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  id: string,
+): DelveProfile {
+  const dive = profile.dive;
+  const offers = alcoveOffers(registry, profile, world, id);
+  if (!dive || offers.length === 0) return profile;
+  const stop = { offers, taken: false };
+  const banked = addHaul(dive.banked, dive.haul);
+  const atStop: DelveProfile = { ...profile, dive: { ...dive, phase: 'choosing', banked, stop } };
+  const picks = new Map<DelveProfile, StopAction>();
+  const picked = bestStop(registry, atStop, (action) => {
+    const res = takeStop(registry, atStop, action);
+    if (res.ok) picks.set(res.profile, action);
+    return res.ok ? res.profile : null;
+  });
+  const action = picks.get(picked);
+  return action ? takeAlcove(registry, profile, world, action).profile : profile;
+}
+
+/** `takeBestStop`'s ladder over `profile`'s stop, each kind tried through `take`. */
+function bestStop(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  take: (action: StopAction) => DelveProfile | null,
+): DelveProfile {
+  const stop = profile.dive?.stop;
+  if (!stop || stop.taken) return profile;
   if (stop.offers.includes('equip')) {
     const best = bestGain(registry, profile, 'asIs');
     const equipped = best && take({ kind: 'equip', uid: best });
@@ -790,7 +853,7 @@ export function runAutopilot(
 
     while (p.dive && (p.dive.phase === 'fighting' || p.dive.phase === 'choosing')) {
       if (p.dive.phase === 'fighting') {
-        const played = playFloor(registry, p, maxFloorSeconds);
+        const played = playFloor(registry, p, maxFloorSeconds, opts.policy ?? 'thorough');
         p = played.profile;
         seconds += played.seconds;
         continue;
