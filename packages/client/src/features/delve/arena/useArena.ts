@@ -10,6 +10,7 @@ import {
   failFloor,
   heroChains,
   takeAlcove,
+  takeBestAlcove,
   type DataRegistry,
   profileStats,
   type ArpgEvent,
@@ -126,7 +127,7 @@ export function floorOver(world: ArpgWorld): boolean {
  * A generated floor's requests (see the floor maps spec). The gate's `exitRequest`: the page
  * confirms it, the autopilot takes the exit at once (`exitFloor`). An alcove's `alcoveOpen`: what
  * waits banks first, so its offers (`alcoveOffers`) are priced on the save, then the page opens
- * them; under the autopilot the bot has the alcove.
+ * them; the autopilot takes the bot's pick at once (`takeBestAlcove`).
  */
 export function routeFloorEvents(
   registry: DataRegistry,
@@ -138,10 +139,11 @@ export function routeFloorEvents(
     if (e.kind === 'exitRequest') {
       if (opts.autopilot) exitFloor(world);
       else opts.onUi({ kind: 'exitRequest', unexplored: e.roomsUnexplored });
-    } else if (e.kind === 'alcoveOpen' && !opts.autopilot) {
+    } else if (e.kind === 'alcoveOpen') {
       opts.bank(world);
-      const offers = alcoveOffers(registry, useDelveStore.getState().profile, world, e.id);
-      opts.onUi({ kind: 'alcove', offers });
+      const { profile, setProfile } = useDelveStore.getState();
+      if (opts.autopilot) setProfile(takeBestAlcove(registry, profile, world, e.id));
+      else opts.onUi({ kind: 'alcove', offers: alcoveOffers(registry, profile, world, e.id) });
     }
   }
 }

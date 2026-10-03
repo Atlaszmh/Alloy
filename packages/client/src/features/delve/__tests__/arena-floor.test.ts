@@ -6,6 +6,7 @@ import {
   exitFloor,
   startDive,
   takeAlcove,
+  takeBestAlcove,
   type ArpgEvent,
   type ArpgWorld,
   type DelveProfile,
@@ -20,6 +21,7 @@ vi.mock('@alloy/engine', async (orig) => ({
   exitFloor: vi.fn(),
   alcoveOffers: vi.fn(),
   takeAlcove: vi.fn(),
+  takeBestAlcove: vi.fn(),
 }));
 
 const registry = getDelveRegistry();
@@ -73,6 +75,19 @@ describe("a generated floor's requests", () => {
       '2:4',
     );
     expect(ui).toEqual([{ kind: 'alcove', offers: ['slot', 'upgrade'] }]);
+  });
+
+  it("under the autopilot, the bot takes an alcove's power-up itself, on the save a bank leaves", () => {
+    const store = useDelveStore.getState();
+    const before = startDive(registry, createDelveProfile(registry, 7), 1);
+    const taken: DelveProfile = { ...before, scrap: before.scrap - 25 };
+    store.setProfile(before);
+    vi.mocked(takeBestAlcove).mockReturnValue(taken);
+    route([{ kind: 'alcoveOpen', id: '2:4' }], true);
+    expect(calls).toEqual(['bank']);
+    expect(takeBestAlcove).toHaveBeenCalledWith(registry, before, world, '2:4');
+    expect(useDelveStore.getState().profile).toBe(taken);
+    expect(ui).toEqual([]);
   });
 
   it('passes every other event by', () => {
