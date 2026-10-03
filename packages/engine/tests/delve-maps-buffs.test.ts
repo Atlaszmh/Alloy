@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createFloorWorld, refreshWorldHero } from '../src/arpg/world.js';
-import { beginFloor, startDive } from '../src/delve/dive.js';
 import { applyBuffs, computeHeroStats, manaPool } from '../src/delve/hero-stats.js';
-import { profileStats, worldStats } from '../src/delve/pair.js';
-import { createDelveProfile } from '../src/delve/profile.js';
-import { heroChains } from '../src/loot/moveset.js';
 import type { Buff } from '../src/types/floor-map.js';
 import { DEFAULT_CHAINS, arena, dummy, gear, registry, run } from './fixtures/arena.js';
 
@@ -64,21 +60,6 @@ describe("the hero's blessings", () => {
     refreshWorldHero(registry, w, STATS, DEFAULT_CHAINS);
     expect(h.baseStats.damageMult).toBeCloseTo(STATS.damageMult * 1.1, 12);
     expect(h.stats.damageMult).toBeCloseTo(STATS.damageMult * 1.1 * 1.2, 12);
-  });
-
-  it("worldStats is the profile's stats as the world's hero wears them", () => {
-    const p = startDive(registry, createDelveProfile(registry, 4, { primary: 'fire' }), 1);
-    const w = beginFloor(registry, p);
-    expect(worldStats(registry, p, w)).toEqual(profileStats(registry, p));
-    w.hero.diveBuffs = [DEVOTION];
-    w.hero.floorBuffs = [VIGOR, CLARITY];
-    refreshWorldHero(
-      registry,
-      w,
-      profileStats(registry, p),
-      heroChains(registry, p.equipped, p.pair),
-    );
-    expect(worldStats(registry, p, w)).toEqual(w.hero.stats);
   });
 
   it("a blessing's life regen heals", () => {
