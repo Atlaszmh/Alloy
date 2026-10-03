@@ -1,13 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { beginFloor, createDelveProfile, startDive, type ArpgEvent } from '@alloy/engine';
+import {
+  beginFloor,
+  createDelveProfile,
+  generateFloor,
+  startDive,
+  type ArpgEvent,
+  type FloorMap,
+} from '@alloy/engine';
 import {
   FloorEngine,
+  FLOOR_MARGIN,
   FLOOR_PPU,
   FLOOR_SCALE,
+  floorInit,
   snapshotArena,
   type FloorFrame,
 } from '../arena/pixel/floor-engine';
 import { getDelveRegistry } from '../registry';
+import { gridMap, ringMap } from './hand-map';
 
 const registry = getDelveRegistry();
 
@@ -159,5 +169,56 @@ describe('snapshotArena', () => {
     expect(snap.bodies[0][0]).toBe('hero');
     // Plain data only, so it can be posted to a worker.
     expect(() => structuredClone(snap)).not.toThrow();
+  });
+});
+
+describe('a generated floor', { timeout: 20000 }, () => {
+  /** Today's first floor of a dive, on `map` (the generator is B1's; until then the dive is the open room). */
+  function onMap(map?: FloorMap) {
+    const world = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    if (map) Object.assign(world, { map, width: map.width, height: map.height });
+    return world;
+  }
+
+  it('is built from its map and seeded by it; the open arena as ever', () => {
+    const open = floorInit(onMap());
+    expect(open.plan).toBeUndefined();
+    expect(open.seed).toBeUndefined();
+    const init = floorInit(onMap(ringMap()));
+    expect(init.plan).toMatchObject({ width: 64, height: 64, ppu: FLOOR_PPU });
+    expect(init.plan!.rooms.map((r) => r.kind)).toEqual([
+      'start',
+      'vault',
+      'sanctum',
+      'exit',
+      'combat',
+    ]);
+    // Plain data, for the worker; the same map, the same seed; another map, another.
+    expect(() => structuredClone(init)).not.toThrow();
+    expect(floorInit(onMap(ringMap())).seed).toBe(init.seed);
+    expect(floorInit(onMap(gridMap())).seed).not.toBe(init.seed);
+    const engine = new FloorEngine(init);
+    expect(engine.world.plan).not.toBeNull();
+    expect(engine.world.width).toBe((64 + 2 * FLOOR_MARGIN) * FLOOR_PPU);
+  });
+
+  it("builds a generator's floor: rock where its walls are, ground where it walks", () => {
+    const map = generateFloor(registry, 11, 3, registry.getBiomeForDepth(3), null);
+    const pw = new FloorEngine(floorInit(onMap(map))).world;
+    const M = FLOOR_MARGIN * FLOOR_PPU;
+    for (let c = 0; c < map.cells.length; c++) {
+      const [mx, my] = [c % map.width, Math.floor(c / map.width)];
+      const i = (M + my * FLOOR_PPU + 2) * pw.width + M + mx * FLOOR_PPU + 2;
+      expect(pw.edge[i] > 0).toBe(map.cells[c] === 1);
+    }
+  });
+
+  it('simulates round the view only; the open arena all of it', () => {
+    const big = new FloorEngine(floorInit(onMap(ringMap())));
+    big.frame(frame({ dt: 0.1, view: { left: 0, top: 0, right: 20, bottom: 14 } }));
+    expect(big.world.awake.some((a) => a === 0)).toBe(true);
+    const open = new FloorEngine(floorInit(onMap()));
+    open.frame(frame({ dt: 0.1 }));
+    expect(open.world.awake.every((a) => a === 1)).toBe(true);
   });
 });

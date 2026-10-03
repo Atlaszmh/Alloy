@@ -193,10 +193,20 @@ function getViewScratch(pw: PixelWorld, vw: number, vh: number, s: number): View
   return v;
 }
 
-function boxBlur(buf: Float32Array, w: number, h: number, r: number, tmp: Float32Array): void {
+/** Box-blur the `w` × `h` window at (x0, y0) of a buffer `stride` wide, its edges held. */
+function boxBlur(
+  buf: Float32Array,
+  stride: number,
+  x0: number,
+  y0: number,
+  w: number,
+  h: number,
+  r: number,
+  tmp: Float32Array,
+): void {
   const norm = 1 / (2 * r + 1);
   for (let y = 0; y < h; y++) {
-    const row = y * w;
+    const row = (y0 + y) * stride + x0;
     const first = buf[row];
     const last = buf[row + w - 1];
     let acc = first * (r + 1);
@@ -210,17 +220,18 @@ function boxBlur(buf: Float32Array, w: number, h: number, r: number, tmp: Float3
     for (let x = 0; x < w; x++) buf[row + x] = tmp[x];
   }
   for (let x = 0; x < w; x++) {
-    const first = buf[x];
-    const last = buf[(h - 1) * w + x];
+    const col = y0 * stride + x0 + x;
+    const first = buf[col];
+    const last = buf[col + (h - 1) * stride];
     let acc = first * (r + 1);
-    for (let k = 1; k <= r; k++) acc += buf[(k < h ? k : h - 1) * w + x];
+    for (let k = 1; k <= r; k++) acc += buf[col + (k < h ? k : h - 1) * stride];
     for (let y = 0; y < h; y++) {
       tmp[y] = acc * norm;
       const ai = y + r + 1;
       const si = y - r;
-      acc += (ai < h ? buf[ai * w + x] : last) - (si >= 0 ? buf[si * w + x] : first);
+      acc += (ai < h ? buf[col + ai * stride] : last) - (si >= 0 ? buf[col + si * stride] : first);
     }
-    for (let y = 0; y < h; y++) buf[y * w + x] = tmp[y];
+    for (let y = 0; y < h; y++) buf[col + y * stride] = tmp[y];
   }
 }
 
@@ -404,9 +415,6 @@ function buildLight(F: Frame): void {
   const W = pw.width;
   const H = pw.height;
   const { lw, lh, lr, lg, lb } = S;
-  lr.fill(0);
-  lg.fill(0);
-  lb.fill(0);
   const { mat, noise, fluid, frost, fire, charge, prop, propColor } = pw;
   const glow = th.fluidGlow;
   const gs = th.fluidGlowStrength;
@@ -414,6 +422,18 @@ function buildLight(F: Frame): void {
   const cx1 = Math.min(W, x0 + vw + LIGHT_PAD);
   const cy0 = Math.max(0, y0 - LIGHT_PAD);
   const cy1 = Math.min(H, y0 + vh + LIGHT_PAD);
+  // Only the light round the view is cleared and blurred, so a big floor costs no more than a small one:
+  // light from farther off never reaches the view (the blur spreads 4 light cells, the pad is 7).
+  const wx0 = cx0 >> 1;
+  const wy0 = cy0 >> 1;
+  const ww = Math.min(lw, (cx1 + 1) >> 1) - wx0;
+  const wh = Math.min(lh, (cy1 + 1) >> 1) - wy0;
+  for (let y = wy0; y < wy0 + wh; y++) {
+    const a = y * lw + wx0;
+    lr.fill(0, a, a + ww);
+    lg.fill(0, a, a + ww);
+    lb.fill(0, a, a + ww);
+  }
   const gr = (glow[0] / 255) * gs * 0.11;
   const gg = (glow[1] / 255) * gs * 0.11;
   const gb = (glow[2] / 255) * gs * 0.11;
@@ -493,9 +513,9 @@ function buildLight(F: Frame): void {
   for (const l of pw.lights) splat(F, l, 0.35);
 
   for (let pass = 0; pass < 2; pass++) {
-    boxBlur(lr, lw, lh, BLUR_RADIUS, S.tmp);
-    boxBlur(lg, lw, lh, BLUR_RADIUS, S.tmp);
-    boxBlur(lb, lw, lh, BLUR_RADIUS, S.tmp);
+    boxBlur(lr, lw, wx0, wy0, ww, wh, BLUR_RADIUS, S.tmp);
+    boxBlur(lg, lw, wx0, wy0, ww, wh, BLUR_RADIUS, S.tmp);
+    boxBlur(lb, lw, wx0, wy0, ww, wh, BLUR_RADIUS, S.tmp);
   }
 
   // Sample the light at each view cell's centre.
@@ -568,8 +588,6 @@ function passGround(F: Frame): void {
   const { pw, out, t, S, V, x0, y0, vw, vh, s, RW } = F;
   const th = pw.theme;
   const W = pw.width;
-  const H = pw.height;
-  const M = pw.margin;
   const { baseR, baseG, baseB, cachedMat, cachedDetail, jitter, crack } = S;
   const { er, eg, eb, wetNear } = V;
   const {
@@ -586,6 +604,7 @@ function passGround(F: Frame): void {
     blight,
     fire,
     detail,
+    edge: rock,
   } = pw;
   const glow = th.fluidGlow;
   const gs = th.fluidGlowStrength;
@@ -594,7 +613,6 @@ function passGround(F: Frame): void {
   const deep = th.fluidDeep;
 
   for (let y = y0; y < y0 + vh; y++) {
-    const ey = y < M ? M - y : y >= H - M ? y - (H - M - 1) : 0;
     const pyBase = (y - y0) * s;
     for (let x = x0; x < x0 + vw; x++) {
       const i = y * W + x;
@@ -605,8 +623,7 @@ function passGround(F: Frame): void {
       const up = x > 0 && y > 0 ? terrain[i - W - 1] : terrain[i];
       let sh = 1 + (terrain[i] - up) * 20;
       sh = sh < 0.5 ? 0.5 : sh > 1.5 ? 1.5 : sh;
-      const ex = x < M ? M - x : x >= W - M ? x - (W - M - 1) : 0;
-      const edge = ex > ey ? ex : ey;
+      const edge = rock[i];
       if (edge > 0) sh *= edge > 13 ? 0.42 : 1 - edge * 0.045;
       const wt = wet[i];
       if (wt > 0) sh *= 1 - 0.32 * wt;
@@ -779,8 +796,9 @@ function passFoliage(F: Frame): void {
   const swayAmp = 0.65 + Math.min(1, Math.abs(wind)) * 0.6;
   const { sway, sw: sgw, tint, grassBlade, bushBlade, tallBlade, bladeThr } = S;
   const by1 = Math.min(Math.ceil(H / 4) - 1, (y0 + vh + 3) >> 2);
+  const bx1 = Math.min(sgw - 1, (x0 + vw - 1) >> 2);
   for (let by = y0 >> 2; by <= by1; by++) {
-    for (let bx = 0; bx < sgw; bx++) {
+    for (let bx = x0 >> 2; bx <= bx1; bx++) {
       const x = bx * 4 + 2;
       const y = by * 4 + 2;
       sway[by * sgw + bx] =

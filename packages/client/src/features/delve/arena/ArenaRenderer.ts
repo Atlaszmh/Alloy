@@ -1,14 +1,26 @@
-import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import {
+  Application,
+  BufferImageSource,
+  Container,
+  Graphics,
+  Sprite,
+  Text,
+  Texture,
+} from 'pixi.js';
 import {
   activeMove,
   type ArpgEvent,
   type ArpgWorld,
   type BiomeDef,
+  type Door,
   type Drop,
+  type FloorMap,
   type GearItem,
+  type InteractableKind,
   type ManaType,
   type MaterialRef,
   type MonsterEntity,
+  type PropId,
   type Vec,
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
@@ -37,6 +49,7 @@ import {
 export type { AimView } from './fx/draw-world';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
+import { FLOOR_MARGIN, floorInit } from './pixel/floor-engine';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
@@ -92,6 +105,15 @@ interface FloatText {
   pop: boolean;
 }
 
+/** A generated floor's fog: one pixel a cell, over the map and the cliffs round it. */
+interface FogLayer {
+  sprite: Sprite;
+  source: BufferImageSource;
+  pixels: Uint8Array;
+  /** The world's `fogVersion` it shows. */
+  version: number;
+}
+
 interface Dying {
   root: Container;
   life: number;
@@ -99,6 +121,24 @@ interface Dying {
 }
 
 const FONT = 'Rajdhani, "DM Sans", system-ui, sans-serif';
+
+/** A door's posts, its bars, and the glow of a sealed one (ENDESGA 32). */
+const DOOR_STONE = 0x5a6988;
+const DOOR_IRON = 0x8b9bb4;
+const DOOR_SEAL = 0xe43b44;
+/** Seconds a door's bars take to slide shut, or back open. */
+const DOOR_SECONDS = 0.25;
+
+/** The fog's darkness (alpha) by a cell's fog: unseen black, seen but out of sight dimmed, in sight clear. */
+const FOG_ALPHA = [255, 150, 0];
+
+/** Each interactable's prop in the atlas. */
+const PROP_SPRITE: Record<InteractableKind, PropId> = {
+  chest: 'chest',
+  shrine: 'shrine',
+  alcove: 'alcove_anvil',
+  gate: 'exit_gate',
+};
 
 /** Forms cast on the hero itself: they burst outward instead of flinging at a target. */
 const SELF_FORMS = new Set(['nova', 'ward', 'armor', 'surge']);
@@ -141,6 +181,14 @@ export class ArenaRenderer {
   private root = new Container();
   private floor = new Graphics();
   private pixelFloor: PixelFloor | null = null;
+  /** A generated floor's doors, under the drops, redrawn every frame. */
+  private doorGfx = new Graphics();
+  /** How shut each door's bars are, 0 to 1. */
+  private doorShut = new Map<number, number>();
+  /** The rooms' props by interactable id, with their atlas frames. */
+  private props = new Map<string, { sprite: Sprite; frames: Texture[] }>();
+  /** A generated floor's fog. */
+  private fog: FogLayer | null = null;
   private dropLayer = new Container();
   private entities = new Container();
   private textLayer = new Container();
@@ -181,6 +229,7 @@ export class ArenaRenderer {
     this.root.addChild(
       this.floor,
       this.groundFx.sprite,
+      this.doorGfx,
       this.dropLayer,
       this.entities,
       this.airFx.sprite,
@@ -227,18 +276,56 @@ export class ArenaRenderer {
     for (const f of this.floats) this.releaseText(f.text);
     this.floats = [];
     this.drawFloor();
+    this.doorShut.clear();
+    this.makeProps(world);
+    this.fog?.sprite.destroy({ texture: true, textureSource: true });
+    this.fog = world.map.open ? null : this.makeFog(world.map);
     this.pixelFloor?.destroy();
-    this.pixelFloor = new PixelFloor({
-      arenaWidth: world.width,
-      arenaHeight: world.height,
-      biomeId: biome.id,
-      depth: world.depth,
-    });
+    this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
     // A still frame: the new floor's view at once, for the HUD's first snapshot of it.
     this.update(0);
+  }
+
+  /** The rooms' props from the atlas, standing at their interactables (none without art). */
+  private makeProps(w: ArpgWorld): void {
+    for (const v of this.props.values()) v.sprite.destroy();
+    this.props.clear();
+    const sizes = getDelveRegistry().getDelveData().layouts.props;
+    for (const { interactable: it } of w.map.rooms) {
+      const frames = it && spriteFrames(PROP_SPRITE[it.kind]);
+      if (!it || !frames) continue;
+      // Its base on the floor below the spot, sorted among the creatures by it.
+      const base = it.y + sizes[PROP_SPRITE[it.kind]] / 2;
+      const sprite = new Sprite(frames[0]);
+      sprite.anchor.set(0.5, 1);
+      sprite.scale.set(SPRITE_PIXEL);
+      sprite.position.set(it.x, base);
+      sprite.zIndex = base - 0.5;
+      this.entities.addChild(sprite);
+      this.props.set(it.id, { sprite, frames });
+    }
+  }
+
+  /** The fog layer, over everything on the floor (the labels and numbers stay above it). */
+  private makeFog(map: FloorMap): FogLayer {
+    const pad = FLOOR_MARGIN;
+    const width = map.width + pad * 2;
+    const height = map.height + pad * 2;
+    const pixels = new Uint8Array(width * height * 4);
+    const source = new BufferImageSource({
+      resource: pixels,
+      width,
+      height,
+      format: 'rgba8unorm',
+      scaleMode: 'nearest',
+    });
+    const sprite = new Sprite(new Texture({ source }));
+    sprite.position.set(-pad, -pad);
+    this.root.addChild(sprite);
+    return { sprite, source, pixels, version: -1 };
   }
 
   private emoji(glyph: string): Texture {
@@ -336,6 +423,8 @@ export class ArenaRenderer {
     for (const e of events) {
       switch (e.kind) {
         case 'hit': {
+          // Out of sight, a hit shows nothing (its number would give the foe away).
+          if (!inSight(w, e.x, e.y)) break;
           const color = elemColor(e.element);
           this.fx.burst(e.x, e.y, color, e.crit ? 7 : 3, e.crit ? 5 : 3);
           if (e.reaction) {
@@ -663,11 +752,23 @@ export class ArenaRenderer {
     this.syncHero(w);
     this.syncMonsters(w);
     this.syncDrops(w);
+    this.syncProps(w);
+    this.drawDoors(w, dt);
+    const fog = this.fog;
+    if (fog && fog.version !== w.fogVersion) {
+      paintFog(w.map, w.fog, FLOOR_MARGIN, fog.pixels);
+      fog.source.update();
+      fog.version = w.fogVersion;
+    }
+    // A foe out of sight shows nothing: not its marks, nor its wind-ups.
+    const seen = w.map.open
+      ? w
+      : { ...w, monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)) };
     drawZones(ground, w, this.time);
     drawLobs(ground, air, w, this.time);
-    drawTelegraphs(ground, w, this.time);
+    drawTelegraphs(ground, seen, this.time);
     drawFooting(ground, w, this.time);
-    drawMonsterMarks(ground, air, w, this.time);
+    drawMonsterMarks(ground, air, seen, this.time);
     this.lifecycles.update(w, this.fx, this.time);
     drawProjectiles(air, w, this.time, this.trails, (id) => this.lifecycles.bornAt(id));
     drawGuard(air, w, this.time);
@@ -814,6 +915,7 @@ export class ArenaRenderer {
     const s = m.status;
     v.root.position.set(m.x, m.y);
     v.root.zIndex = m.y;
+    v.root.visible = inSight(w, m.x, m.y);
     const flip = w.hero.x > m.x ? -1 : 1;
     const hit = t - m.lastHitAt < 0.09;
     const frozen = t < s.freezeUntil;
@@ -860,6 +962,31 @@ export class ArenaRenderer {
       hp.rect(-bw / 2, y, (bw * Math.max(0, m.hp)) / m.maxHp, 0.13).fill({
         color: m.kind === 'elite' ? 0xfacc15 : 0xef4444,
       });
+    }
+  }
+
+  /** Each prop in its state (`propFrame`); a gate opens once no boss lives. */
+  private syncProps(w: ArpgWorld): void {
+    const open = w.bossId === null || w.bossKilled;
+    for (const { interactable: it } of w.map.rooms) {
+      const v = it && this.props.get(it.id);
+      if (!it || !v) continue;
+      const f = propFrame(it.kind, it.used, open, this.time);
+      v.sprite.texture = v.frames[f.frame % v.frames.length];
+      v.sprite.tint = f.tint;
+    }
+  }
+
+  /** The doors, each one's bars easing toward its state over `DOOR_SECONDS`. */
+  private drawDoors(w: ArpgWorld, dt: number): void {
+    const g = this.doorGfx;
+    g.clear();
+    for (const d of w.map.doors) {
+      const was = this.doorShut.get(d.id) ?? (d.closed ? 1 : 0);
+      const step = dt / DOOR_SECONDS;
+      const shut = d.closed ? Math.min(1, was + step) : Math.max(0, was - step);
+      this.doorShut.set(d.id, shut);
+      drawDoor(g, d, shut, this.time);
     }
   }
 
@@ -981,6 +1108,83 @@ export function holdPing(
       ? h.stats.weapon.blows[h.swing?.step ?? 0]?.element
       : activeMove(h, e.slot)?.element;
   return { r: 0.8 + 0.4 * e.stage, color: elemColor(element) };
+}
+
+/**
+ * A door: a stone post at each end of its cells and, as it shuts (`shut` 0 → 1),
+ * iron bars sliding across it, glowing red while they hold its room sealed.
+ * Whole sprite pixels (0.1 units).
+ */
+export function drawDoor(g: Graphics, d: Door, shut: number, time: number): void {
+  const xs = d.cells.map((c) => c.x);
+  const ys = d.cells.map((c) => c.y);
+  const x0 = Math.min(...xs);
+  const y0 = Math.min(...ys);
+  const w = Math.max(...xs) + 1 - x0;
+  const h = Math.max(...ys) + 1 - y0;
+  // Across a hall running up and down (wider than deep), or across one running sideways.
+  const across = w >= h;
+  if (across) {
+    g.rect(x0 - 0.3, y0, 0.3, h).fill({ color: DOOR_STONE });
+    g.rect(x0 + w, y0, 0.3, h).fill({ color: DOOR_STONE });
+  } else {
+    g.rect(x0, y0 - 0.3, w, 0.3).fill({ color: DOOR_STONE });
+    g.rect(x0, y0 + h, w, 0.3).fill({ color: DOOR_STONE });
+  }
+  if (shut <= 0) return;
+  g.rect(x0, y0, w, h).fill({ color: DOOR_SEAL, alpha: (0.25 + 0.15 * Math.sin(time * 6)) * shut });
+  // A bar every 3 sprite pixels, slid `shut` of the way in.
+  const bars = Math.round((across ? w : h) / 0.3);
+  for (let k = 0; k < bars; k++) {
+    if (across) g.rect(x0 + 0.1 + k * 0.3, y0, 0.1, h * shut).fill({ color: DOOR_IRON });
+    else g.rect(x0, y0 + 0.1 + k * 0.3, w * shut, 0.1).fill({ color: DOOR_IRON });
+  }
+}
+
+/** Whether the hero sees a point now (on the open room, always). */
+export function inSight(w: ArpgWorld, x: number, y: number): boolean {
+  if (w.map.open) return true;
+  const { width: W, height: H } = w.map;
+  const cx = Math.min(W - 1, Math.max(0, Math.floor(x)));
+  const cy = Math.min(H - 1, Math.max(0, Math.floor(y)));
+  return w.fog[cy * W + cx] === 2;
+}
+
+/**
+ * The fog layer's pixels (black, at `FOG_ALPHA`), one a cell over the map and
+ * `pad` cells round it. A wall takes the clearest fog of the floor beside it,
+ * so the walls round what the hero sees show; past the map's edge, the edge's.
+ */
+export function paintFog(map: FloorMap, fog: Uint8Array, pad: number, out: Uint8Array): void {
+  const { width: W, height: H, cells } = map;
+  const OW = W + pad * 2;
+  for (let oy = 0; oy < H + pad * 2; oy++)
+    for (let ox = 0; ox < OW; ox++) {
+      const x = Math.min(W - 1, Math.max(0, ox - pad));
+      const y = Math.min(H - 1, Math.max(0, oy - pad));
+      let f = fog[y * W + x];
+      if (cells[y * W + x] === 1)
+        for (let ny = Math.max(0, y - 1); ny <= Math.min(H - 1, y + 1); ny++)
+          for (let nx = Math.max(0, x - 1); nx <= Math.min(W - 1, x + 1); nx++)
+            if (cells[ny * W + nx] !== 1) f = Math.max(f, fog[ny * W + nx]);
+      out[(oy * OW + ox) * 4 + 3] = FOG_ALPHA[f];
+    }
+}
+
+/**
+ * A prop's atlas frame and tint: a chest opens (frame 1) and a shrine goes dark
+ * once used; a gate opens once it may be taken; an anvil's glow flickers until
+ * used, then it stands dimmed.
+ */
+export function propFrame(
+  kind: InteractableKind,
+  used: boolean,
+  gateOpen: boolean,
+  time: number,
+): { frame: number; tint: number } {
+  if (kind === 'gate') return { frame: gateOpen ? 1 : 0, tint: 0xffffff };
+  if (kind !== 'alcove') return { frame: used ? 1 : 0, tint: 0xffffff };
+  return used ? { frame: 0, tint: 0x8b8b8b } : { frame: Math.floor(time * 3) % 2, tint: 0xffffff };
 }
 
 /**

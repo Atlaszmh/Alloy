@@ -1,21 +1,35 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { CanvasTextMetrics, Container, Text, type Application, type Graphics } from 'pixi.js';
+import {
+  CanvasTextMetrics,
+  Container,
+  Text,
+  Texture,
+  type Application,
+  type Graphics,
+  type Sprite,
+} from 'pixi.js';
 import {
   computeHeroStats,
   createSandboxWorld,
   defaultChains,
+  spawnDummies,
   type ArpgEvent,
   type ArpgWorld,
+  type Door,
   type Drop,
+  type FloorMap,
   type GearItem,
 } from '@alloy/engine';
 import {
   ArenaRenderer,
   drawDrop,
   dropPlaque,
+  drawDoor,
   dropPop,
   holdPing,
+  paintFog,
   pickupColor,
+  propFrame,
   pruneViews,
   stackPlaques,
 } from '../arena/ArenaRenderer';
@@ -27,6 +41,17 @@ import { runeHex } from '../arena/fx/runes';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
 import { useUIStore } from '@/stores/uiStore';
+import { ringMap } from './hand-map';
+
+// The props' art: two frames each (the atlas isn't loaded under jsdom; nothing else has art here).
+vi.mock('../arena/sprites', async (importOriginal) => {
+  const { Texture } = await import('pixi.js');
+  const props = ['chest', 'shrine', 'alcove_anvil', 'exit_gate'];
+  return {
+    ...(await importOriginal<typeof import('../arena/sprites')>()),
+    spriteFrames: (id: string) => (props.includes(id) ? [Texture.WHITE, Texture.EMPTY] : null),
+  };
+});
 
 /** A Graphics stand-in that records the colours it fills. */
 function recorder() {
@@ -111,7 +136,8 @@ describe('the arena renderer', () => {
 /** A renderer on a stand-in app (no GPU): a `width`×`height` screen at resolution `res`. */
 function stage(width = 1920, height = 1080, res = 1) {
   const app = {
-    renderer: { render() {}, resolution: res },
+    // A creature without art draws its emoji, as a generated texture.
+    renderer: { render() {}, resolution: res, generateTexture: () => Texture.EMPTY },
     stage: new Container(),
     screen: { width, height },
     canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
@@ -399,5 +425,180 @@ describe('loot labels', () => {
           bottoms[i] - a.h >= bottoms[j];
         expect(apart).toBe(true);
       }
+  });
+});
+
+/** `floor()` on a hand-built map, every cell in sight, the hero at its start. */
+function onMap(map: FloorMap): ArpgWorld {
+  const w = floor(map.start.x, map.start.y);
+  Object.assign(w, {
+    map,
+    width: map.width,
+    height: map.height,
+    fog: new Uint8Array(map.width * map.height).fill(2),
+  });
+  return w;
+}
+
+// A floor on ringMap builds its 64 × 64 pixel floor in the thread (jsdom has no workers).
+describe("a generated floor's doors and props", { timeout: 20000 }, () => {
+  it('frames a door with stone posts; shut, iron bars slide across it, glowing red', () => {
+    const door: Door = {
+      id: 0,
+      cells: [16, 17, 18].map((x) => ({ x, y: 9 })),
+      rooms: [0, 1],
+      closed: true,
+    };
+    const open = recorder();
+    drawDoor(open.g, door, 0, 1);
+    expect(open.fills).toEqual([0x5a6988, 0x5a6988]);
+    const shut = recorder();
+    drawDoor(shut.g, door, 1, 1);
+    expect(shut.fills.slice(0, 3)).toEqual([0x5a6988, 0x5a6988, 0xe43b44]);
+    // A bar every 0.3 units across its 3 cells.
+    expect(shut.fills.filter((c) => c === 0x8b9bb4)).toHaveLength(10);
+  });
+
+  it("slides a door's bars shut and open over a quarter second", () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const shut = (r as unknown as { doorShut: Map<number, number> }).doorShut;
+    expect(shut.get(0)).toBe(0);
+    w.map.doors[0].closed = true;
+    r.update(0.1);
+    expect(shut.get(0)).toBeCloseTo(0.4);
+    r.update(0.2);
+    expect(shut.get(0)).toBe(1);
+    w.map.doors[0].closed = false;
+    r.update(0.05);
+    expect(shut.get(0)).toBeCloseTo(0.8);
+  });
+
+  it('picks each prop its frame: open, spent, a gate once it may be taken, an anvil flickering till used', () => {
+    expect(propFrame('chest', false, true, 0).frame).toBe(0);
+    expect(propFrame('chest', true, true, 0).frame).toBe(1);
+    expect(propFrame('shrine', true, true, 0).frame).toBe(1);
+    expect(propFrame('gate', false, false, 0).frame).toBe(0);
+    expect(propFrame('gate', false, true, 0).frame).toBe(1);
+    const flicker = [0, 0.4].map((t) => propFrame('alcove', false, true, t));
+    expect(flicker.map((f) => f.frame)).toEqual([0, 1]);
+    expect(propFrame('alcove', true, true, 0.4)).toEqual({ frame: 0, tint: 0x8b8b8b });
+  });
+
+  it("stands each room's prop at its interactable, in its state", () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const props = (r as unknown as { props: Map<string, { sprite: Sprite }> }).props;
+    expect([...props.keys()]).toEqual(['1:1', '1:2', '1:3']);
+    const chest = props.get('1:1')!.sprite;
+    // Centred on its spot, its base below it (a 0.9 chest), sorted among the creatures by its base.
+    expect(chest.position.x).toBe(50);
+    expect(chest.position.y).toBeCloseTo(9 + 0.45);
+    expect(chest.zIndex).toBeCloseTo(9 + 0.45 - 0.5);
+    expect(chest.texture).toBe(Texture.WHITE);
+    w.map.rooms[1].interactable!.used = true;
+    r.update(0.1);
+    expect(chest.texture).toBe(Texture.EMPTY);
+    // No boss: the gate stands open; while a boss lives, it is shut.
+    const gate = props.get('1:3')!.sprite;
+    expect(gate.texture).toBe(Texture.EMPTY);
+    w.bossId = 99;
+    r.update(0.1);
+    expect(gate.texture).toBe(Texture.WHITE);
+    w.bossKilled = true;
+    r.update(0.1);
+    expect(gate.texture).toBe(Texture.EMPTY);
+  });
+});
+
+describe("a generated floor's fog", { timeout: 20000 }, () => {
+  it('blacks out the unseen, dims the seen, clears what is in sight, and shows the walls round it', () => {
+    const map = ringMap();
+    const fog = new Uint8Array(64 * 64);
+    const cells = (k: number) => {
+      const r = map.rooms[k].rect;
+      return Array.from(
+        { length: r.w * r.h },
+        (_, i) => (r.y + Math.floor(i / r.w)) * 64 + r.x + (i % r.w),
+      );
+    };
+    for (const c of cells(0)) fog[c] = 2;
+    for (const c of cells(1)) fog[c] = 1;
+    const pad = 3;
+    const out = new Uint8Array((64 + pad * 2) ** 2 * 4);
+    paintFog(map, fog, pad, out);
+    const alpha = (x: number, y: number) => out[((y + pad) * (64 + pad * 2) + x + pad) * 4 + 3];
+    expect(alpha(8, 8)).toBe(0); // in the start room
+    expect(alpha(3, 8)).toBe(0); // its wall
+    expect(alpha(50, 8)).toBe(150); // the vault, seen before
+    expect(alpha(50, 50)).toBe(255); // the sanctum, never seen
+    expect(alpha(0, 0)).toBe(255);
+    expect(alpha(-3, -3)).toBe(255); // the cliffs past the edge
+    expect(out[(pad * (64 + pad * 2) + pad) * 4]).toBe(0); // black
+  });
+
+  it('lays over a generated floor (none on the open room), and redraws when the fog moves on', () => {
+    const { r } = stage();
+    show(r, floor());
+    expect((r as unknown as { fog: unknown }).fog).toBeNull();
+    const w = onMap(ringMap());
+    w.fog.fill(0);
+    show(r, w);
+    const fog = (r as unknown as { fog: { sprite: Sprite; pixels: Uint8Array } }).fog;
+    expect(fog.sprite.position.x).toBe(-3);
+    const at = (x: number, y: number) => fog.pixels[((y + 3) * 70 + x + 3) * 4 + 3];
+    expect(at(8, 8)).toBe(255);
+    w.fog.fill(2);
+    r.update(0.1);
+    expect(at(8, 8)).toBe(255); // the same fogVersion: not redrawn
+    w.fogVersion++;
+    r.update(0.1);
+    expect(at(8, 8)).toBe(0);
+  });
+
+  it('shows a foe, and the numbers of its hits, only while the hero sees it', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    const [foe] = spawnDummies(getDelveRegistry(), w, { layout: 'single', element: null });
+    Object.assign(foe, { x: 10, y: 8 });
+    show(r, w);
+    const view = () =>
+      (r as unknown as { monsters: Map<number, { root: Container }> }).monsters.get(foe.id)!.root;
+    expect(view().visible).toBe(true);
+    const floats = () => (r as unknown as { floats: unknown[] }).floats.length;
+    const hit: ArpgEvent = {
+      kind: 'hit',
+      id: foe.id,
+      x: 10,
+      y: 8,
+      amount: 12,
+      crit: false,
+      element: null,
+      heft: 0,
+      source: 'basic',
+    };
+    r.handleEvents([hit]);
+    expect(floats()).toBe(1);
+    w.fog[8 * 64 + 10] = 1;
+    r.update(0.1);
+    expect(view().visible).toBe(false);
+    r.handleEvents([hit]);
+    expect(floats()).toBe(1);
+  });
+
+  it("keeps the camera on the map's bounds", () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    Object.assign(w.hero, { x: 2, y: 2 });
+    show(r, w);
+    expect(r.viewRect().left).toBeCloseTo(-1);
+    expect(r.viewRect().top).toBeCloseTo(-1.5);
+    const far = onMap(ringMap());
+    Object.assign(far.hero, { x: 62, y: 62 });
+    show(r, far);
+    expect(r.viewRect().right).toBeCloseTo(65);
+    expect(r.viewRect().bottom).toBeCloseTo(65.5);
   });
 });
