@@ -1,5 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
+import type { MetalId } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
 import { rarityIndex } from '../types/gem.js';
 import {
@@ -11,9 +12,12 @@ import {
   type QuestDef,
   type QuestEvent,
   type QuestId,
+  type QuestKind,
   type QuestState,
   type Reward,
   type RewardGrant,
+  type RewardRef,
+  type RewardView,
 } from '../types/quests.js';
 import { isDiveActive } from './dive.js';
 import type { ProfileActionResult } from './profile.js';
@@ -50,6 +54,8 @@ function questDef(registry: DataRegistry, id: QuestId): QuestDef | undefined {
 function withQuests(profile: DelveProfile, quests: Partial<ProfileQuests>): DelveProfile {
   return { ...profile, quests: { ...profile.quests, ...quests } };
 }
+
+const without = (ids: readonly QuestId[], id: QuestId) => ids.filter((x) => x !== id);
 
 /** Whether `e` counts for `o`: its type, and every filter `o` gives (`pair`: the pair's reaction). */
 function matches(
@@ -201,13 +207,74 @@ export function resetDiveQuests(registry: DataRegistry, profile: DelveProfile): 
   return withQuests(profile, { progress, board });
 }
 
+/** A reward as the quest view shows it: concrete, or a rule until it is claimed. */
+function rewardView(r: Reward): RewardView {
+  const ref: RewardRef | null =
+    r.kind === 'scrap' || r.kind === 'dust' || r.kind === 'links'
+      ? { kind: r.kind }
+      : r.kind === 'metal' && r.id && r.id !== 'depth'
+        ? { kind: 'metal', metal: r.id as MetalId }
+        : r.kind === 'flux' && r.grade
+          ? { kind: 'flux', grade: r.grade }
+          : r.kind === 'essence' && r.id && r.id !== 'fit'
+            ? { kind: 'essence', essence: r.id }
+            : r.kind === 'pattern' && r.id && r.id !== 'unknown'
+              ? { kind: 'pattern', pattern: r.id }
+              : null;
+  return ref ? { ref, count: r.count } : { rule: r };
+}
+
+function stateOf(
+  q: ProfileQuests,
+  kind: QuestKind,
+  quest: Pick<QuestDef, 'id' | 'name' | 'line' | 'chapter' | 'objectives' | 'rewards'>,
+  progress: readonly ObjectiveProgress[] | undefined,
+): QuestState {
+  const objectives = quest.objectives.map((o, i) => ({
+    id: o.id,
+    text: o.text,
+    value: progress?.[i]?.value ?? 0,
+    count: o.count,
+    done: progress?.[i]?.done ?? false,
+  }));
+  const claimed = q.claimed.includes(quest.id);
+  return {
+    id: quest.id,
+    kind,
+    status: claimed ? 'claimed' : objectives.every((o) => o.done) ? 'complete' : 'active',
+    isNew: !claimed && !q.seen.includes(quest.id),
+    tracked: q.tracked.includes(quest.id),
+    name: quest.name,
+    line: quest.line,
+    ...(quest.chapter ? { chapter: quest.chapter } : {}),
+    objectives,
+    rewards: quest.rewards.map(rewardView),
+  };
+}
+
+/** How far down the main chain `def` is: 0 for the first main quest. */
+function chainRank(registry: DataRegistry, def: QuestDef): number {
+  const after = def.unlock?.after && questDef(registry, def.unlock.after);
+  return after ? 1 + chainRank(registry, after) : 0;
+}
+
 /**
- * Every unlocked quest, main, side and the board's contracts, as the journal
- * and the HUD draw it: data, never text the engine made. Stub (B1): until
- * then it shows none.
+ * Every unlocked quest, claimed ones included: the main quests in chain
+ * order, the side quests in `quests.json`'s, then the board's contracts by
+ * slot, as the journal and the HUD draw them: data, never text the engine
+ * made.
  */
-export function questStates(_registry: DataRegistry, _profile: DelveProfile): QuestState[] {
-  return [];
+export function questStates(registry: DataRegistry, profile: DelveProfile): QuestState[] {
+  const q = profile.quests;
+  const open = registry.getQuestsData().quests.filter((d) => q.unlocked.includes(d.id));
+  const main = open
+    .filter((d) => d.kind === 'main')
+    .sort((a, b) => chainRank(registry, a) - chainRank(registry, b));
+  const quests = [...main, ...open.filter((d) => d.kind !== 'main')].map((d) =>
+    stateOf(q, d.kind, d, q.progress[d.id]),
+  );
+  const contracts = q.board.flatMap((c) => (c ? [stateOf(q, 'contract', c, c.progress)] : []));
+  return [...quests, ...contracts];
 }
 
 const CLAIM_AT_ANVIL = 'Claim at the Anvil, between dives';
@@ -253,24 +320,44 @@ export function grantRewards(
   };
 }
 
-/**
- * Track `questId` on the HUD (`on`), up to `delve.quests.maxTracked`, or stop
- * tracking it; allowed mid-dive (the pause). Stub (B1).
- */
-export function trackQuest(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _questId: QuestId,
-  _on: boolean,
-): ProfileActionResult {
-  throw new Error('trackQuest: not implemented');
+/** Whether `questId` is open in the journal: an unlocked, unclaimed quest or a contract on the board. */
+function isOpen(q: ProfileQuests, questId: QuestId): boolean {
+  return (
+    (q.unlocked.includes(questId) && !q.claimed.includes(questId)) ||
+    q.board.some((c) => c?.id === questId)
+  );
 }
 
-/** The journal opened `questId`: it is NEW no more. Allowed mid-dive. Stub (B1). */
+/**
+ * Track `questId` on the HUD (`on`), up to `delve.quests.maxTracked`, or stop
+ * tracking it; allowed mid-dive (the pause). Refuses a quest that isn't open
+ * and a tracker that is full.
+ */
+export function trackQuest(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  questId: QuestId,
+  on: boolean,
+): ProfileActionResult {
+  const q = profile.quests;
+  if (!on)
+    return { ok: true, profile: withQuests(profile, { tracked: without(q.tracked, questId) }) };
+  if (!isOpen(q, questId)) return { ok: false, profile, reason: 'No such quest' };
+  if (q.tracked.includes(questId)) return { ok: true, profile };
+  const { maxTracked } = registry.getDelveBalance().quests;
+  if (q.tracked.length >= maxTracked)
+    return { ok: false, profile, reason: `Track at most ${maxTracked} quests` };
+  return { ok: true, profile: withQuests(profile, { tracked: [...q.tracked, questId] }) };
+}
+
+/** The journal opened `questId`: it is NEW no more. Allowed mid-dive. */
 export function markQuestSeen(
   _registry: DataRegistry,
-  _profile: DelveProfile,
-  _questId: QuestId,
+  profile: DelveProfile,
+  questId: QuestId,
 ): DelveProfile {
-  throw new Error('markQuestSeen: not implemented');
+  const q = profile.quests;
+  if (q.seen.includes(questId) || !(q.unlocked.includes(questId) || isOpen(q, questId)))
+    return profile;
+  return withQuests(profile, { seen: [...q.seen, questId] });
 }

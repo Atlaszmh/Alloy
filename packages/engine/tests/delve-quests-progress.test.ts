@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import { startDive } from '../src/delve/dive.js';
 import { createDelveProfile } from '../src/delve/profile.js';
-import { applyQuestEvents, resetDiveQuests } from '../src/delve/quests.js';
+import {
+  applyQuestEvents,
+  markQuestSeen,
+  questStates,
+  resetDiveQuests,
+  trackQuest,
+} from '../src/delve/quests.js';
+import type { DelveProfile } from '../src/types/delve.js';
 import type { ManaType } from '../src/types/mana.js';
 import type { Rarity } from '../src/types/gear.js';
-import type { Objective, QuestEvent } from '../src/types/quests.js';
+import type { Contract, Objective, QuestEvent, Reward } from '../src/types/quests.js';
 import { obj, quest, questRegistry, value } from './fixtures/quests.js';
 
 // Quest progress (see the quests spec's quest model and objective table), on fixture quests.
@@ -217,5 +225,129 @@ describe('unlocks', () => {
     expect(p.quests.progress.second).toEqual([{ value: 1, done: true }]);
     p = applyQuestEvents(reg, p, [REFINE]);
     expect(value(p, 'refines')).toBe(1);
+  });
+});
+
+describe('the quest view, tracking and NEW', () => {
+  const REWARDS: Reward[] = [
+    { kind: 'scrap', count: 40 },
+    { kind: 'metal', id: 'depth', count: 3 },
+    { kind: 'metal', id: 'iron', count: 2 },
+    { kind: 'flux', grade: 'magic', count: 1 },
+    { kind: 'shard', family: 'offense', tier: 3, count: 1 },
+    { kind: 'essence', id: 'fit', count: 1 },
+    { kind: 'pattern', id: 'unknown', count: 1, fallback: { kind: 'dust', count: 5 } },
+  ];
+  // Out of order in the data: the view lists the main quests by the chain.
+  const reg = questRegistry([
+    quest('a', [obj('refine', 1)]),
+    quest('m2', [obj('refine', 1)], { kind: 'main', unlock: { after: 'm1' } }),
+    quest('m1', [obj('refine', 2, { text: 'Refine twice' })], {
+      kind: 'main',
+      chapter: 'One',
+      rewards: REWARDS,
+    }),
+    quest('b', [obj('refine', 1)]),
+    quest('c', [obj('refine', 1)]),
+    quest('locked', [obj('refine', 1)], { unlock: { bestDepth: 9 } }),
+  ]);
+  const contract: Contract = {
+    id: 'contract:0',
+    template: 'dodges',
+    tier: 'easy',
+    name: 'Light Feet',
+    line: 'Dance.',
+    objectives: [obj('perfectDodge', 3, { text: 'Dodge 3' })],
+    rewards: [{ kind: 'dust', count: 4 }],
+    progress: [{ value: 1, done: false }],
+  };
+  const start = (): DelveProfile => {
+    const p = applyQuestEvents(reg, createDelveProfile(reg, 1, { primary: 'fire' }), [REFINE]);
+    return { ...p, quests: { ...p.quests, board: [null, contract, null] } };
+  };
+
+  it('shows the main quests by the chain, the side quests, then the contracts; rewards as refs, or rules', () => {
+    const states = questStates(reg, start());
+    expect(states.map((s) => s.id)).toEqual(['m1', 'a', 'b', 'c', 'contract:0']);
+    expect(states[0]).toEqual({
+      id: 'm1',
+      kind: 'main',
+      status: 'active',
+      isNew: true,
+      tracked: true,
+      name: 'm1',
+      line: "m1's line",
+      chapter: 'One',
+      objectives: [{ id: 'refine', text: 'Refine twice', value: 1, count: 2, done: false }],
+      rewards: [
+        { ref: { kind: 'scrap' }, count: 40 },
+        { rule: REWARDS[1] },
+        { ref: { kind: 'metal', metal: 'iron' }, count: 2 },
+        { ref: { kind: 'flux', grade: 'magic' }, count: 1 },
+        { rule: REWARDS[4] },
+        { rule: REWARDS[5] },
+        { rule: REWARDS[6] },
+      ],
+    });
+    expect(states[4]).toEqual({
+      id: 'contract:0',
+      kind: 'contract',
+      status: 'active',
+      isNew: true,
+      tracked: false,
+      name: 'Light Feet',
+      line: 'Dance.',
+      objectives: [{ id: 'perfectDodge', text: 'Dodge 3', value: 1, count: 3, done: false }],
+      rewards: [{ ref: { kind: 'dust' }, count: 4 }],
+    });
+  });
+
+  it('a contract advances on the board; complete once every objective is done, claimed once claimed', () => {
+    let p = applyQuestEvents(reg, start(), [DODGE, DODGE, REFINE]);
+    expect(p.quests.board[1]!.progress).toEqual([{ value: 3, done: true }]);
+    expect(questStates(reg, p).every((s) => s.status === 'complete')).toBe(true);
+    p = applyQuestEvents(reg, { ...p, quests: { ...p.quests, claimed: ['m1'] } }, []);
+    expect(questStates(reg, p).map((s) => [s.id, s.status, s.isNew])).toEqual([
+      ['m1', 'claimed', false],
+      ['m2', 'active', true],
+      ['a', 'complete', true],
+      ['b', 'complete', true],
+      ['c', 'complete', true],
+      ['contract:0', 'complete', true],
+    ]);
+  });
+
+  it('tracks up to maxTracked and untracks; only an open quest; mid-dive too', () => {
+    const max = reg.getDelveBalance().quests.maxTracked;
+    let p = start();
+    expect(p.quests.tracked).toEqual(['m1']);
+    p = trackQuest(reg, p, 'a', true).profile;
+    p = trackQuest(reg, p, 'contract:0', true).profile;
+    expect(p.quests.tracked).toEqual(['m1', 'a', 'contract:0']);
+    expect(trackQuest(reg, p, 'b', true)).toEqual({
+      ok: false,
+      profile: p,
+      reason: `Track at most ${max} quests`,
+    });
+    expect(trackQuest(reg, p, 'a', true)).toEqual({ ok: true, profile: p });
+    for (const id of ['locked', 'nope'])
+      expect(trackQuest(reg, p, id, true).reason).toBe('No such quest');
+    p = trackQuest(reg, p, 'm1', false).profile;
+    expect(p.quests.tracked).toEqual(['a', 'contract:0']);
+    const diving = startDive(reg, p, 1);
+    expect(trackQuest(reg, diving, 'b', true).profile.quests.tracked).toEqual([
+      'a',
+      'contract:0',
+      'b',
+    ]);
+  });
+
+  it('a quest opened in the journal is NEW no more; mid-dive too', () => {
+    const p = startDive(reg, start(), 1);
+    const seen = markQuestSeen(reg, markQuestSeen(reg, p, 'a'), 'contract:0');
+    expect(seen.quests.seen).toEqual(['a', 'contract:0']);
+    expect(questStates(reg, seen).map((s) => s.isNew)).toEqual([true, false, true, true, false]);
+    expect(markQuestSeen(reg, seen, 'a')).toBe(seen);
+    expect(markQuestSeen(reg, seen, 'locked')).toBe(seen);
   });
 });
