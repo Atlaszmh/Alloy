@@ -11,7 +11,7 @@ import type {
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
-import type { FloorLayout } from '../types/floor-map.js';
+import type { Buff, FloorLayout } from '../types/floor-map.js';
 import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
@@ -20,7 +20,7 @@ import {
   type Chains,
   type ResolvedChain,
 } from '../types/ability.js';
-import { manaPool } from '../delve/hero-stats.js';
+import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
@@ -48,6 +48,8 @@ export interface FloorOptions {
    * the generated path is the generator's to add, so until then every floor is open).
    */
   layout?: FloorLayout;
+  /** The dive's blessings (`DiveState.diveBuffs`): the hero wears them from the start (default none). */
+  diveBuffs?: Buff[];
 }
 
 export function emptyStatus(): StatusState {
@@ -216,10 +218,20 @@ function resolveAll(
 
 export function createHeroEntity(
   registry: DataRegistry,
-  stats: HeroStats,
+  unbuffed: HeroStats,
   chains: Partial<Pick<Chains, AbilitySlot>>,
-  opts: { hpFrac: number; potions: number; phoenixAvailable: boolean; x: number; y: number },
+  opts: {
+    hpFrac: number;
+    potions: number;
+    phoenixAvailable: boolean;
+    x: number;
+    y: number;
+    /** The dive's blessings, worn from the start. */
+    diveBuffs?: Buff[];
+  },
 ): HeroEntity {
+  const diveBuffs = [...(opts.diveBuffs ?? [])];
+  const stats = applyBuffs(unbuffed, diveBuffs);
   const pool = manaPool(stats, registry);
   const resolved = resolveAll(registry, chains, stats);
   return {
@@ -229,6 +241,9 @@ export function createHeroEntity(
     facing: { x: 0, y: -1 },
     hp: Math.max(1, stats.maxHp * Math.min(1, opts.hpFrac)),
     stats,
+    baseStats: stats,
+    floorBuffs: [],
+    diveBuffs,
     mana: pool.max,
     manaMax: pool.max,
     manaRegen: pool.regen,
@@ -277,14 +292,18 @@ export function createHeroEntity(
  * drops its wind-up (as a dodge does), its hold, its beat, its waiting press
  * and its queued echo, and a new Defensive ends the old one's buff and Ward at once, without
  * bursting. A skill left out has no chain (and so no cooldowns or charge).
+ * `unbuffed` is the hero's gear (`profileStats`): its dive's and floor's
+ * blessings go back on (see the floor maps spec), so a refresh never wipes them.
  */
 export function refreshWorldHero(
   registry: DataRegistry,
   world: ArpgWorld,
-  stats: HeroStats,
+  unbuffed: HeroStats,
   chains: Partial<Pick<Chains, AbilitySlot>>,
 ): void {
   const h = world.hero;
+  const base = applyBuffs(unbuffed, h.diveBuffs);
+  const stats = applyBuffs(base, h.floorBuffs);
   const frac = h.hp / h.stats.maxHp;
   const pool = manaPool(stats, registry);
   // A different weapon, or a basic chain whose blows changed (their kinds or number), starts
@@ -315,6 +334,7 @@ export function refreshWorldHero(
     h.ward = null;
   }
   h.stats = stats;
+  h.baseStats = base;
   h.hp = h.hp > 0 ? Math.max(1, frac * stats.maxHp) : h.hp;
   h.manaMax = pool.max;
   h.manaRegen = pool.regen;
@@ -404,13 +424,19 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
       phoenixAvailable: opts.phoenixAvailable,
       x: heroX,
       y: heroY,
+      diveBuffs: opts.diveBuffs,
     }),
     monsters: [],
     projectiles: [],
     zones: [],
     drops: [],
     nextId: 1,
-    loot: { ...opts.loot, dropsGiven: [...opts.loot.dropsGiven] },
+    loot: {
+      ...opts.loot,
+      // A blessing's Find counts all dive.
+      find: (opts.diveBuffs ?? []).reduce((f, b) => f + (b.effect.find ?? 0), opts.loot.find),
+      dropsGiven: [...opts.loot.dropsGiven],
+    },
     pending: emptyPending(true),
     totalMonsters: 0,
     bossId: null,

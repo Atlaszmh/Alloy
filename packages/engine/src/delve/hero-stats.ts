@@ -26,6 +26,7 @@ import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/del
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
 import { MANA_TYPES, emptyManaMap, type ManaMap, type ManaType } from '../types/mana.js';
+import type { Buff } from '../types/floor-map.js';
 
 export interface ItemStatLine extends StatRoll {
   source: 'implicit' | 'affix';
@@ -259,6 +260,23 @@ export function computeHeroStats(
     elementPower,
     legendaries,
   };
+}
+
+/**
+ * `stats` under blessings (see the floor maps spec): each multiplies damage
+ * and mana regen and adds life regen (Find and potions act on the world, not
+ * here). No blessings: `stats` itself.
+ */
+export function applyBuffs(stats: HeroStats, buffs: readonly Buff[]): HeroStats {
+  if (buffs.length === 0) return stats;
+  let { damageMult, manaRegenMult } = stats;
+  let lifeRegen = stats.lifeRegen ?? 0;
+  for (const { effect } of buffs) {
+    damageMult *= 1 + (effect.damage ?? 0);
+    manaRegenMult *= 1 + (effect.manaRegen ?? 0);
+    lifeRegen += effect.lifeRegen ?? 0;
+  }
+  return { ...stats, damageMult, manaRegenMult, lifeRegen };
 }
 
 // ── Mana ───────────────────────────────────────────────────────────────────

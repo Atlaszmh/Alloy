@@ -728,6 +728,8 @@ export interface HeroStats {
   cooldownMult: number;
   /** Multiply mana regen by this. */
   manaRegenMult: number;
+  /** Life regained a second, as a fraction of max life (a shrine's blessing; see the floor maps spec). */
+  lifeRegen?: number;
   weapon: HeroWeapon;
   /** Total attunement per mana type (item affinities + attunement affixes). */
   attunement: ManaMap;

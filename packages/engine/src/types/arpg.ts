@@ -5,7 +5,7 @@ import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
 import type { QuestEvent } from './quests.js';
-import type { FloorMap } from './floor-map.js';
+import type { Buff, FloorMap } from './floor-map.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -347,7 +347,14 @@ export interface HeroEntity {
   radius: number;
   facing: Vec;
   hp: number;
+  /** Its stats: `baseStats` under the floor's blessings (`applyBuffs`). */
   stats: HeroStats;
+  /** Its stats before the floor's blessings: its gear's under the dive's (see the floor maps spec). */
+  baseStats: HeroStats;
+  /** The blessings it took on this floor (a sanctum's shrine). */
+  floorBuffs: Buff[];
+  /** The dive's blessings: those it began the floor with, and any taken on it. */
+  diveBuffs: Buff[];
   /** The one mana pool: basic hits fill it, abilities spend it. */
   mana: number;
   manaMax: number;

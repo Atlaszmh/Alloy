@@ -261,6 +261,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
 
   // Infinite mana (Training Grounds) tops the pool up every tick.
   h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
+  // A blessing's life regen (see the floor maps spec).
+  if (h.stats.lifeRegen)
+    h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.maxHp * h.stats.lifeRegen * dt);
   // No cooldowns (Training Grounds) keeps every charge-paid chain charged.
   if (world.sandbox?.noCooldowns)
     h.chains.forEach((chain, i) => {
