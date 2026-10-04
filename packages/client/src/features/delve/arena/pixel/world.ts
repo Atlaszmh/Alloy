@@ -96,11 +96,20 @@ export interface MapPlan {
   /** Map size in map cells (units). */
   width: number;
   height: number;
-  /** The map's cells, row by row: 0 floor, 1 wall, 2 door. */
+  /** The map's cells, row by row: the engine's `Cell` codes (`solidCell` reads them). */
   cells: Uint8Array;
   rooms: { kind: RoomKind; rect: Rect }[];
   /** Floor cells per map cell. */
   ppu: number;
+}
+
+/**
+ * Whether a map cell's code is solid (a wall, cover or crumbling cover): the
+ * engine's `solidCode`, mirrored here because the floor's worker never loads
+ * the engine (`room-contract.test.ts` holds the two together).
+ */
+export function solidCell(code: number): boolean {
+  return code === 1 || code === 3 || code === 4;
 }
 
 /** Simulation chunks are CHUNK × CHUNK cells; an asleep chunk's fluid, fields and fire hold still. */
@@ -478,7 +487,7 @@ export class PixelWorld {
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const c = mapCell(x, y);
-        edge[y * W + x] = c < 0 || plan.cells[c] === 1 ? 255 : 0;
+        edge[y * W + x] = c < 0 || solidCell(plan.cells[c]) ? 255 : 0;
       }
     const relax = (i: number, j: number) => {
       if (edge[j] + 1 < edge[i]) edge[i] = edge[j] + 1;
@@ -549,7 +558,7 @@ export class PixelWorld {
         let hh = base + (nz(x / 15, y / 15) - 0.5) * 0.05;
         const c = mapCell(x, y);
         const look =
-          c < 0 || plan.cells[c] === 1 ? null : roomOf[c] < 0 ? 'hall' : looks[roomOf[c]];
+          c < 0 || solidCell(plan.cells[c]) ? null : roomOf[c] < 0 ? 'hall' : looks[roomOf[c]];
         const wild = () =>
           nz(x / 18 + 20, y / 18 + 7) > grassThr
             ? nz(x / 9 + 40, y / 9 + 13) > bushThr

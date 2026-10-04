@@ -39,8 +39,12 @@ export interface MeterSummary {
 type HitEvent = Extract<ArpgEvent, { kind: 'hit' }>;
 const SLOT_BUCKET: MeterBucket[] = ['q', 'e', 'r'];
 
-/** Skill hits go to their slot (none, as Hellfire Brand's: Other skill); the rest by source. */
-function bucketOf(e: HitEvent): MeterBucket {
+/**
+ * Skill hits go to their slot (none, as Hellfire Brand's: Other skill); the rest by source. A
+ * hazard's burst isn't the hero's damage: none (the Training Grounds hold no hazards).
+ */
+function bucketOf(e: HitEvent): MeterBucket | null {
+  if (e.source === 'hazard') return null;
   if (e.source !== 'skill') return e.source;
   return e.slot === undefined ? 'skill' : (SLOT_BUCKET[e.slot] ?? 'skill');
 }
@@ -70,10 +74,12 @@ export class DamageMeter {
       if (e.kind === 'reaction')
         this.reactions[e.reaction] = (this.reactions[e.reaction] ?? 0) + (e.pairs ?? 1);
       if (e.kind !== 'hit') continue;
+      const bucket = bucketOf(e);
+      if (!bucket) continue;
       this.start ??= t;
       this.total += e.amount;
       this.biggest = Math.max(this.biggest, e.amount);
-      const b = this.buckets[bucketOf(e)];
+      const b = this.buckets[bucket];
       b.hits++;
       b.damage += e.amount;
       this.recent.push({ t, amount: e.amount });
