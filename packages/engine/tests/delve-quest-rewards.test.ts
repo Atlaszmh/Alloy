@@ -54,9 +54,10 @@ describe('resolveReward', () => {
     }
   });
 
-  it("gives an essence that fits a learned pattern for 'fit', seen at once", () => {
+  it("gives an essence that fits a learned pattern for 'fit', seen at once (from depth 20)", () => {
     const { bases, legendaries } = registry.getDelveData();
-    const p = { ...fresh(), patterns: ['ring'] };
+    const bestDepth = registry.getDelveBalance().drops.essenceMinDepth;
+    const p = { ...fresh(), patterns: ['ring'], bestDepth };
     for (let i = 0; i < 20; i++) {
       const r = resolve(p, { kind: 'essence', id: 'fit', count: 1 }, `e${i}`);
       const { essence } = r.granted.ref as { kind: 'essence'; essence: string };
@@ -107,7 +108,8 @@ describe('a claim through grantRewards', () => {
     ];
     const a = grantRewards(registry, p, 'first_steps', rewards);
     expect(a).toEqual(grantRewards(registry, p, 'first_steps', rewards));
-    expect(a.granted.map((g) => g.ref.kind)).toEqual(['metal', 'shard', 'essence']);
+    // Below drops.essenceMinDepth the essence comes as epic flux.
+    expect(a.granted.map((g) => g.ref.kind)).toEqual(['metal', 'shard', 'flux']);
     expect(a.profile.materials.metals.rusty).toBe(p.materials.metals.rusty + 3);
   });
 });

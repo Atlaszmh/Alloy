@@ -94,7 +94,9 @@ describe('ForgeBench', () => {
       expect(screen.getByTestId('forge-implicits')).toHaveTextContent(
         statRange(registry, im.stat, im.min, im.max),
       );
-    expect(screen.getByTestId('forge-weapon')).toHaveTextContent('Carries Basic, Primary');
+    // A common weapon carries the basic chain alone.
+    expect(screen.getByTestId('forge-weapon')).toHaveTextContent('Carries Basic');
+    expect(screen.getByTestId('forge-weapon')).not.toHaveTextContent('Primary');
     expect(uses()).toHaveTextContent('Uses Iron bar');
     expect(screen.getByTestId('forge-button')).toHaveTextContent(
       `Forge · ${prev.price.scrap} scrap`,

@@ -14,6 +14,7 @@ import {
   type SalvageYield,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { ToastContainer } from '@/components/Toast';
 import { ComparePane } from '../ComparePane';
 import { getDelveRegistry } from '../../../registry';
@@ -98,6 +99,7 @@ describe('the compare pane', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
     useDelveStore.setState({ unsocket: null, bindDeclined: [] });
     vi.mocked(salvageYield).mockReset().mockReturnValue(SCRAP_ONLY);
   });
@@ -345,7 +347,7 @@ describe('the compare pane', () => {
     const mine = { ...epic, moveset: defaultMoveset(registry, epic, 'fire') };
     const plain = generateItem(
       registry,
-      { uid: 'w2', ilvl: 2, rarity: 'common', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      { uid: 'w2', ilvl: 2, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
       new SeededRNG(4),
     );
     store().setProfile({ ...p, equipped: { ...p.equipped, weapon: mine }, bag: [plain] });

@@ -16,6 +16,7 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { DelveProfile, DiveStop, StopKind } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
 import { bal, chainsOf, registry, run } from './fixtures/arena.js';
+import { armed } from './fixtures/carries.js';
 
 // See the weapon movesets spec's "Stops between depths".
 
@@ -26,9 +27,9 @@ const ring = (uid: string, seed = 1): GearItem =>
     new SeededRNG(seed),
   );
 
-/** A Fire hero with a ring in the bag. */
+/** A Fire hero with an uncommon sword and a ring in the bag. */
 const hero = (): DelveProfile => ({
-  ...createDelveProfile(registry, 3, { primary: 'fire' }),
+  ...armed(registry, createDelveProfile(registry, 3, { primary: 'fire' })),
   bag: [ring('r1')],
 });
 
@@ -68,7 +69,7 @@ describe('the stop after a cleared depth', () => {
   });
 
   it('offers only what the hero can take and pay for: a bag item, a slot, an edit, an upgrade', () => {
-    const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
+    const p0 = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     const p = { ...p0, scrap: 0, stats: { ...p0.stats, dives: 1 } }; // past the free edits
     expect(upgradeCost(registry, p.equipped.chest!)).toBe(10);
     expect(stopKinds(registry, p)).toEqual([]); // no bag, Links, scrap or Mana Dust
@@ -228,7 +229,7 @@ describe('takeStop', () => {
       index: 0,
       move: { kind: 'medium', form: 'ward', elements: ['fire'] },
     });
-    expect(nothing.reason).toBe('Carried by magic weapons and better');
+    expect(nothing.reason).toBe('Carried by rare weapons and better');
     expect(takeStop(registry, moved, { kind: 'equip', uid: 'nope' }).reason).toBe(
       'Item not in bag: nope',
     );

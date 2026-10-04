@@ -9,7 +9,9 @@ import {
   imprintRefusal,
   previewForge,
 } from '../loot/forge.js';
+import { scrapLevelFactor } from '../loot/item-generator.js';
 import { materialCount, refineCost, refinedRef, withMaterial } from '../loot/materials.js';
+import { baseSlots, defaultChain, movesetOf } from '../loot/moveset.js';
 import type { AwakenPrice, ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { GearItem, HeroStatKey } from '../types/gear.js';
@@ -143,19 +145,52 @@ export function refine(
  * Awaken rare weapon `uid` (see the tutorial spec's Awaken): it carries the
  * Ultimate too (`GearItem.awakened`; its moveset gains the Ultimate's base
  * chain in the pair's primary), once, for `awakenPrice`. Refused mid-dive, on
- * anything but a rare weapon, on an awakened one, and unpaid. B3 fills it.
+ * anything but a rare weapon, on an awakened one, and unpaid. Pure: the Temper
+ * bench reads its refusal from a dry run.
  */
 export function awaken(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _uid: string,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  uid: string,
 ): ProfileActionResult {
-  throw new Error('awaken: not implemented');
+  if (isDiveActive(profile)) return refuse(profile, FORGE_LOCKED);
+  const found = findItem(profile, uid);
+  if (!found) return refuse(profile, 'Item not found');
+  const { item } = found;
+  if (item.slot !== 'weapon' || item.rarity !== 'rare')
+    return refuse(profile, 'Only a rare weapon awakens');
+  if (item.awakened) return refuse(profile, 'Already awakened');
+  const price = awakenPrice(registry, item);
+  const epic: MaterialRef = { kind: 'flux', grade: 'epic' };
+  if (materialCount(profile.materials, epic) < price.epicFlux)
+    return refuse(profile, 'Not enough epic flux');
+  if (profile.links < price.links) return refuse(profile, 'Not enough Links');
+  if (profile.scrap < price.scrap) return refuse(profile, 'Not enough scrap');
+  const { chains, slots } = movesetOf(registry, item);
+  const base = baseSlots(registry, item.baseId, 'ultimate');
+  const element = profile.pair.primary ?? item.mana;
+  const ultimate = defaultChain(registry, 'ultimate', item.baseId, element, base);
+  const awakened: GearItem = {
+    ...item,
+    awakened: true,
+    moveset: { chains: { ...chains, ultimate }, slots: { ...slots, ultimate: base } },
+  };
+  return {
+    ok: true,
+    item: awakened,
+    profile: {
+      ...replaceItem(profile, awakened),
+      materials: withMaterial(profile.materials, epic, -price.epicFlux),
+      links: profile.links - price.links,
+      scrap: profile.scrap - price.scrap,
+    },
+  };
 }
 
-/** What awakening `item` costs: `crafting.awaken`, its scrap × `scrapLevelFactor(ilvl)`. B3 fills it. */
-export function awakenPrice(_registry: DataRegistry, _item: GearItem): AwakenPrice {
-  throw new Error('awakenPrice: not implemented');
+/** What awakening `item` costs: `crafting.awaken`, its scrap × `scrapLevelFactor(ilvl)`. */
+export function awakenPrice(registry: DataRegistry, item: GearItem): AwakenPrice {
+  const price = registry.getDelveBalance().crafting.awaken;
+  return { ...price, scrap: Math.round(price.scrap * scrapLevelFactor(registry, item.ilvl)) };
 }
 
 /** Buy a tier I shard of `stat` at the shard bench (`crafting.shardBench`). */

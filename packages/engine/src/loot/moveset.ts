@@ -31,7 +31,7 @@ export interface MovesetOwner {
   awakened?: boolean;
 }
 
-/** No weapon: it carries the basic chain and the Primary, at the hero's own string. */
+/** No weapon: it carries the basic chain alone, at the hero's own string. */
 export const UNARMED: MovesetOwner = { baseId: null, rarity: null };
 
 /** Each ability slot's default form and payment: a Bolt, a Ward and a charged Nova. */
@@ -42,15 +42,18 @@ export const DEFAULT_FORMS: Record<AbilitySlot, { form: FormId; payment: Ability
 };
 
 /**
- * The skills `item` carries, by its rarity (and, once Awaken lands, its
- * awakening); unarmed (null, or `UNARMED`): basic and primary.
+ * The skills `item` carries, by its rarity (`movesets.carries`), and the
+ * Ultimate too once awakened (see the tutorial spec's Awaken); unarmed (null,
+ * or `UNARMED`): the basic chain alone.
  */
 export function carriedSkills(
   registry: DataRegistry,
   item: Pick<MovesetOwner, 'rarity' | 'awakened'> | null,
 ): readonly ChainSkill[] {
-  const rarity = item?.rarity ?? null;
-  return rarity ? registry.getDelveBalance().movesets.carries[rarity] : ['basic', 'primary'];
+  if (!item?.rarity) return ['basic'];
+  const carried = registry.getDelveBalance().movesets.carries[item.rarity];
+  if (!item.awakened || carried.includes('ultimate')) return carried;
+  return [...carried, 'ultimate'];
 }
 
 /**
@@ -64,14 +67,17 @@ export function carriedFrom(registry: DataRegistry, skill: ChainSkill): Rarity |
 }
 
 /**
- * Why a weapon can't hold `skill`: "Carried by magic weapons and better" (the
- * locked tab's text, and the ops' refusal). The balance's schema keeps
- * `carries` growing with rarity; a skill every rarity carries (missing only
- * from a hand-edited save) reads "Not carried by this weapon".
+ * Why a weapon can't hold `skill`: "Carried by rare weapons and better" (the
+ * locked tab's text, and the ops' refusal); the Ultimate adds ", or an
+ * awakened rare" (`awaken`). The balance's schema keeps `carries` growing with
+ * rarity; a skill every rarity carries (missing only from a hand-edited save)
+ * reads "Not carried by this weapon".
  */
 export function carriedByText(registry: DataRegistry, skill: ChainSkill): string {
   const from = carriedFrom(registry, skill);
-  return from ? `Carried by ${from} weapons and better` : 'Not carried by this weapon';
+  if (!from) return 'Not carried by this weapon';
+  const text = `Carried by ${from} weapons and better`;
+  return skill === 'ultimate' ? `${text}, or an awakened rare` : text;
 }
 
 /** A weapon's basic string, the kinds of its default basic chain (unarmed, null: the hero's). */

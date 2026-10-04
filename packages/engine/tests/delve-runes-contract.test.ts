@@ -54,6 +54,7 @@ import {
   run,
   withChains,
 } from './fixtures/arena.js';
+import { armed } from './fixtures/carries.js';
 
 // The runes spec's wave-0 contract: every new knob neutral, so nothing plays differently yet.
 
@@ -683,7 +684,7 @@ describe('save v9: sockets and the pouch', () => {
 
   it("in 'pay' mode the runes a trim takes off go back to the pouch", () => {
     const p = {
-      ...withChains(fresh(), {
+      ...withChains(armed(registry, fresh()), {
         primary: {
           moves: [
             bolt([

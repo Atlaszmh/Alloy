@@ -11,6 +11,7 @@ import {
   type Rarity,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { BagPane } from '../BagPane';
 import { getDelveRegistry } from '../../../registry';
@@ -41,6 +42,7 @@ describe('the bag pane', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
     useInputDeviceStore.setState({ device: 'keyboard' });
   });
 

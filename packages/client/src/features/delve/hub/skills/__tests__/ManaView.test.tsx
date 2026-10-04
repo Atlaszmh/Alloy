@@ -4,6 +4,7 @@ import { bindSecondary, generateItem, profilePower, SeededRNG, type ManaType } f
 import { formatNumber } from '../../../format';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { renderSkills } from './harness';
 
 vi.mock('react-router', async () => {
@@ -27,6 +28,7 @@ describe('the Mana view (the Anvil, Skills tab)', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
   });
 
   it("opens from the mana pair's Realign as its own pad scope; Back returns to the move", () => {

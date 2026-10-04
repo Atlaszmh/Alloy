@@ -64,13 +64,14 @@ function clearDepth(p: DelveProfile): DelveProfile {
 }
 
 describe('profile basics', () => {
-  it('starts with a fire sword and an earth cuirass, and Fire chains', () => {
+  it('starts with a fire sword (its basic chain alone) and an earth cuirass, and Fire chains', () => {
     const p = createDelveProfile(registry, 123);
     expect(p.version).toBe(11);
     expect(p.links).toBe(0);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');
-    expect(chainsOf(p).primary!.moves.every((m) => m.elements.join() === 'fire')).toBe(true);
+    expect(Object.keys(chainsOf(p))).toEqual(['basic']);
+    expect(chainsOf(p).basic!.every((b) => b.element === 'fire')).toBe(true);
     expect(p.bag).toHaveLength(0);
     expect(p.dive).toBeNull();
   });
@@ -194,17 +195,16 @@ describe('dive lifecycle', () => {
     expect(res.profile.stats.deaths).toBe(1);
   });
 
-  it('the first boss ever drops an essence, grants a checkpoint and a potion', () => {
+  it('the first boss grants a checkpoint and a potion, and no essence (none below essenceMinDepth)', () => {
     let p = startDive(registry, createDelveProfile(registry, 3), 1);
     p = { ...p, dive: { ...p.dive!, depth: 5, potions: 0 } };
     const world = beginFloor(registry, p);
     expect(world.monsters.some((m) => m.kind === 'boss')).toBe(true);
     clearFloor(world);
-    expect(world.loot.firstEssence).toBe(false);
     const res = completeFloor(registry, p, world);
     expect(res.bossKilled).toBe(true);
     expect(res.profile.checkpoints).toContain(5);
-    expect(res.profile.firstEssenceGiven).toBe(true);
+    expect(res.profile.dive!.banked.essences).toEqual({});
     expect(res.profile.dive!.potions).toBe(bal.dive.bossPotionReward);
     expect(res.profile.stats.bossKills).toBe(1);
   });
@@ -274,17 +274,13 @@ describe('gear management', () => {
     expect(beginFloor(registry, startDive(registry, p, 1)).hero.manaMax).toBeGreaterThan(before);
   });
 
-  it("unequip moves the item into the bag; the floor has the common sword's Primary, and no Defensive or Ultimate", () => {
+  it("unequip moves the item into the bag; the floor has the common sword's basic chain alone: no Primary, Defensive or Ultimate", () => {
     let p = createDelveProfile(registry, 1);
     p = unequipSlot(registry, p, 'chest');
     expect(p.equipped.chest).toBeUndefined();
     expect(p.bag).toHaveLength(1);
     p = startDive(registry, p, 1);
-    expect(beginFloor(registry, p).hero.chains.map((c) => c?.moves[0].name ?? null)).toEqual([
-      'Fire Bolt',
-      null,
-      null,
-    ]);
+    expect(beginFloor(registry, p).hero.chains).toEqual([null, null, null]);
   });
 
   it('equipBest picks upgrades, but never a weapon', () => {

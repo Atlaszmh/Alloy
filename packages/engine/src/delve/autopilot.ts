@@ -40,7 +40,7 @@ import {
   salvageItems,
   upgradeGear,
 } from './profile.js';
-import { buyShard, forge, hone, refine } from './crafting.js';
+import { awaken, buyShard, forge, hone, refine } from './crafting.js';
 import { addSlot, movesOf, setChain, transferMoveset, withMove } from './moveset.js';
 import { fuseRunes, openSocket } from './runes.js';
 import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
@@ -508,6 +508,14 @@ function bestStop(
   return profile;
 }
 
+/** Awaken the rare weapon it wields when it can pay and Power rises (see the tutorial spec's Awaken). */
+function awakenWeapon(registry: DataRegistry, p: DelveProfile): DelveProfile {
+  const weapon = p.equipped.weapon;
+  const res = weapon && awaken(registry, p, weapon.uid);
+  if (!res?.ok) return p;
+  return profilePower(registry, res.profile) > profilePower(registry, p) ? res.profile : p;
+}
+
 /**
  * Upgrade its cheapest equipped item while the scrap lasts.
  */
@@ -794,7 +802,8 @@ interface AnvilVisit {
  * follows; it melts
  * the gear it doesn't wear, refines flux and bars up, forges (a legendary
  * first), moves its moveset to a better weapon and equips upgrades, melts
- * what they replaced; spends Links on slots up to `SOCKETS_AFTER` a chain,
+ * what they replaced; awakens a rare weapon it wields (`awakenWeapon`);
+ * spends Links on slots up to `SOCKETS_AFTER` a chain,
  * then on sockets for the pouch's runes (each filled as it opens), then on the
  * rest of the slots; sockets the best runes and fuses the copies left over;
  * buys and refines shards; hones and pours the rest of the scrap into
@@ -821,6 +830,7 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
   pay(equipBest(registry, transferBest(registry, p)).profile);
   melt();
   if (!legendaryWaits(registry, p)) {
+    pay(awakenWeapon(registry, p));
     // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
     // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left
     // over and socket again (a fused tier can beat a socketed one).

@@ -16,6 +16,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
 import { pricedRegistry } from '../runes/__tests__/priced-registry';
 import { attachPromptKeys } from '../kit/prompts';
+import { armed } from './armed';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -53,6 +54,7 @@ describe('StopPanel (the stop between depths)', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
   });
 
   it('shows the offered kinds as cards that expand in place to their picker, and once one is taken, says so', () => {
