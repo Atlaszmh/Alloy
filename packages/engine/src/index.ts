@@ -262,3 +262,6 @@ export * from './data/tutorial-check.js';
 // Room objects (see the room objects spec): every module whole, so the areas that build them never edit this file.
 export * from './data/setpieces-schema.js';
 export * from './arpg/objects.js';
+export * from './arpg/terrain.js';
+export * from './arpg/pack.js';
+export * from './arpg/layout/furnish.js';

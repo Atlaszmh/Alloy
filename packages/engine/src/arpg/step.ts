@@ -58,6 +58,9 @@ import { fogTick } from './fog.js';
 import { tutorialTick } from './tutorial.js';
 import { scriptTick, spawnMults } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
+import { objectsSeparate, objectsTick } from './objects.js';
+import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
+import { directorTick } from './pack.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -132,7 +135,11 @@ function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   interactTick(ctx);
   projectilesTick(ctx, dt);
   zonesTick(ctx);
+  // The room objects' hooks (see the room objects spec): each a no-op until its area fills it.
+  objectsTick(ctx);
   flowTick(ctx);
+  terrainTick(ctx);
+  directorTick(ctx);
   monstersTick(ctx, dt);
   leashTick(ctx);
   separate(ctx);
@@ -245,8 +252,13 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     );
     // Lightning Rod quickens the step, on top of Surge and any slowing.
     const quick = t < h.quickUntil ? 1 + bal.reactions.lightningRodMove : 1;
+    // Slow ground slows the walk (`groundSpeed`), whatever else does.
     const pace =
-      h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1) * quick * slow;
+      h.stats.moveSpeed *
+      (surge ? 1 + bal.abilities.defend.surgeMove : 1) *
+      quick *
+      slow *
+      groundSpeed(world, h);
     Object.assign(h, moveCircle(world.map, h, h.radius, v.x * pace * dt, v.y * pace * dt));
   }
   if (!dashing) pushesTick(ctx, heading);
@@ -541,10 +553,21 @@ function gapFromDodge(ctx: SimCtx, m: MonsterEntity): number {
   return o ? dist(m.x, m.y, o.x, o.y) - m.radius - ctx.world.hero.radius : Infinity;
 }
 
-/** Rooted foes stay put (they can still attack in reach); a wall stops the rest. */
-function moveMonster(ctx: SimCtx, m: MonsterEntity, dir: Vec, speed: number, dt: number): void {
+/**
+ * Rooted foes stay put (they can still attack in reach); a wall stops the rest.
+ * Slow ground slows the walk (`groundSpeed`), but not a charger's dash (`ground` false).
+ */
+function moveMonster(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  dir: Vec,
+  speed: number,
+  dt: number,
+  ground = true,
+): void {
   if (isRooted(ctx, m)) return;
-  shift(ctx.world.map, m, m.radius, dir.x * speed * dt, dir.y * speed * dt);
+  const pace = ground ? speed * groundSpeed(ctx.world, m, m.kind === 'boss') : speed;
+  shift(ctx.world.map, m, m.radius, dir.x * pace * dt, dir.y * pace * dt);
   keepInRoom(ctx, m);
 }
 
@@ -688,8 +711,12 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       m.hp = Math.min(m.maxHp, m.hp + m.maxHp * bal.monster.traits.regenPerSecond * dt);
 
     if (m.kbx !== 0 || m.kby !== 0) {
-      shift(world.map, m, m.radius, m.kbx * dt, m.kby * dt);
+      // A wall or cover that stops it short slams it (`wallSlam`).
+      const from = { x: m.x, y: m.y };
+      const want = { x: m.kbx * dt, y: m.kby * dt };
+      shift(world.map, m, m.radius, want.x, want.y);
       keepInRoom(ctx, m);
+      wallSlam(ctx, m, from, want);
       const decay = Math.exp(-10 * dt);
       m.kbx = Math.abs(m.kbx * decay) < 0.05 ? 0 : m.kbx * decay;
       m.kby = Math.abs(m.kby * decay) < 0.05 ? 0 : m.kby * decay;
@@ -736,7 +763,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     switch (m.ai) {
       case 'charger': {
         if (m.chargeUntil > world.t) {
-          moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt);
+          moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt, false);
           if (!m.chargeHit && gap <= 0.25) {
             m.chargeHit = true;
             m.chargeUntil = world.t;
@@ -857,7 +884,9 @@ function separate(ctx: SimCtx): void {
       shift(map, h, h.radius, -n.x * overlap * heroShare, -n.y * overlap * heroShare);
     }
   }
-  // Whatever the moves and pushes left pressed into a wall goes back out.
+  // Props and hazards push bodies out (`objectsSeparate`); then whatever the moves and pushes
+  // left pressed into a wall goes back out.
+  objectsSeparate(ctx);
   for (const m of ms) Object.assign(m, moveCircle(world.map, m, m.radius, 0, 0));
   Object.assign(h, moveCircle(world.map, h, h.radius, 0, 0));
 }
