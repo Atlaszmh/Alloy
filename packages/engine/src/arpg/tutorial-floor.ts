@@ -202,6 +202,15 @@ function setDrop(ctx: SimCtx, d: TutorialSetDrop, from: Vec, roomId: number | nu
   });
 }
 
+/** Foe `m`'s spawn's life and damage multipliers on a hand-built floor (none elsewhere). */
+export function spawnMults(
+  ctx: SimCtx,
+  m: MonsterEntity,
+): { hpMult?: number; damageMult?: number } {
+  const spawn = floorOf(ctx)?.spawns.find((s) => s.id === m.spawnId);
+  return spawn ? { hpMult: spawn.hpMult, damageMult: spawn.damageMult } : {};
+}
+
 /**
  * Foe `m`'s set drops on a hand-built floor (`spawn:<its id>`, and `boss` for the
  * boss), `killMonster`'s: around it, in its room. A foe that already gave its gear this

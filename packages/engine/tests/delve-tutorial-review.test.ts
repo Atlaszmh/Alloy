@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { worldTutorialEvents } from '../src/arpg/tutorial.js';
+import { createMonsterEntity } from '../src/arpg/world.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
@@ -167,5 +168,51 @@ describe('a floor step that needs foes, once they are all dead', () => {
     expect(tutorialSkippable(registry, p, w.tutorial!, w)).toBe(true);
     worldTutorialEvents(registry, w, [{ type: 'skipStep' }]);
     expect(w.tutorial!.step).not.toBe('d2-pips');
+  });
+});
+
+describe("a scripted boss's summons", () => {
+  it("Grask's diggers take his spawn's life and damage multipliers", () => {
+    const start = startDive(registry, startTutorial(registry, fresh()), 1);
+    const p = { ...atStep('d2-grask', start), dive: { ...start.dive!, depth: 5 } };
+    const w = beginFloor(registry, p);
+    const grask = w.monsters.find((m) => m.kind === 'boss')!;
+    const spawn = registry
+      .getTutorialData()
+      .floors.find((f) => f.id === 'd2-5')!
+      .spawns.find((s) => s.id === grask.spawnId)!;
+    expect(spawn.hpMult).toBeLessThan(1);
+    Object.assign(grask, { aggro: true, nextSpecialAt: 0, windupUntil: 0 });
+    // The special's roll on its summons (the third), then the summons' own draws as they come.
+    const nextInt = w.rng.nextInt.bind(w.rng);
+    let first = true;
+    w.rng.nextInt = (lo: number, hi: number) => (first ? ((first = false), 2) : nextInt(lo, hi));
+    const before = new Set(w.monsters.map((m) => m.id));
+    stepWorld(registry, w, { move: { x: 0, y: 0 } }, registry.getDelveBalance().arena.step);
+    const adds = w.monsters.filter((m) => !before.has(m.id));
+    expect(adds.length).toBe(2);
+    for (const add of adds) {
+      const def = registry.getBiomeForDepth(5).monsters.find((d) => d.id === add.defId)!;
+      const plain = (mult: number | undefined, dmg: number | undefined) =>
+        createMonsterEntity(
+          registry,
+          {
+            id: 0,
+            def,
+            kind: 'normal',
+            depth: 5,
+            door: w.door,
+            element: w.element,
+            x: 0,
+            y: 0,
+            packId: 0,
+            hpMult: mult,
+            damageMult: dmg,
+          },
+          new SeededRNG(1),
+        );
+      const scaled = plain(spawn.hpMult, spawn.damageMult);
+      expect([add.maxHp, add.damage]).toEqual([scaled.maxHp, scaled.damage]);
+    }
   });
 });
