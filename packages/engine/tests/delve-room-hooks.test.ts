@@ -25,7 +25,10 @@ vi.mock('../src/arpg/objects.js', async (importOriginal) => ({
   objectsTick: () => hooks.log.push('objects'),
   objectsSeparate: () => hooks.log.push('separate'),
 }));
-vi.mock('../src/arpg/pack.js', () => ({ directorTick: () => hooks.log.push('director') }));
+vi.mock('../src/arpg/pack.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/arpg/pack.js')>()),
+  directorTick: () => hooks.log.push('director'),
+}));
 
 beforeEach(() => {
   hooks.factor = 1;

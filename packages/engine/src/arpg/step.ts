@@ -58,9 +58,16 @@ import { fogTick } from './fog.js';
 import { tutorialTick } from './tutorial.js';
 import { scriptTick, spawnMults } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
-import { hitObject, objectsIn, objectsSeparate, objectsTick, objectsTouching } from './objects.js';
+import {
+  hitObject,
+  objectsIn,
+  objectsOnBeam,
+  objectsSeparate,
+  objectsTick,
+  objectsTouching,
+} from './objects.js';
 import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
-import { directorTick } from './pack.js';
+import { directorTick, goalWay } from './pack.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -607,6 +614,24 @@ function pursue(
   if (way) moveMonster(ctx, m, way, speed, dt);
 }
 
+/**
+ * A foe's walk this tick (see the room objects spec's pack director): toward
+ * its goal (`goalWay`: a job's spot or a search's last-seen point), else after
+ * the hero (`pursue`).
+ */
+function advance(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  toTarget: Vec,
+  near: boolean,
+  speed: number,
+  dt: number,
+): void {
+  const way = goalWay(ctx, m, near);
+  if (way) moveMonster(ctx, m, way, speed, dt);
+  else pursue(ctx, m, toTarget, near, speed, dt);
+}
+
 function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
   const { world, registry } = ctx;
   const h = world.hero;
@@ -759,9 +784,13 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
-    // It attacks only what it perceives; with sight in `ai.directRange` it steers straight at it.
+    // It attacks only what it perceives; with sight in `ai.directRange` it steers straight at it,
+    // unless a prop or a hazard stands in the way (the flow fields go round them).
     const seen = perceives(world.map, m, h);
-    const near = seen && dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange;
+    const near =
+      seen &&
+      dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange &&
+      objectsOnBeam(world, m, h, m.radius).length === 0;
     const chill = Math.min(bal.stacks.frostSlowCap, s.stacks.frost * bal.stacks.frostSlowPerStack);
     const speed = m.speed * (1 - chill);
 
@@ -843,10 +872,14 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > m.attackRange || !seen) pursue(ctx, m, toTarget, near, speed, dt);
+        if (gap > m.attackRange || !seen) advance(ctx, m, toTarget, near, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + bal.monster.windup * (m.kind === 'boss' ? 1.5 : 1);
+        } else {
+          // Between blows a foe with a ring slot moves round to it.
+          const way = goalWay(ctx, m, near);
+          if (way) moveMonster(ctx, m, way, speed, dt);
         }
       }
     }
