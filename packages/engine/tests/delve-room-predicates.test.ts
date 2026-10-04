@@ -16,8 +16,9 @@ import { floorWorld, twoRooms } from './fixtures/flow-map.js';
 import { walledMap } from './fixtures/maps.js';
 
 // See the room objects spec's two predicates: `solid` (a wall, a shut door, cover, crumbling
-// cover) for movement, the fields, spawns, shots and hits; `perceives` for sight (`sees` until
-// foliage hides things). Every reader asks one of them, so the new cells act at once.
+// cover) for movement, the fields, spawns, shots and hits; `perceives` for sight (`sees` and
+// foliage's two rules: `delve-terrain-sight`). Every reader asks one of them, so the new cells
+// act at once.
 
 /** A 12 × 12 map with column 6 of `code`, the hero starting at (3.5, 6.5). */
 function column(code: number) {
@@ -84,13 +85,14 @@ describe('every reader asks a predicate', () => {
       expect(snapToWalkable(map, 6.5, 6.5).x !== 6.5).toBe(isSolid);
       // The flow fields: the column cuts the map in two.
       expect(flowField(map, b, 100, 1)[6 * 12 + 3] === UNREACHED).toBe(isSolid);
-      // Shots and hits, and sight (foliage hides nothing yet).
+      // Shots and hits, and sight (one cell of foliage hides nothing: `foliageDepth`).
       expect(sees(map, a, b)).toBe(!isSolid);
       expect(perceives(map, a, b)).toBe(!isSolid);
-      // The fog: the column is lit as a wall beside lit floor, and hides what's past it.
+      // The fog: a solid column is lit as a wall beside lit floor, and hides what's past it; a
+      // foliage cell 3 units off is out of sight (`foliageSight`).
       const w = floorWorld(map);
       run(w, STEP);
-      expect(w.fog[6 * 12 + 6]).toBe(2);
+      expect(w.fog[6 * 12 + 6]).toBe(code === CELL.foliage ? 0 : 2);
       expect(w.fog[6 * 12 + 9]).toBe(isSolid ? 0 : 2);
       // The hero's walk.
       run(w, 1, { x: 1, y: 0 });
