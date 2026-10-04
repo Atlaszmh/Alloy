@@ -56,7 +56,10 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
     ...GEAR_SLOTS.flatMap((s) => profile.equipped[s]?.mana ?? []),
     ...profile.bag.map((i) => i.mana),
   ]);
-  const candidates = MANA_TYPES.filter((m) => m !== primary && owned.has(m));
+  // The guided start's bind (see the tutorial spec) offers any element: its hero owns no other.
+  const candidates = MANA_TYPES.filter(
+    (m) => m !== primary && (owned.has(m) || profile.tutorial !== null),
+  );
   const overtake = overtakeProgress(registry, profile);
   // Realign always sends both elements: the engine refuses a lone primary equal to the secondary.
   const next = secondary
