@@ -468,7 +468,7 @@ interface DelveStore {
   skipTutorial: (world?: ArpgWorld | null) => void;
   /** Off a floor, the events only the tutorial reads: a beat's `ack`, a `skipStep`, Training's cast. */
   tutorialEvents: (events: TutorialEvent[]) => void;
-  /** A tutorial death, Abandon or floor restart: the depth as it was entered. */
+  /** A tutorial death, Abandon or floor restart: the depth as it was entered, its finds forgotten. */
   retryTutorialDepth: () => void;
   /** Claim a completed quest or contract at the Anvil: its rewards to the stockpile (see the quests spec). */
   claimQuest: (id: string) => ProfileActionResult;
@@ -700,7 +700,17 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     tutorialEvents: (events) => commit(applyTutorialEvents(registry(), get().profile, events)),
 
-    retryTutorialDepth: () => commit(engineRetryTutorialDepth(registry(), get().profile)),
+    retryTutorialDepth: () => {
+      commit(engineRetryTutorialDepth(registry(), get().profile));
+      // The floor's finds went with it: the Found log and the stop keep the dive's from before.
+      const { diveDrops, diveRunes, divePatterns } = get();
+      const { floorDropsFrom, floorRunesFrom, floorPatternsFrom } = get();
+      set({
+        diveDrops: diveDrops.slice(diveDrops.length - floorDropsFrom),
+        diveRunes: diveRunes.slice(diveRunes.length - floorRunesFrom),
+        divePatterns: divePatterns.slice(divePatterns.length - floorPatternsFrom),
+      });
+    },
 
     claimQuest: (id) => applyResult(engineClaimQuest(registry(), get().profile, id)),
 
