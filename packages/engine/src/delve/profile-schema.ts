@@ -166,6 +166,7 @@ export const GearItemSchema = z.object({
   hones: z.number().int().min(0).default(0),
   locked: z.boolean(),
   moveset: MovesetSchema.optional(),
+  awakened: z.boolean().optional(),
 });
 
 const PerRarityCount = z.object({

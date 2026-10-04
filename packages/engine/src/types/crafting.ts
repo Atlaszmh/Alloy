@@ -241,6 +241,15 @@ export interface CraftingBalance {
   shardBench: { scrap: number; dust: number };
   /** The share of a dive's banked materials a death or an abandon loses. */
   deathLoss: number;
+  /** Awaken's price, its scrap before `scrapLevelFactor(ilvl)` (see the tutorial spec). */
+  awaken: AwakenPrice;
+}
+
+/** What awakening a rare weapon costs (`awakenPrice`): epic flux, Links and scrap. */
+export interface AwakenPrice {
+  epicFlux: number;
+  links: number;
+  scrap: number;
 }
 
 export interface DropsBalance {
@@ -278,6 +287,8 @@ export interface DropsBalance {
   scrapPickups: Record<MonsterKind, number>;
   /** Chance a bar comes as the next metal up. */
   metalUpChance: number;
+  /** Below this depth nothing yields an essence: no boss, vault, contract or reward (see the tutorial spec). */
+  essenceMinDepth: number;
   /** Find: each flux or shard drop comes a grade or tier up with chance min(cap, Find / 100 × perPoint). */
   find: { perPoint: number; cap: number };
   /** The depth each shard tier, I to V, starts dropping at. */
