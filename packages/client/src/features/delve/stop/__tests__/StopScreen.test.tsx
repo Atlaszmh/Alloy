@@ -326,3 +326,70 @@ describe('StopScreen (between depths)', () => {
     expect(onInspect).toHaveBeenCalledWith('h1');
   });
 });
+
+describe("StopScreen (a guided start's stops)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    store().resetProfile(1234, 'fire');
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('a required power-up holds every road, and Skip with them, until it is taken', () => {
+    atStop(['equip'], { stop: { offers: ['equip'], taken: false, required: true } });
+    arm();
+    const roads = () => [
+      ...store().profile.dive!.doorChoices.map((id) => screen.getByTestId(`door-${id}`)),
+      screen.getByTestId('extract-button'),
+    ];
+    for (const road of roads()) expect(road).toBeDisabled();
+    expect(screen.getByTestId('roads-held')).toHaveTextContent('Take the power-up to go on');
+    press('KeyS');
+    expect(screen.getByTestId('stop')).toBeInTheDocument();
+    const dive = store().profile.dive!;
+    act(() =>
+      store().setProfile({
+        ...store().profile,
+        dive: { ...dive, stop: { ...dive.stop!, taken: true } },
+      }),
+    );
+    for (const road of roads()) expect(road).toBeEnabled();
+    expect(screen.queryByTestId('roads-held')).toBeNull();
+  });
+
+  it('with no doors, Extract stands alone, the first focus', () => {
+    atStop(null, { doorChoices: [] });
+    expect(screen.getByTestId('door-choice')).not.toHaveTextContent('Choose your path');
+    expect(screen.getByTestId('door-list')).toBeEmptyDOMElement();
+    expect(screen.getByTestId('extract-button')).toHaveAttribute('data-pad-first');
+  });
+
+  it("a guided stop whose step doesn't extract offers no Extract", () => {
+    const step = (id: string, extract: boolean) => ({
+      id,
+      where: 'stop' as const,
+      floor: id,
+      line: 'Hesta.',
+      objective: 'Go on',
+      trigger: { type: 'ack' as const, count: 1 },
+      stop: { kinds: [], doors: ['winding'], extract },
+    });
+    vi.spyOn(registry, 'getTutorialData').mockReturnValue({
+      ...registry.getTutorialData(),
+      steps: [step('d1-1', false), step('d1-3', true)],
+    });
+    const at = (step: string) =>
+      act(() =>
+        store().setProfile({ ...store().profile, tutorial: { step, count: 0, misses: 0 } }),
+      );
+    atStop(null);
+    expect(screen.getByTestId('extract-button')).toBeInTheDocument();
+    at('d1-1');
+    expect(screen.queryByTestId('extract-button')).toBeNull();
+    at('d1-3');
+    expect(screen.getByTestId('extract-button')).toBeInTheDocument();
+  });
+});

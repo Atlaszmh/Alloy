@@ -115,7 +115,8 @@ export const StopScreen = memo(function StopScreen({
         setSkipped(true);
         mainRef.current?.querySelector<HTMLElement>('[data-door]')?.focus();
       },
-      disabled: !offering || !armed,
+      // A guided stop's required power-up can't be skipped: the roads wait for it.
+      disabled: !offering || !armed || !!stop?.required,
     },
   ];
   // Drawn as the footer's Menu button, not in the prompt bar.
@@ -262,11 +263,11 @@ export const StopScreen = memo(function StopScreen({
                 })}
               </div>
             )}
-            <span className="k-caption mt-auto" data-testid="risk-line">
+            <span className="k-caption mt-auto" data-testid="risk-line" data-tutorial="stop.risk">
               Banked this dive · dying loses {deathLoss}% of it
             </span>
           </Panel>
-          <div className="flex min-w-0 flex-col">
+          <div className="flex min-w-0 flex-col" data-tutorial="stop.powerup">
             {!stop ? (
               <p className="k-body-2 m-0">No power-up at this stop.</p>
             ) : skipped && !stop.taken ? (
@@ -280,6 +281,7 @@ export const StopScreen = memo(function StopScreen({
           <DoorPane
             dive={dive}
             padFirst={!offering}
+            held={!!stop?.required && !stop.taken}
             onChoose={onChoose}
             onExtract={onExtract}
             onPotion={onPotion}
