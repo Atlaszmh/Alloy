@@ -55,6 +55,16 @@ describe('DiveSummary', () => {
     expect(onAgain).toHaveBeenCalledOnce();
   });
 
+  it('without a way straight in (the guided start goes on at the Anvil), only Return', () => {
+    const registry = getDelveRegistry();
+    const dive = startDive(registry, createDelveProfile(registry, 1, { primary: 'fire' }), 1).dive!;
+    render(
+      <DiveSummary dive={{ ...dive, phase: 'extracted' }} biomeName="Test" onCamp={vi.fn()} />,
+    );
+    expect(screen.getByTestId('return-camp')).toBeInTheDocument();
+    expect(screen.queryByTestId('dive-again')).toBeNull();
+  });
+
   it('a fall loses the bounty', () => {
     summary({ phase: 'dead' });
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('YOU FELL');

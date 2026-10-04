@@ -12,10 +12,12 @@ import {
   type MonsterKind,
 } from '@alloy/engine';
 import { MAX_DUMMY_GROUPS, useSandboxStats, useSandboxStore } from '@/stores/sandboxStore';
+import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from '../arena/useArenaCore';
 import type { Insets } from '../arena/camera';
 import { DamageMeter, type MeterSummary } from './meter';
+import { trainingEvents } from '../tutorial/tutorial-view';
 
 /** How often the meter readout refreshes (real time), in ms. */
 const METER_EVERY_MS = 250;
@@ -25,7 +27,8 @@ const METER_EVERY_MS = 250;
  * sandbox store (its dummy groups replayed from heroStart on every rebuild),
  * the toggles and loadout hot-swapped mid-fight, a respawn at once on death,
  * and the damage meter fed from the events. Panel actions go through the
- * engine's sandbox functions; nothing here touches the Delve save.
+ * engine's sandbox functions; nothing here touches the Delve save but the
+ * guided start's Training step, which hears the casts (see the tutorial spec).
  */
 export function useTrainingArena(
   hostRef: RefObject<HTMLDivElement | null>,
@@ -64,7 +67,13 @@ export function useTrainingArena(
     },
     loadout,
     frame: () => false,
-    onEvents: (world, events) => meterRef.current.record(events, world.t),
+    onEvents: (world, events) => {
+      meterRef.current.record(events, world.t);
+      // To the tutorial only, never the quests (`tutorialEvents`).
+      const s = useDelveStore.getState();
+      const casts = trainingEvents(registry, s.profile.tutorial, events);
+      if (casts.length > 0) s.tutorialEvents(casts);
+    },
     onHeroDead: (world) => respawnHero(registry, world),
     speed: slowmo,
   };
