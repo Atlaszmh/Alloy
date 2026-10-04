@@ -6,7 +6,6 @@ import {
   hitObject,
   objectsIn,
   objectsOnBeam,
-  objectsTick,
   objectsTouching,
   type RoomObject,
 } from '../src/arpg/objects.js';
@@ -101,11 +100,11 @@ describe('the shapes each hit site tests', () => {
     expect(ids(objectsTouching(w, { x: 6, y: 6.5, radius: 0.3 }))).toEqual([]);
   });
 
-  it("the stubs: a hit stops nothing and the tick does nothing, until B3's", () => {
-    const ctx = makeCtx(registry, w, []);
-    expect(hitObject(ctx, w.props[0], 'hero')).toBe(false);
-    objectsTick(ctx);
-    expect(ctx.events).toEqual([]);
+  it("B3's: a hit breaks a prop and stops what hit it", () => {
+    const v = arena([]);
+    v.props = [prop(5, 5)];
+    expect(hitObject(makeCtx(registry, v, []), v.props[0], 'hero')).toBe(true);
+    expect(v.props[0].dead).toBe(true);
   });
 });
 
