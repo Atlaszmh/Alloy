@@ -33,7 +33,7 @@ test.describe('Delve loot loop', () => {
       'aria-label',
       /^Primary: (light|medium|heavy) Fire Bolt$/,
     );
-    // The starting sword is common: it carries no Defensive or Ultimate, so they have no button.
+    // The seeded sword is uncommon: it carries no Defensive or Ultimate, so they have no button.
     await expect(page.getByTestId('ability-1')).toHaveCount(0);
     await expect(page.getByTestId('ability-2')).toHaveCount(0);
     await expect(page.getByTestId('mana-bar')).toBeVisible();
@@ -58,7 +58,8 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     await expect(page.getByTestId('scrap-count')).toHaveText(/[1-9][\d,]* scrap/);
-    await expect(page.getByTestId('delve-howto')).toHaveCount(0);
+    // How to delve stays until Strike the Anvil is claimed (a forge, after Bring It Home).
+    await expect(page.getByTestId('delve-howto')).toBeVisible();
   });
 
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
@@ -261,7 +262,7 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
   });
 
-  test('D08: a new save chooses its mana first; Frost starts with frost gear and abilities', async ({
+  test('D08: a new save asks Guided start or Jump in, then its mana; Frost starts with frost gear', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -271,16 +272,19 @@ test.describe('Delve loot loop', () => {
       sessionStorage.setItem('delve-e2e', '1');
     });
     await page.goto('/delve');
+    await expect(page.getByTestId('guided-choice')).toBeVisible();
+    await page.getByTestId('guided-jump').click();
     const choice = page.getByTestId('mana-choice');
     await expect(choice).toBeVisible();
     await page.getByTestId('mana-choice-frost').click();
     await expect(choice).toBeHidden();
     await page.getByTestId('tab-skills').click();
+    // The common sword carries the Basic alone: the others show locked.
     const summary = page.getByTestId('abilities-summary');
-    await expect(summary).toContainText('Frost Bolt');
-    // The common sword carries Basic and Primary: the others show locked.
+    await page.getByTestId('chain-skill-primary').click();
+    await expect(summary).toContainText('Carried by uncommon weapons and better');
     await page.getByTestId('chain-skill-defensive').click();
-    await expect(summary).toContainText('Carried by magic weapons and better');
+    await expect(summary).toContainText('Carried by rare weapons and better');
     // The paper doll is on the Loadout tab.
     await page.getByTestId('tab-loadout').click();
     await page.getByTestId('slot-weapon').click();

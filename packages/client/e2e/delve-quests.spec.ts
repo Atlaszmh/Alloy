@@ -30,7 +30,11 @@ test.describe('Delve quests', () => {
     await toast;
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
-    await expect(tracked.getByRole('img', { name: 'Done' })).toBeVisible();
+    // Done, Bring It Home unlocks at once and takes its tracker slot (First Steps waits to be claimed).
+    await expect(tracked).toHaveCount(0);
+    await expect(
+      page.getByTestId('quest-tracker').getByTestId('tracked-bring_it_home'),
+    ).toBeVisible();
     await page.keyboard.press('Escape');
     await page.getByTestId('dive-pause').getByTestId('pause-abandon').click();
     await expect(page.getByTestId('dive-summary')).toContainText('ABANDONED');
@@ -49,7 +53,7 @@ test.describe('Delve quests', () => {
     await expect(page.getByTestId('quest-message')).toContainText('Claimed First Steps');
 
     // Claimed: First Steps moves to Done (open, since it is the open quest), and the next main
-    // quest arrives NEW.
+    // quest (open since First Steps was done) is still NEW.
     await expect(page.getByTestId('quest-group-done')).toContainText('First Steps');
     const next = page.getByTestId('quest-group-main').getByTestId('quest-bring_it_home');
     await expect(next.getByTestId('quest-new')).toBeVisible();
