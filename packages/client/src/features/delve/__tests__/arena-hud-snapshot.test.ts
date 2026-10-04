@@ -13,6 +13,7 @@ import {
   type Chains,
   type Drop,
   type GearItem,
+  type HazardEntity,
   type HeroStatsExtra,
   type HudMap,
   type MonsterEntity,
@@ -373,6 +374,29 @@ describe('arena HUD snapshot: a generated floor', () => {
     });
     expect(map.floor!.fog).toBe(w.fog);
     expect(map.floor!.cells).toBe(w.map.cells);
+  });
+
+  it("carries the map's version, and the hazards in seen cells in their element's colour", () => {
+    vi.mocked(hudMapOf).mockReturnValue(FLOOR);
+    const w = generated();
+    const brazier: HazardEntity = {
+      type: 'hazard',
+      id: 50,
+      kind: 'brazier',
+      element: 'fire',
+      x: 5.5,
+      y: 6.5,
+      radius: 0.4,
+      burst: 2.5,
+      state: 'ready',
+      until: 0,
+    };
+    w.hazards.push(brazier, { ...brazier, id: 51, element: 'frost', x: 7.5, y: 8.5 });
+    w.fog[6 * w.width + 5] = 1; // the brazier's cell has been seen
+    w.map.version = 3;
+    const floor = snapshot(w, null).map.floor!;
+    expect(floor.version).toBe(3);
+    expect(floor.hazards).toEqual([{ x: 5.5, y: 6.5, color: '#ff6a2b' }]);
   });
 
   it('never asks the engine on the open room', () => {

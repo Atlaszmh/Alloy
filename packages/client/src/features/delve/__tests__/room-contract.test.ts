@@ -21,17 +21,17 @@ describe("the client's cell readers", () => {
     expect([out[3], out[7], out[11]]).toEqual([0, 0, 255]);
   });
 
-  it("the minimap's fog never draws a solid cell", () => {
-    const fills: number[] = [];
+  it("the minimap's fog never draws a solid cell as floor (cover has its own colour)", () => {
+    const fills: string[] = [];
     const ctx = {
       fillStyle: '',
       clearRect: () => {},
-      fillRect: (x: number) => fills.push(x),
+      fillRect: (x: number) => fills.push(`${ctx.fillStyle}@${x}`),
     } as unknown as CanvasRenderingContext2D;
     const cells = Uint8Array.from([0, CELL.cover, CELL.foliage, CELL.slow, CELL.crumbling]);
     const floor = { width: 5, height: 1, cells, fog: new Uint8Array(5).fill(2) };
     drawFog(ctx, floor as never, 1);
-    expect(fills).toEqual([0, 2, 3]);
+    expect(fills).toEqual(['#3a4466@0', '#3a4466@2', '#3a4466@3', '#5a6988@1', '#5a6988@4']);
   });
 });
 
