@@ -60,10 +60,11 @@ function inReach(world: ArpgWorld, radius: number): Interactable | null {
   return best;
 }
 
-/** One use a dive: on the world's interactable and, for the bank, in `pending.used`. */
-function use(world: ArpgWorld, it: Interactable): void {
+/** One use a dive: on the world's interactable and, for the bank, in `pending.used` (a `used` event). */
+function use(ctx: SimCtx, it: Interactable): void {
   it.used = true;
-  world.pending.used.push(it.id);
+  ctx.world.pending.used.push(it.id);
+  ctx.events.push({ kind: 'used', id: it.id, interactable: it.kind });
 }
 
 /**
@@ -95,7 +96,7 @@ export function interactTick(ctx: SimCtx): void {
       const it = interactableOf(world, prayer.id);
       const shrine = it && shrineOf(registry, it);
       if (it && !it.used && shrine) {
-        use(world, it);
+        use(ctx, it);
         applyShrine(registry, world, shrine);
       }
     }
@@ -111,7 +112,7 @@ export function interactTick(ctx: SimCtx): void {
   if (!pressed) return;
   switch (it.kind) {
     case 'chest':
-      use(world, it);
+      use(ctx, it);
       openChest(ctx, it);
       break;
     case 'shrine':

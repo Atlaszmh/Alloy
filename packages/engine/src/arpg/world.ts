@@ -13,6 +13,7 @@ import type {
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
 import type { Buff, FloorLayout, Rect } from '../types/floor-map.js';
+import type { TutorialState } from '../types/tutorial.js';
 import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
@@ -55,6 +56,11 @@ export interface FloorOptions {
   diveBuffs?: Buff[];
   /** The interactables used this dive (`DiveState.used`): a generated floor marks them used (default none). */
   used?: string[];
+  /**
+   * A guided start's depth (see the tutorial spec): its hand-built floor's id and
+   * the tutorial's state as the floor begins (`ArpgWorld.tutorialFloor`, `tutorial`).
+   */
+  tutorial?: { floor: string; state: TutorialState };
 }
 
 export function emptyStatus(): StatusState {
@@ -474,6 +480,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     potionDrunk: false,
     hurt: false,
     sandbox: null,
+    tutorialFloor: opts.tutorial?.floor ?? null,
+    tutorial: opts.tutorial ? { ...opts.tutorial.state, tally: {} } : null,
   };
 
   const mods = opts.door?.mods ?? {};
