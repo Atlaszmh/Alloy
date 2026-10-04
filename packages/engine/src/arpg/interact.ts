@@ -8,6 +8,7 @@ import { shardTiersOf } from '../loot/materials.js';
 import type { SimCtx } from './combat.js';
 import { dist } from './geometry.js';
 import { snapToWalkable } from './grid.js';
+import { offFootprints } from './objects-base.js';
 import { essenceAllowed, rollMaterialDrops } from './material-drops.js';
 import { tutorialExitHeld } from './tutorial.js';
 import { tutorialChest } from './tutorial-floor.js';
@@ -192,12 +193,9 @@ function openChest(ctx: SimCtx, it: Interactable): void {
   for (const { material, amount } of rollVault(registry, world, rng)) {
     const angle = rng.next() * Math.PI * 2;
     const r = 0.6 + rng.next() * 0.9;
-    const { x, y } = snapToWalkable(
-      world.map,
-      it.x + Math.cos(angle) * r,
-      it.y + Math.sin(angle) * r,
-      1,
-    );
+    const at = snapToWalkable(world.map, it.x + Math.cos(angle) * r, it.y + Math.sin(angle) * r, 1);
+    // Off every prop's and hazard's footprint (see the room objects spec).
+    const { x, y } = offFootprints(world, it, at);
     const id = world.nextId++;
     world.drops.push({
       id,

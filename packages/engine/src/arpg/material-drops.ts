@@ -14,6 +14,7 @@ import type { DoorDef } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
 import type { SimCtx } from './combat.js';
 import { clipSight, snapToWalkable } from './grid.js';
+import { offFootprints } from './objects-base.js';
 
 /**
  * A slain foe's materials (see the crafting spec's drop tables): the rolls
@@ -56,7 +57,7 @@ export function essenceAllowed(registry: DataRegistry, depth: number): boolean {
 }
 
 /** The bar a floor at `depth` drops: its item level's metal, the next one up at `drops.metalUpChance`. */
-function rollMetal(registry: DataRegistry, depth: number, rng: SeededRNG): MetalId {
+export function rollMetal(registry: DataRegistry, depth: number, rng: SeededRNG): MetalId {
   const metals = registry.getCraftingData().metals;
   const at = metals.indexOf(metalAt(registry, depth));
   const up = rng.next() < registry.getDelveBalance().drops.metalUpChance ? 1 : 0;
@@ -194,9 +195,10 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
   const spawn = (extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern'>) => {
     const angle = rng.next() * Math.PI * 2;
     const r = 0.6 + rng.next() * 0.9;
-    // Short of any wall between it and its foe, in the foe's room (see the floor maps spec).
+    // Short of any wall between it and its foe, off every prop's and hazard's footprint, in the
+    // foe's room (see the floor maps and room objects specs).
     const at = snapToWalkable(world.map, m.x + Math.cos(angle) * r, m.y + Math.sin(angle) * r, 1);
-    const { x, y } = clipSight(world.map, m, at);
+    const { x, y } = offFootprints(world, m, clipSight(world.map, m, at));
     const id = world.nextId++;
     world.drops.push({
       id,
