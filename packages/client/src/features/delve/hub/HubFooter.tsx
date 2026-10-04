@@ -92,9 +92,12 @@ export function HubFooter({
           >
             {applyLabel(registry, view.price)}
           </Button>
-          <Button size="sm" onClick={onDiscardAndDelve} testId="draft-discard-delve">
-            Discard changes &amp; delve
-          </Button>
+          {/* A lesson holds the dive: discarding would only drop the lesson's draft. */}
+          {!lesson && (
+            <Button size="sm" onClick={onDiscardAndDelve} testId="draft-discard-delve">
+              Discard changes &amp; delve
+            </Button>
+          )}
         </div>
       )}
       {lesson && (

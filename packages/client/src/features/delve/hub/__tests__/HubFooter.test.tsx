@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import { heroChains } from '@alloy/engine';
 import { HubFooter } from '../HubFooter';
 import { ApplyBar } from '../skills/ApplyBar';
 import { useDelveStore } from '@/stores/delveStore';
+import { getDelveRegistry } from '@/features/delve/registry';
+import { armed } from '@/features/delve/__tests__/armed';
 
 // See the tutorial spec's gates: an unfinished Anvil lesson holds the Delve button, with
 // `tutorialBlocksDive`'s reason (B1's; mocked here).
@@ -44,6 +47,24 @@ describe("the hub's Delve while a lesson runs", () => {
     footer();
     expect(screen.getByTestId('delve-button')).toBeEnabled();
     expect(screen.queryByTestId('lesson-block')).toBeNull();
+  });
+
+  it('offers no "Discard changes & delve" while a lesson holds the dive (it would only revert)', () => {
+    const s = useDelveStore.getState();
+    s.setProfile(armed(s.profile));
+    const { profile } = useDelveStore.getState();
+    const primary = heroChains(getDelveRegistry(), profile.equipped, profile.pair).primary!;
+    act(() =>
+      s.editDraft('primary', { ...primary, moves: [{ ...primary.moves[0], form: 'lance' }] }),
+    );
+    lesson.why = WHY;
+    const { unmount } = footer();
+    expect(screen.getByTestId('draft-apply')).toBeInTheDocument();
+    expect(screen.queryByTestId('draft-discard-delve')).toBeNull();
+    unmount();
+    lesson.why = null;
+    footer();
+    expect(screen.getByTestId('draft-discard-delve')).toBeEnabled();
   });
 
   it("never holds a dive's Resume", () => {
