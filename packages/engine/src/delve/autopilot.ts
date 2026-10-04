@@ -25,6 +25,7 @@ import {
   completeFloor,
   extractDive,
   failFloor,
+  isBossDepth,
   startDepthOptions,
   startDive,
 } from './dive.js';
@@ -148,10 +149,13 @@ function playFloor(
  * The next door, or null to extract: when spent (low on life, no potions, no
  * shrine), or to bring home the epic flux it has banked, or an essence it has
  * the epic flux to forge (a banked essence is never lost, but a vault's alone
- * isn't worth ending the dive for).
+ * isn't worth ending the dive for), or its first boss's haul: a save's first
+ * extract (Bring It Home, which the main quests wait on; the first boss's
+ * essence and epic flux, which used to bring it home, are gone).
  */
-function pickDoor(profile: DelveProfile): string | null {
+function pickDoor(registry: DataRegistry, profile: DelveProfile): string | null {
   const dive = profile.dive!;
+  if (profile.stats.extracts === 0 && isBossDepth(registry, dive.depth)) return null;
   const essence = Object.values(dive.banked.essences).some((n) => n > 0);
   if (dive.banked.flux.epic > 0 || (essence && profile.materials.flux.epic > 0)) return null;
   if (dive.heroHpFrac < 0.35 && dive.potions === 0 && !dive.doorChoices.includes('shrine')) return null;
@@ -893,7 +897,7 @@ export function runAutopilot(
         result = 'capped';
         break;
       }
-      const door = pickDoor(p);
+      const door = pickDoor(registry, p);
       if (!door) {
         p = extractDive(registry, p);
         result = 'extracted';

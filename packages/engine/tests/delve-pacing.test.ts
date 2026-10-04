@@ -82,9 +82,7 @@ describe('Delve ARPG pacing (autopilot)', () => {
     expect(clear).toBeGreaterThan(1.25 * rush);
   });
 
-  // Fails since B3 (the tutorial's carries: a new save's sword carries the basic chain alone); B3's
-  // plan records what it measured. B4 re-bands.
-  it.fails("rushing still progresses: a beeline reaches at least 80% of the full clear's depth by dive 12", () => {
+  it("rushing still progresses: a beeline reaches at least 80% of the full clear's depth by dive 12", () => {
     const rush = avg(rushRuns.map((r) => r[DIVES - 1].endDepth));
     expect(rush).toBeGreaterThanOrEqual(0.8 * endDepthAt(DIVES));
   });
@@ -105,8 +103,7 @@ describe('Delve crafting pacing targets (economySim)', () => {
       expect(first, `seed ${SEEDS[i]}`).toEqual({ opened: true, kitAlone: false, withDive1: true, forged: true });
   });
 
-  // Fails since B3 (no essence below depth 20); B3's plan records what it measured. B4 re-bands.
-  it.fails('a first epic (or a legendary) is forged by about dive 5', () => {
+  it('a first epic (or a legendary) is forged by about dive 5', () => {
     const first = economies.map(firstEpicDive);
     for (const [i, dive] of first.entries()) {
       expect(dive, `seed ${SEEDS[i]}`).toBeGreaterThan(0);
