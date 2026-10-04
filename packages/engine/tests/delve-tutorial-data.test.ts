@@ -29,8 +29,22 @@ const STEP: TutorialStep = {
   trigger: { type: 'marker', filter: { id: 'walk' }, count: 1 },
 };
 const steps = (...ss: TutorialStep[]) => tutorialDataProblems(withTutorial({ ...data, steps: ss }));
+/** Two rooms joined by door 0, so the floor checks below never read the real floors. */
+const TWO_ROOMS: TutorialFloorDef = {
+  id: 'd1-1',
+  dive: 1,
+  depth: 1,
+  rows: ['#########', '#...#...#', '#.S.0.X.#', '#...#...#', '#########'],
+  rooms: [
+    { id: 0, kind: 'start', rect: { x: 1, y: 1, w: 3, h: 3 } },
+    { id: 1, kind: 'exit', rect: { x: 5, y: 1, w: 3, h: 3 } },
+  ],
+  spawns: [],
+  markers: [{ id: 'walk', at: { x: 6.5, y: 1.5 } }],
+  drops: [],
+};
 const floor = (f: Partial<TutorialFloorDef>) =>
-  tutorialFloorProblems(withTutorial({ ...data, floors: [{ ...data.floors[0], ...f }] }));
+  tutorialFloorProblems(withTutorial({ ...data, floors: [{ ...TWO_ROOMS, ...f }] }));
 
 describe('tutorial.json', () => {
   it('rides the registry: a partner for every primary, and the eight floors of the two dives', () => {
@@ -84,7 +98,7 @@ describe('tutorialDataProblems', () => {
 
   it('names a marker or door its floor lacks, and a gate or a stop off its kind of step', () => {
     expect(steps({ ...STEP, marker: 'nowhere' })).toEqual(['walk: no marker nowhere']);
-    expect(steps({ ...STEP, gate: { door: 1 } })).toEqual(['walk: no door 1']);
+    expect(steps({ ...STEP, gate: { door: 9 } })).toEqual(['walk: no door 9']);
     const stop = { kinds: [], doors: ['winding'], extract: false };
     expect(steps({ ...STEP, stop })).toEqual(['walk: a stop on a stop step']);
     expect(steps({ ...STEP, where: 'stop' })).toEqual([
@@ -117,7 +131,7 @@ describe('tutorialDataProblems', () => {
 });
 
 describe('tutorialFloorProblems', () => {
-  const rows = data.floors[0].rows;
+  const rows = TWO_ROOMS.rows;
 
   it('names a second start, a missing door number and a room outside the rows', () => {
     expect(floor({ rows: rows.map((r) => r.replace('X', 'S')) })).toContain('d1-1: one S');
