@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router';
 import { AppShell } from './components/AppShell';
-import { MainMenu } from './pages/MainMenu';
+import { TitleScreen } from './pages/TitleScreen';
 import { DelveCamp } from './pages/DelveCamp';
 import { DelveRun } from './pages/DelveRun';
 import { DelveTraining } from './pages/DelveTraining';
@@ -19,7 +19,7 @@ export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/" element={<MainMenu />} />
+        <Route path="/" element={<TitleScreen />} />
         <Route path="/delve" element={<DelveCamp />} />
         <Route path="/delve/run" element={<DelveRun />} />
         <Route path="/delve/training" element={<DelveTraining />} />
