@@ -1470,7 +1470,7 @@
     {
       "id": "gilded",
       "name": "Gilded Halls",
-      "text": "+75% Find, more flux and essences. Monsters have +25% life.",
+      "text": "+75% Find and more flux (deep down, more essences too). Monsters have +25% life.",
       "icon": "💰",
       "weight": 3,
       "mods": {

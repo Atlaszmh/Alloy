@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { CHAIN_SKILLS, carriedByText, carriedSkills } from '@alloy/engine';
+import { CHAIN_SKILLS, carriedByText, carriedFrom, carriedSkills } from '@alloy/engine';
 import { HowTo } from '../HowTo';
 import { getDelveRegistry } from '../../registry';
 import { SKILL_NAME } from '../../chains/chain-text';
@@ -53,6 +53,10 @@ describe('HowTo', () => {
         `${SKILL_NAME[s]}: ${carriedByText(registry, s).toLowerCase()}`,
       );
     expect(carries).toHaveTextContent("Awaken a rare weapon on the Forge's Temper bench");
+    // A Jump in save's first forge: the kit's flux at the rarity that carries the Primary.
+    expect(carries).toHaveTextContent(
+      `Forge your first weapon from your starting kit on the Forge tab: with ${carriedFrom(registry, 'primary')} flux it carries your Primary Q`,
+    );
   });
 
   it('tells of materials, the forge, the floor and what a death costs, from the balance', () => {
