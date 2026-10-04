@@ -81,6 +81,7 @@ import {
   run,
   withChains,
 } from './fixtures/arena.js';
+import { armed } from './fixtures/carries.js';
 
 // See the weapon movesets spec.
 
@@ -94,9 +95,9 @@ const weapon = (rarity: Rarity, seed: number, baseId?: string): GearItem =>
 describe('data: movesets', () => {
   it('loads the chains each rarity carries, the extra slots and the prices', () => {
     const m = bal.movesets;
-    expect(m.carries.common).toEqual(['basic', 'primary']);
+    expect(m.carries.common).toEqual(['basic']);
     expect(m.carries.uncommon).toEqual(['basic', 'primary']);
-    expect(m.carries.magic).toEqual(['basic', 'primary', 'defensive']);
+    expect(m.carries.magic).toEqual(['basic', 'primary']);
     expect(m.carries.rare).toEqual(['basic', 'primary', 'defensive']);
     expect(m.carries.epic).toEqual(['basic', 'primary', 'defensive', 'ultimate']);
     expect(m.carries.legendary).toEqual(['basic', 'primary', 'defensive', 'ultimate']);
@@ -121,7 +122,7 @@ describe('data: movesets', () => {
     });
     const carries = { ...balanceData.delve.movesets.carries, common: ['primary'] };
     expect(BalanceConfigSchema.safeParse(withMovesets({ carries })).success).toBe(false);
-    const shrinks = { ...balanceData.delve.movesets.carries, rare: ['basic', 'primary'] };
+    const shrinks = { ...balanceData.delve.movesets.carries, rare: ['basic'] };
     expect(BalanceConfigSchema.safeParse(withMovesets({ carries: shrinks })).success).toBe(false);
     const noUltimate = Object.fromEntries(
       Object.entries(balanceData.delve.movesets.carries).map(([r, s]) => [
@@ -150,20 +151,20 @@ describe('base slots and carried chains', () => {
     }
   });
 
-  it('carries chains by rarity; unarmed carries the basic chain and the Primary', () => {
+  it('carries chains by rarity; unarmed carries the basic chain alone', () => {
     for (const r of RARITY_ORDER)
       expect(carriedSkills(registry, { rarity: r })).toEqual(bal.movesets.carries[r]);
-    expect(carriedSkills(registry, null)).toEqual(['basic', 'primary']);
+    expect(carriedSkills(registry, null)).toEqual(['basic']);
     expect(carriedFrom(registry, 'basic')).toBeNull();
-    expect(carriedFrom(registry, 'primary')).toBeNull();
-    expect(carriedFrom(registry, 'defensive')).toBe('magic');
+    expect(carriedFrom(registry, 'primary')).toBe('uncommon');
+    expect(carriedFrom(registry, 'defensive')).toBe('rare');
     expect(carriedFrom(registry, 'ultimate')).toBe('epic');
   });
 });
 
 describe('default moves', () => {
   it("fills a moveset at its base slots: the weapon's string, and each slot's default form's first move", () => {
-    const m = defaultMoveset(registry, { baseId: 'sword', rarity: 'common' }, 'frost');
+    const m = defaultMoveset(registry, { baseId: 'sword', rarity: 'uncommon' }, 'frost');
     expect(m.slots).toEqual({ basic: 3, primary: 1 });
     expect(m.chains).toEqual({
       basic: [
@@ -209,7 +210,7 @@ describe('default moves', () => {
 
   it('gives unarmed its default moveset in the element asked for', () => {
     const m = defaultMoveset(registry, { baseId: null, rarity: null }, 'nature');
-    expect(m.slots).toEqual({ basic: 3, primary: 1 });
+    expect(m.slots).toEqual({ basic: 3 });
     expect(m.chains.basic).toEqual(
       bal.hero.defaultChain.map((kind) => ({ kind, element: 'nature' })),
     );
@@ -310,7 +311,7 @@ describe('determinism', () => {
 });
 
 describe('save schema: a weapon moveset', () => {
-  const sword = weapon('common', 1, 'sword');
+  const sword = weapon('uncommon', 1, 'sword');
 
   it('reads an item with a moveset, and one without (a version 5 save)', () => {
     expect(GearItemSchema.safeParse(sword).success).toBe(true);
@@ -617,9 +618,9 @@ describe('the edit price (movesetEditPrice): by origin', () => {
 
 describe('edits: setChain and setChains', () => {
   const light = (...elements: ManaType[]): Move => ({ kind: 'light', form: 'bolt', elements });
-  /** A Fire hero past its first dive, with 20 Mana Dust. */
+  /** A Fire hero past its first dive, with 20 Mana Dust and an uncommon sword. */
   const veteran = (): DelveProfile => {
-    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     return { ...p, manaDust: 20, stats: { ...p.stats, dives: 1 } };
   };
 
@@ -628,7 +629,7 @@ describe('edits: setChain and setChains', () => {
       moves: [{ kind: 'heavy', form: 'bolt', elements: ['fire'] }],
       payment: 'mana',
     };
-    const fresh = createDelveProfile(registry, 3, { primary: 'fire' });
+    const fresh = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     const free = setChain(registry, fresh, 'primary', next);
     expect(free.ok).toBe(true);
     expect(chainsOf(free.profile).primary).toEqual(next);
@@ -657,13 +658,15 @@ describe('edits: setChain and setChains', () => {
       'Equip a weapon to build your moves',
     );
     const ward = { moves: [{ ...light('fire'), form: 'ward' as const }], payment: 'mana' as const };
-    expect(reason(p, 'defensive', ward)).toBe('Carried by magic weapons and better');
-    const magic = {
+    expect(reason(p, 'defensive', ward)).toBe('Carried by rare weapons and better');
+    const rare = {
       ...p,
-      equipped: { ...p.equipped, weapon: weapon('magic', 2, 'sword') },
+      equipped: { ...p.equipped, weapon: weapon('rare', 2, 'sword') },
     };
     const nova = { moves: [{ ...light('fire'), form: 'nova' as const }], payment: 'mana' as const };
-    expect(reason(magic, 'ultimate', nova)).toBe('Carried by epic weapons and better');
+    expect(reason(rare, 'ultimate', nova)).toBe(
+      'Carried by epic weapons and better, or an awakened rare',
+    );
     expect(reason(p, 'primary', { ...one, moves: [light('fire'), light('fire')] })).toBe(
       'A chain holds 1 to 1 moves',
     );
@@ -771,8 +774,10 @@ describe('edits by origin', () => {
 });
 
 describe('slots: addSlot', () => {
-  /** A Fire hero with plenty of Links and scrap. */
-  const rich = (p = createDelveProfile(registry, 3, { primary: 'fire' })): DelveProfile => ({
+  /** A Fire hero with an uncommon sword and plenty of Links and scrap. */
+  const rich = (
+    p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' })),
+  ): DelveProfile => ({
     ...p,
     links: 99,
     scrap: 9999,
@@ -854,7 +859,7 @@ describe('slots: addSlot', () => {
       addSlot(registry, q, skill).reason;
     expect(reason(startDive(registry, p, 1))).toBe('Chains can only change between dives');
     expect(reason(unequipSlot(registry, p, 'weapon'))).toBe('Equip a weapon to build your moves');
-    expect(reason(p, 'defensive')).toBe('Carried by magic weapons and better');
+    expect(reason(p, 'defensive')).toBe('Carried by rare weapons and better');
     let full = p;
     for (let i = 0; i < 4; i++) full = addSlot(registry, full, 'primary').profile;
     expect(full.equipped.weapon!.moveset!.slots.primary).toBe(5);
@@ -976,8 +981,8 @@ describe('transfer', () => {
       defensive: 1,
       ultimate: 3,
     });
-    const common = { ...weapon('common', 8, 'axe'), uid: 'axe' };
-    const res = transferMoveset(registry, holding(epic, common), 'axe');
+    const uncommon = { ...weapon('uncommon', 8, 'axe'), uid: 'axe' };
+    const res = transferMoveset(registry, holding(epic, uncommon), 'axe');
     const m = res.profile.equipped.weapon!.moveset!;
     expect(Object.keys(m.chains)).toEqual(['basic', 'primary']);
     expect(m.slots).toEqual({ basic: 3, primary: 2 });
@@ -1018,9 +1023,9 @@ describe('transfer', () => {
 });
 
 describe('valuing a weapon: as it is, and as a home', () => {
-  /** A Fire hero whose sword holds a 4-slot Primary, and `bag` in the bag. */
+  /** A Fire hero whose uncommon sword holds a 4-slot Primary, and `bag` in the bag. */
   const hero = (...bag: GearItem[]): DelveProfile => {
-    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     const sword = slotted(p.equipped.weapon!, { basic: 3, primary: 4 });
     return { ...p, equipped: { ...p.equipped, weapon: sword }, bag, scrap: 1000 };
   };
@@ -1115,9 +1120,9 @@ describe('the dive lock', () => {
 });
 
 describe('the autopilot between dives', () => {
-  /** A Fire hero after its first dive, wielding `w` (the starter sword by default), with nothing to forge. */
+  /** A Fire hero after its first dive, wielding `w` (an uncommon sword by default), with nothing to forge. */
   const veteran = (w?: GearItem): DelveProfile => {
-    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     const weapon = w ?? p.equipped.weapon!;
     return {
       ...p,

@@ -220,6 +220,7 @@ describe('estimateCombat & compareItem', () => {
   it('attunement in an ability element raises Power', () => {
     const weapon = makeItem({
       uid: 'w',
+      rarity: 'uncommon', // it carries the Primary
       slot: 'weapon',
       baseId: 'sword',
       mana: 'fire',

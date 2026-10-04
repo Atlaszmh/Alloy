@@ -6,17 +6,18 @@ import { startDive } from '../src/delve/dive.js';
 import { defaultMoveset } from '../src/loot/moveset.js';
 import type { Chain, Move } from '../src/types/ability.js';
 import { chainsOf, withChains } from './fixtures/arena.js';
+import { armed } from './fixtures/carries.js';
 
 const registry = createDefaultRegistry();
 const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 
 describe('chains on the weapon (save v6)', () => {
-  it("a new profile's sword carries its base moveset in the weapon's element", () => {
+  it("a new profile's common sword carries its base moveset in the weapon's element: the basic chain", () => {
     const p = createDelveProfile(registry, 1);
     expect(p.version).toBe(11);
     const sword = p.equipped.weapon!;
     expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'fire'));
-    expect(sword.moveset!.slots).toEqual({ basic: 3, primary: 1 });
+    expect(sword.moveset!.slots).toEqual({ basic: 3 });
   });
 
   it('setChain takes a valid chain for a skill the weapon carries, and it round-trips', () => {
@@ -27,7 +28,7 @@ describe('chains on the weapon (save v6)', () => {
       ],
       payment: 'cast',
     };
-    const roomy = withChains(createDelveProfile(registry, 1), { primary: chain });
+    const roomy = withChains(armed(registry, createDelveProfile(registry, 1)), { primary: chain });
     let p = setChain(registry, roomy, 'primary', chain).profile;
     p = setChain(registry, p, 'basic', [{ kind: 'heavy', element: 'nature' }]).profile;
     expect(chainsOf(p).primary).toEqual(chain);
@@ -37,7 +38,7 @@ describe('chains on the weapon (save v6)', () => {
   });
 
   it('setChain refuses no moves, more than the slots, an unknown kind, a form from another slot, bad elements or payment', () => {
-    const fresh = createDelveProfile(registry, 1);
+    const fresh = armed(registry, createDelveProfile(registry, 1));
     const move: Move = { kind: 'medium', form: 'bolt', elements: ['fire'] };
     const ok: Chain = { moves: [move], payment: 'mana' };
     const p = withChains(fresh, {
@@ -64,7 +65,7 @@ describe('chains on the weapon (save v6)', () => {
     ).toBe('Unknown element');
     const ward: Chain = { moves: [{ ...move, form: 'ward' }], payment: 'mana' };
     expect(setChain(registry, p, 'defensive', ward).reason).toBe(
-      'Carried by magic weapons and better',
+      'Carried by rare weapons and better',
     );
     expect(set(ok, unequipSlot(registry, p, 'weapon'))).toBe('Equip a weapon to build your moves');
   });

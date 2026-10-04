@@ -100,8 +100,8 @@
     },
     "movesets": {
       "carries": {
-        "common": ["basic", "primary"], "uncommon": ["basic", "primary"],
-        "magic": ["basic", "primary", "defensive"], "rare": ["basic", "primary", "defensive"],
+        "common": ["basic"], "uncommon": ["basic", "primary"],
+        "magic": ["basic", "primary"], "rare": ["basic", "primary", "defensive"],
         "epic": ["basic", "primary", "defensive", "ultimate"], "legendary": ["basic", "primary", "defensive", "ultimate"]
       },
       "extraSlots": { "common": [0, 0], "uncommon": [0, 0], "magic": [0, 1], "rare": [1, 2], "epic": [2, 3], "legendary": [3, 4] },

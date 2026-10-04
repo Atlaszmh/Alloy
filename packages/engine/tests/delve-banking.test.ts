@@ -23,6 +23,7 @@ import type { ArpgWorld } from '../src/types/arpg.js';
 import type { MaterialRef } from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import { registry } from './fixtures/arena.js';
+import { armed } from './fixtures/carries.js';
 // See the crafting spec's "Banking and death".
 
 const IRON: MaterialRef = { kind: 'metal', metal: 'iron' };
@@ -320,9 +321,12 @@ describe('the first boss, and when pickups bank', () => {
     expect(beginFloor(registry, again).loot.firstEssence).toBe(true);
   });
 
-  /** A floor the bot plays at `fps`, banked every frame or only as it ends: the profile after it. */
+  /**
+   * A floor the bot plays at `fps`, banked every frame or only as it ends: the profile after it.
+   * Its sword is uncommon: it fights with the Primary.
+   */
   function play(seed: number, depth: number, fps: number, everyFrame: boolean): DelveProfile {
-    const start = diving(seed);
+    const start = armed(registry, diving(seed));
     let p: DelveProfile = { ...start, dive: { ...start.dive!, depth } };
     const world = beginFloor(registry, p);
     for (let i = 0; i < fps * 120 && !world.heroDead && !world.exited; i++) {

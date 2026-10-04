@@ -259,11 +259,7 @@ describe('previewForge', () => {
     const p = smith();
     const weapon = (flux?: FluxGrade) =>
       previewForge(registry, p, req({ baseId: 'sword', flux })).weapon;
-    expect(weapon()).toEqual({
-      carries: ['basic', 'primary'],
-      slots: { basic: 0, primary: 0 },
-      sockets: 0,
-    });
+    expect(weapon()).toEqual({ carries: ['basic'], slots: { basic: 0 }, sockets: 0 });
     expect(weapon('rare')).toEqual({
       carries: ['basic', 'primary', 'defensive'],
       slots: { basic: 0, primary: C.weaponExtras.rare.slots, defensive: 0 },

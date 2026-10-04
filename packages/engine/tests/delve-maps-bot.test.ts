@@ -12,6 +12,7 @@ import type { DelveProfile } from '../src/types/delve.js';
 import { STEP, bal, dummy, registry } from './fixtures/arena.js';
 import { floorWorld, twoRooms } from './fixtures/flow-map.js';
 import { walledMap } from './fixtures/maps.js';
+import { armed } from './fixtures/carries.js';
 
 // The bot on generated floors (see the floor maps spec's "The autopilot and pacing").
 
@@ -19,9 +20,10 @@ import { walledMap } from './fixtures/maps.js';
 const generating = createDefaultRegistry();
 generating.getDelveBalance().layout.generatedDives = true;
 
-/** A new Fire hero's first floor (seed `seed`), played by the bot to its end. */
+/** A new Fire hero's first floor (seed `seed`), its sword uncommon (a Primary), played by the bot to its end. */
 function playOut(seed: number, policy: BotPolicy): ArpgWorld {
-  let p = startDive(generating, createDelveProfile(generating, seed, { primary: 'fire' }), 1);
+  const hero = armed(generating, createDelveProfile(generating, seed, { primary: 'fire' }));
+  let p = startDive(generating, hero, 1);
   const world = beginFloor(generating, p);
   while (!world.heroDead && !world.exited && world.t < 240)
     p = botStep(generating, p, world, STEP, policy);

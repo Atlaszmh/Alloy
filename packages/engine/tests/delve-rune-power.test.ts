@@ -39,6 +39,7 @@ import type { GearItem } from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
 import type { RuneRef } from '../src/types/rune.js';
 import { arena, bal, chainsOf, dummy, gear, registry, withChains } from './fixtures/arena.js';
+import { armed } from './fixtures/carries.js';
 
 /**
  * Power and runes (see the runes spec's "Power and the autopilot"): Power is
@@ -78,8 +79,9 @@ describe('Power without runes', () => {
   };
 
   it("is what it was at v0.50.0: the starters (an Earth Bolt's endless pierce included) and an archer", () => {
+    // The starter sword made uncommon: its basic chain and a Bolt, as the common one carried then.
     const starter = (primary: ManaType) =>
-      estimate(createDelveProfile(registry, 3, { primary }), DEPTH);
+      estimate(armed(registry, createDelveProfile(registry, 3, { primary })), DEPTH);
     expect(starter('fire')).toEqual({
       dps: 36.424338129677416,
       ehp: 162.01086642686363,
