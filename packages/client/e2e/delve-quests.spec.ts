@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, seedProfile } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile } from './fixtures/delve';
 
 // Quests (see the quests spec): the main line's first quest done in a dive and claimed at the
 // Anvil, and a contract rerolled once a visit.
 test.describe('Delve quests', () => {
+  // A floor's clear may take most of the default two minutes under load.
+  test.describe.configure({ timeout: 240_000 });
   test('Q01: First Steps done in a dive, claimed at the Anvil, and the next main quest opens', async ({
     page,
   }) => {
@@ -21,7 +23,7 @@ test.describe('Delve quests', () => {
     // A door down enters depth 2 (First Steps done the moment it happens, with its toast), then
     // abandon: progress counts, death or not.
     const door = page.getByTestId('door-choice');
-    await expect(door).toBeVisible({ timeout: 60_000 });
+    await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
     // The toast lasts 2 s: watch for it from before the click, so a slow run can't miss it.
     const toast = page
       .getByText('Quest complete: First Steps · claim at the Anvil')

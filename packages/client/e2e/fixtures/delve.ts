@@ -12,6 +12,8 @@ import {
 export const SAVE_KEY = 'alloy:delve:v2';
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 export const ARENA_READY = 30_000;
+/** The bot clearing a generated floor: slow at 1080p while many test browsers run at once. */
+export const FLOOR_CLEAR = 120_000;
 
 /**
  * `p` with its equipped weapon made uncommon, holding that rarity's base moveset in its mana: a
