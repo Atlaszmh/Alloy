@@ -231,6 +231,21 @@ export function terrainOf(map: FloorMap): TerrainBalance | undefined {
   return terrains.get(map);
 }
 
+/**
+ * The ground's pace at point `p` (see the room objects spec's "Slow ground"):
+ * `terrain.slowMult` on slow ground (`bossSlowMult` for a boss), else 1, and 1
+ * off the map or on a map with no terrain bound. `groundSpeed` and the hero's
+ * pushes read it.
+ */
+export function groundAt(map: FloorMap, p: Vec, boss = false): number {
+  const t = terrains.get(map);
+  const cx = Math.floor(p.x);
+  const cy = Math.floor(p.y);
+  if (!t || cx < 0 || cy < 0 || cx >= map.width || cy >= map.height) return 1;
+  if (map.cells[cy * map.width + cx] !== CELL.slow) return 1;
+  return boss ? t.bossSlowMult : t.slowMult;
+}
+
 /** The index (`y × width + x`) of the cell a point stands in. */
 function cellIndex(map: FloorMap, p: Vec): number {
   return cellOf(p.y, map.height) * map.width + cellOf(p.x, map.width);

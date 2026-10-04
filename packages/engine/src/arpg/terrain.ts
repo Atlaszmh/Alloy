@@ -1,6 +1,6 @@
 import type { ArpgWorld, MonsterEntity, Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
-import { bindTerrain } from './grid.js';
+import { bindTerrain, groundAt } from './grid.js';
 
 /**
  * Terrain in a fight (B2; see the room objects spec's "Objects in a fight"):
@@ -10,13 +10,13 @@ import { bindTerrain } from './grid.js';
  */
 
 /**
- * How fast a body moves over the ground under it: `terrain.slowMult` on slow
- * ground (`bossSlowMult` for a boss), else 1. The hero's walk and a foe's walk
- * ask it (and the hero's pushes, B2's in `action.ts`); the dodge, knockback and
- * a charger's dash never do. Stub: 1.
+ * How fast a body moves over the ground under it (`groundAt`): `terrain.slowMult`
+ * on slow ground (`bossSlowMult` for a boss), else 1. The hero's walk and a
+ * foe's walk ask it, and the hero's pushes (`action.ts`, through `groundAt`);
+ * the dodge, knockback and a charger's dash never do.
  */
-export function groundSpeed(_world: ArpgWorld, _body: Vec, _boss = false): number {
-  return 1;
+export function groundSpeed(world: ArpgWorld, body: Vec, boss = false): number {
+  return groundAt(world.map, body, boss);
 }
 
 /**
