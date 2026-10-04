@@ -4,6 +4,7 @@ import { generateItem, SeededRNG, type ProfileActionResult } from '@alloy/engine
 import { AlcoveDialog, ExitConfirm } from '../arena/FloorDialogs';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from './armed';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -41,7 +42,8 @@ describe('AlcoveDialog', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    store().setProfile({ ...store().profile, bag: [helm] });
+    // An uncommon sword (it carries the Primary), and a helm in the bag.
+    store().setProfile({ ...armed(store().profile), bag: [helm] });
     store().startDive(1); // mid-floor: the dive is fighting
   });
 

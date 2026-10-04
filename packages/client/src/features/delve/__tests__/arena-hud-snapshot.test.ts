@@ -22,6 +22,7 @@ import { promptAfter, type PromptEvent } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
 import { RARITY_COLOR } from '../format';
 import { FAMILY_STYLE } from '../runes/rune-style';
+import { armed } from './armed';
 
 // The floor flow's map (B3's) is a stub until it lands: each test says what it returns.
 vi.mock('@alloy/engine', async (orig) => ({
@@ -175,8 +176,9 @@ describe('arena HUD snapshot', () => {
   });
 
   it("a skill the weapon doesn't carry has no entry, and its slot keeps its place", () => {
-    // A new hero's common sword: Basic and Primary only.
-    const w = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    // An uncommon sword: Basic and Primary only.
+    const hero = armed(createDelveProfile(registry, 99));
+    const w = beginFloor(registry, startDive(registry, hero, 1));
     const hud = snapshot(w, null);
     expect(hud.abilities).toHaveLength(3);
     expect(hud.abilities[0]).toMatchObject({ name: 'Fire Bolt' });

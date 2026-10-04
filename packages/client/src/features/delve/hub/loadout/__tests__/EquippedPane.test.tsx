@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { profileStats, strikeInterval, type Blow } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { getDelveRegistry } from '../../../registry';
 import { EquippedPane } from '../EquippedPane';
 
@@ -16,6 +17,7 @@ describe('the equipped pane', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'frost');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
   });
 
   it('draws the paper doll round the hero on the anvil, each slot labelled', () => {

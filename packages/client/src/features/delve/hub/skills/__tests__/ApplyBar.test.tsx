@@ -3,6 +3,7 @@ import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { heroChains, type Chains } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { getDelveRegistry } from '../../../registry';
 import { ApplyBar } from '../ApplyBar';
 
@@ -30,6 +31,7 @@ describe('ApplyBar', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
     onDelve.mockClear();
   });
 

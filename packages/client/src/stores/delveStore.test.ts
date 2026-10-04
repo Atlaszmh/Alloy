@@ -29,6 +29,7 @@ import {
   selectDraftApply,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
+import { armed } from '@/features/delve/__tests__/armed';
 
 const registry = getDelveRegistry();
 /** The hero's chains, as its equipped weapon carries them. */
@@ -55,6 +56,8 @@ describe('delveStore', () => {
   beforeEach(() => {
     localStorage.clear();
     useDelveStore.getState().resetProfile(1234, 'fire');
+    // An uncommon sword: it carries the Primary.
+    useDelveStore.getState().setProfile(armed(useDelveStore.getState().profile));
   });
 
   it('starts a fresh profile with starter gear', () => {
@@ -175,7 +178,7 @@ describe('delveStore', () => {
     expect(chains().primary.moves).toHaveLength(2);
     expect(s().addSlot('defensive')).toMatchObject({
       ok: false,
-      reason: 'Carried by magic weapons and better',
+      reason: 'Carried by rare weapons and better',
     });
   });
 
@@ -417,6 +420,7 @@ describe('delveStore: runes in the draft', () => {
   beforeEach(() => {
     localStorage.clear();
     s().resetProfile(1234, 'fire');
+    s().setProfile(armed(s().profile)); // an uncommon sword: it carries the Primary
     useDelveStore.setState({ unsocket: null });
   });
 
@@ -568,6 +572,7 @@ describe('delveStore: runes outside the draft', () => {
   beforeEach(() => {
     localStorage.clear();
     s().resetProfile(1234, 'fire');
+    s().setProfile(armed(s().profile)); // an uncommon sword: it carries the Primary
     useDelveStore.setState({ unsocket: null });
   });
 
@@ -608,6 +613,7 @@ describe('delveStore: runes outside the draft', () => {
 
   it("choosing the mana gives the weapon's runes back by the pull rule", () => {
     s().resetProfile(5);
+    s().setProfile(armed(s().profile));
     const p = s().profile;
     const weapon = swordWith([split]);
     s().setProfile({ ...p, equipped: { ...p.equipped, weapon } });

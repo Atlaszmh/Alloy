@@ -20,11 +20,12 @@ describe('MovesetView', () => {
     expect(screen.getByTestId('moveset-basic')).toHaveTextContent(
       'Basic 3/5 · light Fire blow · light Fire blow · heavy Fire blow',
     );
+    // A new save's common sword: the basic chain alone.
     expect(screen.getByTestId('moveset-primary')).toHaveTextContent(
-      'Primary 1/5 · light Fire Bolt',
+      'Primary: carried by uncommon weapons and better',
     );
     expect(screen.getByTestId('moveset-defensive')).toHaveTextContent(
-      'Defensive: carried by magic weapons and better',
+      'Defensive: carried by rare weapons and better',
     );
     expect(screen.getByTestId('item-sockets')).toHaveTextContent('Sockets · up to 1 a move');
     expect(screen.getByTestId('item-moveset').outerHTML).not.toMatch(
