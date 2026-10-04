@@ -308,6 +308,9 @@ export class ArenaRenderer {
     this.pixelFloor?.destroy();
     this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
+    // The foliage's canopy, over the creatures (see pixel/pixel-floor.ts).
+    if (this.pixelFloor)
+      this.root.addChildAt(this.pixelFloor.canopy, this.root.getChildIndex(this.entities) + 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
     // A still frame: the new floor's view at once, for the HUD's first snapshot of it.

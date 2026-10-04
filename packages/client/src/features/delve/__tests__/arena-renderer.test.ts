@@ -848,3 +848,23 @@ describe("the room objects' sprites (C2's RoomSprites)", { timeout: 20000 }, () 
     update.mockRestore();
   });
 });
+
+describe("the foliage's canopy", () => {
+  it('is in the scene above the floor and over the creatures', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const view = r as unknown as {
+      root: Container;
+      pixelFloor: { sprite: Sprite; canopy: Sprite } | null;
+      entities: Container;
+    };
+    const { root, pixelFloor, entities } = view;
+    expect(pixelFloor).not.toBeNull();
+    const floorIndex = root.getChildIndex(pixelFloor!.sprite);
+    const canopyIndex = root.getChildIndex(pixelFloor!.canopy);
+    const entitiesIndex = root.getChildIndex(entities);
+    expect(canopyIndex).toBeGreaterThan(floorIndex);
+    expect(canopyIndex).toBeGreaterThan(entitiesIndex);
+  });
+});
