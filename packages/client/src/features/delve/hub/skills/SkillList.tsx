@@ -83,6 +83,7 @@ export function SkillList({
               }}
               onClick={() => ed.pick(s)}
               data-testid={`chain-skill-${s}`}
+              data-tutorial={s === 'primary' ? 'skills.primary' : undefined}
             >
               <span className="flex items-center gap-2.5">
                 <InputGlyph binding={skillBinding(config, s)} size="sm" />
@@ -142,7 +143,13 @@ function ManaPair({ stats, onMana }: { stats: HeroStats; onMana: () => void }) {
     >
       <div className="flex items-center justify-between">
         <span className="k-disp text-[17px]">Mana pair</span>
-        <Button variant="quiet" size="sm" onClick={onMana} testId="mana-realign">
+        <Button
+          variant="quiet"
+          size="sm"
+          onClick={onMana}
+          data-tutorial="skills.mana"
+          testId="mana-realign"
+        >
           {secondary ? 'Realign ›' : 'Bind ›'}
         </Button>
       </div>

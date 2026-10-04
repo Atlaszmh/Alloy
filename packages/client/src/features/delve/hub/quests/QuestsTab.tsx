@@ -13,6 +13,7 @@ import {
   rerollContract,
   type Contract,
   type ProfileActionResult,
+  type TutorialTarget,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
@@ -230,7 +231,11 @@ function Journal({
         );
       })}
       {board.length > 0 && (
-        <Group title={QUEST_KIND.contract.group} testId="quest-group-contract">
+        <Group
+          title={QUEST_KIND.contract.group}
+          testId="quest-group-contract"
+          tutorial="quests.board"
+        >
           {board.map((c, i) => {
             const q = c && quests.find((x) => x.id === c.id);
             return q ? (
@@ -273,14 +278,16 @@ function Journal({
 function Group({
   title,
   testId,
+  tutorial,
   children,
 }: {
   title: string;
   testId: string;
+  tutorial?: TutorialTarget;
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2" data-testid={testId}>
+    <div className="flex flex-col gap-2" data-testid={testId} data-tutorial={tutorial}>
       <h3 className="k-label m-0">{title}</h3>
       {children}
     </div>
@@ -455,6 +462,7 @@ function Rewards({
             binding={CLAIM_BINDING}
             disabled={diving}
             onClick={onClaim}
+            data-tutorial="quests.claim"
             testId="quest-claim"
           >
             {diving ? 'Claim after the dive' : 'Claim'}

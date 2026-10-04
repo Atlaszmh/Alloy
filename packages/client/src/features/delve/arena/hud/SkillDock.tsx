@@ -32,6 +32,8 @@ export interface SkillDockProps {
 }
 
 const SLOT_ACTION = ['primary', 'defensive', 'ultimate'] as const;
+/** Each row's guided-start target (see the tutorial spec's highlights). */
+const SLOT_TARGET = ['hud.primary', 'hud.defensive', undefined] as const;
 
 /** An action's key and pad button from the player's setup. */
 export const bindingOf = (cfg: ControlsConfig, action: ControlAction): Binding => ({
@@ -87,7 +89,10 @@ export function SkillDock({
             openWhile={ab.hold !== null}
             content={() => <SkillTooltip slot={slot} ab={ab} world={world?.current ?? null} />}
           >
-            <div className="grid grid-cols-[76px_260px] items-center gap-[22px] self-start">
+            <div
+              className="grid grid-cols-[76px_260px] items-center gap-[22px] self-start"
+              data-tutorial={SLOT_TARGET[slot]}
+            >
               <SkillSlot
                 slot={slot}
                 ab={ab}
@@ -144,6 +149,7 @@ export function SkillDock({
           }}
           aria-label="Dodge"
           data-testid="dodge-button"
+          data-tutorial="hud.dodge"
           data-charges={charges}
           data-riposte={riposte}
           onMouseDown={noFocus}
@@ -172,6 +178,7 @@ export function SkillDock({
           style={SLOT_STYLE}
           aria-label="Drink potion"
           data-testid="potion-button"
+          data-tutorial="hud.potion"
           disabled={!hud || hud.potions <= 0}
           onMouseDown={noFocus}
           onClick={onPotion}

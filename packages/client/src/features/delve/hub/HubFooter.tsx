@@ -94,7 +94,12 @@ export function HubFooter({
           </Button>
         </div>
       )}
-      <Button onClick={onTraining} binding={TRAINING_BINDING} testId="training-button">
+      <Button
+        onClick={onTraining}
+        binding={TRAINING_BINDING}
+        data-tutorial="hub.training"
+        testId="training-button"
+      >
         <Glyph id="training" size={20} /> Training
       </Button>
       {!active && starts.length > 1 && (
@@ -122,6 +127,7 @@ export function HubFooter({
         data-pad-menu
         data-pad-first
         data-primary-action="delve"
+        data-tutorial="hub.delve"
         testId="delve-button"
       >
         {active ? `Resume dive · depth ${profile.dive!.depth}` : `Delve ▸ depth ${start}`}

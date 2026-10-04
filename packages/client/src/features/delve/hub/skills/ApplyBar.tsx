@@ -104,6 +104,7 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
         binding={APPLY_BINDING}
         aria-label={applyLabel(registry, price)}
         aria-describedby={applyNote ? `${id}-apply` : applyWhy ? `${id}-price` : undefined}
+        data-tutorial="skills.apply"
         testId="chain-apply"
       >
         Apply
@@ -117,6 +118,7 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
         binding={{ key: 'Enter', pad: 'menu' }}
         data-pad-menu
         data-primary-action="delve"
+        data-tutorial="hub.delve"
         testId="delve-button"
       >
         {active ? 'Resume' : 'Delve'}
