@@ -305,7 +305,15 @@ describe('the quest view, tracking and NEW', () => {
   it('a contract advances on the board; complete once every objective is done, claimed once claimed', () => {
     let p = applyQuestEvents(reg, start(), [DODGE, DODGE, REFINE]);
     expect(p.quests.board[1]!.progress).toEqual([{ value: 3, done: true }]);
-    expect(questStates(reg, p).every((s) => s.status === 'complete')).toBe(true);
+    // m1's second refine completed it: m2 unlocked then, afresh.
+    expect(questStates(reg, p).map((s) => [s.id, s.status])).toEqual([
+      ['m1', 'complete'],
+      ['m2', 'active'],
+      ['a', 'complete'],
+      ['b', 'complete'],
+      ['c', 'complete'],
+      ['contract:0', 'complete'],
+    ]);
     p = applyQuestEvents(reg, { ...p, quests: { ...p.quests, claimed: ['m1'] } }, []);
     expect(questStates(reg, p).map((s) => [s.id, s.status, s.isNew])).toEqual([
       ['m1', 'claimed', false],
