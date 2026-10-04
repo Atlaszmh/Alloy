@@ -212,10 +212,10 @@
       "roomVacuum": true, "sightRadius": 10, "fogEvery": 0.1, "exitHintSeconds": 60, "interactRadius": 1.5, "shrineChannel": 0.5,
       "pack": {
         "directorEvery": 0.25, "flowRadius": 24, "stuckTime": 1.5,
-        "ring": { "on": false },
-        "flank": { "on": false, "kiteTime": 1.5, "leadTime": 0.8, "flankShare": { "fromDepth": 3, "base": 0.2, "perDepth": 0.02, "max": 0.5 } },
+        "ring": { "on": true },
+        "flank": { "on": true, "kiteTime": 1.5, "leadTime": 0.8, "flankShare": { "fromDepth": 3, "base": 0.2, "perDepth": 0.02, "max": 0.5 } },
         "cover": { "on": true, "coverSearch": 6, "coverFlee": 3 },
-        "charge": { "on": false, "chargeStun": 1.2, "chargeSlam": 0.5 },
+        "charge": { "on": true, "chargeStun": 1.2, "chargeSlam": 0.5 },
         "ambush": { "on": true, "ambushChance": 0.35, "ambushWake": 3 }
       }
     },

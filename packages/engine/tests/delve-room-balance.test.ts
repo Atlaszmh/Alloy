@@ -17,7 +17,7 @@ const raw = rawBalance.delve;
 describe('delve.terrain and delve.ai.pack', () => {
   it('load with the balance', () => {
     expect(bal.terrain).toMatchObject({ slowMult: 0.6, bossSlowMult: 0.8, fuse: 0.4 });
-    expect(bal.ai.pack).toMatchObject({ directorEvery: 0.25, ring: { on: false } });
+    expect(bal.ai.pack).toMatchObject({ directorEvery: 0.25, ring: { on: true } });
   });
 
   it('refuse a misspelled number and a slow ground that speeds up', () => {
