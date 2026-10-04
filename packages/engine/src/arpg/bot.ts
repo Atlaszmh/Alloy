@@ -6,7 +6,7 @@ import { dirTo, dist } from './geometry.js';
 import { abilityReady, holdCharge, nextMove } from './abilities/cast.js';
 import { nearestMonster } from './abilities/targeting.js';
 import { UNREACHED, downhill, flowField } from './flow.js';
-import { moveCircle, sees } from './grid.js';
+import { doorShut, moveCircle, sees } from './grid.js';
 import { roomAt } from './fog.js';
 import { openedAlcove } from './interact.js';
 
@@ -229,7 +229,7 @@ function cellOf(world: ArpgWorld, p: Vec): number {
 
 /** A flow field over the hero's map toward `p`'s cell, as the doors stand now. */
 function fieldTo(world: ArpgWorld, p: Vec): Uint16Array {
-  const doors = world.map.doors.map((d) => (d.closed ? 1 : 0)).join('');
+  const doors = world.map.doors.map((d) => (doorShut(d) ? 1 : 0)).join('');
   let kept = paths.get(world);
   if (!kept || kept.doors !== doors)
     paths.set(world, (kept = { map: kept?.map ?? heroMap(world.map), doors, byCell: new Map() }));
