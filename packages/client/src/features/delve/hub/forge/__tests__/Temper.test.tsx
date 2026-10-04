@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import {
+  awaken,
+  awakenPrice,
   emptyMaterials,
   findItem,
   generateItem,
@@ -17,9 +19,23 @@ import { Temper } from '../Temper';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
+// Awaken's price and dry run (the tutorial's B3 fills them): each test says what they give.
+vi.mock('@alloy/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@alloy/engine')>()),
+  awaken: vi.fn(),
+  awakenPrice: vi.fn(),
+}));
+
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 const pal = registry.getDelveBalance().pair;
+/** A sword of `rarity`. */
+const sword = (rarity: GearItem['rarity']): GearItem =>
+  generateItem(
+    registry,
+    { uid: 'w1', ilvl: 3, rarity, slot: 'weapon', baseId: 'sword', mana: 'fire' },
+    new SeededRNG(4),
+  );
 /** A magic helm with only the lines given as affixes. */
 const helm = (mana: ManaType, affixes: GearItem['affixes'] = []): GearItem => ({
   ...generateItem(
@@ -36,13 +52,15 @@ function Bench({ uid }: { uid: string }) {
 }
 const bench = (item: GearItem, over: { scrap?: number; manaDust?: number } = {}) => {
   store().setProfile({ ...store().profile, bag: [item], ...over });
-  render(<Bench uid={item.uid} />);
+  return render(<Bench uid={item.uid} />);
 };
 
 describe('Temper', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    vi.mocked(awaken).mockReset();
+    vi.mocked(awakenPrice).mockReset();
   });
 
   it('upgrades the item for scrap, priced against the purse', () => {
@@ -106,6 +124,8 @@ describe('Temper', () => {
     const item = { ...helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]), hones: 2 };
     const cost = honeCost(registry, item);
     bench(item, { scrap: cost + 1 });
+    // The guided start's Anvil lesson highlights it.
+    expect(screen.getByTestId('hone-open')).toHaveAttribute('data-tutorial', 'temper.hone');
     fireEvent.click(screen.getByTestId('hone-open'));
     expect(screen.getByTestId('hone-pick')).toHaveAttribute('data-pad-scope');
     expect(screen.getByTestId('hone-back')).toHaveAttribute('data-pad-back');
@@ -197,5 +217,66 @@ describe('Temper', () => {
       `Needs ${pal.reattuneDust.magic} Mana Dust`,
     );
     expect(screen.getByRole('status')).toHaveTextContent('Attuned to Storm');
+  });
+
+  it("awakens a rare weapon at the engine's price, as its dry run allows, and says why not", () => {
+    const price = { epicFlux: 1, links: 2, scrap: 150 };
+    vi.mocked(awakenPrice).mockReturnValue(price);
+    // The engine's rule stands in: 150 scrap awakens the sword.
+    vi.mocked(awaken).mockImplementation((_registry, p, uid) =>
+      p.scrap < price.scrap
+        ? { ok: false, profile: p, reason: 'Needs 150 scrap' }
+        : {
+            ok: true,
+            profile: {
+              ...p,
+              scrap: p.scrap - price.scrap,
+              bag: p.bag.map((i) => (i.uid === uid ? { ...i, awakened: true } : i)),
+            },
+          },
+    );
+    bench(sword('rare'), { scrap: 149 });
+    expect(awakenPrice).toHaveBeenCalledWith(
+      registry,
+      expect.objectContaining({ uid: 'w1', rarity: 'rare' }),
+    );
+    const button = screen.getByTestId('awaken-button');
+    expect(button).toHaveTextContent('Awaken · 1 Epic flux · 2 Links · 150 scrap');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription('Needs 150 scrap');
+    expect(screen.getByTestId('awaken-refused')).toHaveTextContent('Needs 150 scrap');
+    act(() => store().setProfile({ ...store().profile, scrap: 150 }));
+    expect(button).toBeEnabled();
+    expect(screen.queryByTestId('awaken-refused')).toBeNull();
+    fireEvent.click(button);
+    expect(awaken).toHaveBeenLastCalledWith(
+      registry,
+      expect.objectContaining({ scrap: 150 }),
+      'w1',
+    );
+    expect(store().profile).toMatchObject({ scrap: 0, bag: [{ uid: 'w1', awakened: true }] });
+    expect(screen.getByRole('status')).toHaveTextContent('Awakened!');
+    // Once: the bench says so instead.
+    expect(screen.queryByTestId('awaken')).toBeNull();
+    expect(screen.getByTestId('awakened')).toHaveTextContent('Awakened: it carries the Ultimate.');
+  });
+
+  it('offers Awaken only on a rare weapon not yet awakened', () => {
+    for (const item of [
+      sword('magic'),
+      sword('epic'),
+      { ...helm('fire'), rarity: 'rare' as const },
+    ]) {
+      const { unmount } = bench(item);
+      expect(screen.queryByTestId('awaken')).toBeNull();
+      expect(screen.queryByTestId('awakened')).toBeNull();
+      unmount();
+    }
+    bench({ ...sword('rare'), awakened: true });
+    expect(screen.queryByTestId('awaken')).toBeNull();
+    expect(screen.getByTestId('awakened')).toBeInTheDocument();
+    // The engine is asked for neither the price nor a dry run.
+    expect(awakenPrice).not.toHaveBeenCalled();
+    expect(awaken).not.toHaveBeenCalled();
   });
 });
