@@ -30,7 +30,6 @@ function floor(depth: number, seed: number): ArpgWorld {
       nextUid: 1,
       find: 0,
       legendaryBoost: 1,
-      firstEssence: false,
       patterns: [],
       dropsGiven: [],
       pair: [],

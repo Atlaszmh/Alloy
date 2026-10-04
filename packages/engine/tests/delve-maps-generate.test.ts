@@ -42,7 +42,6 @@ const world = (depth: number, seed: number, opts: Partial<FloorOptions> = {}, re
       nextUid: 1,
       find: 0,
       legendaryBoost: 1,
-      firstEssence: false,
       patterns: [],
       dropsGiven: [],
       pair: [],

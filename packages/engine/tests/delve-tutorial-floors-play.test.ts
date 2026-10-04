@@ -49,7 +49,6 @@ function world(p: DelveProfile, id: string, hp = 1, potions = 3, skills = true):
       nextUid: p.nextUid,
       find: stats.magicFind,
       legendaryBoost: 1,
-      firstEssence: false,
       patterns: [...p.patterns],
       dropsGiven: [],
       pair: pairElements(p.pair),

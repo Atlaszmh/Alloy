@@ -34,8 +34,6 @@ export interface MaterialDropContext {
   find: number;
   /** Lucky Charm's: multiplies the essence chance. */
   legendaryBoost: number;
-  /** Unread: the first boss's guarantee is gone (see the tutorial spec); B4 removes it. */
-  firstEssence?: boolean;
   /** The patterns the hero knows: a pattern drop is one it doesn't. */
   patterns: string[];
 }

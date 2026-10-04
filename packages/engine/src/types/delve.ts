@@ -852,8 +852,6 @@ export interface DelveProfile {
   checkpoints: number[];
   codex: Record<string, CodexEntry>;
   stats: DelveStats;
-  /** The first boss's essence has banked (until it does, the first boss guarantees one). */
-  firstEssenceGiven: boolean;
   autoSalvage: Record<Rarity, boolean>;
   /** The hero's two elements. */
   pair: ManaPair;

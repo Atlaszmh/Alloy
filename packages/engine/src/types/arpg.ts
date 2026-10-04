@@ -310,8 +310,6 @@ export interface Drop {
   material?: MaterialRef;
   /** A pattern drop's base id (kind `'pattern'`): learned when it banks. */
   pattern?: string;
-  /** The first boss's guaranteed essence: picking it up sets `ArpgWorld.firstEssenceTaken`. */
-  firstEssence?: boolean;
   /** The room of the foe it fell from (none: a hall's, or the open room's): its last kill pulls it in. */
   roomId?: number;
   amount: number;
@@ -705,11 +703,6 @@ export interface LootContext {
   /** Total Find in percentage points (gear + the door's `find`). The door's drop multipliers are `world.door`'s. */
   find: number;
   legendaryBoost: number;
-  /**
-   * The first boss's essence hasn't banked (`DelveProfile.firstEssenceGiven`):
-   * the first boss guarantees it, with an epic flux (`dropMaterials` clears it).
-   */
-  firstEssence: boolean;
   /** The patterns the hero knows: a pattern drop teaches one it doesn't. */
   patterns: string[];
   /**
@@ -850,11 +843,6 @@ export interface ArpgWorld {
   queuedInteract: boolean;
   kills: number;
   bossKilled: boolean;
-  /**
-   * The first boss's guaranteed essence was picked up on this floor (it rides the
-   * floor's haul): `completeFloor` counts it as given only then.
-   */
-  firstEssenceTaken: boolean;
   cleared: boolean;
   clearedAt: number;
   heroDead: boolean;

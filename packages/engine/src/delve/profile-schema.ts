@@ -309,7 +309,6 @@ const ProfileSchema = z.object({
     scrapEarned: z.number().min(0),
     itemsFound: PerRarityCount,
   }),
-  firstEssenceGiven: z.boolean(),
   autoSalvage: z.object({
     common: z.boolean(),
     uncommon: z.boolean(),

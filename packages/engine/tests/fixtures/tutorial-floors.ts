@@ -79,7 +79,6 @@ export function builtWorld(
       nextUid: 100,
       find: 0,
       legendaryBoost: 1,
-      firstEssence: false,
       patterns: [],
       dropsGiven: [],
       pair: ['fire', 'frost'],

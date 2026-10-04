@@ -18,7 +18,7 @@ function blessed(diveBuffs: Buff[]) {
     ...{ depth: 2, door: null, stats: STATS, chains: DEFAULT_CHAINS, heroHpFrac: 1, potions: 3 },
     ...{ phoenixAvailable: true, seed: 77, empty: true, diveBuffs },
     loot: {
-      ...{ nextUid: 100, find: 10, legendaryBoost: 1, firstEssence: false },
+      ...{ nextUid: 100, find: 10, legendaryBoost: 1 },
       ...{ patterns: [], dropsGiven: [], pair: [] },
     },
   });
