@@ -3,7 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { generateItem, SeededRNG } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../../registry';
-import { PauseScreen } from '../PauseScreen';
+import { PauseScreen, type PauseScreenProps } from '../PauseScreen';
 import type { HubLink } from '../types';
 
 // The fixture's quests: the journal link opens the Quests tab on them.
@@ -16,7 +16,7 @@ vi.mock('../../quests/useQuests', async () => {
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 
-const renderPause = (link?: HubLink, atStop = false) => {
+const renderPause = (link?: HubLink, atStop = false, more: Partial<PauseScreenProps> = {}) => {
   const on = { onResume: vi.fn(), onAnvil: vi.fn(), onAbandon: vi.fn() };
   const dive = store().profile.dive!;
   render(
@@ -27,6 +27,7 @@ const renderPause = (link?: HubLink, atStop = false) => {
       link={link}
       atStop={atStop}
       {...on}
+      {...more}
     />,
   );
   return on;
@@ -161,6 +162,30 @@ describe('PauseScreen', () => {
     expect(screen.getByTestId('equip-locked')).toHaveTextContent('Locked during the dive');
     expect(screen.queryByTestId('equip-button')).toBeNull();
     expect(screen.getByRole('tab', { name: /Loadout/ })).toHaveTextContent('1');
+  });
+
+  it('while the guided start runs, the Anvil and Abandon restart the depth; Skip tutorial asks first', () => {
+    const onSkipTutorial = vi.fn();
+    const on = renderPause(undefined, false, { onSkipTutorial });
+    expect(screen.getByTestId('pause-anvil')).toHaveTextContent(
+      'The depth restarts as you entered it',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Abandon · the depth restarts' }));
+    expect(on.onAbandon).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('pause-skip-step')).toBeNull();
+    fireEvent.click(screen.getByTestId('pause-skip-tutorial'));
+    expect(onSkipTutorial).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('skip-tutorial-confirm'));
+    expect(onSkipTutorial).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('skip-tutorial')).toBeNull();
+  });
+
+  it("at the guided start's stop Abandon waits; Skip this step shows while the engine allows it", () => {
+    const onSkipStep = vi.fn();
+    renderPause(undefined, true, { onSkipTutorial: vi.fn(), onSkipStep });
+    expect(screen.getByTestId('pause-abandon')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('pause-skip-step'));
+    expect(onSkipStep).toHaveBeenCalledTimes(1);
   });
 
   it('opens on Quests from the journal', () => {
