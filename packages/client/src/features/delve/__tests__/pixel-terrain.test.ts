@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CELL, LOOK_IDS, type FloorMap, type LookId } from '@alloy/engine';
 import { FLOOR_CELL, FLOOR_LOOKS, LOOK, MAT, PixelWorld } from '../arena/pixel/world';
+import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
 import { ringMap } from './hand-map';
 
@@ -156,5 +157,23 @@ describe("a floor painted from its map's cells", { timeout: 20000 }, () => {
       [31, 30, MAT.SLOW],
     ])
       expect(cellsOf(pw, mx, my).every((i) => pw.mat[i] === m)).toBe(true);
+  });
+
+  it("draws a ruin in the biome's stone, brighter than the cliffs; timber and mud in their own colours", () => {
+    const map = furnished();
+    map.look[24 * map.width + 29] = LOOK_IDS.indexOf('timber');
+    const pw = floor(map);
+    const out = new Uint8ClampedArray(pw.size * 4);
+    renderPixelWorld(pw, out, 1);
+    const colour = (mx: number, my: number) =>
+      [0, 1, 2].map((k) => cellsOf(pw, mx, my).reduce((s, i) => s + out[i * 4 + k], 0) / PPU ** 2);
+    const sum = (c: number[]) => c[0] + c[1] + c[2];
+    const ruin = colour(27, 24);
+    expect(sum(ruin)).toBeGreaterThan(sum(colour(23, 28)) + 40); // the combat room's west wall
+    const timber = colour(29, 24);
+    expect(timber[0] - timber[2]).toBeGreaterThan(ruin[0] - ruin[2] + 10); // brown, not grey
+    const mud = colour(31, 30);
+    const ground = colour(30, 27);
+    expect(Math.max(...mud.map((v, k) => Math.abs(v - ground[k])))).toBeGreaterThan(15);
   });
 });

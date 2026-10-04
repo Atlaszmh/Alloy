@@ -1,5 +1,5 @@
 import type { RGB } from './themes';
-import { DETAIL, MAT, PART, PROP, type PixelWorld } from './world';
+import { DETAIL, LOOK, MAT, PART, PROP, type PixelWorld } from './world';
 
 /**
  * Draws a PixelWorld into an RGBA buffer, lit like a night scene:
@@ -51,6 +51,32 @@ const RIPPLE: RGB = [230, 250, 255];
 const WHITE: RGB = [255, 255, 255];
 /** Per-sub-pixel scatter of the growth's leaves. */
 const GROWTH_MUL = [5.37, 9.11, 12.3, 15.7];
+/** A mine's timber ruins: planks, and the gaps between them. */
+const TIMBER: RGB = [150, 102, 60];
+const TIMBER_GAP: RGB = [52, 34, 24];
+/** Each slow ground's two tones (the second where the cell's noise is high), the same in every biome. */
+const SLOW_TONES: Record<number, readonly [RGB, RGB]> = {
+  [LOOK.coal_rubble]: [
+    [30, 26, 28],
+    [64, 58, 56],
+  ],
+  [LOOK.snowdrift]: [
+    [228, 238, 250],
+    [252, 254, 255],
+  ],
+  [LOOK.oil]: [
+    [18, 16, 24],
+    [60, 44, 92],
+  ],
+  [LOOK.mud]: [
+    [56, 40, 28],
+    [78, 56, 36],
+  ],
+  [LOOK.ash]: [
+    [54, 50, 50],
+    [82, 76, 74],
+  ],
+};
 
 /** A theme green pushed greener, for the nature growth. */
 function greener(c: RGB): RGB {
@@ -311,6 +337,34 @@ function fillBase(pw: PixelWorld, S: WorldScratch, i: number): void {
       g = n > 0.9 ? 66 : 18;
       b = n > 0.9 ? 98 : 28;
       break;
+    case MAT.RUIN: {
+      // Blocks of the biome's stone (a mine's timber planks), their joints in shade.
+      const wood = pw.lookAt(i) === LOOK.timber;
+      const joint = (pw.detail[i] & DETAIL.MORTAR) !== 0;
+      const v = joint ? 0.6 : 0.78 + (tone / 255) * 0.24 + (n - 0.5) * 0.06;
+      c = wood ? (joint ? TIMBER_GAP : TIMBER) : th.stone;
+      r = c[0] * v;
+      g = c[1] * v;
+      b = c[2] * v;
+      break;
+    }
+    case MAT.SLOW: {
+      const look = pw.lookAt(i);
+      if (look === LOOK.rubble) {
+        // A crumbled structure: chunks of its stone strewn on the bare ground.
+        const v = 0.6 + n * 0.3;
+        c = n > 0.62 ? th.stone : th.soil[1];
+        r = c[0] * v;
+        g = c[1] * v;
+        b = c[2] * v;
+      } else {
+        c = (SLOW_TONES[look] ?? SLOW_TONES[LOOK.mud])[n > 0.7 ? 1 : 0];
+        r = c[0];
+        g = c[1];
+        b = c[2];
+      }
+      break;
+    }
     default:
       c = th.wall[Math.min(2, tone)];
       r = c[0];
@@ -683,7 +737,7 @@ function passGround(F: Frame): void {
       const ch = charge[i];
       const special = blightGlow > 0 || fireA > 0 || ch > 0.05;
       const wetCell = wetNear[(y - y0) * vw + (x - x0)] === 1 && m !== MAT.WALL;
-      const jitterOn = s > 1 && m !== MAT.STONE && m !== MAT.RUBBLE;
+      const jitterOn = s > 1 && m !== MAT.STONE && m !== MAT.RUBBLE && m !== MAT.RUIN;
       const pxBase = (x - x0) * s;
 
       for (let sy = 0; sy < s; sy++) {
@@ -858,7 +912,7 @@ function passFoliage(F: Frame): void {
           const rx = (x - x0) * s + sx + (sv > thr ? 1 : sv < -thr ? -1 : 0);
           if (rx < 0 || rx >= RW) continue;
           const j = V.rowCell[ry] * W + V.colCell[rx];
-          if ((mat[j] === MAT.WALL && !bush) || fluid[j] > 0.003) continue;
+          if ((mat[j] === MAT.WALL && !bush) || mat[j] === MAT.RUIN || fluid[j] > 0.003) continue;
           const o = (ry * RW + rx) * 4;
           out[o] = tr;
           out[o + 1] = tg;
