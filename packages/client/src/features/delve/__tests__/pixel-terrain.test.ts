@@ -1,8 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { CELL, LOOK_IDS, type FloorMap, type LookId } from '@alloy/engine';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  beginFloor,
+  CELL,
+  createDelveProfile,
+  LOOK_IDS,
+  startDive,
+  type FloorMap,
+  type LookId,
+} from '@alloy/engine';
 import { FLOOR_CELL, FLOOR_LOOKS, LOOK, MAT, PixelWorld } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
+import { FloorEngine, floorInit, type FloorFrame } from '../arena/pixel/floor-engine';
+import { PixelFloor } from '../arena/pixel/pixel-floor';
+import { getDelveRegistry } from '../registry';
 import { ringMap } from './hand-map';
 
 // See the room objects spec's "Client": the pixel floor paints its terrain from the map's cells
@@ -24,8 +35,8 @@ function seeded(seed: number): () => number {
 
 /**
  * ringMap with its combat room (24, 22; 16 × 14) furnished by hand: a cover line
- * (26–29, 24), crumbling cover (34–35, 24–25), foliage (26–28, 30–32), mud
- * (31–32, 30) and shallow water (35–37, 30–32).
+ * (26–29, 24), crumbling cover (34–35, 24–25: structure 0), foliage (26–28,
+ * 30–32), mud (31–32, 30) and shallow water (35–37, 30–32).
  */
 function furnished(): FloorMap {
   const map = ringMap();
@@ -41,6 +52,8 @@ function furnished(): FloorMap {
   put(26, 30, 28, 32, CELL.foliage, 'undergrowth');
   put(31, 30, 32, 30, CELL.slow, 'mud');
   put(35, 30, 37, 32, CELL.slow, 'shallow_water');
+  const cells = [34, 35].flatMap((x) => [24, 25].map((y) => ({ x, y })));
+  map.structures = [{ id: 0, cells, life: 120, maxLife: 120 }];
   return map;
 }
 
@@ -58,6 +71,7 @@ function floor(map: FloorMap, theme: PixelTheme = PIXEL_THEMES.sunken_quarry): P
       height: map.height,
       cells: map.cells,
       look: map.look,
+      structures: map.structures.map((s) => s.cells),
       rooms: map.rooms,
       ppu: PPU,
     },
@@ -75,6 +89,9 @@ function cellsOf(pw: PixelWorld, mx: number, my: number): number[] {
 
 /** The floor cell in the middle of map cell (mx, my). */
 const mid = (pw: PixelWorld, mx: number, my: number) => cellsOf(pw, mx, my)[12];
+
+/** Map cell (x, y)'s index on ringMap's 64 × 64. */
+const at = (x: number, y: number) => y * 64 + x;
 
 describe('the pixel floor reads the engine', () => {
   it("mirrors the engine's cell codes and looks", () => {
@@ -175,5 +192,109 @@ describe("a floor painted from its map's cells", { timeout: 20000 }, () => {
     const mud = colour(31, 30);
     const ground = colour(30, 27);
     expect(Math.max(...mud.map((v, k) => Math.abs(v - ground[k])))).toBeGreaterThan(15);
+  });
+});
+
+describe('crumbling cover on the pixel floor', { timeout: 20000 }, () => {
+  it('cracks from the start, and more as its structure wears; cover never', () => {
+    const pw = floor(furnished());
+    expect(pw.crackAt(mid(pw, 34, 24))).toBe(0.25);
+    expect(pw.crackAt(mid(pw, 27, 24))).toBe(0);
+    const light = () => {
+      const out = new Uint8ClampedArray(pw.size * 4);
+      renderPixelWorld(pw, out, 1);
+      return [34, 35]
+        .flatMap((x) => cellsOf(pw, x, 24))
+        .reduce((s, i) => s + out[i * 4] + out[i * 4 + 1] + out[i * 4 + 2], 0);
+    };
+    const whole = light();
+    pw.setCracks([1]);
+    expect(pw.crackAt(mid(pw, 34, 24))).toBe(1);
+    expect(light()).toBeLessThan(whole * 0.95);
+  });
+
+  it('crumbles into rubble where it is told: slow ground a step down, and a burst of its stone', () => {
+    const pw = floor(furnished());
+    const cells = cellsOf(pw, 34, 24);
+    const before = pw.terrain[cells[12]];
+    const particles = pw.particleCount;
+    pw.setCells([at(34, 24), CELL.slow, LOOK.rubble, at(35, 24), CELL.slow, LOOK.rubble]);
+    for (const i of cells) {
+      expect(pw.mat[i]).toBe(MAT.SLOW);
+      expect(pw.lookAt(i)).toBe(LOOK.rubble);
+      expect(pw.edge[i]).toBe(0);
+    }
+    expect(pw.terrain[cells[12]]).toBeLessThan(before - 0.08);
+    expect(pw.particleCount).toBeGreaterThan(particles + 10);
+    expect(pw.mat[mid(pw, 34, 25)]).toBe(MAT.RUIN);
+  });
+});
+
+/** A dive's first floor, played on `map`. */
+function onMap(map: FloorMap) {
+  const registry = getDelveRegistry();
+  const world = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+  return Object.assign(world, { map, width: map.width, height: map.height });
+}
+
+/** A frame of the floor: the hero at (30, 27), looking at the combat room. */
+function frame(more: Partial<FloorFrame> = {}): FloorFrame {
+  return {
+    dt: 0,
+    events: [],
+    bodies: [],
+    hero: { x: 30, y: 27, element: null },
+    projectiles: [],
+    zones: [],
+    drops: [],
+    view: { left: 20, top: 20, right: 40, bottom: 34 },
+    ...more,
+  };
+}
+
+describe('the floor follows the map', { timeout: 20000 }, () => {
+  it("repaints the cells a frame names, and cracks the structures by the frame's wear", () => {
+    const engine = new FloorEngine(floorInit(onMap(furnished())));
+    const pw = engine.world;
+    engine.frame(frame({ cracks: [0.5] }));
+    expect(pw.damage[0]).toBe(0.5);
+    engine.frame(frame({ cells: [at(34, 25), CELL.slow, LOOK.rubble] }));
+    expect(pw.mat[mid(pw, 34, 25)]).toBe(MAT.SLOW);
+  });
+
+  it("sends a crumble's cells with the next frame, once, and its structures' wear as it moves", () => {
+    const map = furnished();
+    const world = onMap(map);
+    const sent: FloorFrame[] = [];
+    const spy = vi.spyOn(FloorEngine.prototype, 'frame').mockImplementation((f) => {
+      sent.push(f);
+      return null;
+    });
+    const floor = new PixelFloor(floorInit(world));
+    const view = { left: 20, top: 20, right: 40, bottom: 34 };
+    floor.update(0.1, world, view);
+    expect(sent[0].cracks).toEqual([0]);
+    expect(sent[0].cells).toBeUndefined();
+    map.structures[0].life = 115; // a scratch: under half a step of wear
+    floor.update(0.1, world, view);
+    expect(sent[1].cracks).toBeUndefined();
+    map.structures[0].life = 60;
+    floor.update(0.1, world, view);
+    expect(sent[2].cracks).toEqual([0.5]);
+    for (const { x, y } of map.structures[0].cells) {
+      map.cells[at(x, y)] = CELL.slow;
+      map.look[at(x, y)] = LOOK.rubble;
+    }
+    map.structures[0].life = 0;
+    map.version++;
+    floor.update(0.1, world, view);
+    expect(sent[3].cells).toEqual(
+      [at(34, 24), at(35, 24), at(34, 25), at(35, 25)].flatMap((c) => [c, CELL.slow, LOOK.rubble]),
+    );
+    expect(sent[3].cracks).toEqual([1]);
+    floor.update(0.1, world, view);
+    expect(sent[4].cells).toBeUndefined();
+    spy.mockRestore();
+    floor.destroy();
   });
 });

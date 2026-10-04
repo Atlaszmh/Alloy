@@ -1,4 +1,4 @@
-import type { Rect, RoomKind } from '@alloy/engine';
+import type { Rect, RoomKind, Vec } from '@alloy/engine';
 import type { PixelTheme, RGB } from './themes';
 
 /**
@@ -142,6 +142,8 @@ export interface MapPlan {
   cells: Uint8Array;
   /** Each map cell's look (`FLOOR_LOOKS` index), row by row. */
   look: Uint8Array;
+  /** Each crumbling structure's cells, by its id (`setCracks` follows their wear). */
+  structures: Vec[][];
   rooms: { kind: RoomKind; rect: Rect }[];
   /** Floor cells per map cell. */
   ppu: number;
@@ -257,6 +259,10 @@ export class PixelWorld {
   readonly plan: MapPlan | null;
   /** Each floor cell's map cell (−1 outside the map), on a generated floor. */
   private readonly mapOf: Int32Array | null;
+  /** Each map cell's crumbling structure (its index), −1 for none. */
+  private readonly structOf: Int16Array | null;
+  /** How worn each crumbling structure is (0 whole, 1 about to crumble): its cracks. */
+  readonly damage: Float32Array;
   /** Each map cell's room (its index), −1 in a hall or a wall. */
   private roomOf: Int16Array | null = null;
   /** Each room's paving origin (floor cells), or null for its wild ground. */
@@ -346,6 +352,11 @@ export class PixelWorld {
     this.edge = new Uint8Array(n);
     this.plan = opts.plan ?? null;
     this.mapOf = this.plan ? new Int32Array(n) : null;
+    this.structOf = this.plan ? new Int16Array(this.plan.cells.length).fill(-1) : null;
+    this.damage = new Float32Array(this.plan?.structures.length ?? 0);
+    this.plan?.structures.forEach((cells, k) => {
+      for (const { x, y } of cells) this.structOf![y * this.plan!.width + x] = k;
+    });
     this.chunksW = Math.ceil(this.width / CHUNK);
     this.chunksH = Math.ceil(this.height / CHUNK);
     this.awake = new Uint8Array(this.chunksW * this.chunksH).fill(1);
@@ -380,6 +391,40 @@ export class PixelWorld {
   /** A ruin, foliage or slow ground: the effects mark it but never change what it is. */
   isTerrain(i: number): boolean {
     return this.codeAt(i) >= FLOOR_CELL.cover;
+  }
+
+  /** How cracked floor cell `i` is drawn (0–1): crumbling cover from a quarter, more as its structure wears. */
+  crackAt(i: number): number {
+    if (this.codeAt(i) !== FLOOR_CELL.crumbling) return 0;
+    const k = this.structOf![this.mapOf![i]];
+    return 0.25 + 0.75 * (k < 0 ? 0 : this.damage[k]);
+  }
+
+  /** Each crumbling structure's wear (0–1), in the map's order. */
+  setCracks(damage: readonly number[]): void {
+    for (let k = 0; k < this.damage.length; k++) this.damage[k] = damage[k] ?? 0;
+  }
+
+  /**
+   * Repaint the map cells that changed (flat triples: cell, code, look): a
+   * crumbled structure's rubble. A cell that was solid and is no longer throws
+   * up its stone.
+   */
+  setCells(changes: readonly number[]): void {
+    const plan = this.plan;
+    if (!plan) return;
+    const P = plan.ppu;
+    for (let k = 0; k < changes.length; k += 3) {
+      const c = changes[k];
+      const was = plan.cells[c];
+      plan.cells[c] = changes[k + 1];
+      plan.look[c] = changes[k + 2];
+      const x0 = this.margin + (c % plan.width) * P;
+      const y0 = this.margin + Math.floor(c / plan.width) * P;
+      for (let y = y0; y < y0 + P; y++)
+        for (let x = x0; x < x0 + P; x++) this.paint(y * this.width + x, x, y);
+      if (solidCell(was) && !solidCell(plan.cells[c])) this.crumble(x0 + P / 2, y0 + P / 2);
+    }
   }
 
   // ── Generation ──────────────────────────────────────────────────────────
@@ -1378,6 +1423,28 @@ export class PixelWorld {
           0,
         );
     }
+  }
+
+  /** Stone thrown up where a structure's cell crumbles, and its dust. */
+  private crumble(cx: number, cy: number): void {
+    const r = this.rand;
+    const stone = packRGB(this.theme.stone);
+    for (let s = 0; s < 8; s++) {
+      const a = r() * Math.PI * 2;
+      const sp = 0.3 + r() * 0.8;
+      this.spawn(
+        PART.DEBRIS,
+        cx,
+        cy,
+        2,
+        Math.cos(a) * sp,
+        Math.sin(a) * sp * 0.8,
+        1 + r() * 2,
+        600,
+        stone,
+      );
+    }
+    this.burst(PART.DUST, cx, cy, 6, 0.3, 0.08, 90);
   }
 
   addRipple(x: number, y: number): void {

@@ -1,5 +1,5 @@
 import { BufferImageSource, Sprite, Texture } from 'pixi.js';
-import type { ArpgEvent, ArpgWorld } from '@alloy/engine';
+import type { ArpgEvent, ArpgWorld, FloorMap } from '@alloy/engine';
 import {
   FLOOR_PPU,
   FLOOR_SCALE,
@@ -9,6 +9,9 @@ import {
   type FloorInit,
 } from './floor-engine';
 import type { FloorRequest, FloorResponse } from './floor-worker';
+
+/** A structure's wear goes in steps of this fraction, so a scratch sends nothing. */
+const CRACK_STEPS = 8;
 
 /**
  * The simulated pixel floor under the arena, as a Pixi sprite in world units.
@@ -33,9 +36,16 @@ export class PixelFloor {
   private texture: Texture | null = null;
   private shown = false;
   private destroyed = false;
+  /** The map's cells and looks as last sent, the version they were read at, and its structures' wear. */
+  private readonly cells: Uint8Array | null;
+  private readonly looks: Uint8Array | null;
+  private version = -1;
+  private cracks = '';
 
   constructor(init: FloorInit) {
     this.init = init;
+    this.cells = init.plan ? init.plan.cells.slice() : null;
+    this.looks = init.plan ? init.plan.look.slice() : null;
     this.sprite = new Sprite(Texture.EMPTY);
     this.sprite.scale.set(1 / (FLOOR_PPU * FLOOR_SCALE));
     if (typeof Worker === 'undefined') {
@@ -75,8 +85,9 @@ export class PixelFloor {
     if (this.destroyed) return;
     this.pendingDt += dt;
     if (this.inFlight) return;
-    if (this.shown && this.pendingDt === 0 && this.pendingEvents.length === 0) return;
-    const frame = snapshotArena(w, this.pendingDt, this.pendingEvents, view);
+    const changes = this.changes(w.map);
+    if (this.shown && this.pendingDt === 0 && this.pendingEvents.length === 0 && !changes) return;
+    const frame = { ...snapshotArena(w, this.pendingDt, this.pendingEvents, view), ...changes };
     this.pendingDt = 0;
     this.pendingEvents = [];
     if (this.worker) {
@@ -88,6 +99,33 @@ export class PixelFloor {
       const pic = this.engine.frame(frame);
       if (pic) this.show(pic.pixels, pic.width, pic.height, pic.x, pic.y);
     }
+  }
+
+  /** What changed on the map since the last frame sent: its cells (on a new version), its structures' wear. */
+  private changes(map: FloorMap): Pick<FloorFrame, 'cells' | 'cracks'> | null {
+    if (!this.cells || !this.looks) return null;
+    let out: Pick<FloorFrame, 'cells' | 'cracks'> | null = null;
+    if (map.version !== this.version) {
+      this.version = map.version;
+      const cells: number[] = [];
+      for (let c = 0; c < map.cells.length; c++)
+        if (map.cells[c] !== this.cells[c] || map.look[c] !== this.looks[c]) {
+          cells.push(c, map.cells[c], map.look[c]);
+          this.cells[c] = map.cells[c];
+          this.looks[c] = map.look[c];
+        }
+      if (cells.length) out = { cells };
+    }
+    // By id: a crumbled structure may leave the list.
+    const cracks: number[] = [];
+    for (const s of map.structures)
+      cracks[s.id] =
+        s.maxLife > 0 ? Math.round((1 - s.life / s.maxLife) * CRACK_STEPS) / CRACK_STEPS : 0;
+    if (cracks.join() !== this.cracks) {
+      this.cracks = cracks.join();
+      out = { ...out, cracks };
+    }
+    return out;
   }
 
   private receive(msg: FloorResponse): void {

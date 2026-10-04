@@ -60,6 +60,10 @@ export interface FloorFrame {
   drops: { x: number; y: number; rarity: Rarity }[];
   /** Visible arena rectangle (arena units). */
   view: { left: number; top: number; right: number; bottom: number };
+  /** Map cells changed since the last frame (flat triples: cell, code, look): `PixelWorld.setCells`. */
+  cells?: number[];
+  /** Each crumbling structure's wear (0–1), when it moved: `PixelWorld.setCracks`. */
+  cracks?: number[];
 }
 
 export interface FloorPicture {
@@ -136,6 +140,8 @@ export function floorInit(w: ArpgWorld): FloorInit {
       height: map.height,
       cells: map.cells.slice(),
       look: map.look.slice(),
+      // By id: a new floor's structures are numbered from 0, in order.
+      structures: map.structures.map((s) => s.cells),
       rooms: map.rooms.map(({ kind, rect }) => ({ kind, rect })),
       ppu: FLOOR_PPU,
     },
@@ -218,6 +224,8 @@ export class FloorEngine {
 
   /** Apply a frame; returns a fresh picture when one is due, else null. */
   frame(f: FloorFrame, reuse?: Uint8ClampedArray): FloorPicture | null {
+    if (f.cells) this.world.setCells(f.cells);
+    if (f.cracks) this.world.setCracks(f.cracks);
     for (const e of f.events) applyArenaEvent(this.world, e, FLOOR_PPU, FLOOR_MARGIN);
     // A generated floor simulates the chunks under the view, and the rooms they reach, only.
     if (this.world.plan) {

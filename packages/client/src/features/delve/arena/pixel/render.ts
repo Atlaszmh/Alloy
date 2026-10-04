@@ -738,6 +738,7 @@ function passGround(F: Frame): void {
       const special = blightGlow > 0 || fireA > 0 || ch > 0.05;
       const wetCell = wetNear[(y - y0) * vw + (x - x0)] === 1 && m !== MAT.WALL;
       const jitterOn = s > 1 && m !== MAT.STONE && m !== MAT.RUBBLE && m !== MAT.RUIN;
+      const crk = m === MAT.RUIN ? pw.crackAt(i) : 0;
       const pxBase = (x - x0) * s;
 
       for (let sy = 0; sy < s; sy++) {
@@ -755,6 +756,16 @@ function passGround(F: Frame): void {
             r *= j;
             g *= j;
             b *= j;
+          }
+          if (crk > 0) {
+            // Cracks across crumbling cover, wider as its structure wears.
+            const X = x + sx / s;
+            const Y = y + sy / s;
+            if (Math.abs(fsin(X * 0.5 + fsin(Y * 0.45) * 2.4 + Y * 0.35)) < 0.24 * crk) {
+              r *= 0.3;
+              g *= 0.3;
+              b *= 0.3;
+            }
           }
           if (wetCell) {
             // Fluid depth, bilinear across cells for smooth shorelines.

@@ -668,6 +668,7 @@ function fromMap(map: FloorMap = ringMap(), seed = 7): PixelWorld {
       height: map.height,
       cells: map.cells,
       look: map.look,
+      structures: [],
       rooms: map.rooms,
       ppu: PPU,
     },
