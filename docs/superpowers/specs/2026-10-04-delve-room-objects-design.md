@@ -51,7 +51,7 @@ Every raw `cells[...] === 1` reader is converted (`generate.ts` `cellSteps` / `h
 | boss | medium cover, no crumbling cover, no hazards |
 | halls | none |
 
-It picks pieces from the biome's palette by weight and tags and places them under the **invariants**, treating prop and hazard footprints (their cell) as blocked:
+It picks pieces from the biome's palette by weight and tags and places them under the **invariants**, treating prop and hazard footprints (below) as blocked:
 
 - every walkable cell lies in an all-walkable 3×3 (the generator's passage rule) — **checked with each crumbling structure crumbled on its own and the rest intact** (crumbling only adds walkable cells, so every combination then holds);
 - each door keeps two clear cells in front of it, inside the room;
@@ -118,7 +118,7 @@ Destructible solid ruins; foes deliberately using hazards; new monster kinds; he
 
 ## Phases and parallel areas (for the plan)
 
-- **A — contract:** cell codes, `look`, `structures`, `version`; the two predicates (`solid`, `perceives`) with every caller routed and listed; `ArpgWorld.props` / `hazards` types; `hitObjects` signature and its call sites (no-op); `setpieces.json` + schema; `delve.terrain` and `delve.ai.pack` + schemas; the coarse grid (24, ≤ 96 check); the monster-life helper; `HitSource 'hazard'`; typed stubs for the furnisher, terrain effects, props, hazards and the director; hooks in `step.ts`; save v12.
-- **B (engine, in parallel):** B1 bigger rooms + the arena (two coarse cells) + the furnisher + set pieces and palettes + spawns; B2 terrain mechanics (foliage sight and aggro, slow ground, cover, crumbling structures, wall slam, the leash from the rect — re-run the tutorial's floor and bot tests, since the leash change reaches its hand-built floors); B3 props and hazards (`hitObjects`); B4 the pack director; B5 the bot and pacing (after B1–B4).
+- **A — contract:** cell codes, `look`, `structures`, `version`; the two predicates (`solid`, `perceives`) with every caller routed and listed; `ArpgWorld.props` / `hazards` types; `hitObject` signature and each hit site's shape test (no-op); `setpieces.json` + schema; `delve.terrain` and `delve.ai.pack` + schemas; the coarse grid (24, ≤ 96 check); the monster-life helper; `HitSource 'hazard'`; typed stubs for the furnisher, terrain effects, props, hazards and the director; hooks in `step.ts`; save v12.
+- **B (engine, in parallel):** B1 bigger rooms + the arena (two coarse cells) + the furnisher + set pieces and palettes + spawns; B2 terrain mechanics (foliage sight and aggro, slow ground, cover, crumbling structures, wall slam, the leash from the rect — re-run the tutorial's floor and bot tests, since the leash change reaches its hand-built floors); B3 props and hazards (`hitObject`); B4 the pack director; B5 the bot and pacing (after B1–B4).
 - **C (client, in parallel):** C1 the pixel floor's terrain and cover painting from cells (random dressing replaced), foliage see-through, the worker message; C2 sprites (pixel-forge) for statues, props and hazards; C3 FX, the minimap and fog refresh on `version`.
 - **D:** E2E, CLAUDE.md, balance check, v0.63.0.
