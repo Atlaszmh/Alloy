@@ -7,8 +7,8 @@ import { block, walledMap } from './fixtures/maps.js';
 
 // See the room objects spec's "Wall slam": a knocked-back foe that meets cover or a wall during
 // that knockback takes `slamDamage` × the knockback's hit and `slamStagger`, once a knockback.
-// The balance ships both at 0 (the slam off) until the pacing pass turns it on: these tests set
-// the spec's numbers on this file's registry.
+// The balance ships the spec's numbers; these tests set them on this file's registry whatever
+// it ships.
 
 const SHIPPED = { ...bal.terrain };
 const slamDamage = 0.5;
@@ -88,9 +88,12 @@ describe('a wall slam', () => {
     expect(slams(run(w, 0.5))).toEqual([]);
   });
 
-  it('none at all with both numbers 0, as the balance ships them', () => {
-    Object.assign(bal.terrain, SHIPPED);
-    expect([SHIPPED.slamDamage, SHIPPED.slamStagger]).toEqual([0, 0]);
+  it("the balance ships the spec's numbers", () => {
+    expect([SHIPPED.slamDamage, SHIPPED.slamStagger]).toEqual([slamDamage, slamStagger]);
+  });
+
+  it('none at all with both numbers 0', () => {
+    Object.assign(bal.terrain, { slamDamage: 0, slamStagger: 0 });
     const { w, m, knock } = slammer();
     const hit = knock();
     expect(slams(run(w, 0.5))).toEqual([]);

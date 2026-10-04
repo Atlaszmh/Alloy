@@ -165,16 +165,16 @@ function outside(r: Rect, p: Vec): number {
 /**
  * The leash (see the floor maps spec, and the room objects spec's "The
  * leash"): an awake foe more than `terrain.leashMargin` outside its room's
- * rect, and farther than `ai.leashRadius` from its centre, for more than
- * `ai.leashSeconds` turns home (`goingHome`, walked in `monstersTick`), so a
- * pack anywhere in its room never leashes; home, it heals to full and sleeps
- * again (`aggro` and `aggroAt` reset, so a boss's enrage restarts). A foliage
- * search given up (`terrainTick`) comes home the same way. None in the open room.
+ * rect for more than `ai.leashSeconds` turns home (`goingHome`, walked in
+ * `monstersTick`), so a pack anywhere in its room never leashes; home, it
+ * heals to full and sleeps again (`aggro` and `aggroAt` reset, so a boss's
+ * enrage restarts). A foliage search given up (`terrainTick`) comes home the
+ * same way. None in the open room.
  */
 export function leashTick(ctx: SimCtx): void {
   const { world, bal } = ctx;
   if (world.map.open) return;
-  const { leashRadius, leashSeconds } = bal.ai;
+  const { leashSeconds } = bal.ai;
   const { leashMargin } = bal.terrain;
   for (const m of world.monsters) {
     if (m.dead || m.dummy) continue;
@@ -186,9 +186,7 @@ export function leashTick(ctx: SimCtx): void {
       m.hp = m.maxHp;
       continue;
     }
-    const far =
-      outside(home.room.rect, m) > leashMargin &&
-      dist(m.x, m.y, home.at.x, home.at.y) > leashRadius;
+    const far = outside(home.room.rect, m) > leashMargin;
     if (!m.aggro || !far) m.farSince = null;
     else if (m.farSince === null) m.farSince = world.t;
     else if (world.t - m.farSince > leashSeconds) {

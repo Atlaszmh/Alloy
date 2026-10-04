@@ -193,7 +193,7 @@ export interface MonsterEntity {
   packId: number;
   /** Its room on a generated floor (see the floor maps spec); null in the open room. */
   roomId: number | null;
-  /** Since when it has been beyond its leash (`ai.leashRadius` from its room's centre), else null. */
+  /** Since when it has been beyond its leash (`terrain.leashMargin` outside its room's rect), else null. */
   farSince: number | null;
   /** Leashed: going home along its room's `homeField`, to heal and sleep. */
   goingHome: boolean;

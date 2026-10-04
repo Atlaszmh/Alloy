@@ -736,7 +736,6 @@ export const AiBalanceSchema = z.object({
   flowEvery: z.number().positive(),
   flowRadius: z.number().int().positive(),
   directRange: z.number().min(0),
-  leashRadius: z.number().positive(),
   leashSeconds: z.number().min(0),
   sealGrace: z.number().min(0),
   roomVacuum: z.boolean(),
