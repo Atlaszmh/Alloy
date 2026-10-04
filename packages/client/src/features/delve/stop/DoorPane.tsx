@@ -1,5 +1,14 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
-import { RARITY_ORDER, isBossDepth, type DiveState, type DoorMods } from '@alloy/engine';
+import {
+  RARITY_ORDER,
+  isBossDepth,
+  type DiveState,
+  type DoorMods,
+  type TutorialState,
+  type TutorialStopDef,
+  type TutorialTarget,
+} from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { Button, Glyph, PixelSprite } from '../kit';
@@ -37,6 +46,8 @@ function DoorButton({
   aside,
   first,
   primary,
+  disabled,
+  tutorial,
   onClick,
   testId,
 }: {
@@ -47,6 +58,8 @@ function DoorButton({
   first?: boolean;
   /** The first door: the responsive harness's reachability probe checks it. */
   primary?: boolean;
+  disabled?: boolean;
+  tutorial?: TutorialTarget;
   onClick: () => void;
   testId: string;
 }): ReactElement {
@@ -55,6 +68,8 @@ function DoorButton({
       type="button"
       className="k-plate flex flex-none items-center gap-4 p-5 text-left text-[var(--k-text)] [@media(max-height:809px)]:px-4 [@media(max-height:809px)]:py-2.5"
       onClick={onClick}
+      disabled={disabled}
+      data-tutorial={tutorial}
       data-door
       data-pad-first={first || undefined}
       data-primary-action={primary ? 'door' : undefined}
@@ -87,36 +102,60 @@ export function doorLoot(mods: DoorMods): string[] {
 }
 
 /**
+ * A guided start's stop (see the tutorial spec's gates): the `stop` its step's floor names
+ * (`tutorial.json`), or undefined at an ordinary stop.
+ */
+function tutorialStop(state: TutorialState | null): TutorialStopDef | undefined {
+  const steps = getDelveRegistry().getTutorialData().steps;
+  const now = state && steps.find((s) => s.id === state.step);
+  if (now?.where !== 'stop') return undefined;
+  return steps.find((s) => s.where === 'stop' && s.floor === now.floor && s.stop)?.stop;
+}
+
+/**
  * "Choose your path": each door as a plate with its art in a doorway (the next depth's first
  * monster, or the chest for a door that raises gear or essences), its depth, a boss mark and its
  * loot multipliers (`doorLoot`); Extract,
  * with the hero leaving; then the hero's life and potions, and a potion to drink. With
  * `padFirst`, the first door is the pad's first focus (not while a power-up is on offer).
+ * With no doors, Extract stands alone (the first focus); a guided stop that doesn't extract
+ * hides it; while `held` (a required power-up not yet taken) every road waits.
  */
 export function DoorPane({
   dive,
   padFirst,
+  held = false,
   onChoose,
   onExtract,
   onPotion,
 }: {
   dive: DiveState;
   padFirst: boolean;
+  held?: boolean;
   onChoose: (doorId: string) => void;
   onExtract: () => void;
   onPotion: () => void;
 }): ReactElement {
   const registry = getDelveRegistry();
   const finds = RARITY_ORDER.reduce((n, r) => n + dive.found[r], 0);
+  const tutorial = useDelveStore((s) => s.profile.tutorial);
+  const extract = tutorialStop(tutorial)?.extract ?? true;
+  const doors = dive.doorChoices.length > 0;
   return (
     <section
       aria-label="Doors"
       className="flex min-h-0 flex-col gap-4 [@media(max-height:809px)]:gap-3"
     >
-      <h2 className="k-section m-0 text-[26px]">Choose your path</h2>
+      <h2 className="k-section m-0 text-[26px]">{doors ? 'Choose your path' : 'The way home'}</h2>
+      {held && (
+        <span className="text-[16px] text-[var(--k-hot)]" data-testid="roads-held">
+          Take the power-up to go on
+        </span>
+      )}
       <div
         className="k-scroll flex min-h-0 flex-col gap-4 [@media(max-height:809px)]:gap-3"
         data-testid="door-list"
+        data-tutorial="stop.doors"
       >
         {dive.doorChoices.map((id, i) => {
           const door = registry.getDoor(id);
@@ -128,6 +167,7 @@ export function DoorPane({
               key={id}
               first={padFirst && i === 0}
               primary={i === 0}
+              disabled={held}
               testId={`door-${id}`}
               art={
                 <Doorway fill={treasure ? 'var(--k-wood-0)' : 'var(--k-mana-2)'}>
@@ -166,21 +206,26 @@ export function DoorPane({
           );
         })}
       </div>
-      <DoorButton
-        testId="extract-button"
-        art={
-          <Doorway fill="var(--k-steel)">
-            <PixelSprite id="hero" scale={4} context="ui" label="Your hero leaving" />
-          </Doorway>
-        }
-        title="Extract"
-        body={`Leave with ${formatNumber(dive.bounty)} scrap and ${finds} finds.`}
-        onClick={() => {
-          playSound('victory');
-          vibrate('success');
-          onExtract();
-        }}
-      />
+      {extract && (
+        <DoorButton
+          testId="extract-button"
+          tutorial="stop.extract"
+          first={padFirst && !doors}
+          disabled={held}
+          art={
+            <Doorway fill="var(--k-steel)">
+              <PixelSprite id="hero" scale={4} context="ui" label="Your hero leaving" />
+            </Doorway>
+          }
+          title="Extract"
+          body={`Leave with ${formatNumber(dive.bounty)} scrap and ${finds} finds.`}
+          onClick={() => {
+            playSound('victory');
+            vibrate('success');
+            onExtract();
+          }}
+        />
+      )}
       <div className="mt-auto flex items-center justify-between gap-3">
         <span className="text-[16px] text-[var(--k-text-2)]">
           Life {Math.round(dive.heroHpFrac * 100)}% · {dive.potions} potion

@@ -139,7 +139,11 @@ export function ComparePane({
         </div>
 
         {cmp && (
-          <div className="flex flex-col gap-1" data-testid="item-compare">
+          <div
+            className="flex flex-col gap-1"
+            data-testid="item-compare"
+            data-tutorial="loadout.compare"
+          >
             {!cmp.replaced && <span className="k-caption">Empty slot: pure gain</span>}
             {asIs && transfer ? (
               <>
@@ -192,6 +196,7 @@ export function ComparePane({
               variant={homeUpgrade ? 'go' : 'secondary'}
               onClick={onTransfer}
               className="flex-wrap whitespace-normal"
+              data-tutorial="loadout.transfer"
               testId="transfer-button"
             >
               {homeUpgrade ? '▲ ' : ''}Transfer my moveset here · <Price scrap={transfer.scrap} />
@@ -241,6 +246,7 @@ export function ComparePane({
                   variant={isUpgrade ? 'go' : 'secondary'}
                   binding={{ mouse: 'rmb', pad: 'a' }}
                   onClick={() => actions.equip(item.uid)}
+                  data-tutorial="loadout.equip"
                   testId="equip-button"
                 >
                   Equip{equipCmp && ` · ${formatDelta(equipCmp.powerPct)} Power`}
@@ -253,6 +259,7 @@ export function ComparePane({
                 binding={{ key: 'Delete', pad: 'x' }}
                 disabled={item.locked}
                 onClick={() => actions.salvage(item.uid)}
+                data-tutorial="loadout.salvage"
                 testId="salvage-button"
               >
                 {armed === item.uid ? (

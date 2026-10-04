@@ -24,7 +24,7 @@ export function PatternList({
   const bases = registry.getDelveData().bases;
   const fits = essence ? registry.getLegendary(essence).slots : null;
   return (
-    <Panel title="Patterns" testId="pattern-list">
+    <Panel title="Patterns" testId="pattern-list" data-tutorial="forge.pattern">
       <div className="flex flex-col gap-2">
         {bases
           .filter((b) => known.includes(b.id))

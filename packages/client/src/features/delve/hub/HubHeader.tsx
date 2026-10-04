@@ -1,14 +1,21 @@
-import { useMemo, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useMemo, type ReactNode } from 'react';
 import { profilePower } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { Glyph, Header, Price } from '@/features/delve/kit';
+import { Glyph, Header, Price, type TabsProps } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
 import { useCountUp } from '../useCountUp';
 import { formatNumber } from '../format';
 
+/** The hub's tabs (its `Tabs`) carry their guided-start targets: `hub.tab.<id>`. */
+function withTargets(nav: ReactNode): ReactNode {
+  if (!isValidElement<TabsProps<string>>(nav) || !nav.props.tabs) return nav;
+  const tabs = nav.props.tabs.map((t) => ({ ...t, tutorial: `hub.tab.${t.id}` }));
+  return cloneElement(nav, { tabs });
+}
+
 /**
  * The hub's steel band: the anvil and "The Anvil", the deepest depth and the
- * legendaries found, the tabs (`nav`), then the purse and Power.
+ * legendaries found, the tabs (`nav`, each carrying its target), then the purse and Power.
  */
 export function HubHeader({ nav }: { nav: ReactNode }) {
   const registry = getDelveRegistry();
@@ -25,7 +32,7 @@ export function HubHeader({ nav }: { nav: ReactNode }) {
         </span>
       }
       subtitle={`Deepest ${profile.bestDepth} · ${found} of ${legendaries} legendaries`}
-      nav={nav}
+      nav={withTargets(nav)}
       aside={
         <>
           <span data-testid="scrap-count">

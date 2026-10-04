@@ -9,6 +9,7 @@ import {
   type HeroStatKey,
   type MaterialRef,
   type RuneRef,
+  type TutorialTarget,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -94,14 +95,16 @@ function MaterialRow({
 function Section({
   title,
   testId,
+  tutorial,
   children,
 }: {
   title: string;
   testId: string;
+  tutorial?: TutorialTarget;
   children: ReactNode;
 }) {
   return (
-    <Panel material="well" title={title} testId={testId}>
+    <Panel material="well" title={title} testId={testId} data-tutorial={tutorial}>
       <div className="flex flex-col gap-3">{children}</div>
     </Panel>
   );
@@ -187,7 +190,7 @@ export function MaterialsPane({ locked }: { locked: boolean }) {
             A dive is under way: refine and buy between dives.
           </p>
         )}
-        <Section title="Bars" testId="materials-bars">
+        <Section title="Bars" testId="materials-bars" tutorial="forge.refine">
           {bars.length === 0 && <p className="k-caption">None yet: foes drop them.</p>}
           {bars.map((m) => row({ kind: 'metal', metal: m }, metals[m]))}
         </Section>

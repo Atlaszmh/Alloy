@@ -98,7 +98,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export interface TabsProps<T extends string> {
-  tabs: { id: T; label: ReactNode; badge?: ReactNode; disabled?: boolean; title?: string; testId?: string }[];
+  /** `tutorial`: the tab's guided-start target (`data-tutorial`), e.g. `hub.tab.forge`. */
+  tabs: { id: T; label: ReactNode; badge?: ReactNode; disabled?: boolean; title?: string; testId?: string; tutorial?: string }[];
   value: T;
   onChange: (id: T) => void;
   /** 'top': LB/RB (draws the digits 1..n when `digits` (the hub binds them)). 'sub': LT/RT. Disabled tabs are skipped by all of them. */

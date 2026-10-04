@@ -61,7 +61,7 @@ export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
         }}
         tabs={[
           { id: 'forge', label: 'Forge', testId: 'bench-forge' },
-          { id: 'temper', label: 'Temper', testId: 'bench-temper' },
+          { id: 'temper', label: 'Temper', testId: 'bench-temper', tutorial: 'forge.temper' },
         ]}
       />
       <div

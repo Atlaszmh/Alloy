@@ -133,6 +133,7 @@ export function Tabs<T extends string>({
           disabled={t.disabled}
           title={t.title}
           data-testid={t.testId}
+          data-tutorial={t.tutorial}
           className={`k-tab k-tab-${size}`}
           onClick={() => onChange(t.id)}
           onPointerUp={blurAfterMouse}

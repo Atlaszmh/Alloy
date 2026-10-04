@@ -38,7 +38,7 @@ export function ShardPicker({
       </p>
     );
   return (
-    <div className="flex flex-col gap-2" data-testid="shard-picker">
+    <div className="flex flex-col gap-2" data-testid="shard-picker" data-tutorial="forge.shard">
       {held.map(({ shard, n, band }) => {
         const on = selected?.stat === shard.stat && selected.tier === shard.tier;
         return (

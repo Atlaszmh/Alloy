@@ -9,6 +9,8 @@ import {
 } from 'pixi.js';
 import {
   activeMove,
+  doorShut,
+  tutorialExitHeld,
   type ArpgEvent,
   type ArpgWorld,
   type BiomeDef,
@@ -21,9 +23,11 @@ import {
   type MaterialRef,
   type MonsterEntity,
   type PropId,
+  type TutorialData,
   type Vec,
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
+import { manaLine, manaRing } from './fx/mana-pixels';
 import { ManaFx, finisherRing } from './fx/mana-fx';
 import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
@@ -126,8 +130,14 @@ const FONT = 'Rajdhani, "DM Sans", system-ui, sans-serif';
 const DOOR_STONE = 0x5a6988;
 const DOOR_IRON = 0x8b9bb4;
 const DOOR_SEAL = 0xe43b44;
+/** A door or the exit held by the guided start's gate: forge gold where a seal glows red. */
+const DOOR_HELD = 0xfeae34;
 /** Seconds a door's bars take to slide shut, or back open. */
 const DOOR_SECONDS = 0.25;
+/** The guided start's marker: its beacon on the floor and its arrow at the edge of the view. */
+const MARKER = 0xfee761;
+/** Screen px the marker's arrow keeps inside the clear view's edge. */
+const ARROW_MARGIN = 28;
 
 /** The fog's darkness (alpha) by a cell's fog: unseen black, seen but out of sight dimmed, in sight clear. */
 const FOG_ALPHA = [255, 150, 0];
@@ -185,6 +195,11 @@ export class ArenaRenderer {
   private doorGfx = new Graphics();
   /** How shut each door's bars are, 0 to 1. */
   private doorShut = new Map<number, number>();
+  /** Whether each door last shut held by the guided start (gold bars) rather than sealed (red). */
+  private doorHeld = new Map<number, boolean>();
+  /** The guided start's marker: its beacon (world units, over the fog) and its edge arrow (screen px). */
+  private markerGfx = new Graphics();
+  private arrowGfx = new Graphics();
   /** The rooms' props by interactable id, with their atlas frames. */
   private props = new Map<string, { sprite: Sprite; frames: Texture[] }>();
   /** A generated floor's fog. */
@@ -235,7 +250,7 @@ export class ArenaRenderer {
       this.airFx.sprite,
     );
     this.hero.addChild(this.heroAura, this.heroBody);
-    app.stage.addChild(this.root, this.textLayer);
+    app.stage.addChild(this.root, this.textLayer, this.arrowGfx);
     this.resize();
   }
 
@@ -277,9 +292,12 @@ export class ArenaRenderer {
     this.floats = [];
     this.drawFloor();
     this.doorShut.clear();
+    this.doorHeld.clear();
     this.makeProps(world);
     this.fog?.sprite.destroy({ texture: true, textureSource: true });
     this.fog = world.map.open ? null : this.makeFog(world.map);
+    // The marker's beacon shows through the fog: it guides to what isn't seen yet.
+    this.root.addChild(this.markerGfx);
     this.pixelFloor?.destroy();
     this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
@@ -754,6 +772,7 @@ export class ArenaRenderer {
     this.syncDrops(w);
     this.syncProps(w);
     this.drawDoors(w, dt);
+    this.drawMarker(w);
     const fog = this.fog;
     if (fog && fog.version !== w.fogVersion) {
       paintFog(w.map, w.fog, FLOOR_MARGIN, fog.pixels);
@@ -965,29 +984,64 @@ export class ArenaRenderer {
     }
   }
 
-  /** Each prop in its state (`propFrame`); a gate opens once no boss lives. */
+  /**
+   * Each prop in its state (`propFrame`); a gate opens once no boss lives, and while the guided
+   * start holds the exit (`tutorialExitHeld`) it stays shut, barred in gold.
+   */
   private syncProps(w: ArpgWorld): void {
-    const open = w.bossId === null || w.bossKilled;
+    const held = tutorialExitHeld(w);
+    const open = (w.bossId === null || w.bossKilled) && !held;
     for (const { interactable: it } of w.map.rooms) {
       const v = it && this.props.get(it.id);
       if (!it || !v) continue;
       const f = propFrame(it.kind, it.used, open, this.time);
       v.sprite.texture = v.frames[f.frame % v.frames.length];
       v.sprite.tint = f.tint;
+      if (held && it.kind === 'gate') {
+        const s = v.sprite;
+        const box = { x: s.x - s.width / 2, y: s.y - s.height, w: s.width, h: s.height };
+        drawHeldGate(this.airFx.g, box, this.time);
+      }
     }
   }
 
-  /** The doors, each one's bars easing toward its state over `DOOR_SECONDS`. */
+  /** The doors, each one's bars easing toward its state (`doorShut`: sealed or held) over `DOOR_SECONDS`. */
   private drawDoors(w: ArpgWorld, dt: number): void {
     const g = this.doorGfx;
     g.clear();
     for (const d of w.map.doors) {
-      const was = this.doorShut.get(d.id) ?? (d.closed ? 1 : 0);
+      const closed = doorShut(d);
+      const was = this.doorShut.get(d.id) ?? (closed ? 1 : 0);
       const step = dt / DOOR_SECONDS;
-      const shut = d.closed ? Math.min(1, was + step) : Math.max(0, was - step);
+      const shut = closed ? Math.min(1, was + step) : Math.max(0, was - step);
       this.doorShut.set(d.id, shut);
-      drawDoor(g, d, shut, this.time);
+      // Why it shut is kept while it opens, so a held door's bars slide away gold.
+      if (closed) this.doorHeld.set(d.id, !!d.held);
+      drawDoor(g, d, shut, this.time, this.doorHeld.get(d.id));
     }
+  }
+
+  /**
+   * The guided start's marker (`tutorialMarker`): a beacon at the spot and, while the spot is
+   * outside the view the HUD leaves clear, an arrow at that view's edge pointing to it.
+   */
+  private drawMarker(w: ArpgWorld): void {
+    const g = this.markerGfx;
+    const arrow = this.arrowGfx;
+    g.clear();
+    arrow.clear();
+    const at = tutorialMarker(getDelveRegistry().getTutorialData(), w);
+    if (!at) return;
+    drawBeacon(g, at.x, at.y, this.time);
+    const { width, height } = this.app.screen;
+    const ins = this.insets;
+    const edge = edgeArrow(this.toScreen(at.x, at.y), {
+      left: ins.left + ARROW_MARGIN,
+      top: ins.top + ARROW_MARGIN,
+      right: width - ins.right - ARROW_MARGIN,
+      bottom: height - ins.bottom - ARROW_MARGIN,
+    });
+    if (edge) drawEdgeArrow(arrow, edge, contextZoom('hud'));
   }
 
   private syncDrops(w: ArpgWorld): void {
@@ -1112,10 +1166,11 @@ export function holdPing(
 
 /**
  * A door: a stone post at each end of its cells and, as it shuts (`shut` 0 → 1),
- * iron bars sliding across it, glowing red while they hold its room sealed.
+ * iron bars sliding across it, glowing red while they hold its room sealed, or
+ * forge gold while the guided start holds it (`held`).
  * Whole sprite pixels (0.1 units).
  */
-export function drawDoor(g: Graphics, d: Door, shut: number, time: number): void {
+export function drawDoor(g: Graphics, d: Door, shut: number, time: number, held = false): void {
   const xs = d.cells.map((c) => c.x);
   const ys = d.cells.map((c) => c.y);
   const x0 = Math.min(...xs);
@@ -1132,13 +1187,79 @@ export function drawDoor(g: Graphics, d: Door, shut: number, time: number): void
     g.rect(x0, y0 + h, w, 0.3).fill({ color: DOOR_STONE });
   }
   if (shut <= 0) return;
-  g.rect(x0, y0, w, h).fill({ color: DOOR_SEAL, alpha: (0.25 + 0.15 * Math.sin(time * 6)) * shut });
+  g.rect(x0, y0, w, h).fill({
+    color: held ? DOOR_HELD : DOOR_SEAL,
+    alpha: (0.25 + 0.15 * Math.sin(time * 6)) * shut,
+  });
   // A bar every 3 sprite pixels, slid `shut` of the way in.
   const bars = Math.round((across ? w : h) / 0.3);
   for (let k = 0; k < bars; k++) {
     if (across) g.rect(x0 + 0.1 + k * 0.3, y0, 0.1, h * shut).fill({ color: DOOR_IRON });
     else g.rect(x0, y0 + 0.1 + k * 0.3, w * shut, 0.1).fill({ color: DOOR_IRON });
   }
+}
+
+/** A held exit: gold bars of mana pixels across its gate's box (world units), every 0.3 units, pulsing. */
+export function drawHeldGate(
+  g: Graphics,
+  box: { x: number; y: number; w: number; h: number },
+  time: number,
+): void {
+  const alpha = 0.7 + 0.3 * Math.sin(time * 4);
+  for (let x = box.x + 0.1; x < box.x + box.w; x += 0.3)
+    manaLine(g, x, box.y, x, box.y + box.h, DOOR_HELD, alpha);
+}
+
+/**
+ * The guided start's marker on this floor: the current step's `marker` among its hand-built
+ * floor's (`world.tutorialFloor`), or null (no tutorial, a step that names none).
+ */
+export function tutorialMarker(data: TutorialData, w: ArpgWorld): Vec | null {
+  if (!w.tutorial || !w.tutorialFloor) return null;
+  const id = data.steps.find((s) => s.id === w.tutorial!.step)?.marker;
+  const floor = id ? data.floors.find((f) => f.id === w.tutorialFloor) : undefined;
+  return floor?.markers.find((m) => m.id === id)?.at ?? null;
+}
+
+/**
+ * Where the marker's edge arrow stands (screen px): on `view`'s border, on the line from its
+ * centre toward `p`, pointing along it (`angle`, radians); null while `p` is inside `view`.
+ */
+export function edgeArrow(
+  p: Vec,
+  view: { left: number; top: number; right: number; bottom: number },
+): { x: number; y: number; angle: number } | null {
+  if (p.x >= view.left && p.x <= view.right && p.y >= view.top && p.y <= view.bottom) return null;
+  const cx = (view.left + view.right) / 2;
+  const cy = (view.top + view.bottom) / 2;
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+  const kx = dx === 0 ? Infinity : ((dx > 0 ? view.right : view.left) - cx) / dx;
+  const ky = dy === 0 ? Infinity : ((dy > 0 ? view.bottom : view.top) - cy) / dy;
+  const k = Math.min(kx, ky);
+  return { x: cx + dx * k, y: cy + dy * k, angle: Math.atan2(dy, dx) };
+}
+
+/** The marker's beacon: a gold ring of mana pixels round the spot and a column of light rising from it, pulsing. */
+export function drawBeacon(g: Graphics, x: number, y: number, time: number): void {
+  const pulse = 0.5 + 0.5 * Math.sin(time * 4);
+  manaRing(g, x, y, 0.5 + 0.15 * pulse, MARKER, time, { thickness: 2, gaps: 4, spin: 3 });
+  manaLine(g, x, y, x, y - 2.5, MARKER, 0.35 + 0.4 * pulse, { every: 2, jitter: 1, time });
+}
+
+/** The edge arrow: a gold pointer outlined in the well's ink, `zoom` × 14 px long. */
+function drawEdgeArrow(
+  g: Graphics,
+  a: { x: number; y: number; angle: number },
+  zoom: number,
+): void {
+  const s = 14 * zoom;
+  const c = Math.cos(a.angle);
+  const n = Math.sin(a.angle);
+  const at = (fx: number, fy: number) => [a.x + (fx * c - fy * n) * s, a.y + (fx * n + fy * c) * s];
+  g.poly([...at(0.6, 0), ...at(-0.6, -0.7), ...at(-0.6, 0.7)])
+    .fill({ color: MARKER })
+    .stroke({ color: 0x181425, width: 3 * zoom });
 }
 
 /** The fog at a point: 0 unseen, 1 seen, 2 in sight (on the open room, always 2). */
