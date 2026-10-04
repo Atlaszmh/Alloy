@@ -104,6 +104,8 @@ export interface Room {
   kind: RoomKind;
   /** Its floor, in cells (its walls are outside it). */
   rect: Rect;
+  /** The floor's arena (see the room objects spec): a combat room furnished by `furnish.arena`. */
+  arena?: true;
   /** Its template's dressing over `rect`, row by row (0 floor, 1 pillar, 2 rubble); `cells` holds it as walls. */
   mask?: Uint8Array;
   /** BFS steps from each map cell to its centre, for a leashed foe going home (65535: unreachable). */
@@ -303,6 +305,11 @@ export interface LayoutBalance {
   packsPerRoom: number;
   /** Dives play generated floors (`FloorOptions.layout: 'generated'`); off, they keep the open room. */
   generatedDives: boolean;
+  /**
+   * Each room kind's furnishing (the arena its own; see the room objects spec): set pieces
+   * per 100 floor cells, and whether they may hold hazards and crumbling cover.
+   */
+  furnish: Record<RoomKind | 'arena', { pieces: number; hazards: boolean; crumbling: boolean }>;
 }
 
 /** How foes move and see, and the floor's timings (see the floor maps spec). */

@@ -628,6 +628,11 @@ export const LayoutsDataSchema = z.object({
   }),
 });
 
+/** A room kind's furnishing: pieces per 100 floor cells, hazards and crumbling cover allowed. */
+const FurnishBudgetSchema = z
+  .object({ pieces: z.number().min(0), hazards: z.boolean(), crumbling: z.boolean() })
+  .strict();
+
 /** `balance.json → delve.layout`. */
 export const LayoutBalanceSchema = z
   .object({
@@ -673,6 +678,23 @@ export const LayoutBalanceSchema = z
     minPackDistance: z.number().positive(),
     packsPerRoom: z.number().int().positive(),
     generatedDives: z.boolean(),
+    furnish: z
+      .object({
+        start: FurnishBudgetSchema,
+        combat: FurnishBudgetSchema,
+        arena: FurnishBudgetSchema,
+        den: FurnishBudgetSchema,
+        vault: FurnishBudgetSchema,
+        sanctum: FurnishBudgetSchema,
+        alcove: FurnishBudgetSchema,
+        exit: FurnishBudgetSchema,
+        boss: FurnishBudgetSchema,
+      })
+      .strict()
+      .refine(
+        (f) => !f.start.hazards && !f.boss.hazards && !f.boss.crumbling,
+        'no hazards in the start or boss rooms, no crumbling cover in a boss room',
+      ),
   })
   .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid')
   .refine(

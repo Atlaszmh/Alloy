@@ -205,7 +205,18 @@
         { "fromDepth": 6, "weights": { "combat": 5, "den": 2, "vault": 1, "sanctum": 1, "alcove": 1 } }
       ],
       "alcoveMax": 1, "deadEndWeight": 3, "minCombatRooms": 2, "vaultGuardChance": 0.35,
-      "pillarChance": 0.3, "minPackDistance": 9, "packsPerRoom": 2, "generatedDives": true
+      "pillarChance": 0.3, "minPackDistance": 9, "packsPerRoom": 2, "generatedDives": true,
+      "furnish": {
+        "start": { "pieces": 1, "hazards": false, "crumbling": true },
+        "combat": { "pieces": 2.5, "hazards": true, "crumbling": true },
+        "arena": { "pieces": 3, "hazards": true, "crumbling": true },
+        "den": { "pieces": 3.5, "hazards": true, "crumbling": true },
+        "vault": { "pieces": 1, "hazards": true, "crumbling": true },
+        "sanctum": { "pieces": 1, "hazards": true, "crumbling": true },
+        "alcove": { "pieces": 1, "hazards": true, "crumbling": true },
+        "exit": { "pieces": 1, "hazards": true, "crumbling": true },
+        "boss": { "pieces": 1.5, "hazards": false, "crumbling": false }
+      }
     },
     "ai": {
       "flowEvery": 0.25, "flowRadius": 30, "directRange": 4, "leashRadius": 12, "leashSeconds": 3, "sealGrace": 0.5,
