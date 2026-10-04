@@ -162,7 +162,7 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
   const fit = (item: GearItem): GearItem => {
     if (item.slot !== 'weapon') return item;
     const old = movesetOf(registry, item);
-    const carried = carriedSkills(registry, item.rarity);
+    const carried = carriedSkills(registry, item);
     const cap = socketCap(registry, item.rarity);
     const moveset: Moveset = { chains: {}, slots: {} };
     for (const skill of CHAIN_SKILLS) {

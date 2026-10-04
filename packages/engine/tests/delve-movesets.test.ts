@@ -152,7 +152,7 @@ describe('base slots and carried chains', () => {
 
   it('carries chains by rarity; unarmed carries the basic chain and the Primary', () => {
     for (const r of RARITY_ORDER)
-      expect(carriedSkills(registry, r)).toEqual(bal.movesets.carries[r]);
+      expect(carriedSkills(registry, { rarity: r })).toEqual(bal.movesets.carries[r]);
     expect(carriedSkills(registry, null)).toEqual(['basic', 'primary']);
     expect(carriedFrom(registry, 'basic')).toBeNull();
     expect(carriedFrom(registry, 'primary')).toBeNull();

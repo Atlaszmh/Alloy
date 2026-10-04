@@ -23,10 +23,12 @@ import { runeFits, socketCap, socketsOf } from './runes.js';
  * carries, its base slots, its default moves, and a drop's extra slots.
  */
 
-/** A weapon as its moveset sees it: its base and rarity (unarmed: both null). */
+/** A weapon as its moveset sees it: its base, rarity and awakening (unarmed: base and rarity null). */
 export interface MovesetOwner {
   baseId: string | null;
   rarity: Rarity | null;
+  /** An awakened rare (see the tutorial spec's Awaken). */
+  awakened?: boolean;
 }
 
 /** No weapon: it carries the basic chain and the Primary, at the hero's own string. */
@@ -39,11 +41,15 @@ export const DEFAULT_FORMS: Record<AbilitySlot, { form: FormId; payment: Ability
   ultimate: { form: 'nova', payment: 'charge' },
 };
 
-/** The skills a weapon of `rarity` carries (unarmed, null: basic and primary). */
+/**
+ * The skills `item` carries, by its rarity (and, once Awaken lands, its
+ * awakening); unarmed (null, or `UNARMED`): basic and primary.
+ */
 export function carriedSkills(
   registry: DataRegistry,
-  rarity: Rarity | null,
+  item: Pick<MovesetOwner, 'rarity' | 'awakened'> | null,
 ): readonly ChainSkill[] {
+  const rarity = item?.rarity ?? null;
   return rarity ? registry.getDelveBalance().movesets.carries[rarity] : ['basic', 'primary'];
 }
 
@@ -133,7 +139,7 @@ export function defaultMoveset(
   element: ManaType,
   slots: Partial<Record<ChainSkill, number>> = {},
 ): Moveset {
-  const skills = carriedSkills(registry, owner.rarity);
+  const skills = carriedSkills(registry, owner);
   const n = (s: ChainSkill) => slots[s] ?? baseSlots(registry, owner.baseId, s);
   return {
     chains: Object.fromEntries(
@@ -170,7 +176,7 @@ export function rollMoveset(
 ): Moveset {
   const bal = registry.getDelveBalance();
   const [least, most] = bal.movesets.extraSlots[item.rarity];
-  const skills = carriedSkills(registry, item.rarity);
+  const skills = carriedSkills(registry, item);
   const slots = Object.fromEntries(skills.map((s) => [s, baseSlots(registry, item.baseId, s)]));
   for (let extra = rng.nextInt(least, most); extra > 0; extra--) {
     const open = skills.filter((s) => slots[s] < bal.chains.cap[s]);
@@ -309,7 +315,7 @@ export function movesetTransfer(
   const bal = registry.getDelveBalance();
   const from = movesetOf(registry, source);
   const onto = movesetOf(registry, target);
-  const carried = carriedSkills(registry, target.rarity);
+  const carried = carriedSkills(registry, target);
   const cap = socketCap(registry, target.rarity);
   const chains = { ...onto.chains };
   const slots = { ...onto.slots };
