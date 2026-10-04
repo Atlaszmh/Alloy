@@ -40,7 +40,8 @@ function withSocket(moveset: Moveset): Moveset {
 }
 
 /**
- * A fire hero's save, its sword's Primary at `primarySlots` slots of default moves; with
+ * A fire hero's save, its sword uncommon (a new save's common sword carries no Primary) with
+ * its Primary at `primarySlots` slots of default moves; with
  * `socket`, its first move has one open, empty socket and Quick III waits in the pouch; with
  * `bag`, the bag holds what `bag` makes.
  */
@@ -53,7 +54,7 @@ async function setup(
 ): Promise<void> {
   const registry = createDefaultRegistry();
   const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
-  const sword = profile.equipped.weapon!;
+  const sword = { ...profile.equipped.weapon!, rarity: 'uncommon' as const };
   const moveset = defaultMoveset(registry, sword, 'fire', { primary: primarySlots });
   const save = JSON.stringify({
     ...profile,
