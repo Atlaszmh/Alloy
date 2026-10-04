@@ -3,6 +3,7 @@ import type { FloorMap, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { dirTo, dist } from './geometry.js';
 import { solid } from './grid.js';
+import { footprints } from './objects.js';
 
 /**
  * Foes' pathing and leashing on the grid (see the floor maps spec's
@@ -29,21 +30,24 @@ function cellAt(v: number, n: number): number {
  * Steps from each walkable cell to `target` (BFS over the four neighbours,
  * within `radius` steps) for a foe `clearance` cells wide: a cell counts only
  * if the odd square round it that fits such a foe is open (one cell for 1, three
- * for 2 or 3). UNREACHED where it doesn't reach. The target's own cell is 0
- * whatever stands there.
+ * for 2 or 3): no solid cell, nor one of `blocked` (cell indices: the props'
+ * and hazards' footprints). UNREACHED where it doesn't reach. The target's own
+ * cell is 0 whatever stands there.
  */
 export function flowField(
   map: FloorMap,
   target: Vec,
   radius: number,
   clearance: number,
+  blocked?: ReadonlySet<number>,
 ): Uint16Array {
   const { width: w, height: h } = map;
   const field = new Uint16Array(w * h).fill(UNREACHED);
   const half = Math.floor(clearance / 2);
   const fits = (cx: number, cy: number) => {
     for (let y = cy - half; y <= cy + half; y++)
-      for (let x = cx - half; x <= cx + half; x++) if (solid(map, x, y)) return false;
+      for (let x = cx - half; x <= cx + half; x++)
+        if (solid(map, x, y) || blocked?.has(y * w + x)) return false;
     return true;
   };
   const queue = new Int32Array(w * h);
@@ -112,15 +116,20 @@ export function downhill(map: FloorMap, field: Uint16Array, p: Vec, target: Vec)
   return to && dirTo(p.x, p.y, to.x, to.y);
 }
 
-/** Rebuild both flow fields toward the hero at each `ai.flowEvery` mark (`ArpgWorld.flow`). */
+/**
+ * Rebuild both flow fields toward the hero at each `ai.flowEvery` mark
+ * (`ArpgWorld.flow`), round the standing props' and hazards' footprints.
+ */
 export function flowTick(ctx: SimCtx): void {
   const { world, bal } = ctx;
   const flow = world.flow;
   if (world.map.open || world.t < flow.nextAt) return;
   flow.nextAt = world.t + bal.ai.flowEvery;
   const { flowRadius } = bal.ai;
-  flow.small = flowField(world.map, world.hero, flowRadius, 1);
-  flow.large = flowField(world.map, world.hero, flowRadius, Math.min(LARGE, bal.layout.hallWidth));
+  const feet = footprints(world);
+  const large = Math.min(LARGE, bal.layout.hallWidth);
+  flow.small = flowField(world.map, world.hero, flowRadius, 1, feet);
+  flow.large = flowField(world.map, world.hero, flowRadius, large, feet);
 }
 
 /** A foe's room and its centre, where it leashes to; null for one with no room. */
