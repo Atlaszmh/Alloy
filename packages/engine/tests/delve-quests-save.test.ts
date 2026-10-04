@@ -67,7 +67,7 @@ describe('save v9', () => {
       claimCount: 0,
     });
     const p = fresh();
-    expect(p.version).toBe(11);
+    expect(p.version).toBe(12);
     expect(p.quests.board).toHaveLength(registry.getDelveBalance().quests.contracts.slots);
   });
 
@@ -78,7 +78,7 @@ describe('save v9', () => {
     expect(parseDelveProfile(registry, json(diving))).toEqual({ profile: diving });
   });
 
-  it('resets a version 8 save; a version 11 save without its quests, or a bad contract, is refused', () => {
+  it('resets a version 8 save; a version 12 save without its quests, or a bad contract, is refused', () => {
     const p = underWay(fresh());
     expect(parseDelveProfile(registry, json({ ...p, version: 8 }))).toEqual({ reset: true });
     const { quests: _q, ...noQuests } = p;
