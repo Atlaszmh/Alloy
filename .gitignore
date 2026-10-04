@@ -33,9 +33,6 @@ packages/client/playwright-report/
 packages/client/test-results/
 .playwright-mcp/
 
-# Supabase
-packages/supabase/.temp/
-
 # Logs
 *.log
 npm-debug.log*
