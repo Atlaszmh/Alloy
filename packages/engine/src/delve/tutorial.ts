@@ -1,5 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { FloorOptions } from '../arpg/world.js';
+import { nextMove } from '../arpg/abilities/cast.js';
 import { honeCost, previewForge } from '../loot/forge.js';
 import { materialCount, refineCost } from '../loot/materials.js';
 import { movesetOf, movesetTransfer } from '../loot/moveset.js';
@@ -15,11 +16,14 @@ import {
   type GearSlot,
   type Rarity,
 } from '../types/gear.js';
+import type { ManaType } from '../types/mana.js';
 import type {
   TutorialEvent,
+  TutorialInput,
   TutorialState,
   TutorialStep,
   TutorialText,
+  TutorialTextPart,
 } from '../types/tutorial.js';
 import { movesOf, slotPrice } from './moveset.js';
 import { questStates } from './quests.js';
@@ -361,10 +365,62 @@ export function tutorialBlocksDive(registry: DataRegistry, profile: DelveProfile
  * and the hero's Primary (`world`: a floor's hero, for the Primary's next move).
  */
 export function tutorialText(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _step: string,
-  _world?: ArpgWorld | null,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  step: string,
+  world?: ArpgWorld | null,
 ): TutorialText {
-  throw new Error('tutorialText: not implemented');
+  const data = registry.getTutorialData();
+  const def = data.steps.find((s) => s.id === step);
+  if (!def) throw new Error(`No tutorial step ${step}`);
+  const mana = registry.getArpgData().mana;
+  const { primary } = profile.pair;
+  const partner = primary ? data.partners[primary] : null;
+  // Before the bind, the secondary is the partner Hesta suggests.
+  const secondary = profile.pair.secondary ?? partner;
+  const name = (m: ManaType | null) => (m ? mana[m].name : '');
+  const tokens: Record<string, string> = {
+    primary: name(primary),
+    secondary: name(secondary),
+    partner: name(partner),
+    reaction: primary && secondary ? registry.getReactionFor(primary, secondary).name : '',
+    primarySkill: primarySkill(registry, profile, world),
+  };
+  const fill = (text: string): TutorialTextPart[] => {
+    const parts: TutorialTextPart[] = [];
+    // Odd pieces are the tokens between braces.
+    text.split(/{([^}]*)}/).forEach((piece, i) => {
+      const input = i % 2 ? /^input:(.+)$/.exec(piece) : null;
+      if (input) {
+        parts.push({ input: input[1] as TutorialInput });
+        return;
+      }
+      const run = i % 2 ? (tokens[piece] ?? '') : piece;
+      const last = parts[parts.length - 1];
+      if (last && 'text' in last) last.text += run;
+      else if (run) parts.push({ text: run });
+    });
+    return parts;
+  };
+  return { line: fill(def.line), objective: fill(def.objective) };
+}
+
+/**
+ * The name of the move the hero's Primary casts next: on a floor its hero's
+ * (`nextMove`), else the equipped weapon's first Primary move, named as the
+ * sim names it ("Fire Bolt", a fusion's "Wildfire Burst"); empty without one.
+ */
+function primarySkill(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world?: ArpgWorld | null,
+): string {
+  const window = registry.getDelveBalance().abilities.comboWindow;
+  if (world) return nextMove(world.hero, 0, world.t, window)?.name ?? '';
+  const move = primaryMoves(registry, profile)[0];
+  if (!move) return '';
+  const [a, b] = move.elements;
+  const fusion = b ? registry.getFusion(a, b) : undefined;
+  const element = fusion ? fusion.name : registry.getArpgData().mana[a].name;
+  return `${element} ${registry.getForm(move.form).name}`;
 }
