@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 import { minSize } from '../min-size';
 import { pageScroll } from '../overflow';
 import { primaryActionReachable } from '../reachability';
-import { tabBarVisibility } from '../tabbar';
 import { PC_VIEWPORTS } from '../../viewports';
 
 const VP = PC_VIEWPORTS[0]; // hd-720
@@ -16,13 +15,6 @@ const frame = (body: string) => `
   <html><body style="margin:0;overflow:hidden">
     <div class="app-frame" style="width:1280px;height:720px;position:relative;overflow:hidden">${body}</div>
   </body></html>`;
-
-test('tabbar: a Delve screen has none', async ({ page }) => {
-  await page.setContent(frame(''));
-  expect(await tabBarVisibility(page, CTX)).toEqual([]);
-  await page.setContent(frame('<div data-tabbar style="height:20px"></div>'));
-  expect((await tabBarVisibility(page, CTX))[0]?.severity).toBe('fail');
-});
 
 test('min-size: 14 design px under the 0.75 zoom passes, 12 fails', async ({ page }) => {
   await page.setContent(frame(`

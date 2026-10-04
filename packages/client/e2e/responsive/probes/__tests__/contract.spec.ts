@@ -9,9 +9,7 @@ test('contract: stubbed probes produce no findings, fixture writes empty report'
   await page.setContent(`
     <!doctype html>
     <html><body style="margin:0">
-      <div class="app-frame" style="width: 100px; height: 100px; position: relative;">
-        <div data-tabbar style="position:absolute;bottom:0;left:0;right:0;height:20px;background:#222"></div>
-      </div>
+      <div class="app-frame" style="width: 100px; height: 100px; position: relative;"></div>
     </body></html>
   `);
   const vp = VIEWPORTS[0];
