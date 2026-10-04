@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Graphics } from 'pixi.js';
+import type { ArpgWorld, HazardState } from '@alloy/engine';
 import { MANA_HEX } from '../../palette';
 import type { ManaFx } from '../mana-fx';
 import { DAZE, SPLINTER, STONE, roomObjectFx, roomObjectPoints } from '../room-objects';
+import { drawHazards } from '../draw-world';
 
 // See the room objects spec's client: each room object's event has its moment.
 
@@ -98,5 +101,24 @@ describe("the room objects' moments", () => {
     expect(roomObjectPoints({ kind: 'crumble', structure: 0, cells: [{ x: 5, y: 7 }] })).toEqual([
       { x: 5.5, y: 7.5 },
     ]);
+  });
+});
+
+describe("a hazard's telegraph", () => {
+  /** A hazard's ground pixels at world time `t`: a fuse of 0.4 s, primed till 1. */
+  const pixels = (state: HazardState, t: number) => {
+    const g = { rects: 0, rect: () => (g.rects++, g), fill: () => g };
+    const hazard = { id: 1, element: 'fire', x: 5, y: 5, radius: 0.4, burst: 2.5, state, until: 1 };
+    drawHazards(g as unknown as Graphics, { t, hazards: [hazard] } as unknown as ArpgWorld, 0, 0.4);
+    return g.rects;
+  };
+
+  it('a ready one glows round its body, a primed one fills its reach as the fuse burns, a dormant one shows nothing', () => {
+    const ready = pixels('ready', 0);
+    expect(ready).toBeGreaterThan(0);
+    expect(pixels('dormant', 0)).toBe(0);
+    const lit = pixels('primed', 0.6);
+    expect(lit).toBeGreaterThan(ready);
+    expect(pixels('primed', 0.95)).toBeGreaterThan(lit);
   });
 });

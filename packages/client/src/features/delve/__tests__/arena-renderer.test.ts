@@ -781,4 +781,30 @@ describe("the room objects' moments on the floor", { timeout: 20000 }, () => {
     r.handleEvents([{ kind: 'crumble', structure: 0, cells }]);
     expect(disperse).toHaveBeenCalledTimes(2);
   });
+
+  it("draws a hazard's glow and telegraph only while the hero sees it", () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const ground = () =>
+      (r as unknown as { groundFx: { g: Graphics } }).groundFx.g.context.instructions.length;
+    const none = ground();
+    w.hazards.push({
+      type: 'hazard',
+      id: 42,
+      kind: 'brazier',
+      element: 'fire',
+      x: 6.5,
+      y: 10.5,
+      radius: 0.4,
+      burst: 2.5,
+      state: 'primed',
+      until: 0.3,
+    });
+    r.update(0);
+    expect(ground()).toBeGreaterThan(none);
+    w.fog[10 * 64 + 6] = 1; // seen once, out of sight now
+    r.update(0);
+    expect(ground()).toBe(none);
+  });
 });

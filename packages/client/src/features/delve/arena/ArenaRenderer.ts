@@ -42,6 +42,7 @@ import {
   drawAnticipation,
   drawFooting,
   drawGuard,
+  drawHazards,
   drawInfusions,
   drawLobs,
   drawMonsterMarks,
@@ -792,12 +793,18 @@ export class ArenaRenderer {
       fog.version = w.fogVersion;
     }
     // A foe out of sight shows nothing: not its marks, nor its wind-ups.
+    // Out of sight a foe shows nothing (not its marks, nor its wind-ups), nor a hazard its glow or fuse.
     const seen = w.map.open
       ? w
-      : { ...w, monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)) };
+      : {
+          ...w,
+          monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)),
+          hazards: w.hazards.filter((h) => inSight(w, h.x, h.y)),
+        };
     drawZones(ground, w, this.time);
     drawLobs(ground, air, w, this.time);
     drawTelegraphs(ground, seen, this.time);
+    drawHazards(ground, seen, this.time, getDelveRegistry().getDelveBalance().terrain.fuse);
     drawFooting(ground, w, this.time);
     drawMonsterMarks(ground, air, seen, this.time);
     this.lifecycles.update(w, this.fx, this.time);
