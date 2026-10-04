@@ -67,7 +67,7 @@ import {
   objectsTouching,
 } from './objects.js';
 import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
-import { directorTick, goalWay } from './pack.js';
+import { directorTick, goalWay, laneOpen } from './pack.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -632,6 +632,20 @@ function advance(
   else pursue(ctx, m, toTarget, near, speed, dt);
 }
 
+/**
+ * A charger whose dash met a wall or cover (the director's charge job): its
+ * dash ends, it is stunned `charge.chargeStun` and slammed for `chargeSlam` ×
+ * its own hit.
+ */
+function stunCharger(ctx: SimCtx, m: MonsterEntity): void {
+  const { world, bal } = ctx;
+  const { chargeStun, chargeSlam } = bal.ai.pack.charge;
+  m.chargeUntil = world.t;
+  m.status.staggerUntil = Math.max(m.status.staggerUntil, world.t + chargeStun);
+  ctx.events.push({ kind: 'chargeStun', id: m.id, x: m.x, y: m.y });
+  hitMonster(ctx, m, m.damage * chargeSlam, null, { source: 'dot', noReact: true });
+}
+
 function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
   const { world, registry } = ctx;
   const h = world.hero;
@@ -799,7 +813,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     switch (m.ai) {
       case 'charger': {
         if (m.chargeUntil > world.t) {
-          moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt, false);
+          const from = { x: m.x, y: m.y };
+          const pace = m.speed * 3.4;
+          moveMonster(ctx, m, m.chargeDir, pace, dt, false);
           // The dash passes through props and hazards, setting them off.
           for (const o of objectsTouching(world, m)) hitObject(ctx, o, 'foe');
           if (!m.chargeHit && gap <= 0.25) {
@@ -807,6 +823,14 @@ function monstersTick(ctx: SimCtx, dt: number): void {
             m.chargeUntil = world.t;
             damageHero(ctx, m, m.damage * 1.4, true);
           } else if (!m.chargeHit && gapFromDodge(ctx, m) <= 0.25) notePerfect(ctx);
+          // Stopped short by a wall or cover (not a root), a directed charger is stunned.
+          if (
+            m.job === 'charge' &&
+            m.chargeUntil > world.t &&
+            !isRooted(ctx, m) &&
+            dist(from.x, from.y, m.x, m.y) < pace * dt * 0.5
+          )
+            stunCharger(ctx, m);
           break;
         }
         if (m.windupUntil > 0) {
@@ -818,7 +842,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7.5 || !seen) pursue(ctx, m, toTarget, near, speed, dt);
+        // A directed charger charges only down an open lane; till then it closes in.
+        const lane = m.job !== 'charge' || laneOpen(world.map, m, h, m.radius);
+        if (gap > 7.5 || !seen || !lane) advance(ctx, m, toTarget, near && lane, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.75;

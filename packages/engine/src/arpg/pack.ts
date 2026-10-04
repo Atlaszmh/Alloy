@@ -244,6 +244,23 @@ function coverSpot(ctx: SimCtx, st: DirectorState, m: MonsterEntity): Vec | null
 }
 
 /**
+ * Whether a body of radius `r` can go straight from `a` to `b` (a charger's
+ * lane): its circle swept down the segment (its square, every quarter unit)
+ * meets no solid cell.
+ */
+export function laneOpen(map: FloorMap, a: Vec, b: Vec, r: number): boolean {
+  const n = Math.max(1, Math.ceil(dist(a.x, a.y, b.x, b.y) / 0.25));
+  for (let i = 0; i <= n; i++) {
+    const x = a.x + ((b.x - a.x) * i) / n;
+    const y = a.y + ((b.y - a.y) * i) / n;
+    for (let cy = Math.floor(y - r + 1e-9); cy <= Math.floor(y + r - 1e-9); cy++)
+      for (let cx = Math.floor(x - r + 1e-9); cx <= Math.floor(x + r - 1e-9); cx++)
+        if (solid(map, cx, cy)) return false;
+  }
+  return true;
+}
+
+/**
  * Where `m` walks this tick toward its goal, or null to go after the hero as
  * before (`pursue`). A ring slot is walked to only `near` the hero (with sight,
  * in `ai.directRange`) and a flanker turns on the hero there; any other goal
@@ -305,6 +322,7 @@ export function directorTick(ctx: SimCtx): void {
     for (const m of members) {
       m.job = null;
       if (!m.search) m.goal = null;
+      if (m.ai === 'charger' && cfg.charge.on) m.job = 'charge';
       if (m.ai === 'ranged') {
         const spot = cfg.cover.on ? coverSpot(ctx, st, m) : null;
         if (spot) {
