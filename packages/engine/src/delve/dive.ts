@@ -20,6 +20,7 @@ import type { SetChainsOptions } from './runes.js';
 import { refillBoard } from './contracts.js';
 import { applyQuestEvents, resetDiveQuests } from './quests.js';
 import type { QuestEvent } from '../types/quests.js';
+import { tutorialFloorOf } from './tutorial.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
   return isBossFloor(registry, depth);
@@ -113,6 +114,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     layout: 'generated',
     used: [...dive.used],
     diveBuffs: [...dive.diveBuffs],
+    tutorial: tutorialFloorOf(registry, profile),
     loot: {
       nextUid: profile.nextUid,
       find: stats.magicFind + (mods.find ?? 0),

@@ -14,6 +14,7 @@ import type { SetChainsOptions } from './runes.js';
 import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
 import { emptyMaterials } from '../loot/materials.js';
 import { applyQuestEvents, emptyQuests } from './quests.js';
+import { applyTutorialEvents } from './tutorial.js';
 import { refillBoard } from './contracts.js';
 import { rollFloor } from '../loot/forge.js';
 import { applySalvage, salvageRng } from '../loot/salvage-yield.js';
@@ -380,7 +381,7 @@ const FORGE_LOCKED = 'Forge at the Anvil, between dives';
 
 /** Equip a bag item; a weapon brings its own moveset. Throws mid-dive. */
 export function equipItem(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
 ): DelveProfile {
@@ -390,7 +391,8 @@ export function equipItem(
   const previous = profile.equipped[item.slot];
   const bag = profile.bag.filter((i) => i.uid !== uid);
   if (previous) bag.push(previous);
-  return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
+  const equipped = { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
+  return applyTutorialEvents(registry, equipped, [{ type: 'equip', slot: item.slot }]);
 }
 
 /** Unequip into the bag (a weapon keeps its moveset). Throws mid-dive. */
@@ -438,7 +440,12 @@ export function salvageItems(
     : profile.bag.filter((item) => targets.has(item.uid) && !item.locked);
   const bag = profile.bag.filter((item) => !melted.includes(item));
   const res = melt(registry, melted.length > 0 ? { ...profile, bag } : profile, melted, opts);
-  return { ...res, count: melted.length };
+  const events = melted.map((item) => ({ type: 'salvage', slot: item.slot }) as const);
+  return {
+    ...res,
+    profile: applyTutorialEvents(registry, res.profile, events),
+    count: melted.length,
+  };
 }
 
 /** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`, and no weapon holding runes. */

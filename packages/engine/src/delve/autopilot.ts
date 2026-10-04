@@ -75,6 +75,8 @@ export interface AutopilotOptions {
   primary?: ManaType;
   /** Bind this second element before the first dive (the Primary built from both), forcing the pair. */
   secondary?: ManaType;
+  /** Play a guided start (see the tutorial spec): B4's; ignored until then. */
+  tutorial?: boolean;
 }
 
 export interface AutopilotDiveReport {
