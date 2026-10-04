@@ -122,8 +122,8 @@
     },
     "chest/0": {
       "frame": {
-        "x": 136,
-        "y": 230,
+        "x": 34,
+        "y": 247,
         "w": 14,
         "h": 14
       },
@@ -142,8 +142,8 @@
     },
     "chest/1": {
       "frame": {
-        "x": 151,
-        "y": 230,
+        "x": 49,
+        "y": 247,
         "w": 14,
         "h": 14
       },
@@ -280,10 +280,710 @@
         "h": 42
       }
     },
+    "urn/0": {
+      "frame": {
+        "x": 238,
+        "y": 264,
+        "w": 11,
+        "h": 11
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 11,
+        "h": 11
+      },
+      "sourceSize": {
+        "w": 11,
+        "h": 11
+      }
+    },
+    "urn/1": {
+      "frame": {
+        "x": 0,
+        "y": 278,
+        "w": 11,
+        "h": 11
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 11,
+        "h": 11
+      },
+      "sourceSize": {
+        "w": 11,
+        "h": 11
+      }
+    },
+    "crate/0": {
+      "frame": {
+        "x": 94,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "crate/1": {
+      "frame": {
+        "x": 108,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "barrel/0": {
+      "frame": {
+        "x": 122,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "barrel/1": {
+      "frame": {
+        "x": 136,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "bone_pile/0": {
+      "frame": {
+        "x": 150,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "bone_pile/1": {
+      "frame": {
+        "x": 164,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "brazier/0": {
+      "frame": {
+        "x": 178,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "brazier/1": {
+      "frame": {
+        "x": 192,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "brazier/2": {
+      "frame": {
+        "x": 206,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "frost_crystal/0": {
+      "frame": {
+        "x": 220,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "frost_crystal/1": {
+      "frame": {
+        "x": 234,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "frost_crystal/2": {
+      "frame": {
+        "x": 0,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "storm_coil/0": {
+      "frame": {
+        "x": 14,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "storm_coil/1": {
+      "frame": {
+        "x": 28,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "storm_coil/2": {
+      "frame": {
+        "x": 42,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "spore_pod/0": {
+      "frame": {
+        "x": 56,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "spore_pod/1": {
+      "frame": {
+        "x": 70,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "spore_pod/2": {
+      "frame": {
+        "x": 84,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "shadow_brazier/0": {
+      "frame": {
+        "x": 98,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "shadow_brazier/1": {
+      "frame": {
+        "x": 112,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "shadow_brazier/2": {
+      "frame": {
+        "x": 126,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "fire_vent/0": {
+      "frame": {
+        "x": 140,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "fire_vent/1": {
+      "frame": {
+        "x": 154,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "fire_vent/2": {
+      "frame": {
+        "x": 168,
+        "y": 264,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "statue/0": {
+      "frame": {
+        "x": 222,
+        "y": 210,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "statue/1": {
+      "frame": {
+        "x": 239,
+        "y": 210,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "statue/2": {
+      "frame": {
+        "x": 0,
+        "y": 230,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "boulder/0": {
+      "frame": {
+        "x": 17,
+        "y": 230,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "spire/0": {
+      "frame": {
+        "x": 34,
+        "y": 230,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "ice_pillar/0": {
+      "frame": {
+        "x": 51,
+        "y": 230,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "minecart/0": {
+      "frame": {
+        "x": 68,
+        "y": 230,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "tomb/0": {
+      "frame": {
+        "x": 85,
+        "y": 230,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "machinery/0": {
+      "frame": {
+        "x": 102,
+        "y": 230,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
     "mine_rat/0": {
       "frame": {
-        "x": 48,
-        "y": 247,
+        "x": 60,
+        "y": 278,
         "w": 10,
         "h": 10
       },
@@ -302,8 +1002,8 @@
     },
     "mine_rat/1": {
       "frame": {
-        "x": 59,
-        "y": 247,
+        "x": 71,
+        "y": 278,
         "w": 10,
         "h": 10
       },
@@ -322,8 +1022,8 @@
     },
     "soot_bat/0": {
       "frame": {
-        "x": 0,
-        "y": 247,
+        "x": 12,
+        "y": 278,
         "w": 11,
         "h": 11
       },
@@ -342,8 +1042,8 @@
     },
     "soot_bat/1": {
       "frame": {
-        "x": 12,
-        "y": 247,
+        "x": 24,
+        "y": 278,
         "w": 11,
         "h": 11
       },
@@ -402,8 +1102,8 @@
     },
     "goblin_digger/0": {
       "frame": {
-        "x": 222,
-        "y": 210,
+        "x": 119,
+        "y": 230,
         "w": 16,
         "h": 16
       },
@@ -422,8 +1122,8 @@
     },
     "goblin_digger/1": {
       "frame": {
-        "x": 239,
-        "y": 210,
+        "x": 136,
+        "y": 230,
         "w": 16,
         "h": 16
       },
@@ -482,7 +1182,7 @@
     },
     "frost_wolf/0": {
       "frame": {
-        "x": 0,
+        "x": 153,
         "y": 230,
         "w": 16,
         "h": 16
@@ -502,7 +1202,7 @@
     },
     "frost_wolf/1": {
       "frame": {
-        "x": 17,
+        "x": 170,
         "y": 230,
         "w": 16,
         "h": 16
@@ -522,7 +1222,7 @@
     },
     "rime_wraith/0": {
       "frame": {
-        "x": 34,
+        "x": 187,
         "y": 230,
         "w": 16,
         "h": 16
@@ -542,7 +1242,7 @@
     },
     "rime_wraith/1": {
       "frame": {
-        "x": 51,
+        "x": 204,
         "y": 230,
         "w": 16,
         "h": 16
@@ -722,8 +1422,8 @@
     },
     "storm_hawk/0": {
       "frame": {
-        "x": 166,
-        "y": 230,
+        "x": 64,
+        "y": 247,
         "w": 14,
         "h": 14
       },
@@ -742,8 +1442,8 @@
     },
     "storm_hawk/1": {
       "frame": {
-        "x": 181,
-        "y": 230,
+        "x": 79,
+        "y": 247,
         "w": 14,
         "h": 14
       },
@@ -802,8 +1502,8 @@
     },
     "arc_imp/0": {
       "frame": {
-        "x": 70,
-        "y": 247,
+        "x": 82,
+        "y": 278,
         "w": 10,
         "h": 10
       },
@@ -822,8 +1522,8 @@
     },
     "arc_imp/1": {
       "frame": {
-        "x": 81,
-        "y": 247,
+        "x": 93,
+        "y": 278,
         "w": 10,
         "h": 10
       },
@@ -882,7 +1582,7 @@
     },
     "quarry_stalker/0": {
       "frame": {
-        "x": 68,
+        "x": 221,
         "y": 230,
         "w": 16,
         "h": 16
@@ -902,7 +1602,7 @@
     },
     "quarry_stalker/1": {
       "frame": {
-        "x": 85,
+        "x": 238,
         "y": 230,
         "w": 16,
         "h": 16
@@ -1002,8 +1702,8 @@
     },
     "mud_toad/0": {
       "frame": {
-        "x": 24,
-        "y": 247,
+        "x": 36,
+        "y": 278,
         "w": 11,
         "h": 11
       },
@@ -1022,8 +1722,8 @@
     },
     "mud_toad/1": {
       "frame": {
-        "x": 36,
-        "y": 247,
+        "x": 48,
+        "y": 278,
         "w": 11,
         "h": 11
       },
@@ -1082,8 +1782,8 @@
     },
     "skeleton/0": {
       "frame": {
-        "x": 102,
-        "y": 230,
+        "x": 0,
+        "y": 247,
         "w": 16,
         "h": 16
       },
@@ -1102,8 +1802,8 @@
     },
     "skeleton/1": {
       "frame": {
-        "x": 119,
-        "y": 230,
+        "x": 17,
+        "y": 247,
         "w": 16,
         "h": 16
       },
@@ -1122,8 +1822,8 @@
     },
     "nightstalker/0": {
       "frame": {
-        "x": 196,
-        "y": 230,
+        "x": 182,
+        "y": 264,
         "w": 13,
         "h": 13
       },
@@ -1142,8 +1842,8 @@
     },
     "nightstalker/1": {
       "frame": {
-        "x": 210,
-        "y": 230,
+        "x": 196,
+        "y": 264,
         "w": 13,
         "h": 13
       },
@@ -1282,8 +1982,8 @@
     },
     "fire_imp/0": {
       "frame": {
-        "x": 92,
-        "y": 247,
+        "x": 104,
+        "y": 278,
         "w": 10,
         "h": 10
       },
@@ -1302,8 +2002,8 @@
     },
     "fire_imp/1": {
       "frame": {
-        "x": 103,
-        "y": 247,
+        "x": 115,
+        "y": 278,
         "w": 10,
         "h": 10
       },
@@ -1402,8 +2102,8 @@
     },
     "flame_spirit/0": {
       "frame": {
-        "x": 224,
-        "y": 230,
+        "x": 210,
+        "y": 264,
         "w": 13,
         "h": 13
       },
@@ -1422,8 +2122,8 @@
     },
     "flame_spirit/1": {
       "frame": {
-        "x": 238,
-        "y": 230,
+        "x": 224,
+        "y": 264,
         "w": 13,
         "h": 13
       },
@@ -1509,6 +2209,75 @@
     "exit_gate": [
       "exit_gate/0",
       "exit_gate/1"
+    ],
+    "urn": [
+      "urn/0",
+      "urn/1"
+    ],
+    "crate": [
+      "crate/0",
+      "crate/1"
+    ],
+    "barrel": [
+      "barrel/0",
+      "barrel/1"
+    ],
+    "bone_pile": [
+      "bone_pile/0",
+      "bone_pile/1"
+    ],
+    "brazier": [
+      "brazier/0",
+      "brazier/1",
+      "brazier/2"
+    ],
+    "frost_crystal": [
+      "frost_crystal/0",
+      "frost_crystal/1",
+      "frost_crystal/2"
+    ],
+    "storm_coil": [
+      "storm_coil/0",
+      "storm_coil/1",
+      "storm_coil/2"
+    ],
+    "spore_pod": [
+      "spore_pod/0",
+      "spore_pod/1",
+      "spore_pod/2"
+    ],
+    "shadow_brazier": [
+      "shadow_brazier/0",
+      "shadow_brazier/1",
+      "shadow_brazier/2"
+    ],
+    "fire_vent": [
+      "fire_vent/0",
+      "fire_vent/1",
+      "fire_vent/2"
+    ],
+    "statue": [
+      "statue/0",
+      "statue/1",
+      "statue/2"
+    ],
+    "boulder": [
+      "boulder/0"
+    ],
+    "spire": [
+      "spire/0"
+    ],
+    "ice_pillar": [
+      "ice_pillar/0"
+    ],
+    "minecart": [
+      "minecart/0"
+    ],
+    "tomb": [
+      "tomb/0"
+    ],
+    "machinery": [
+      "machinery/0"
     ],
     "mine_rat": [
       "mine_rat/0",
@@ -1638,7 +2407,7 @@
     "format": "RGBA8888",
     "size": {
       "w": 256,
-      "h": 258
+      "h": 289
     },
     "scale": "1"
   }
