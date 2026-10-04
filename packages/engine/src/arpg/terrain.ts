@@ -1,5 +1,6 @@
 import type { ArpgWorld, MonsterEntity, Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
+import { bindTerrain } from './grid.js';
 
 /**
  * Terrain in a fight (B2; see the room objects spec's "Objects in a fight"):
@@ -43,7 +44,13 @@ export function hitStructures(
 ): void {}
 
 /**
- * Each tick, before the director: foes that lost the hero to foliage search
- * its last-seen point (`MonsterEntity.search`, `goal`), and give up. Stub: a no-op.
+ * Each tick, before the director: binds `delve.terrain` to the floor's map
+ * (`bindTerrain`: foliage's sight and slow ground). Foes that lost the hero to
+ * foliage search its last-seen point (`MonsterEntity.search`, `goal`), and
+ * give up. A no-op on the open room.
  */
-export function terrainTick(_ctx: SimCtx): void {}
+export function terrainTick(ctx: SimCtx): void {
+  const { world, bal } = ctx;
+  if (world.map.open) return;
+  bindTerrain(world.map, bal.terrain);
+}

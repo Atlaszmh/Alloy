@@ -1,5 +1,5 @@
 import type { Vec } from '../types/arpg.js';
-import { CELL, type Door, type FloorMap } from '../types/floor-map.js';
+import { CELL, type Door, type FloorMap, type TerrainBalance } from '../types/floor-map.js';
 import { clamp } from './geometry.js';
 
 /**
@@ -213,14 +213,76 @@ export function sees(map: FloorMap, a: Vec, b: Vec): boolean {
   return map.open || lineOfSight(map, a, b);
 }
 
+/** The terrain numbers each map's sight and ground read (`bindTerrain`). */
+const terrains = new WeakMap<FloorMap, TerrainBalance>();
+
+/**
+ * Bind `delve.terrain` to a map, for `perceives`' foliage and `groundSpeed`'s
+ * slow ground. `terrainTick` binds it every tick, so only a world's very first
+ * step (its hero's, before the hook) reads the map unbound: no foliage hides
+ * and no ground slows.
+ */
+export function bindTerrain(map: FloorMap, terrain: TerrainBalance): void {
+  terrains.set(map, terrain);
+}
+
+/** The terrain numbers bound to a map (`bindTerrain`), if any. */
+export function terrainOf(map: FloorMap): TerrainBalance | undefined {
+  return terrains.get(map);
+}
+
+/** The index (`y × width + x`) of the cell a point stands in. */
+function cellIndex(map: FloorMap, p: Vec): number {
+  return cellOf(p.y, map.height) * map.width + cellOf(p.x, map.width);
+}
+
 /**
  * Whether `a` perceives `b` (see the room objects spec's predicates): sight,
  * which the fog, a foe's aggro and sight, `nearestMonster`, auto-aim and the
- * bot's targeting ask. Solid cells block it as they block `sees`; foliage's
- * two rules come with B2. Until then it is `sees`.
+ * bot's targeting ask. Solid cells block it as they block `sees`, and foliage
+ * twice: what stands in foliage (either end) is perceived only within
+ * `terrain.foliageSight`, and a line running through more than
+ * `terrain.foliageDepth` of foliage (its ends' own cells left out) is blocked.
+ * A map with no terrain bound (`bindTerrain`) has no foliage rules.
  */
 export function perceives(map: FloorMap, a: Vec, b: Vec): boolean {
-  return sees(map, a, b);
+  if (!sees(map, a, b)) return false;
+  const t = terrains.get(map);
+  if (map.open || !t) return true;
+  const ia = cellIndex(map, a);
+  const ib = cellIndex(map, b);
+  const leafy = map.cells[ia] === CELL.foliage || map.cells[ib] === CELL.foliage;
+  if (leafy && Math.hypot(b.x - a.x, b.y - a.y) > t.foliageSight) return false;
+  return foliageAlong(map, a, b, ia, ib) <= t.foliageDepth;
+}
+
+/**
+ * How far the segment from `a` to `b` runs through foliage, leaving out the
+ * cells `ia` and `ib` (its ends'): the DDA walk `lineOfSight` takes.
+ */
+function foliageAlong(map: FloorMap, a: Vec, b: Vec, ia: number, ib: number): number {
+  let cx = cellOf(a.x, map.width);
+  let cy = cellOf(a.y, map.height);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  const sx = Math.sign(dx);
+  const sy = Math.sign(dy);
+  const tx = () => (sx ? (cx + (sx > 0 ? 1 : 0) - a.x) / dx : Infinity);
+  const ty = () => (sy ? (cy + (sy > 0 ? 1 : 0) - a.y) / dy : Infinity);
+  let sum = 0;
+  // Where along the segment (0 at a, 1 at b) the cell being walked begins.
+  for (let from = 0; ; ) {
+    const x = tx();
+    const y = ty();
+    const to = Math.min(x, y, 1);
+    const i = cy * map.width + cx;
+    if (i !== ia && i !== ib && map.cells[i] === CELL.foliage) sum += (to - from) * len;
+    if (to >= 1) return sum;
+    from = to;
+    if (x <= y) cx += sx;
+    if (y <= x) cy += sy;
+  }
 }
 
 /**
