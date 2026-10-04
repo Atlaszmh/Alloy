@@ -18,8 +18,18 @@ describe('delve sprite atlas', () => {
   const monsterIds = new Set(
     registry.getDelveData().biomes.flatMap((b) => [...b.monsters.map((m) => m.id), b.boss.id]),
   );
-  /** Everything drawn from the atlas: the hero, the training dummy (size 1), the monsters, Hesta, the Anvil-keeper, and the floor-map props. */
-  const known = new Set(['hero', 'dummy', 'hesta', ...monsterIds, ...Object.keys(props)]);
+  /** The room objects (`setpieces.json → props`, `hazards`): each sprite is as wide as its body (2 × radius). */
+  const { props: roomProps, hazards } = registry.getSetPieces();
+  const objects = [...roomProps, ...hazards];
+  /** Everything drawn from the atlas: the hero, the training dummy (size 1), the monsters, Hesta, the Anvil-keeper, the floor-map props and the room objects. */
+  const known = new Set([
+    'hero',
+    'dummy',
+    'hesta',
+    ...monsterIds,
+    ...Object.keys(props),
+    ...objects.map((o) => o.id),
+  ]);
 
   it('only holds sprites the game can use', () => {
     for (const id of Object.keys(atlas.animations)) {
@@ -40,6 +50,11 @@ describe('delve sprite atlas', () => {
     }
   });
 
+  it('holds every room prop whole and broken, and every hazard ready, primed and dormant', () => {
+    for (const { id } of roomProps) expect(atlas.animations[id]?.length, id).toBe(2);
+    for (const { id } of hazards) expect(atlas.animations[id]?.length, id).toBe(3);
+  });
+
   it('keeps one pixel density: every canvas is 16 px per unit of monster or prop size', () => {
     // A size-1 monster is 16 px, a size-3 giant 48 px, and every sprite pixel is the same
     // SPRITE_PIXEL in the world. Canvases follow size, so art and hitboxes stay in proportion.
@@ -53,6 +68,7 @@ describe('delve sprite atlas', () => {
     sizes.set('dummy', 1);
     sizes.set('hesta', 1.6);
     for (const [id, size] of Object.entries(props)) sizes.set(id, size);
+    for (const o of objects) sizes.set(o.id, o.radius * 2);
     for (const [id, names] of Object.entries(atlas.animations)) {
       const want = Math.round(16 * sizes.get(id)!);
       for (const n of names) {

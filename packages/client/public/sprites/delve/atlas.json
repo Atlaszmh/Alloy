@@ -280,10 +280,530 @@
         "h": 42
       }
     },
+    "urn/0": {
+      "frame": {
+        "x": 84,
+        "y": 261,
+        "w": 11,
+        "h": 11
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 11,
+        "h": 11
+      },
+      "sourceSize": {
+        "w": 11,
+        "h": 11
+      }
+    },
+    "urn/1": {
+      "frame": {
+        "x": 96,
+        "y": 261,
+        "w": 11,
+        "h": 11
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 11,
+        "h": 11
+      },
+      "sourceSize": {
+        "w": 11,
+        "h": 11
+      }
+    },
+    "crate/0": {
+      "frame": {
+        "x": 196,
+        "y": 230,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "crate/1": {
+      "frame": {
+        "x": 210,
+        "y": 230,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "barrel/0": {
+      "frame": {
+        "x": 224,
+        "y": 230,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "barrel/1": {
+      "frame": {
+        "x": 238,
+        "y": 230,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "bone_pile/0": {
+      "frame": {
+        "x": 0,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "bone_pile/1": {
+      "frame": {
+        "x": 14,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "brazier/0": {
+      "frame": {
+        "x": 28,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "brazier/1": {
+      "frame": {
+        "x": 42,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "brazier/2": {
+      "frame": {
+        "x": 56,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "frost_crystal/0": {
+      "frame": {
+        "x": 70,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "frost_crystal/1": {
+      "frame": {
+        "x": 84,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "frost_crystal/2": {
+      "frame": {
+        "x": 98,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "storm_coil/0": {
+      "frame": {
+        "x": 112,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "storm_coil/1": {
+      "frame": {
+        "x": 126,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "storm_coil/2": {
+      "frame": {
+        "x": 140,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "spore_pod/0": {
+      "frame": {
+        "x": 154,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "spore_pod/1": {
+      "frame": {
+        "x": 168,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "spore_pod/2": {
+      "frame": {
+        "x": 182,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "shadow_brazier/0": {
+      "frame": {
+        "x": 196,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "shadow_brazier/1": {
+      "frame": {
+        "x": 210,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "shadow_brazier/2": {
+      "frame": {
+        "x": 224,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "fire_vent/0": {
+      "frame": {
+        "x": 238,
+        "y": 247,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "fire_vent/1": {
+      "frame": {
+        "x": 0,
+        "y": 261,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
+    "fire_vent/2": {
+      "frame": {
+        "x": 14,
+        "y": 261,
+        "w": 13,
+        "h": 13
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 13,
+        "h": 13
+      },
+      "sourceSize": {
+        "w": 13,
+        "h": 13
+      }
+    },
     "mine_rat/0": {
       "frame": {
-        "x": 48,
-        "y": 247,
+        "x": 156,
+        "y": 261,
         "w": 10,
         "h": 10
       },
@@ -302,8 +822,8 @@
     },
     "mine_rat/1": {
       "frame": {
-        "x": 59,
-        "y": 247,
+        "x": 167,
+        "y": 261,
         "w": 10,
         "h": 10
       },
@@ -322,8 +842,8 @@
     },
     "soot_bat/0": {
       "frame": {
-        "x": 0,
-        "y": 247,
+        "x": 108,
+        "y": 261,
         "w": 11,
         "h": 11
       },
@@ -342,8 +862,8 @@
     },
     "soot_bat/1": {
       "frame": {
-        "x": 12,
-        "y": 247,
+        "x": 120,
+        "y": 261,
         "w": 11,
         "h": 11
       },
@@ -802,8 +1322,8 @@
     },
     "arc_imp/0": {
       "frame": {
-        "x": 70,
-        "y": 247,
+        "x": 178,
+        "y": 261,
         "w": 10,
         "h": 10
       },
@@ -822,8 +1342,8 @@
     },
     "arc_imp/1": {
       "frame": {
-        "x": 81,
-        "y": 247,
+        "x": 189,
+        "y": 261,
         "w": 10,
         "h": 10
       },
@@ -1002,8 +1522,8 @@
     },
     "mud_toad/0": {
       "frame": {
-        "x": 24,
-        "y": 247,
+        "x": 132,
+        "y": 261,
         "w": 11,
         "h": 11
       },
@@ -1022,8 +1542,8 @@
     },
     "mud_toad/1": {
       "frame": {
-        "x": 36,
-        "y": 247,
+        "x": 144,
+        "y": 261,
         "w": 11,
         "h": 11
       },
@@ -1122,8 +1642,8 @@
     },
     "nightstalker/0": {
       "frame": {
-        "x": 196,
-        "y": 230,
+        "x": 28,
+        "y": 261,
         "w": 13,
         "h": 13
       },
@@ -1142,8 +1662,8 @@
     },
     "nightstalker/1": {
       "frame": {
-        "x": 210,
-        "y": 230,
+        "x": 42,
+        "y": 261,
         "w": 13,
         "h": 13
       },
@@ -1282,8 +1802,8 @@
     },
     "fire_imp/0": {
       "frame": {
-        "x": 92,
-        "y": 247,
+        "x": 200,
+        "y": 261,
         "w": 10,
         "h": 10
       },
@@ -1302,8 +1822,8 @@
     },
     "fire_imp/1": {
       "frame": {
-        "x": 103,
-        "y": 247,
+        "x": 211,
+        "y": 261,
         "w": 10,
         "h": 10
       },
@@ -1402,8 +1922,8 @@
     },
     "flame_spirit/0": {
       "frame": {
-        "x": 224,
-        "y": 230,
+        "x": 56,
+        "y": 261,
         "w": 13,
         "h": 13
       },
@@ -1422,8 +1942,8 @@
     },
     "flame_spirit/1": {
       "frame": {
-        "x": 238,
-        "y": 230,
+        "x": 70,
+        "y": 261,
         "w": 13,
         "h": 13
       },
@@ -1509,6 +2029,52 @@
     "exit_gate": [
       "exit_gate/0",
       "exit_gate/1"
+    ],
+    "urn": [
+      "urn/0",
+      "urn/1"
+    ],
+    "crate": [
+      "crate/0",
+      "crate/1"
+    ],
+    "barrel": [
+      "barrel/0",
+      "barrel/1"
+    ],
+    "bone_pile": [
+      "bone_pile/0",
+      "bone_pile/1"
+    ],
+    "brazier": [
+      "brazier/0",
+      "brazier/1",
+      "brazier/2"
+    ],
+    "frost_crystal": [
+      "frost_crystal/0",
+      "frost_crystal/1",
+      "frost_crystal/2"
+    ],
+    "storm_coil": [
+      "storm_coil/0",
+      "storm_coil/1",
+      "storm_coil/2"
+    ],
+    "spore_pod": [
+      "spore_pod/0",
+      "spore_pod/1",
+      "spore_pod/2"
+    ],
+    "shadow_brazier": [
+      "shadow_brazier/0",
+      "shadow_brazier/1",
+      "shadow_brazier/2"
+    ],
+    "fire_vent": [
+      "fire_vent/0",
+      "fire_vent/1",
+      "fire_vent/2"
     ],
     "mine_rat": [
       "mine_rat/0",
@@ -1638,7 +2204,7 @@
     "format": "RGBA8888",
     "size": {
       "w": 256,
-      "h": 258
+      "h": 274
     },
     "scale": "1"
   }
