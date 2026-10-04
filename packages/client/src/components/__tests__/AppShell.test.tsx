@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { AppShell } from '../AppShell';
 import { useUIStore } from '@/stores/uiStore';
 
-/** A page with a visible back button, which Esc presses on a Delve route. */
+/** A page with a visible back button, which Esc presses. */
 function Page({ onBack }: { onBack: () => void }) {
   return (
     <button
@@ -47,18 +47,6 @@ describe('AppShell', () => {
     localStorage.removeItem('alloy:delve:hudScale');
   });
 
-  it('gives every Delve route the full window and no TabBar; other routes keep both', () => {
-    for (const path of ['/delve', '/delve/run', '/delve/training', '/delve/lab']) {
-      const { container, unmount } = renderAt(path);
-      expect(container.querySelector('.app-frame')).toHaveAttribute('data-frame', 'full');
-      expect(container.querySelector('[data-tabbar]')).toBeNull();
-      unmount();
-    }
-    const { container } = renderAt('/');
-    expect(container.querySelector('.app-frame')).not.toHaveAttribute('data-frame');
-    expect(container.querySelector('[data-tabbar]')).not.toBeNull();
-  });
-
   it('sets --ui-scale and --hud-scale in quarter steps on resize and on a HUD scale change, mirrored in uiStore', () => {
     resize(1280, 720);
     renderAt('/delve');
@@ -92,14 +80,13 @@ describe('AppShell', () => {
     expect(seen).toBe('1.25');
   });
 
-  it("binds Esc to the page's back on Delve routes only", () => {
-    const back = vi.fn();
-    const classic = renderAt('/', back);
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' }));
-    expect(back).not.toHaveBeenCalled();
-    classic.unmount();
-    renderAt('/delve', back);
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' }));
-    expect(back).toHaveBeenCalledTimes(1);
+  it("binds Esc to the page's back on every route, the title screen's too", () => {
+    for (const path of ['/', '/delve']) {
+      const back = vi.fn();
+      const { unmount } = renderAt(path, back);
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' }));
+      expect(back).toHaveBeenCalledTimes(1);
+      unmount();
+    }
   });
 });
