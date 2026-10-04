@@ -154,6 +154,7 @@ export {
   createMonsterEntity,
   biomeCycle,
   isBossFloor,
+  depthGrowth,
 } from './arpg/world.js';
 export type { FloorOptions } from './arpg/world.js';
 export { stepWorld } from './arpg/step.js';

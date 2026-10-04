@@ -674,7 +674,76 @@ export const LayoutBalanceSchema = z
     packsPerRoom: z.number().int().positive(),
     generatedDives: z.boolean(),
   })
-  .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid');
+  .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid')
+  .refine(
+    (l) => l.coarseCell * Math.max(l.coarseCols, l.coarseRows) <= 96,
+    'maps are at most 96 × 96 (see the room objects spec)',
+  );
+
+/** `balance.json → delve.ai.pack` (see the room objects spec's "Smarter packs"). */
+export const PackAiBalanceSchema = z
+  .object({
+    directorEvery: z.number().positive(),
+    flowRadius: z.number().int().positive(),
+    stuckTime: z.number().positive(),
+    ring: z.object({ on: z.boolean() }).strict(),
+    flank: z
+      .object({
+        on: z.boolean(),
+        kiteTime: z.number().min(0),
+        leadTime: z.number().min(0),
+        flankShare: z
+          .object({
+            fromDepth: z.number().int().min(1),
+            base: z.number().min(0).max(1),
+            perDepth: z.number().min(0),
+            max: z.number().min(0).max(1),
+          })
+          .strict(),
+      })
+      .strict(),
+    cover: z
+      .object({
+        on: z.boolean(),
+        coverSearch: z.number().int().positive(),
+        coverFlee: z.number().min(0),
+      })
+      .strict(),
+    charge: z
+      .object({ on: z.boolean(), chargeStun: z.number().min(0), chargeSlam: z.number().min(0) })
+      .strict(),
+    ambush: z
+      .object({
+        on: z.boolean(),
+        ambushChance: z.number().min(0).max(1),
+        ambushWake: z.number().positive(),
+      })
+      .strict(),
+  })
+  .strict();
+
+/** `balance.json → delve.terrain` (see the room objects spec's "Objects in a fight"). */
+export const TerrainBalanceSchema = z
+  .object({
+    slowMult: z.number().positive().max(1),
+    bossSlowMult: z.number().positive().max(1),
+    foliageSight: z.number().positive(),
+    foliageDepth: z.number().min(0),
+    searchTime: z.number().min(0),
+    leashMargin: z.number().min(0),
+    structureLife: z.number().positive(),
+    slamDamage: z.number().min(0),
+    slamStagger: z.number().min(0),
+    propLife: z.number().positive(),
+    propDrops: z
+      .object({ chance: z.number().min(0).max(1), material: z.number().min(0).max(1) })
+      .strict(),
+    hazardDamage: z.number().min(0),
+    fuse: z.number().min(0),
+    recharge: z.number().min(0),
+    hazardOffElement: z.number().min(0).max(1),
+  })
+  .strict();
 
 /** `balance.json → delve.ai`. */
 export const AiBalanceSchema = z.object({
@@ -690,6 +759,7 @@ export const AiBalanceSchema = z.object({
   exitHintSeconds: z.number().min(0),
   interactRadius: z.number().positive(),
   shrineChannel: z.number().min(0),
+  pack: PackAiBalanceSchema,
 });
 
 /** A count and a power (`split`, `extraShots`). */
@@ -1317,6 +1387,7 @@ const DelveBalanceSchema = z.object({
   quests: QuestsBalanceSchema,
   layout: LayoutBalanceSchema,
   ai: AiBalanceSchema,
+  terrain: TerrainBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
     // The open room's grid: whole cells.

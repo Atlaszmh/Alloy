@@ -5,7 +5,14 @@ import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
-import type { AiBalance, Buff, LayoutBalance, LayoutsData, ShrineDef } from './floor-map.js';
+import type {
+  AiBalance,
+  Buff,
+  LayoutBalance,
+  LayoutsData,
+  ShrineDef,
+  TerrainBalance,
+} from './floor-map.js';
 import type { TutorialState } from './tutorial.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
@@ -655,6 +662,8 @@ export interface DelveBalance {
   layout: LayoutBalance;
   /** How foes path, leash and see, and the floor's timings. */
   ai: AiBalance;
+  /** Cover, foliage, slow ground, crumbling structures, props and hazards (see the room objects spec). */
+  terrain: TerrainBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;

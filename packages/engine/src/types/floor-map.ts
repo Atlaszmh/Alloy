@@ -330,6 +330,71 @@ export interface AiBalance {
   interactRadius: number;
   /** Seconds a shrine's prayer takes. */
   shrineChannel: number;
+  /** The pack director (see the room objects spec). */
+  pack: PackAiBalance;
+}
+
+/**
+ * The pack director's numbers (`balance.json → delve.ai.pack`; see the room
+ * objects spec's "Smarter packs"): each job's switch (`on`) and its numbers.
+ */
+export interface PackAiBalance {
+  /** Seconds between the director's passes. */
+  directorEvery: number;
+  /** A pack's fields reach this many cells. */
+  flowRadius: number;
+  /** No foe stays pressed against a prop, a hazard or cover longer than this (seconds). */
+  stuckTime: number;
+  /** Melee foes take slots on a ring round the hero. */
+  ring: { on: boolean };
+  /**
+   * After `kiteTime` of the hero moving away from the pack's centre, a share of
+   * its melee foes (`flankShare`: 0 before `fromDepth`, then `base` + `perDepth`
+   * a depth past it, at most `max`) cut it off `leadTime` ahead of its motion.
+   */
+  flank: {
+    on: boolean;
+    kiteTime: number;
+    leadTime: number;
+    flankShare: { fromDepth: number; base: number; perDepth: number; max: number };
+  };
+  /** A ranged foe shoots from beside cover within `coverSearch` cells, and moves when the hero comes within `coverFlee`. */
+  cover: { on: boolean; coverSearch: number; coverFlee: number };
+  /** A charger meeting cover or a wall is stunned `chargeStun` seconds and takes `chargeSlam` × its own hit. */
+  charge: { on: boolean; chargeStun: number; chargeSlam: number };
+  /** A pack in a room with foliage hides in it at `ambushChance`, waking within `ambushWake` of the hero. */
+  ambush: { on: boolean; ambushChance: number; ambushWake: number };
+}
+
+/** The room objects' numbers (`balance.json → delve.terrain`; see the room objects spec's "Objects in a fight"). */
+export interface TerrainBalance {
+  /** Anyone walking on slow ground moves at this × its speed (pushes too); a boss at `bossSlowMult`. */
+  slowMult: number;
+  bossSlowMult: number;
+  /** What stands in foliage is seen only this near (units). */
+  foliageSight: number;
+  /** A sight line crossing more foliage than this (units, the ends' cells left out) is blocked. */
+  foliageDepth: number;
+  /** A foe that lost the hero to foliage searches the last-seen point this long (seconds). */
+  searchTime: number;
+  /** A pack leashes this far outside its room's rect. */
+  leashMargin: number;
+  /** A crumbling structure's life per cell, × the depth's foe life growth (`depthGrowth`). */
+  structureLife: number;
+  /** A knocked-back foe meeting cover or a wall: × the knockback's hit, and this stagger (seconds). */
+  slamDamage: number;
+  slamStagger: number;
+  /** A prop's life. */
+  propLife: number;
+  /** A broken prop drops with `chance`: a material with `material`, else scrap. */
+  propDrops: { chance: number; material: number };
+  /** A hazard's burst: × the depth's foe damage growth (`depthGrowth`). */
+  hazardDamage: number;
+  /** Seconds from a hazard set off to its burst, and from its burst to ready again. */
+  fuse: number;
+  recharge: number;
+  /** Chance a placed hazard is of another element than the biome's. */
+  hazardOffElement: number;
 }
 
 // ── The HUD's map (`hudMapOf`) ─────────────────────────────────────────────
