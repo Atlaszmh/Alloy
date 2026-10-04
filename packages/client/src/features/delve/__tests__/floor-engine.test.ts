@@ -221,7 +221,8 @@ describe('a generated floor', { timeout: 20000 }, () => {
     for (let c = 0; c < map.cells.length; c++) {
       const [mx, my] = [c % map.width, Math.floor(c / map.width)];
       const i = (M + my * FLOOR_PPU + 2) * pw.width + M + mx * FLOOR_PPU + 2;
-      expect(pw.edge[i] > 0).toBe(map.cells[c] === 1);
+      // Walls are rock (0 floor, 1 wall, 2 door); the furnishing's cells are the terrain's.
+      if (map.cells[c] <= 2) expect(pw.edge[i] > 0).toBe(map.cells[c] === 1);
     }
   });
 
