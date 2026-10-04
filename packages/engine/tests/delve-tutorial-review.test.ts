@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
-import { transferMoveset } from '../src/delve/moveset.js';
+import { addSlot, transferMoveset } from '../src/delve/moveset.js';
 import { addLootToBag, createDelveProfile, equipItem } from '../src/delve/profile.js';
 import { startTutorial, tutorialSkippable } from '../src/delve/tutorial.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
@@ -117,5 +117,19 @@ describe('the Transfer step', () => {
     const moved = transferMoveset(registry, p, 'gRare');
     expect(moved.ok).toBe(true);
     expect(moved.profile.tutorial!.step).not.toBe('l2-transfer');
+  });
+});
+
+describe('addSlot checks the tutorial', () => {
+  it("completes the Skills step when the new slot is the lesson's last move", () => {
+    const old = fresh().equipped.weapon!;
+    const p = {
+      ...atStep('l1-skills'),
+      equipped: { ...fresh().equipped, weapon: blade([['fire'], ['frost']]) },
+      bag: [old],
+    };
+    const res = addSlot(registry, p, 'primary');
+    expect(res.ok).toBe(true);
+    expect(res.profile.tutorial!.step).toBe('l1-salvage');
   });
 });

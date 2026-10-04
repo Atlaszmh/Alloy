@@ -419,10 +419,16 @@ export function addSlot(
   }
   const slots = { ...moveset.slots, [skill]: moveset.slots[skill]! + 1 };
   const edited = withMoveset(profile, { chains: { ...moveset.chains, [skill]: next }, slots });
+  const paid = {
+    ...edited,
+    links: profile.links - price.links,
+    scrap: profile.scrap - price.scrap,
+  };
   return {
     ok: true,
     item: edited.equipped.weapon,
-    profile: { ...edited, links: profile.links - price.links, scrap: profile.scrap - price.scrap },
+    // The guided start's Skills step reads the chain (as `setChains`'s Apply does).
+    profile: applyTutorialEvents(registry, paid, [{ type: 'setChains' }]),
   };
 }
 
