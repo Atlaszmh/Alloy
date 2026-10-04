@@ -15,7 +15,7 @@ import {
 import type { ManaType } from '../../types/mana.js';
 import { dist } from '../geometry.js';
 import { solid } from '../grid.js';
-import { footprint } from '../objects.js';
+import { footprint } from '../objects-base.js';
 import { depthGrowth } from '../world.js';
 
 /** What the furnisher placed beside the cells: the props and hazards for `createFloorWorld` to stand. */

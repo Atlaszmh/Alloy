@@ -32,58 +32,22 @@ describe('layouts.json', () => {
       expect(id === 'default' || biomes.includes(id), id).toBe(true);
   });
 
-  it('refuses a mask of the wrong size or with an unknown cell, and a list without a default', () => {
-    const room = (masks: string[][]) => ({
+  it('refuses a template with masks (set pieces furnish rooms now), an arena drawn tall, and a list without a default', () => {
+    const room = (t: object) => ({
       ...layoutsData,
-      rooms: { default: [{ id: 'r', w: 4, h: 4, masks }] },
+      rooms: { default: [{ id: 'r', w: 12, h: 12, ...t }] },
     });
     expect(ok(LayoutsDataSchema, layoutsData)).toBe(true);
-    expect(ok(LayoutsDataSchema, room([['....', '....', '....', '....']]))).toBe(true);
-    expect(ok(LayoutsDataSchema, room([['....', '....', '....']]))).toBe(false);
-    expect(ok(LayoutsDataSchema, room([['....', '..x.', '....', '....']]))).toBe(false);
+    expect(ok(LayoutsDataSchema, room({}))).toBe(true);
+    expect(ok(LayoutsDataSchema, room({ masks: [] }))).toBe(false);
+    expect(ok(LayoutsDataSchema, room({ w: 3 }))).toBe(false);
+    expect(ok(LayoutsDataSchema, { ...layoutsData, arena: [{ id: 'a', w: 20, h: 28 }] })).toBe(
+      false,
+    );
+    expect(ok(LayoutsDataSchema, { ...layoutsData, arena: [] })).toBe(false);
     expect(
       ok(LayoutsDataSchema, { ...layoutsData, rooms: { crypts: layoutsData.rooms.default } }),
     ).toBe(false);
-  });
-
-  it('keeps every passage 3 cells wide: 3 open cells to each wall and between obstacles', () => {
-    const room = (rows: string[]) => ({
-      ...layoutsData,
-      rooms: { default: [{ id: 'r', w: rows[0].length, h: rows.length, masks: [rows] }] },
-    });
-    const grid = (w: number, h: number, blocks: number[][]) =>
-      Array.from({ length: h }, (_, y) =>
-        Array.from({ length: w }, (_, x) =>
-          blocks.some(([bx, by]) => bx === x && by === y) ? '#' : '.',
-        ).join(''),
-      );
-    // An 8×8 room holds a 2×2 centre pillar; '#' and '%' touching are one obstacle.
-    const centre = grid(8, 8, [
-      [3, 3],
-      [4, 3],
-      [3, 4],
-      [4, 4],
-    ]);
-    expect(ok(LayoutsDataSchema, room(centre))).toBe(true);
-    expect(ok(LayoutsDataSchema, room(centre.map((r, y) => (y === 3 ? '...#%...' : r))))).toBe(
-      true,
-    );
-    // Nothing within 2 cells of a wall, on any side.
-    for (const at of [
-      [2, 4],
-      [5, 4],
-      [4, 2],
-      [4, 5],
-    ])
-      expect(ok(LayoutsDataSchema, room(grid(8, 8, [at]))), `${at}`).toBe(false);
-    // Two obstacles 3 apart (2 open cells between) or diagonally 2 apart; 4 apart is fine.
-    for (const [b, fine] of [
-      [[6, 3], false],
-      [[5, 5], false],
-      [[7, 3], true],
-      [[7, 7], true],
-    ] as const)
-      expect(ok(LayoutsDataSchema, room(grid(12, 12, [[3, 3], [...b]]))), `${b}`).toBe(fine);
   });
 });
 
@@ -121,7 +85,7 @@ describe('delve.layout, delve.ai and the vault and den drops', () => {
 
   it('holds the spec numbers; minPackDistance moved from the arena', () => {
     expect(bal.layout).toMatchObject({
-      coarseCell: 16,
+      coarseCell: 24,
       coarseCols: 4,
       coarseRows: 4,
       rooms: { base: 5, perDepth: 0.1, max: 8 },
@@ -144,11 +108,15 @@ describe('delve.layout, delve.ai and the vault and den drops', () => {
     expect(bal.drops.den.gearBonus).toBeGreaterThan(0);
   });
 
-  it('fits every room template in a coarse cell inside its walls', () => {
+  it('fits every room template in a coarse cell inside its walls, an arena in two', () => {
     const { layouts } = registry.getDelveData();
     const fit = bal.layout.coarseCell - bal.layout.minWall;
     for (const t of [...Object.values(layouts.rooms).flat(), layouts.boss]) {
       expect(t.w, t.id).toBeLessThanOrEqual(fit);
+      expect(t.h, t.id).toBeLessThanOrEqual(fit);
+    }
+    for (const t of layouts.arena) {
+      expect(t.w, t.id).toBeLessThanOrEqual(2 * bal.layout.coarseCell - bal.layout.minWall);
       expect(t.h, t.id).toBeLessThanOrEqual(fit);
     }
   });
@@ -163,6 +131,7 @@ describe('delve.layout, delve.ai and the vault and den drops', () => {
     expect(
       ok(LayoutBalanceSchema, { ...bal.layout, rooms: { base: 5, perDepth: 0, max: 17 } }),
     ).toBe(false);
+    expect(ok(LayoutBalanceSchema, { ...bal.layout, minCombatRooms: 0 })).toBe(false);
     expect(ok(AiBalanceSchema, bal.ai)).toBe(true);
     expect(ok(AiBalanceSchema, { ...bal.ai, flowEvery: 0 })).toBe(false);
   });

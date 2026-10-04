@@ -104,10 +104,11 @@ export interface Room {
   kind: RoomKind;
   /** Its floor, in cells (its walls are outside it). */
   rect: Rect;
-  /** The floor's arena (see the room objects spec): a combat room furnished by `furnish.arena`. */
+  /**
+   * The floor's arena (see the room objects spec): a combat room over two coarse cells,
+   * furnished by `furnish.arena`, holding `arenaPacks` more packs.
+   */
   arena?: true;
-  /** Its template's dressing over `rect`, row by row (0 floor, 1 pillar, 2 rubble); `cells` holds it as walls. */
-  mask?: Uint8Array;
   /** BFS steps from each map cell to its centre, for a leashed foe going home (65535: unreachable). */
   homeField?: Uint16Array;
   revealed: boolean;
@@ -197,13 +198,11 @@ export interface Buff {
 export const PROP_IDS = ['chest', 'shrine', 'alcove_anvil', 'exit_gate'] as const;
 export type PropId = (typeof PROP_IDS)[number];
 
-/** A room's shape: its floor in cells, and the dressings one of which it may wear. */
+/** A room's shape: its floor in cells (set pieces furnish it; see the room objects spec). */
 export interface RoomTemplate {
   id: string;
   w: number;
   h: number;
-  /** Each `h` rows of `w` characters: '.' floor, '#' a pillar, '%' rubble (both block). */
-  masks: string[][];
 }
 
 export interface LayoutsData {
@@ -211,6 +210,8 @@ export interface LayoutsData {
   rooms: Record<string, RoomTemplate[]>;
   /** The boss room. */
   boss: RoomTemplate;
+  /** The arena, drawn wide (`w` along its two coarse cells; turned when they stand in a column). */
+  arena: RoomTemplate[];
   /** Each prop's size in units (its sprite is 16 px a unit). */
   props: Record<PropId, number>;
 }
@@ -297,8 +298,8 @@ export interface LayoutBalance {
   minCombatRooms: number;
   /** Chance a vault holds a guard pack. */
   vaultGuardChance: number;
-  /** Chance a room wears one of its template's masks. */
-  pillarChance: number;
+  /** The arena's packs past what the deal gives it. */
+  arenaPacks: number;
   /** Packs spawn at least this far from the start. */
   minPackDistance: number;
   /** Packs a combat room or den, at most (before the overflow rules). */

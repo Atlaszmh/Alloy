@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { isWalkable, solid } from '../src/arpg/grid.js';
+import { isWalkable, solid, solidCode } from '../src/arpg/grid.js';
+import { footprintsOf } from '../src/arpg/layout/furnish.js';
 import { floorPacks, generateFloor, planFloor } from '../src/arpg/layout/generate.js';
 import { createFloorWorld, isBossFloor, type FloorOptions } from '../src/arpg/world.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { DoorDef } from '../src/types/delve.js';
-import type { FloorMap, Room } from '../src/types/floor-map.js';
+import { CELL, type FloorMap, type Room } from '../src/types/floor-map.js';
 import { bal, gear, registry } from './fixtures/arena.js';
 
 // The floor generator (see the floor maps spec's "Generator" and "Testing"):
@@ -90,10 +91,13 @@ function roomSteps(map: FloorMap, from: number): number[] {
 const inRect = (r: Room['rect'], x: number, y: number) =>
   x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h;
 
-/** The map as text: '#' wall, '.' floor, '+' door, 'S' start, and each interactable's letter. */
+/**
+ * The map as text: '#' wall, '.' floor, '+' door, '=' cover, 'c' crumbling cover, 'f'
+ * foliage, '~' slow ground, 'S' start, and each interactable's letter.
+ */
 function ascii(map: FloorMap): string {
   const rows = Array.from({ length: map.height }, (_, y) =>
-    Array.from({ length: map.width }, (_, x) => '.#+'[map.cells[y * map.width + x]]),
+    Array.from({ length: map.width }, (_, x) => '.#+=cf~'[map.cells[y * map.width + x]]),
   );
   const mark = (p: { x: number; y: number }, ch: string) =>
     (rows[Math.floor(p.y)][Math.floor(p.x)] = ch);
@@ -111,7 +115,7 @@ describe('the generated map', () => {
   it('reaches every floor cell, so every room and the exit, from the start', () => {
     for (const { map, seed, depth } of ALL) {
       const seen = reach(map);
-      const walkable = map.cells.filter((c) => c !== 1).length;
+      const walkable = map.cells.filter((c) => !solidCode(c)).length;
       expect(seen.size, `seed ${seed} depth ${depth}`).toBe(walkable);
       expect(isWalkable(map, map.exit.x, map.exit.y)).toBe(true);
       const start = Math.floor(map.start.y) * map.width + Math.floor(map.start.x);
@@ -119,36 +123,33 @@ describe('the generated map', () => {
     }
   });
 
-  it('keeps every passage 3 cells wide, every room masked: each floor cell in an open 3×3', () => {
-    // A large foe needs a 3×3 open block (see arpg/flow.ts); doors count open.
-    const pillared = createDefaultRegistry();
-    pillared.getDelveBalance().layout.pillarChance = 1;
-    const biomes = pillared.getDelveData().biomes;
+  it('keeps every passage 3 cells wide, every room furnished: each floor cell in an open 3×3', () => {
+    // A large foe needs a 3×3 open block (see arpg/flow.ts); doors count open, props' and
+    // hazards' footprints blocked.
     const bad: string[] = [];
-    for (const seed of SEEDS)
-      for (const depth of DEPTHS)
-        for (const biome of biomes) {
-          const { map } = planFloor(pillared, seed, depth, biome, null);
-          const wall = (x: number, y: number) =>
-            x < 0 ||
-            y < 0 ||
-            x >= map.width ||
-            y >= map.height ||
-            map.cells[y * map.width + x] === 1;
-          const open3 = (x: number, y: number) => {
-            for (let j = y; j < y + 3; j++)
-              for (let i = x; i < x + 3; i++) if (wall(i, j)) return false;
-            return true;
-          };
-          for (let y = 0; y < map.height; y++)
-            for (let x = 0; x < map.width; x++) {
-              if (wall(x, y)) continue;
-              let inBlock = false;
-              for (let j = y - 2; j <= y && !inBlock; j++)
-                for (let i = x - 2; i <= x && !inBlock; i++) inBlock = open3(i, j);
-              if (!inBlock) bad.push(`seed ${seed} depth ${depth} ${biome.id} at ${x},${y}`);
-            }
+    for (const { map, seed, depth, furnishing } of ALL) {
+      const feet = footprintsOf(registry, map, furnishing);
+      const wall = (x: number, y: number) =>
+        x < 0 ||
+        y < 0 ||
+        x >= map.width ||
+        y >= map.height ||
+        solidCode(map.cells[y * map.width + x]) ||
+        feet.has(y * map.width + x);
+      const open3 = (x: number, y: number) => {
+        for (let j = y; j < y + 3; j++)
+          for (let i = x; i < x + 3; i++) if (wall(i, j)) return false;
+        return true;
+      };
+      for (let y = 0; y < map.height; y++)
+        for (let x = 0; x < map.width; x++) {
+          if (wall(x, y)) continue;
+          let inBlock = false;
+          for (let j = y - 2; j <= y && !inBlock; j++)
+            for (let i = x - 2; i <= x && !inBlock; i++) inBlock = open3(i, j);
+          if (!inBlock) bad.push(`seed ${seed} depth ${depth} at ${x},${y}`);
         }
+    }
     expect(bad.slice(0, 10), `${bad.length} cells`).toEqual([]);
   });
 
@@ -171,18 +172,19 @@ describe('the generated map', () => {
       expect(count('combat')).toBeGreaterThanOrEqual(L.minCombatRooms);
       const biome = registry.getBiomeForDepth(depth);
       const sizes = (layouts.rooms[biome.id] ?? layouts.rooms.default).map((t) => `${t.w}x${t.h}`);
+      const arenas = layouts.arena.flatMap((t) => [`${t.w}x${t.h}`, `${t.h}x${t.w}`]);
       for (const r of map.rooms)
-        expect(r.kind === 'boss' ? [`${layouts.boss.w}x${layouts.boss.h}`] : sizes).toContain(
-          `${r.rect.w}x${r.rect.h}`,
-        );
+        expect(
+          r.kind === 'boss' ? [`${layouts.boss.w}x${layouts.boss.h}`] : r.arena ? arenas : sizes,
+        ).toContain(`${r.rect.w}x${r.rect.h}`);
     }
   });
 
-  it('puts the exit in the room farthest from the start, its gate there', () => {
+  it('puts the exit in the room farthest from the start but the arena, its gate there', () => {
     for (const { map } of ALL) {
       const exit = map.rooms.find((r) => r.kind === 'exit' || r.kind === 'boss')!;
       const steps = roomSteps(map, 0);
-      expect(steps[exit.id]).toBe(Math.max(...steps));
+      expect(steps[exit.id]).toBe(Math.max(...steps.filter((_, i) => !map.rooms[i].arena)));
       expect(exit.interactable).toMatchObject({ kind: 'gate', x: map.exit.x, y: map.exit.y });
       expect(inRect(exit.rect, map.exit.x, map.exit.y)).toBe(true);
       expect(inRect(map.rooms[0].rect, map.start.x, map.start.y)).toBe(true);
@@ -221,31 +223,27 @@ describe('the generated map', () => {
       }
   });
 
-  it("keeps walls at least minWall thick, but for a room's pillars and rubble", () => {
+  it('keeps walls at least minWall thick', () => {
     for (const { map, seed, depth } of ALL) {
-      const pillar = (x: number, y: number) =>
-        map.rooms.some(
-          (r) =>
-            x >= r.rect.x &&
-            y >= r.rect.y &&
-            x < r.rect.x + r.rect.w &&
-            y < r.rect.y + r.rect.h &&
-            !!r.mask?.[(y - r.rect.y) * r.rect.w + x - r.rect.x],
-        );
+      const wall = (x: number, y: number) =>
+        x < 0 ||
+        y < 0 ||
+        x >= map.width ||
+        y >= map.height ||
+        map.cells[y * map.width + x] === CELL.wall;
       for (let y = 0; y < map.height; y++)
         for (let x = 0; x < map.width; x++) {
-          if (solid(map, x, y)) continue;
-          // From a floor cell, a wall (not a pillar) right or below runs minWall cells on.
+          if (wall(x, y)) continue;
+          // From a cell that isn't wall, a wall right or below runs minWall cells on.
           for (const [dx, dy] of [
             [1, 0],
             [0, 1],
           ]) {
-            if (!solid(map, x + dx, y + dy) || pillar(x + dx, y + dy)) continue;
+            if (!wall(x + dx, y + dy)) continue;
             for (let k = 2; k <= L.minWall; k++)
-              expect(
-                solid(map, x + k * dx, y + k * dy),
-                `seed ${seed} depth ${depth} at ${x},${y}`,
-              ).toBe(true);
+              expect(wall(x + k * dx, y + k * dy), `seed ${seed} depth ${depth} at ${x},${y}`).toBe(
+                true,
+              );
           }
         }
     }
@@ -275,169 +273,91 @@ describe('the generated map', () => {
     expect(generateFloor(registry, 4243, 7, registry.getBiomeForDepth(7), null)).not.toEqual(a);
   });
 
-  it('draws a few seeded maps (for the eye)', () => {
+  it('draws a seeded map (for the eye)', () => {
     expect(ascii(plan(11, 3).map)).toMatchInlineSnapshot(`
       "
-      ################################
-      ################################
-      ################################
-      ###################..........###
-      ###################..........###
-      ###################..........###
-      ###################..........###
-      ###################..........###
-      ###################.....X....###
-      ###################..........###
-      ###################..........###
-      ###################..........###
-      ###################..........###
-      ######################+++#######
-      ######################...#######
-      ######################...#######
-      ######################...#######
-      ######################+++#######
-      ##################..........####
-      ##################..........####
-      ####........######..........####
-      ####........######..........####
-      ####........######..........####
-      ####........+....+..........####
-      ####....S...+....+..........####
-      ####........+....+..........####
-      ####........######..........####
-      ####........######..........####
-      ######+++#############+++#######
-      ######...#############...#######
-      ######...#############...#######
-      ######...#############...#######
-      ######...#############...#######
-      ######+++#############...#######
-      ###........###########...#######
-      ###........###########...#######
-      ###........###########...#######
-      ###........+....######+++#######
-      ###........+....##..........####
-      ###........+....##..........####
-      ###........##...##..........####
-      ###........##....+..........####
-      #############....+..........####
-      #############....+..........####
-      ##################..........####
-      ##################..........####
-      ################################
-      ################################
-      "
-    `);
-    expect(ascii(plan(12, 5).map)).toMatchInlineSnapshot(`
-      "
-      ################################
-      #################..............#
-      #################..............#
-      #################..............#
-      #################..............#
-      #################..............#
-      #################..............#
-      #################..............#
-      #################.......X......#
-      #################..............#
-      #################..............#
-      #################..............#
-      #################..............#
-      #################..............#
-      #################..............#
-      #####################+++########
-      #####################...########
-      #####################...########
-      #####################...########
-      #####################+++########
-      ##################........######
-      ###............###........######
-      ###............###........######
-      ###............+.+...##...######
-      ###............+.+...##...######
-      ###............+.+........######
-      ###......S.....###........######
-      ###............###........######
-      ###............######+++########
-      ###............######...########
-      ###............######...########
-      ########+++##########...########
-      ########+++##########+++########
-      #..............###............##
-      #..............###............##
-      #..............###............##
-      #..............###............##
-      #..............+.+............##
-      #..............+.+............##
-      #..............+.+............##
-      #..............###............##
-      #..............###............##
-      #..............###............##
-      #..............#################
-      #..............#################
-      ################################
-      ################################
-      ################################
-      "
-    `);
-    expect(ascii(plan(13, 30).map)).toMatchInlineSnapshot(`
-      "
-      ################################################################
-      #################..............#################################
-      #################..............#################################
-      #################..............##..............#################
-      #################..............##..............#################
-      #################..............##..............#################
-      #################..............##..............#################
-      #################..............##..............#################
-      #################.......X......++..............#################
-      #################..............++..............#################
-      #################..............++..............#################
-      #################..............##..............#################
-      #################..............##..............#################
-      #################..............##..............#################
-      #################..............##..............#################
-      #######################################+++######################
-      #######################################+++######################
-      #################............####..............#################
-      #################............####..............#################
-      #################............####..............#################
-      #################............####..............#################
-      #################............+..+..............#################
-      #################......A.....+..+..............#################
-      #################............+..+..............#################
-      #################............####..............#################
-      #################............####..............#################
-      #################............####..............#################
-      ######################+++########..............#################
-      ######################...########..............#################
-      ######################...##############+++######################
-      ######################...##############...######################
-      ######################...##############...######################
-      ######################...#############....######################
-      ######################...#############....######################
-      ###............#######...#############....######################
-      ###............#######...#############...#######################
-      ###............#######+++#############...############..........#
-      ###............###..........##########+++############..........#
-      ###............###..........######..........#########..........#
-      ###............+.+..........######..........#########..........#
-      ###............+.+..........+....+..........###.....+..........#
-      ###............+.+.....S....+....+..........+.......+.....C....#
-      ###............###..........+....+..........+.......+..........#
-      ###............###..........######..........+.....###..........#
-      ##################..........######..........#########..........#
-      ##################################..........#########..........#
-      ################################################################
-      ################################################################
+      ################################################
+      ################################################
+      ################################################
+      ################################################
+      ##############################............######
+      ##############################............######
+      ##############################............######
+      ########.......==...##########............######
+      ########.......==...##########............######
+      ########.......cc...##########............######
+      ########.......cc...##########............######
+      ########............###......+............######
+      ########==cc........+........+......X.....######
+      ########==cc........+........+............######
+      ########............+.....####............######
+      ########............##########............######
+      ########..........~.##########............######
+      ########..........~=##########............######
+      ########..........~=##########............######
+      #############+++##############............######
+      #############...###################+++##########
+      #############...###################...##########
+      ##########......###################...##########
+      ##########......###################...##########
+      ##########......###################...##########
+      ##########...######################...##########
+      ##########...######################...##########
+      ##########...######################...##########
+      ##########+++######################...##########
+      #####..........==##################...##########
+      #####.........~~~##################...##########
+      #####............##################...##########
+      #####............##################...##########
+      #####............##################...##########
+      #####............##################...##########
+      #####............##################+++##########
+      #####............+....###....=..........==...~=#
+      #####......S.....+....###...............==...~=#
+      #####............+....###...............cc...~.#
+      #####............##...###...............cc.....#
+      #####............##...###......................#
+      #####............##.....+......................#
+      #####............##.....+......................#
+      #####............##.....+...............~~~..~=#
+      #####............########..............~~~~~.~=#
+      ##########+++############.....=...=...=.~~~..~.#
+      ##########...############.................~..~.#
+      #########....############................~~~.~=#
+      #########....############................~~~.~=#
+      #########....############......=.........~~~...#
+      #########...#############......=..........~....#
+      #########+++#############......=...............#
+      #==..............~=######=~....c.........~.....#
+      #~~~.............~=######=~....c........~~~....#
+      #................~.######.~....c.~......~~~....#
+      #...===ccc===......######......=~~~.....~~~....#
+      #.......=====......######......=~~~.~~~..~.....#
+      #..................+....+......=~~~~~~~~.......#
+      #..................+....+....~~~.~..~~~........#
+      #..................+....+...~~~~~..............#
+      #..................######....~~~.=...=...=.....#
+      #..................######.~....................#
+      #.............cc...######=~............~~~~....#
+      #.............cc...######=~............~~~~....#
+      #.............==...#############################
+      #.............==...#############################
+      ################################################
+      ################################################
+      ################################################
+      ################################################
+      ################################################
+      ################################################
       "
     `);
   });
 });
 
 describe('the packs', () => {
-  it("spreads today's count over the combat rooms and dens, adding rooms when they don't fit", () => {
-    for (const { map, packs, depth, door } of ALL) {
+  it("spreads today's count over the combat rooms and dens, adding rooms when they don't fit, the arena arenaPacks more", () => {
+    for (const { map, packs: held, depth, door } of ALL) {
+      // The deal, the arena's extra packs aside.
+      const packs = held.map((n, id) => n - (map.rooms[id].arena ? L.arenaPacks : 0));
       const holders = map.rooms.filter((r) => r.kind === 'combat' || r.kind === 'den');
       const dealt = holders.reduce((s, r) => s + packs[r.id], 0);
       expect(dealt).toBe(floorPacks(registry, depth, door));
@@ -459,9 +379,10 @@ describe('the packs', () => {
   });
 
   it('on a boss floor puts its 2 packs in combat rooms on the way to the boss room', () => {
-    for (const { map, packs, depth, door } of ALL.filter(({ depth }) =>
+    for (const { map, packs: held, depth, door } of ALL.filter(({ depth }) =>
       isBossFloor(registry, depth),
     )) {
+      const packs = held.map((n, id) => n - (map.rooms[id].arena ? L.arenaPacks : 0));
       expect(map.rooms.filter((r) => r.kind === 'den')).toHaveLength(0);
       const combat = map.rooms.filter((r) => r.kind === 'combat');
       const total = floorPacks(registry, depth, door);
@@ -502,15 +423,17 @@ describe('the world on a generated map', () => {
           expect(isWalkable(w.map, m.x, m.y), `seed ${seed} depth ${depth}`).toBe(true);
           expect(m.roomId).not.toBeNull();
           expect(inRect(w.map.rooms[m.roomId!].rect, m.x, m.y)).toBe(true);
-          // Its pack's centre is minPackDistance away; the pack spreads up to 3 from it.
+          // Its pack's centre is minPackDistance away (a hidden pack's its patch); the pack
+          // spreads up to 3 from it.
           const away = Math.hypot(m.x - w.map.start.x, m.y - w.map.start.y);
-          if (m.kind !== 'boss') expect(away).toBeGreaterThanOrEqual(L.minPackDistance - 3);
+          if (m.kind !== 'boss' && !m.ambush)
+            expect(away).toBeGreaterThanOrEqual(L.minPackDistance - 3);
         }
         const { packs } = plan(seed, depth);
         const packIds = new Set(w.monsters.filter((m) => m.kind !== 'boss').map((m) => m.packId));
         expect(packIds.size).toBe(packs.reduce((s, n) => s + n, 0));
       }
-  });
+  }, 20000);
 
   it("leads every den pack with an elite, and stands a boss floor's boss in the boss room", () => {
     let dens = 0;

@@ -198,14 +198,14 @@
     },
     "sandbox": { "dummyLifeMult": 50, "heroStart": [13, 26], "dummyDistance": 3, "rowSpacing": 1.2, "clumpRadius": 1.2, "groupSpacing": 3.6, "spawnRing": 6, "edgeMargin": 1.5 },
     "layout": {
-      "coarseCell": 16, "coarseCols": 4, "coarseRows": 4, "rooms": { "base": 5, "perDepth": 0.1, "max": 8 },
+      "coarseCell": 24, "coarseCols": 4, "coarseRows": 4, "rooms": { "base": 5, "perDepth": 0.1, "max": 8 },
       "hallWidth": 3, "minWall": 2, "loops": [1, 2],
       "kindWeights": [
         { "fromDepth": 1, "weights": { "combat": 6, "den": 1, "vault": 1, "sanctum": 1, "alcove": 1 } },
         { "fromDepth": 6, "weights": { "combat": 5, "den": 2, "vault": 1, "sanctum": 1, "alcove": 1 } }
       ],
       "alcoveMax": 1, "deadEndWeight": 3, "minCombatRooms": 2, "vaultGuardChance": 0.35,
-      "pillarChance": 0.3, "minPackDistance": 9, "packsPerRoom": 2, "generatedDives": true,
+      "arenaPacks": 1, "minPackDistance": 9, "packsPerRoom": 2, "generatedDives": true,
       "furnish": {
         "start": { "pieces": 1, "hazards": false, "crumbling": true },
         "combat": { "pieces": 2.5, "hazards": true, "crumbling": true },

@@ -16,11 +16,14 @@ import {
 import { clamp } from '../geometry.js';
 import { snapToWalkable, solid } from '../grid.js';
 import { isBossFloor } from '../world.js';
+import { footprintsOf, furnishFloor, type Furnishing } from './furnish.js';
 
 /** How far a room may sit off its coarse cell's centre, in cells (so facing walls share a hall's width). */
 // ponytail: a constant; into `delve.layout` if rooms ever need to wander further.
 const JITTER = 2;
 const UNREACHED = 65535;
+/** A coarse cell: its column and row on the coarse grid. */
+type Coarse = { c: number; r: number };
 const DIRS = [
   { c: 1, r: 0 },
   { c: -1, r: 0 },
@@ -35,10 +38,14 @@ const INTERACTABLE: Partial<Record<RoomKind, InteractableKind>> = {
   boss: 'gate',
 };
 
-/** A generated floor: its map, and how many packs each room holds (by room id). */
+/**
+ * A generated floor: its map, how many packs each room holds (by room id; the arena
+ * `arenaPacks` more), and the props and hazards its furnishing stands.
+ */
 export interface FloorPlan {
   map: FloorMap;
   packs: number[];
+  furnishing: Furnishing;
 }
 
 /** A floor's packs: today's count (`dive.packs*`, × the door's `packs`), 2 on a boss floor. */
@@ -66,10 +73,12 @@ export function generateFloor(
 
 /**
  * `generateFloor` with where the packs go. Rooms are placed by a random walk on
- * the coarse grid (its first steps into each cell the spanning tree), plus
+ * the coarse grid (its first steps into each cell the spanning tree), the arena
+ * on the two cells of one of its links (see the room objects spec), plus
  * `layout.loops` links between neighbours; the start is the walk's first room
- * and the exit (a boss floor's boss room) the farthest from it. The drawn kinds
- * are drawn first, so the overflow rule can add combat rooms before the walk.
+ * and the exit (a boss floor's boss room) the farthest from it but the arena.
+ * The drawn kinds are drawn first, so the overflow rule can add combat rooms
+ * before the walk.
  */
 export function planFloor(
   registry: DataRegistry,
@@ -110,14 +119,15 @@ export function planFloor(
   for (let i = 0; i < extra; i++) drawn.push('combat');
   n += extra;
 
-  // The walk: each new coarse cell a room, linked to the one it came from.
-  const key = (p: { c: number; r: number }) => p.r * L.coarseCols + p.c;
+  // The walk: each new coarse cell linked to the one it came from, until the rooms and the
+  // arena's second cell are placed.
+  const key = (p: Coarse) => p.r * L.coarseCols + p.c;
   let at = { c: rng.nextInt(0, L.coarseCols - 1), r: rng.nextInt(0, L.coarseRows - 1) };
   const coarse = [at];
   const index = new Map([[key(at), 0]]);
-  const links: [number, number][] = [];
+  const tree: [number, number][] = [];
   let from = 0;
-  while (coarse.length < n) {
+  while (coarse.length < n + 1) {
     const moves = DIRS.map((d) => ({ c: at.c + d.c, r: at.r + d.r })).filter(
       (p) => p.c >= 0 && p.r >= 0 && p.c < L.coarseCols && p.r < L.coarseRows,
     );
@@ -127,35 +137,56 @@ export function planFloor(
       id = coarse.length;
       coarse.push(at);
       index.set(key(at), id);
-      links.push([from, id]);
+      tree.push([from, id]);
     }
     from = id;
   }
+
+  // The arena: the two cells of a tree link, neither the start's, one room (its id the first's).
+  const twos = tree.filter(([a, b]) => a !== 0 && b !== 0);
+  const [arenaA, arenaB] = twos[rng.nextInt(0, twos.length - 1)];
+  const cellsOf: Coarse[][] = [];
+  const roomOf: number[] = [];
+  coarse.forEach((p, i) => {
+    if (i === arenaB) return;
+    roomOf[i] = cellsOf.length;
+    cellsOf.push([p]);
+  });
+  const arenaId = roomOf[arenaA];
+  roomOf[arenaB] = arenaId;
+  cellsOf[arenaId].push(coarse[arenaB]);
+
+  // The links between rooms: the tree's but the arena's own, then `layout.loops` more
+  // between neighbouring rooms.
+  const links = tree
+    .filter(([a, b]) => a !== arenaA || b !== arenaB)
+    .map(([a, b]): [number, number] => [roomOf[a], roomOf[b]]);
   const linked = (a: number, b: number) =>
     links.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
   const loops: [number, number][] = [];
-  coarse.forEach((p, a) =>
-    coarse.forEach((q, b) => {
-      if (a < b && Math.abs(p.c - q.c) + Math.abs(p.r - q.r) === 1 && !linked(a, b))
-        loops.push([a, b]);
+  cellsOf.forEach((p, a) =>
+    cellsOf.forEach((q, b) => {
+      if (a < b && touching(p, q) && !linked(a, b)) loops.push([a, b]);
     }),
   );
   for (let k = rng.nextInt(L.loops[0], L.loops[1]); k > 0 && loops.length > 0; k--)
     links.push(loops.splice(rng.nextInt(0, loops.length - 1), 1)[0]);
-  const near = coarse.map((_, a) =>
+  const near = cellsOf.map((_, a) =>
     links.flatMap(([x, y]) => (x === a ? [y] : y === a ? [x] : [])),
   );
 
-  // Start, exit (the farthest by links, ties by seed), then the drawn kinds, the vaults
-  // and sanctums first, leaning toward dead ends.
+  // Start, exit (the farthest by links but the arena, ties by seed), the arena a combat
+  // room, then the drawn kinds (one combat fewer: the arena is it), the vaults and
+  // sanctums first, leaning toward dead ends.
   const steps = graphSteps(near, 0);
-  const far = Math.max(...steps);
-  const ends = steps.flatMap((s, i) => (s === far ? [i] : []));
+  const far = Math.max(...steps.filter((_, i) => i !== arenaId));
+  const ends = steps.flatMap((s, i) => (s === far && i !== arenaId ? [i] : []));
   const exit = ends[rng.nextInt(0, ends.length - 1)];
-  const kinds: RoomKind[] = coarse.map(() => 'combat');
+  const kinds: RoomKind[] = cellsOf.map(() => 'combat');
   kinds[0] = 'start';
   kinds[exit] = boss ? 'boss' : 'exit';
-  const free = coarse.map((_, i) => i).filter((i) => i !== 0 && i !== exit);
+  drawn.splice(drawn.indexOf('combat'), 1);
+  const free = cellsOf.map((_, i) => i).filter((i) => i !== 0 && i !== exit && i !== arenaId);
   const deadEnd = (k: RoomKind) => k === 'vault' || k === 'sanctum';
   for (const k of [...drawn.filter(deadEnd), ...drawn.filter((k) => !deadEnd(k))]) {
     const id = weightedPick(
@@ -167,50 +198,74 @@ export function planFloor(
     kinds[id] = k;
   }
 
-  // The rooms' rects, the map cropped to the coarse cells in use.
+  // The rooms' rects (the arena's over its two cells, drawn wide and turned when they
+  // stand in a column), the map cropped to the coarse cells in use.
   const c0 = Math.min(...coarse.map((p) => p.c));
   const r0 = Math.min(...coarse.map((p) => p.r));
   const width = (Math.max(...coarse.map((p) => p.c)) - c0 + 1) * C;
   const height = (Math.max(...coarse.map((p) => p.r)) - r0 + 1) * C;
   const lo = Math.ceil(L.minWall / 2);
   const hi = Math.floor(L.minWall / 2);
-  const place = (origin: number, size: number) =>
+  const place = (origin: number, size: number, span: number) =>
     clamp(
-      origin + Math.floor((C - size) / 2) + rng.nextInt(-JITTER, JITTER),
+      origin + Math.floor((span - size) / 2) + rng.nextInt(-JITTER, JITTER),
       origin + lo,
-      origin + C - hi - size,
+      origin + span - hi - size,
     );
   const templates = layouts.rooms[biome.id] ?? layouts.rooms.default;
   const cells = new Uint8Array(width * height).fill(1);
-  const rooms: Room[] = coarse.map((p, id) => {
-    const t = kinds[id] === 'boss' ? layouts.boss : templates[rng.nextInt(0, templates.length - 1)];
-    const rect = { x: place((p.c - c0) * C, t.w), y: place((p.r - r0) * C, t.h), w: t.w, h: t.h };
-    const masked = t.masks.length > 0 && rng.next() < L.pillarChance;
-    const rows = masked ? t.masks[rng.nextInt(0, t.masks.length - 1)] : null;
-    const mask = rows
-      ? Uint8Array.from(rows.join(''), (ch) => (ch === '#' ? 1 : ch === '%' ? 2 : 0))
-      : undefined;
-    for (let j = 0; j < t.h; j++)
-      for (let i = 0; i < t.w; i++)
-        cells[(rect.y + j) * width + rect.x + i] = mask?.[j * t.w + i] ? 1 : 0;
-    return { id, kind: kinds[id], rect, mask, revealed: false, cleared: false, sealed: false };
+  const rooms: Room[] = cellsOf.map((cs, id) => {
+    const t =
+      id === arenaId
+        ? layouts.arena[rng.nextInt(0, layouts.arena.length - 1)]
+        : kinds[id] === 'boss'
+          ? layouts.boss
+          : templates[rng.nextInt(0, templates.length - 1)];
+    const cols = new Set(cs.map((p) => p.c)).size;
+    const rows = new Set(cs.map((p) => p.r)).size;
+    const [w, h] = rows > cols ? [t.h, t.w] : [t.w, t.h];
+    const x = place((Math.min(...cs.map((p) => p.c)) - c0) * C, w, cols * C);
+    const y = place((Math.min(...cs.map((p) => p.r)) - r0) * C, h, rows * C);
+    for (let j = y; j < y + h; j++) cells.fill(0, j * width + x, j * width + x + w);
+    return {
+      id,
+      kind: kinds[id],
+      rect: { x, y, w, h },
+      ...(id === arenaId ? { arena: true as const } : {}),
+      revealed: false,
+      cleared: false,
+      sealed: false,
+    };
   });
 
-  // The halls, each with a door where it meets each room's wall.
+  // The halls, each with a door where it meets each room's wall, between the two coarse
+  // cells that touch (the arena's rect cut, across the hall, to its cell's rows or columns).
   const doors: Door[] = [];
   for (const [a, b] of links) {
-    const [p, q] = coarse[a].c + coarse[a].r < coarse[b].c + coarse[b].r ? [a, b] : [b, a];
+    const [p, q] = cellsOf[a].flatMap((p) =>
+      cellsOf[b].flatMap((q) => (adjacent(p, q) ? [[p, q]] : [])),
+    )[0];
+    const [ra, rb, pa, pb] = p.c + p.r < q.c + q.r ? [a, b, p, q] : [b, a, q, p];
+    const across = pa.r === pb.r;
+    const within = (r: Rect, cell: Coarse): Rect => {
+      if (across) {
+        const y = Math.max(r.y, (cell.r - r0) * C);
+        return { ...r, y, h: Math.min(r.y + r.h, (cell.r - r0 + 1) * C) - y };
+      }
+      const x = Math.max(r.x, (cell.c - c0) * C);
+      return { ...r, x, w: Math.min(r.x + r.w, (cell.c - c0 + 1) * C) - x };
+    };
     const h = hall(
-      rooms[p].rect,
-      rooms[q].rect,
-      coarse[p].r === coarse[q].r,
+      within(rooms[ra].rect, pa),
+      within(rooms[rb].rect, pb),
+      across,
       L.hallWidth,
       L.minWall,
     );
     for (const v of h.floor) cells[v.y * width + v.x] = 0;
     for (const [cs, room, other] of [
-      [h.doorA, p, q],
-      [h.doorB, q, p],
+      [h.doorA, ra, rb],
+      [h.doorB, rb, ra],
     ] as const) {
       for (const v of cs) cells[v.y * width + v.x] = 2;
       doors.push({ id: doors.length, cells: cs, rooms: [room, other], closed: false });
@@ -245,8 +300,12 @@ export function planFloor(
       if (kind === 'gate') map.exit = { x: it.x, y: it.y };
       room.interactable = it;
     }
-    room.homeField = cellSteps(map, centre(room.rect));
   }
+
+  // The furnishing (see the room objects spec), then each room's way home round it.
+  const furnishing = furnishFloor(registry, map, seed, depth, biome);
+  const feet = footprintsOf(registry, map, furnishing);
+  for (const room of rooms) room.homeField = cellSteps(map, centre(room.rect), feet);
 
   // The packs: dealt one a room in turn over the dens, then the combat rooms on a shortest
   // way to the exit, then the rest; a vault may keep one as its guard.
@@ -262,7 +321,18 @@ export function planFloor(
     );
   const counts = rooms.map((r) => (r.kind === 'vault' && rng.next() < L.vaultGuardChance ? 1 : 0));
   for (let k = 0; k < packs && order.length > 0; k++) counts[order[k % order.length].id]++;
-  return { map, packs: counts };
+  counts[arenaId] += L.arenaPacks;
+  return { map, packs: counts, furnishing };
+}
+
+/** Whether two coarse cells share a side. */
+function adjacent(p: Coarse, q: Coarse): boolean {
+  return Math.abs(p.c - q.c) + Math.abs(p.r - q.r) === 1;
+}
+
+/** Whether two rooms' coarse cells share a side. */
+function touching(a: Coarse[], b: Coarse[]): boolean {
+  return a.some((p) => b.some((q) => adjacent(p, q)));
 }
 
 /** Links from `from` to each room (breadth first). */
@@ -280,8 +350,8 @@ function graphSteps(near: number[][], from: number): number[] {
   return steps;
 }
 
-/** Steps from `p`'s cell to every cell, over cells that aren't solid (`UNREACHED` past them). */
-function cellSteps(map: FloorMap, p: Vec): Uint16Array {
+/** Steps from `p`'s cell to every cell, over cells neither solid nor in `feet` (`UNREACHED` past them). */
+function cellSteps(map: FloorMap, p: Vec, feet: Set<number>): Uint16Array {
   const { width, height } = map;
   const field = new Uint16Array(width * height).fill(UNREACHED);
   const first = Math.floor(p.y) * width + Math.floor(p.x);
@@ -294,7 +364,7 @@ function cellSteps(map: FloorMap, p: Vec): Uint16Array {
       const i = x + d.c;
       const j = y + d.r;
       const n = j * width + i;
-      if (solid(map, i, j) || field[n] !== UNREACHED) continue;
+      if (solid(map, i, j) || feet.has(n) || field[n] !== UNREACHED) continue;
       field[n] = field[k] + 1;
       queue.push(n);
     }
