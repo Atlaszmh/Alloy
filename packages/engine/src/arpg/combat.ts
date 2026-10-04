@@ -659,6 +659,7 @@ export function hitMonster(
     const d = dirTo(opts.kbFrom.x, opts.kbFrom.y, m.x, m.y);
     m.kbx += d.x * opts.knockback * 6 * resist;
     m.kby += d.y * opts.knockback * 6 * resist;
+    m.kbHit = amount;
   }
 
   if (m.traits.includes('spiked') && opts.source !== 'dot' && opts.source !== 'reaction') {
@@ -858,6 +859,8 @@ export interface HurtOpts {
   melee?: boolean;
   /** Ignores dodge, blind and invulnerability (spiked reflection). */
   unavoidable?: boolean;
+  /** A hazard's burst: the dodge's i-frames avoid it, but it never makes a perfect dodge. */
+  noPerfect?: boolean;
 }
 
 /** Monster → hero damage with dodge, blind, armor, thorns, vampirism and death. */
@@ -873,7 +876,7 @@ export function hurtHero(
   if (world.heroDead || raw <= 0) return;
   if (!opts.unavoidable) {
     if (world.t < h.invulnUntil) {
-      notePerfect(ctx);
+      if (!opts.noPerfect) notePerfect(ctx);
       return;
     }
     const blind =
