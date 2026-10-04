@@ -70,7 +70,7 @@ export function EquippedPane({
   const weapon = equipped.weapon;
   const cap = registry.getDelveBalance().chains.cap;
   const slots = weapon ? movesetOf(registry, weapon).slots : null;
-  const carried = weapon ? carriedSkills(registry, weapon.rarity) : [];
+  const carried = weapon ? carriedSkills(registry, weapon) : [];
 
   const rows: [string, string, boolean?][] = [
     ['Damage', formatNumber(dps)],
