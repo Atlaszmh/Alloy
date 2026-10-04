@@ -72,3 +72,29 @@ describe('rune sounds', () => {
     expect(playSound).toHaveBeenLastCalledWith('upgradeTier');
   });
 });
+
+describe("the room objects' sounds", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('a hazard ticks as it is set off and slams as it bursts; debris scatters; a slam thuds', () => {
+    const at = { x: 0, y: 0 };
+    const hazard = { id: 1, hazard: 'brazier', element: 'fire' as const, ...at, radius: 2.5 };
+    playArenaEvents([
+      { kind: 'hazardPrime', ...hazard, fuse: 0.4 },
+      { kind: 'hazardBurst', ...hazard },
+      { kind: 'crumble', structure: 0, cells: [at] },
+      { kind: 'propBreak', id: 2, prop: 'crate', ...at },
+      { kind: 'wallSlam', id: 3, ...at },
+      { kind: 'chargeStun', id: 4, ...at },
+    ]);
+    expect(vi.mocked(playSound).mock.calls.map(([s]) => s)).toEqual([
+      'orbSelect',
+      'forgeSlam',
+      'forgeSlam',
+      'gemScatter',
+      'combineFail',
+      'combineFail',
+    ]);
+    expect(vi.mocked(vibrate).mock.calls.map(([v]) => v)).toEqual(['medium', 'medium']);
+  });
+});

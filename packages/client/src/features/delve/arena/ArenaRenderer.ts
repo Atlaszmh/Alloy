@@ -35,12 +35,14 @@ import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import { barrierBreakFx, reactionFx, reactionLabel } from './fx/reactions';
 import { runeFx, runeHex } from './fx/runes';
+import { roomObjectFx, roomObjectPoints } from './fx/room-objects';
 import { TIER_NUMERAL } from '../runes/rune-style';
 import {
   drawAim,
   drawAnticipation,
   drawFooting,
   drawGuard,
+  drawHazards,
   drawInfusions,
   drawLobs,
   drawMonsterMarks,
@@ -115,8 +117,8 @@ interface FogLayer {
   sprite: Sprite;
   source: BufferImageSource;
   pixels: Uint8Array;
-  /** The world's `fogVersion` it shows. */
-  version: number;
+  /** What it shows (`fogKey`): the world's fog over the map's cells. */
+  key: string;
 }
 
 interface Dying {
@@ -344,7 +346,7 @@ export class ArenaRenderer {
     const sprite = new Sprite(new Texture({ source }));
     sprite.position.set(-pad, -pad);
     this.root.addChild(sprite);
-    return { sprite, source, pixels, version: -1 };
+    return { sprite, source, pixels, key: '' };
   }
 
   private emoji(glyph: string): Texture {
@@ -578,6 +580,16 @@ export class ArenaRenderer {
         case 'runeFx':
           runeFx(this.fx, e);
           break;
+        case 'propBreak':
+        case 'hazardPrime':
+        case 'hazardBurst':
+        case 'crumble':
+        case 'wallSlam':
+        case 'chargeStun':
+          // The room objects' moments (fx/room-objects.ts), only where the hero sees them.
+          if (roomObjectPoints(e).some((p) => inSight(w, p.x, p.y)))
+            this.addShake(roomObjectFx(this.fx, e));
+          break;
         case 'chain':
           this.fx.bolt(e.points, MANA_HEX[e.element], 0.2, true);
           for (const p of e.points.slice(1)) this.fx.burst(p.x, p.y, MANA_HEX.storm, 3, 3);
@@ -775,18 +787,24 @@ export class ArenaRenderer {
     this.drawDoors(w, dt);
     this.drawMarker(w);
     const fog = this.fog;
-    if (fog && fog.version !== w.fogVersion) {
+    if (fog && fog.key !== fogKey(w)) {
       paintFog(w.map, w.fog, FLOOR_MARGIN, fog.pixels);
       fog.source.update();
-      fog.version = w.fogVersion;
+      fog.key = fogKey(w);
     }
     // A foe out of sight shows nothing: not its marks, nor its wind-ups.
+    // Out of sight a foe shows nothing (not its marks, nor its wind-ups), nor a hazard its glow or fuse.
     const seen = w.map.open
       ? w
-      : { ...w, monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)) };
+      : {
+          ...w,
+          monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)),
+          hazards: w.hazards.filter((h) => inSight(w, h.x, h.y)),
+        };
     drawZones(ground, w, this.time);
     drawLobs(ground, air, w, this.time);
     drawTelegraphs(ground, seen, this.time);
+    drawHazards(ground, seen, this.time, getDelveRegistry().getDelveBalance().terrain.fuse);
     drawFooting(ground, w, this.time);
     drawMonsterMarks(ground, air, seen, this.time);
     this.lifecycles.update(w, this.fx, this.time);
@@ -1280,6 +1298,15 @@ export function inSight(w: ArpgWorld, x: number, y: number): boolean {
 /** Whether the fog has ever seen a point (on the open room, always): the minimap's rule for drops. */
 export function seenAt(w: ArpgWorld, x: number, y: number): boolean {
   return fogAt(w, x, y) > 0;
+}
+
+/**
+ * What the fog layer shows: the world's fog (`fogVersion`) over the map's
+ * cells (`FloorMap.version`; a crumble changes which cells are solid, and so
+ * which take their neighbours' fog). It repaints when either moves.
+ */
+export function fogKey(w: ArpgWorld): string {
+  return `${w.fogVersion}:${w.map.version}`;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
-import { solidCode, type HudIcon } from '@alloy/engine';
+import { CELL, solidCode, type HudIcon } from '@alloy/engine';
 import { useUiScale, type GlyphId } from '../../kit';
 import { GLYPH_ART, pixelRuns } from '../../kit/glyph-art';
 import type { HudMap } from '../useArenaCore';
@@ -14,6 +14,8 @@ const SEEN = '#262b44';
 const LIT = '#3a4466';
 const ROOM = '#8b9bb4';
 const SEALED = '#a22633';
+/** Cover and crumbling cover the hero has seen: low stone inside a room. */
+const COVER = '#5a6988';
 /** The exit and the compass hint toward it. */
 const EXIT = '#63c74d';
 /** Each room icon's pixel glyph (the exit gate is the kit's door), and its tint where it has one colour. */
@@ -34,8 +36,8 @@ export function minimapScale(map: { width: number; height: number }, w: number, 
 
 /**
  * A generated floor's fog layer at `s` device px a cell: each cell that isn't solid
- * (`solidCode`) the hero has seen, those in
- * sight now brighter. The minimap keeps it and redraws it only when the fog moves (`fogVersion`).
+ * (`solidCode`) the hero has seen, those in sight now brighter, and the cover it has seen. The
+ * minimap keeps it and redraws it only when the fog or the map moves (`fogVersion`, `version`).
  */
 export function drawFog(
   ctx: CanvasRenderingContext2D,
@@ -53,13 +55,19 @@ export function drawFog(
         ctx.fillRect((i % floor.width) * s, Math.floor(i / floor.width) * s, s, s);
     });
   }
+  ctx.fillStyle = COVER;
+  floor.fog.forEach((f, i) => {
+    const c = floor.cells[i];
+    if (f > 0 && (c === CELL.cover || c === CELL.crumbling))
+      ctx.fillRect((i % floor.width) * s, Math.floor(i / floor.width) * s, s, s);
+  });
 }
 
 /**
  * Draws `map` on a `w` × `h` device-px canvas: the arena fitted at whole device px per unit and
  * centred, then its terrain; on a generated floor the fog layer (`fog`, from `drawFog`), the revealed
- * rooms and their icons and the exit; the border, the camera's view, the drops, the foes, the
- * compass toward an unfound exit once hinted, and the hero.
+ * rooms and their icons and the exit; the border, the camera's view, the drops, the hazards, the
+ * foes, the compass toward an unfound exit once hinted, and the hero.
  */
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
@@ -119,6 +127,7 @@ export function drawMinimap(
   const v = map.view;
   frame(X(v.left), Y(v.top), X(v.right), Y(v.bottom), VIEW);
   for (const d of map.drops) dot(d.x, d.y, 0.8, d.color);
+  for (const z of floor?.hazards ?? []) dot(z.x, z.y, 0.8, z.color);
   for (const f of map.foes) dot(f.x, f.y, FOE_SIZE[f.rank], FOE);
   const hint = floor && !floor.exit ? floor.hint : null;
   if (hint) {
@@ -168,10 +177,10 @@ export function Minimap({ map }: { map: HudMap | null }): ReactElement {
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx || !map || size.w <= 0 || size.h <= 0) return;
-    /** The kept fog layer, redrawn when the fog, its version or the scale moves. */
+    /** The kept fog layer, redrawn when the fog, its version, the map's or the scale moves. */
     const fogLayer = (floor: NonNullable<HudMap['floor']>) => {
       const s = minimapScale(map, size.w, size.h);
-      const key = `${floor.fogVersion}:${s}`;
+      const key = `${floor.fogVersion}:${floor.version}:${s}`;
       const kept = fogRef.current;
       if (kept && kept.fog === floor.fog && kept.key === key) return kept.canvas;
       const canvas = kept?.canvas ?? document.createElement('canvas');

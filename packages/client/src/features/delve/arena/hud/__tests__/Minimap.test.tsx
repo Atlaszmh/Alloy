@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { CELL } from '@alloy/engine';
 import { Minimap, drawFog, drawMinimap } from '../Minimap';
 import type { HudMap } from '../../useArenaCore';
 
@@ -71,6 +72,8 @@ const FLOOR: NonNullable<HudMap['floor']> = {
   fogVersion: 1,
   cells: new Uint8Array(26 * 40),
   fog: new Uint8Array(26 * 40).fill(1),
+  version: 0,
+  hazards: [],
 };
 const GENERATED: HudMap = { ...MAP, terrain: [], floor: FLOOR };
 
@@ -161,6 +164,32 @@ describe('drawMinimap on a generated floor', () => {
       { x: 4, y: 2, w: 2, h: 2, color: '#3a4466' },
     ]);
   });
+
+  it('draws the cover it has seen, crumbling or not, in its own colour', () => {
+    const { ctx, fills } = fakeContext();
+    const floor = {
+      ...FLOOR,
+      width: 4,
+      height: 1,
+      cells: Uint8Array.from([CELL.cover, CELL.crumbling, CELL.cover, CELL.wall]),
+      fog: Uint8Array.from([1, 2, 0, 2]),
+    };
+    drawFog(ctx, floor, 2);
+    expect(fills).toEqual([
+      { x: 0, y: 0, w: 2, h: 2, color: '#5a6988' },
+      { x: 2, y: 0, w: 2, h: 2, color: '#5a6988' },
+    ]);
+  });
+
+  it("dots the hazards the floor's fog has seen, in their element's colour", () => {
+    const { ctx, fills } = fakeContext();
+    const hazards = [{ x: 20, y: 30, color: '#ff6a2b' }];
+    drawMinimap(ctx, { ...GENERATED, floor: { ...FLOOR, hazards } }, 300, 150);
+    // 3 px per unit, the floor at (111, 15): a 2 px dot centred on (171, 105).
+    expect(fills.filter((f) => f.color === '#ff6a2b')).toEqual([
+      { x: 170, y: 104, w: 2, h: 2, color: '#ff6a2b' },
+    ]);
+  });
 });
 
 describe('Minimap', () => {
@@ -184,7 +213,7 @@ describe('Minimap', () => {
     expect(clear).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps the fog layer while the fog stands still, and redraws it when fogVersion moves', () => {
+  it("keeps the fog layer while the fog stands still, and redraws it when fogVersion or the map's version moves", () => {
     const { ctx, fills, image } = fakeContext();
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as never);
     vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -201,5 +230,7 @@ describe('Minimap', () => {
     expect(image).toHaveBeenCalledTimes(2);
     rerender(<Minimap map={{ ...GENERATED, floor: { ...FLOOR, fogVersion: 2 } }} />);
     expect(seen()).toBe(2 * once);
+    rerender(<Minimap map={{ ...GENERATED, floor: { ...FLOOR, fogVersion: 2, version: 1 } }} />);
+    expect(seen()).toBe(3 * once);
   });
 });
