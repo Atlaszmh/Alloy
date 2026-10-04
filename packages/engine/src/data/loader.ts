@@ -4,6 +4,7 @@ import type { ArpgData } from '../types/arpg.js';
 import type { RuneDef } from '../types/rune.js';
 import type { CraftingData } from '../types/crafting.js';
 import type { QuestsData } from '../types/quests.js';
+import type { TutorialData } from '../types/tutorial.js';
 import {
   BalanceConfigSchema,
   ArpgDataSchema,
@@ -14,6 +15,7 @@ import {
   RunesSchema,
   ShrinesDataSchema,
 } from './schemas.js';
+import { TutorialDataSchema } from './tutorial-schema.js';
 
 import rawBalance from './balance.json';
 import rawDelve from './delve.json';
@@ -23,6 +25,7 @@ import rawCrafting from './crafting.json';
 import rawQuests from './quests.json';
 import rawLayouts from './layouts.json';
 import rawShrines from './shrines.json';
+import rawTutorial from './tutorial.json';
 
 export interface LoadedData {
   balance: BalanceConfig;
@@ -30,6 +33,8 @@ export interface LoadedData {
   arpg: ArpgData;
   crafting: CraftingData;
   quests: QuestsData;
+  /** `tutorial.json`: the guided start's script and floors (see the tutorial spec). */
+  tutorial: TutorialData;
 }
 
 export function loadAndValidateData(): LoadedData {
@@ -46,6 +51,7 @@ export function loadAndValidateData(): LoadedData {
   };
   const crafting = CraftingDataSchema.parse(rawCrafting) as CraftingData;
   const quests = QuestsDataSchema.parse(rawQuests) as QuestsData;
+  const tutorial = TutorialDataSchema.parse(rawTutorial) as TutorialData;
 
-  return { balance, delve, arpg, crafting, quests };
+  return { balance, delve, arpg, crafting, quests, tutorial };
 }

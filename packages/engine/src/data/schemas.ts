@@ -14,7 +14,7 @@ import {
 
 // --- Delve (loot-crawler ARPG) Schemas ---
 
-const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
+export const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const GearSlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
 export const ManaTypeSchema = z.enum(['fire', 'frost', 'storm', 'earth', 'shadow', 'nature']);
 export const HeroStatKeySchema = z.enum([
@@ -48,7 +48,7 @@ export const HeroStatKeySchema = z.enum([
   'shadowAttune',
   'natureAttune',
 ]);
-const MonsterTraitSchema = z.enum([
+export const MonsterTraitSchema = z.enum([
   'armored',
   'swift',
   'brute',

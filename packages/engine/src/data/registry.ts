@@ -15,6 +15,7 @@ import type { RuneDef, RuneId } from '../types/rune.js';
 import type { ManaType } from '../types/mana.js';
 import type { CraftingData } from '../types/crafting.js';
 import type { QuestsData } from '../types/quests.js';
+import type { TutorialData } from '../types/tutorial.js';
 
 export class DataRegistry {
   constructor(private readonly data: LoadedData) {}
@@ -80,6 +81,11 @@ export class DataRegistry {
   /** `quests.json`: the giver, the main and side quests, and the contract templates (see the quests spec). */
   getQuestsData(): QuestsData {
     return this.data.quests;
+  }
+
+  /** `tutorial.json`: the guided start's steps, partners and hand-built floors (see the tutorial spec). */
+  getTutorialData(): TutorialData {
+    return this.data.tutorial;
   }
 
   getDelveBalance(): DelveBalance {
