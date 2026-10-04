@@ -1,8 +1,9 @@
 import type { ArpgWorld, HazardEntity, PropEntity, Vec } from '../types/arpg.js';
 import { BASIC_STATUS, hitMonster, hurtHero, killScrap, spawnDrop, type SimCtx } from './combat.js';
+import { isDashing } from './dodge.js';
 import { roomAt } from './fog.js';
 import { angleBetween, dirTo, dist, distToSegment } from './geometry.js';
-import { sees, snapToWalkable } from './grid.js';
+import { sees, shift, snapToWalkable } from './grid.js';
 import { rollMetal } from './material-drops.js';
 import { standing } from './objects-base.js';
 import { hitStructures } from './terrain.js';
@@ -158,7 +159,25 @@ export function objectsTick(ctx: SimCtx): void {
 }
 
 /**
- * At the end of `separate`, before the walls' push-out (B3): bodies are pushed
- * out of props and hazards as from a fixed dummy. Stub: a no-op.
+ * At the end of `separate`, before the walls' push-out: props and hazards are
+ * fixed circles, so a body overlapping one is pushed straight out of it, as
+ * from a fixed dummy (the object never budges); a dashing hero and a charging
+ * foe pass through.
  */
-export function objectsSeparate(_ctx: SimCtx): void {}
+export function objectsSeparate(ctx: SimCtx): void {
+  const { world } = ctx;
+  const objects = standing(world);
+  if (objects.length === 0) return;
+  const bodies: { x: number; y: number; radius: number }[] = world.monsters.filter(
+    (m) => !m.dead && m.chargeUntil <= world.t,
+  );
+  if (!isDashing(ctx)) bodies.push(world.hero);
+  for (const b of bodies)
+    for (const o of objects) {
+      const d = dist(o.x, o.y, b.x, b.y);
+      const overlap = o.radius + b.radius - d;
+      if (overlap <= 0) continue;
+      const n = d > 1e-6 ? { x: (b.x - o.x) / d, y: (b.y - o.y) / d } : { x: 0, y: 1 };
+      shift(world.map, b, b.radius, n.x * overlap, n.y * overlap);
+    }
+}
