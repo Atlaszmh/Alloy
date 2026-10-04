@@ -2,14 +2,23 @@ import type { DataRegistry } from '../data/registry.js';
 import type { ArpgInput, ArpgWorld, MonsterEntity, Vec } from '../types/arpg.js';
 import { CELL, type FloorMap, type Room } from '../types/floor-map.js';
 import { makeCtx } from './combat.js';
-import { dirTo, dist } from './geometry.js';
+import { angleBetween, dirTo, dist } from './geometry.js';
 import { abilityReady, holdCharge, nextMove } from './abilities/cast.js';
 import { nearestMonster } from './abilities/targeting.js';
-import { UNREACHED, downhill, flowField } from './flow.js';
-import { doorShut, moveCircle, perceives, solidCode } from './grid.js';
+import { UNREACHED, downhill } from './flow.js';
+import {
+  bindTerrain,
+  doorShut,
+  moveCircle,
+  perceives,
+  sees,
+  solid,
+  solidCode,
+  terrainOf,
+} from './grid.js';
 import { roomAt } from './fog.js';
 import { openedAlcove } from './interact.js';
-import { footprints } from './objects-base.js';
+import { footprint } from './objects-base.js';
 import { tutorialStep } from '../delve/tutorial.js';
 
 /**
@@ -41,8 +50,30 @@ export function botInput(
   world: ArpgWorld,
   policy: BotPolicy = 'thorough',
 ): ArpgInput {
+  // The terrain's numbers, as the step binds them (the bot may look first).
+  if (!world.map.open) bindTerrain(world.map, registry.getDelveBalance().terrain);
   const input = plainInput(registry, world, policy);
+  if (!world.map.open) breakInWay(world, input);
   return world.tutorial ? guided(registry, world, input) : input;
+}
+
+/**
+ * A standing prop the hero walks into (in reach, within 60° of its way) gets a
+ * manual blow aimed at it: the bot's paths cross a prop's footprint only where
+ * going round costs more (`PROP`), and any hit breaks one.
+ */
+function breakInWay(world: ArpgWorld, input: ArpgInput): void {
+  const h = world.hero;
+  const way = input.move;
+  if (way.x === 0 && way.y === 0) return;
+  const prop = world.props.find(
+    (p) =>
+      !p.dead &&
+      dist(h.x, h.y, p.x, p.y) - p.radius - h.radius <= 0.8 &&
+      angleBetween(way, dirTo(h.x, h.y, p.x, p.y)) <= Math.PI / 3,
+  );
+  if (prop)
+    Object.assign(input, { attack: true, attackTap: true, attackAim: { x: prop.x, y: prop.y } });
 }
 
 /**
@@ -76,6 +107,18 @@ function plainInput(registry: DataRegistry, world: ArpgWorld, policy: BotPolicy)
   if (h.hp < h.stats.maxHp * 0.4 && h.potions > 0) input.potion = true;
 
   const canDodge = h.dodgeCharges >= 1 && !(h.dodge && world.t < h.dodge.until);
+
+  // Step out of a primed hazard's burst (it reaches a body within `burst` of
+  // its edge that it sees), dodging through it if it's about to go off.
+  for (const hz of world.hazards) {
+    if (hz.state !== 'primed') continue;
+    const reach = hz.burst + h.radius + 0.3;
+    if (dist(h.x, h.y, hz.x, hz.y) >= reach || !sees(world.map, hz, h)) continue;
+    const away = dirTo(hz.x, hz.y, h.x, h.y);
+    input.move = away.x === 0 && away.y === 0 ? { x: 1, y: 0 } : away;
+    if (canDodge && hz.until - world.t <= 0.15) input.dodge = true;
+    return input;
+  }
 
   // Step out of any telegraphed slam, dodging if it's about to land.
   for (const z of world.zones) {
@@ -128,6 +171,7 @@ function plainInput(registry: DataRegistry, world: ArpgWorld, policy: BotPolicy)
 
   // Spent (no potions left), a thorough bot makes for the exit.
   const plan = h.potions === 0 ? 'beeline' : policy;
+  if (!world.map.open) lookIntoLeaves(world);
   const target = foeFor(world, foeInSight(world, nearestMonster(ctx, h.x, h.y, 60)), plan);
   if (!world.map.open) chasing.set(world, target?.id ?? null);
   if (!target) {
@@ -229,37 +273,101 @@ function shutIn(world: ArpgWorld): Room | undefined {
 }
 
 /**
- * Each world's map as the hero walks it (`heroMap`) and the bot's flow fields
- * on it toward the cells it walks to, kept until the map's `version` moves, a
- * door opens or shuts or a prop breaks (`key`).
+ * Each world's step costs as the hero walks them (`costs`) and the bot's path
+ * fields on them toward the cells it walks to, kept until the map's `version`
+ * moves, a door opens or shuts or a prop breaks (`key`).
  */
 const paths = new WeakMap<
   ArpgWorld,
-  { map: FloorMap; key: string; byCell: Map<number, Uint16Array> }
+  { cost: Uint8Array; key: string; byCell: Map<number, Uint16Array> }
 >();
 
+/** A step's cost on firm ground; on slow ground it is `FIRM / terrain.slowMult`, rounded. */
+const FIRM = 3;
+/** A step onto a standing prop's footprint: worth about six cells of detour (`breakInWay` breaks it). */
+const PROP = 18;
+
 /**
- * `map` with the standing objects' footprints walled (`feet`), then every
- * one-cell gap walled (a walkable cell, not a door's, with a solid cell on
- * each side across it, as between two pillars, or a pillar and a crate): the
- * hero's bounding square (radius 0.5) passes one only dead on its centre line,
- * which a step at its pace rarely lands on. Only the cells' codes count here:
- * the doors are read live (`solid`, through the shared `doors`).
+ * What a step onto each cell costs the hero (0: it can't), as the doors stand
+ * now: solid cells and the hazards' footprints none; a standing prop's
+ * footprint `PROP`; slow ground its pace's share of `FIRM`; firm ground
+ * `FIRM`. A one-cell gap (a walkable cell, not a door's, with something on
+ * each side across it, as between two pillars) is shut, or costs `PROP` where
+ * a prop is one side: the hero's bounding square (radius 0.5) passes one only
+ * dead on its centre line, which a step at its pace rarely lands on. Only the
+ * cells' codes make a gap's sides (a door is never one).
  */
-function heroMap(map: FloorMap, feet: ReadonlySet<number>): FloorMap {
+function costs(world: ArpgWorld): Uint8Array {
+  const { map } = world;
   const { width: w, height: h } = map;
-  const walled = map.cells.slice();
-  for (const c of feet) if (walled[c] !== CELL.door) walled[c] = CELL.wall;
+  const props = new Set(world.props.filter((p) => !p.dead).flatMap((p) => footprint(map, p)));
+  const hazards = new Set(world.hazards.flatMap((z) => footprint(map, z)));
+  const slow = Math.round(FIRM / (terrainOf(map)?.slowMult ?? 1));
   const wall = (x: number, y: number) =>
-    x < 0 || y < 0 || x >= w || y >= h || solidCode(walled[y * w + x]);
-  const cells = walled.slice();
+    x < 0 || y < 0 || x >= w || y >= h || solidCode(map.cells[y * w + x]) || hazards.has(y * w + x);
+  const side = (x: number, y: number) => wall(x, y) || props.has(y * w + x);
+  const cost = new Uint8Array(w * h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
-      const squeezed = (wall(x - 1, y) && wall(x + 1, y)) || (wall(x, y - 1) && wall(x, y + 1));
-      const c = cells[y * w + x];
-      if (c !== CELL.door && !solidCode(c) && squeezed) cells[y * w + x] = CELL.wall;
+      const i = y * w + x;
+      if (solid(map, x, y) || hazards.has(i)) continue;
+      const door = map.cells[i] === CELL.door;
+      if (!door && ((wall(x - 1, y) && wall(x + 1, y)) || (wall(x, y - 1) && wall(x, y + 1))))
+        continue;
+      const gap = (side(x - 1, y) && side(x + 1, y)) || (side(x, y - 1) && side(x, y + 1));
+      cost[i] = props.has(i) || (!door && gap) ? PROP : map.cells[i] === CELL.slow ? slow : FIRM;
     }
-  return { ...map, cells };
+  return cost;
+}
+
+/** The eight steps (dx, dy), and what a diagonal costs over a straight one (about √2). */
+const STEPS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [-1, 1],
+  [1, -1],
+  [-1, -1],
+] as const;
+const DIAGONAL = 1.5;
+
+/**
+ * Each cell's cheapest way to `target` by `cost` (Dial's buckets over the
+ * eight neighbours, a diagonal `DIAGONAL` × the cell's cost and only between
+ * two open cells, as `downhill` walks them); UNREACHED where none, the
+ * target's cell 0 whatever it costs.
+ */
+function pathField(map: FloorMap, cost: Uint8Array, target: number): Uint16Array {
+  const { width: w, height: h } = map;
+  const n = cost.length;
+  const field = new Uint16Array(n).fill(UNREACHED);
+  const ring = Math.ceil(PROP * DIAGONAL) + 1;
+  const buckets: number[][] = Array.from({ length: ring }, () => []);
+  const open = (i: number, j: number) => i >= 0 && j >= 0 && i < w && j < h && cost[j * w + i] > 0;
+  field[target] = 0;
+  buckets[0].push(target);
+  for (let d = 0, left = 1; left > 0; d++) {
+    const bucket = buckets[d % ring];
+    while (bucket.length > 0) {
+      const c = bucket.pop()!;
+      left--;
+      if (field[c] !== d) continue;
+      const x = c % w;
+      const y = (c - x) / w;
+      for (const [dx, dy] of STEPS) {
+        if (!open(x + dx, y + dy) || (dx && dy && !(open(x + dx, y) && open(x, y + dy)))) continue;
+        const next = c + dy * w + dx;
+        const to = Math.min(UNREACHED - 1, d + Math.ceil(cost[next] * (dx && dy ? DIAGONAL : 1)));
+        if (to >= field[next]) continue;
+        field[next] = to;
+        buckets[to % ring].push(next);
+        left++;
+      }
+    }
+  }
+  return field;
 }
 
 function cellOf(world: ArpgWorld, p: Vec): number {
@@ -269,36 +377,33 @@ function cellOf(world: ArpgWorld, p: Vec): number {
   return cy * w + cx;
 }
 
-/** A flow field over the hero's map toward `p`'s cell, as the cells, doors and objects stand now. */
+/** A path field toward `p`'s cell by the hero's step costs, as the cells, doors and objects stand now. */
 function fieldTo(world: ArpgWorld, p: Vec): Uint16Array {
   const doors = world.map.doors.map((d) => (doorShut(d) ? 1 : 0)).join('');
   const broken = world.props.filter((o) => o.dead).length;
   const key = `${world.map.version}:${doors}:${broken}`;
   let kept = paths.get(world);
   if (!kept || kept.key !== key)
-    paths.set(
-      world,
-      (kept = { map: heroMap(world.map, footprints(world)), key, byCell: new Map() }),
-    );
+    paths.set(world, (kept = { cost: costs(world), key, byCell: new Map() }));
   const cell = cellOf(world, p);
   let field = kept.byCell.get(cell);
   if (!field) {
-    field = flowField(kept.map, p, world.map.width * world.map.height, 1);
+    field = pathField(world.map, kept.cost, cell);
     kept.byCell.set(cell, field);
   }
   return field;
 }
 
-/** Steps down `field` from the hero (from a neighbour when it stands in a walled gap); UNREACHED if none. */
+/** The cost down `field` from the hero (from a neighbour when it stands on a shut cell); UNREACHED if none. */
 function stepsFrom(world: ArpgWorld, field: Uint16Array): number {
   const { width: w, height: h } = world.map;
   const c = cellOf(world, world.hero);
   const x = c % w;
   let best = field[c];
-  if (x > 0) best = Math.min(best, field[c - 1] + 1);
-  if (x < w - 1) best = Math.min(best, field[c + 1] + 1);
-  if (c >= w) best = Math.min(best, field[c - w] + 1);
-  if (c < w * (h - 1)) best = Math.min(best, field[c + w] + 1);
+  if (x > 0) best = Math.min(best, field[c - 1] + FIRM);
+  if (x < w - 1) best = Math.min(best, field[c + 1] + FIRM);
+  if (c >= w) best = Math.min(best, field[c - w] + FIRM);
+  if (c < w * (h - 1)) best = Math.min(best, field[c + w] + FIRM);
   return Math.min(best, UNREACHED);
 }
 
@@ -440,11 +545,42 @@ function gateGoal(world: ArpgWorld): Goal | null {
   return boss ? nearestReachable(world, [boss]) : nearestRoom(world, [room], true);
 }
 
+/** Each world's foliage cells (their centres), and those the hero has looked into. */
+const leaves = new WeakMap<ArpgWorld, { at: Vec[]; seen: boolean[] }>();
+
+/**
+ * Mark the foliage cells the hero now sees into: within `terrain.foliageSight`
+ * of it and in its sight (what stands in foliage is perceived only that near).
+ */
+function lookIntoLeaves(world: ArpgWorld): void {
+  const { map, hero: h } = world;
+  let l = leaves.get(world);
+  if (!l) {
+    const at: Vec[] = [];
+    map.cells.forEach((c, i) => {
+      if (c === CELL.foliage)
+        at.push({ x: (i % map.width) + 0.5, y: Math.floor(i / map.width) + 0.5 });
+    });
+    leaves.set(world, (l = { at, seen: at.map(() => false) }));
+  }
+  const reach = terrainOf(map)?.foliageSight ?? 0;
+  l.at.forEach((c, i) => {
+    if (!l.seen[i] && dist(h.x, h.y, c.x, c.y) <= reach && sees(map, h, c)) l.seen[i] = true;
+  });
+}
+
+/** The foliage cells of the rooms the hero has been in that it hasn't looked into. */
+function unseenLeaves(world: ArpgWorld): Vec[] {
+  const l = leaves.get(world);
+  if (!l) return [];
+  return l.at.filter((c, i) => !l.seen[i] && roomAt(world.map, c.x, c.y)?.revealed);
+}
+
 /**
  * The `thorough` bot's next goal with no foe in sight: what it has seen lying
- * on the floor; a foe of a room it has been in; an unused chest, shrine or
- * alcove (an alcove once opened is done, taken or not); the nearest room it
- * hasn't been in; then the gate.
+ * on the floor; a foe of a room it has been in; the foliage of those rooms it
+ * hasn't looked into; an unused chest, shrine or alcove (an alcove once opened
+ * is done, taken or not); the nearest room it hasn't been in; then the gate.
  */
 function thoroughGoal(world: ArpgWorld): Goal | null {
   const { map, fog } = world;
@@ -459,6 +595,7 @@ function thoroughGoal(world: ArpgWorld): Goal | null {
   return (
     nearestReachable(world, seen) ??
     nearestReachable(world, foes) ??
+    nearestReachable(world, unseenLeaves(world)) ??
     nearestRoom(world, unused, true) ??
     nearestRoom(
       world,

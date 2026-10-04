@@ -314,7 +314,7 @@ describe('the first boss, and when pickups bank', () => {
         if (phase === 'dead') expect(lost!.scrap).toBeGreaterThan(0);
         else expect([banked.scrap, once.bag.length]).toEqual([expect.any(Number), 2]);
       }
-  });
+  }, 20_000); // eight bot-played floors: slow under the whole suite's load
 });
 
 describe('the E2E dives', () => {
