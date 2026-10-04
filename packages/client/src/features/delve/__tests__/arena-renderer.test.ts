@@ -9,6 +9,7 @@ import {
   type Sprite,
 } from 'pixi.js';
 import {
+  CELL,
   computeHeroStats,
   createSandboxWorld,
   defaultChains,
@@ -28,6 +29,7 @@ import {
   drawHeldGate,
   dropPop,
   edgeArrow,
+  fogKey,
   holdPing,
   paintFog,
   pickupColor,
@@ -585,6 +587,25 @@ describe("a generated floor's fog", { timeout: 20000 }, () => {
     w.fogVersion++;
     r.update(0.1);
     expect(at(8, 8)).toBe(0);
+  });
+
+  it('repaints when the map changes under a still fog: crumbled cover shows its own fog', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    const c = 6 * 64 + 10;
+    w.map.cells[c] = CELL.crumbling;
+    w.fog[c] = 0; // solid: it takes the clearest fog of the floor round it
+    show(r, w);
+    const fog = (r as unknown as { fog: { pixels: Uint8Array } }).fog;
+    const at = (x: number, y: number) => fog.pixels[((y + 3) * 70 + x + 3) * 4 + 3];
+    expect(at(10, 6)).toBe(0);
+    w.map.cells[c] = CELL.slow; // crumbled to rubble: floor, with its own fog
+    r.update(0.1);
+    expect(at(10, 6)).toBe(0); // the same fog and map: not repainted
+    w.map.version++;
+    r.update(0.1);
+    expect(at(10, 6)).toBe(255);
+    expect(fogKey(w)).toBe(`${w.fogVersion}:1`);
   });
 
   it('shows a foe, and the numbers of its hits, only while the hero sees it', () => {
