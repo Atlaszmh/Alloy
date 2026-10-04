@@ -204,6 +204,18 @@ export function diveWorldKey(dive: DiveState | null, attempt = 0): string | null
   return attempt > 0 ? `fighting:${dive.depth}:${attempt}` : `fighting:${dive.depth}`;
 }
 
+/**
+ * The floor under way's world, from the save. A guided depth is built from its entry
+ * (`retryTutorialDepth`, which changes nothing on a fresh one): after a reload, an HMR or a
+ * Resume mid-floor the save holds what the floor banked, and a one-shot step (a set drop, the
+ * chest, the shrine) could never happen again.
+ */
+export function startFloor(registry: DataRegistry): ArpgWorld {
+  const { profile, retryTutorialDepth } = useDelveStore.getState();
+  if (profile.tutorial && profile.dive?.tutorialEntry) retryTutorialDepth();
+  return beginFloor(registry, useDelveStore.getState().profile);
+}
+
 export function useArena(
   hostRef: RefObject<HTMLDivElement | null>,
   opts: {
@@ -301,7 +313,7 @@ export function useArena(
     worldKey: diveWorldKey(profile.dive, attempt),
     createWorld: () => {
       endAtRef.current = null;
-      const world = beginFloor(registry, useDelveStore.getState().profile);
+      const world = startFloor(registry);
       bankedStepRef.current = world.tutorial?.step ?? null;
       return world;
     },
