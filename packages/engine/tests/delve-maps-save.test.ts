@@ -26,7 +26,7 @@ const blessed = (p: DelveProfile): DelveProfile => ({
 describe('save v10', () => {
   it('a dive starts with nothing used and no blessings; a world has nothing pending', () => {
     const p = diving();
-    expect(p.version).toBe(10);
+    expect(p.version).toBe(11);
     expect(p.dive).toMatchObject({ used: [], diveBuffs: [] });
     expect(emptyPending()).toMatchObject({ used: [], diveBuffs: [] });
   });
@@ -36,9 +36,9 @@ describe('save v10', () => {
     expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p });
   });
 
-  it('resets a version 9 save; refuses a dive without the new fields or with a bad blessing', () => {
+  it('resets a version 10 save; refuses a dive without the new fields or with a bad blessing', () => {
     const p = blessed(diving());
-    expect(parseDelveProfile(registry, json({ ...p, version: 9 }))).toEqual({ reset: true });
+    expect(parseDelveProfile(registry, json({ ...p, version: 10 }))).toEqual({ reset: true });
     const { used: _u, ...noUsed } = p.dive!;
     expect(parseDelveProfile(registry, json({ ...p, dive: noUsed }))).toBeNull();
     const bad = { ...p.dive!, diveBuffs: [{ shrine: 'devotion', effect: { haste: 1 } }] };

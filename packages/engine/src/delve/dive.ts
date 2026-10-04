@@ -69,6 +69,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     bestFind: null,
     used: [],
     diveBuffs: [],
+    tutorialEntry: null,
   };
   const started: DelveProfile = {
     ...profile,

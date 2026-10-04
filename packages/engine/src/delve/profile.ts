@@ -70,7 +70,7 @@ export function createDelveProfile(
   Object.assign(materials.metals, kit.startingMaterials.metals);
   Object.assign(materials.flux, kit.startingMaterials.flux);
   const profile: DelveProfile = {
-    version: 10,
+    version: 11,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -101,6 +101,7 @@ export function createDelveProfile(
     essencesSeen: [],
     reactionsSeen: [],
     quests: emptyQuests(registry),
+    tutorial: null,
     dive: null,
   };
   // The first unlocks, and a full Contract board once there are templates (see the quests spec).
@@ -207,13 +208,13 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
 }
 
 /**
- * Validate an unknown JSON blob as a save. A version 10 save is fitted to the
+ * Validate an unknown JSON blob as a save. A version 11 save is fitted to the
  * data (`fitMovesets`); a save of any other version is `{ reset: true }`. Null
- * when it isn't an object, or a version 10 save doesn't fit the schema.
+ * when it isn't an object, or a version 11 save doesn't fit the schema.
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  if ((raw as { version?: unknown }).version !== 10) return { reset: true };
+  if ((raw as { version?: unknown }).version !== 11) return { reset: true };
   const parsed = DelveProfileSchema.safeParse(raw);
   return parsed.success ? { profile: fitMovesets(registry, parsed.data as DelveProfile) } : null;
 }
