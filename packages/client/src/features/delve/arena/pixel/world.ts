@@ -5,6 +5,9 @@ import type { PixelTheme, RGB } from './themes';
  * A cosmetic pixel simulation of the arena floor: terrain, lush foliage,
  * a glowing river and pools, fire, frost, rubble and weather. Nothing here
  * affects gameplay; engine events are replayed onto it as visual effects.
+ * A generated floor is painted from its map's cells: only they make ruins,
+ * foliage, water and slow ground (see the room objects spec), and the
+ * effects mark those cells but never change what they are.
  *
  * Coordinates are cells (one cell = one screen pixel of the floor texture).
  * The grid includes a `margin` of cliffs around the playable arena.
@@ -21,7 +24,46 @@ export const MAT = {
   BUSH: 7,
   BANK: 8,
   WALL: 9,
+  /** Cover and crumbling cover: a low ruin (its look: `lookAt`). */
+  RUIN: 10,
+  /** Slow ground but shallow water: mud, a snowdrift, oil… (its look: `lookAt`). */
+  SLOW: 11,
 } as const;
+
+/**
+ * The engine's cell codes and `LOOK_IDS`, mirrored because the floor's worker
+ * never loads the engine (`pixel-terrain.test.ts` holds them equal): a map
+ * cell's `look` is its index in `FLOOR_LOOKS`.
+ */
+export const FLOOR_CELL = { wall: 1, cover: 3, crumbling: 4, foliage: 5, slow: 6 } as const;
+export const FLOOR_LOOKS = [
+  'plain',
+  'ruin',
+  'timber',
+  'minecart',
+  'ice_pillar',
+  'machinery',
+  'boulder',
+  'tomb',
+  'statue',
+  'spire',
+  'cracked_wall',
+  'vines',
+  'undergrowth',
+  'coal_rubble',
+  'snowdrift',
+  'oil',
+  'shallow_water',
+  'mud',
+  'ash',
+  'rubble',
+] as const;
+export const LOOK = Object.fromEntries(FLOOR_LOOKS.map((id, k) => [id, k])) as Record<
+  (typeof FLOOR_LOOKS)[number],
+  number
+>;
+/** Shallow water's depth: a spring in each of its cells holds it there. */
+const SHALLOW = 0.05;
 
 export const PROP = { NONE: 0, MUSHROOM: 1, CRYSTAL: 2, FLOWER: 3, RUNE: 4 } as const;
 
@@ -98,6 +140,8 @@ export interface MapPlan {
   height: number;
   /** The map's cells, row by row: the engine's `Cell` codes (`solidCell` reads them). */
   cells: Uint8Array;
+  /** Each map cell's look (`FLOOR_LOOKS` index), row by row. */
+  look: Uint8Array;
   rooms: { kind: RoomKind; rect: Rect }[];
   /** Floor cells per map cell. */
   ppu: number;
@@ -119,13 +163,6 @@ export const CHUNK = 32;
 const PAVED: ReadonlySet<RoomKind> = new Set(['den', 'boss', 'vault', 'sanctum', 'alcove']);
 /** Paved rooms with a rune circle at their centre. */
 const RUNED: ReadonlySet<RoomKind> = new Set(['sanctum', 'boss']);
-
-/** A room's dressing, in floor cells: paved, a river running through it, a pool, or wild ground. */
-type RoomLook =
-  | { kind: 'paved'; x0: number; y0: number }
-  | { kind: 'river'; x: (y: number) => number }
-  | { kind: 'pool'; x: number; y: number; rx: number; ry: number }
-  | { kind: 'wild' };
 
 export const MAX_PARTICLES = 7000;
 const MAX_RIPPLES = 140;
@@ -218,6 +255,14 @@ export class PixelWorld {
   readonly edge: Uint8Array;
   /** The map this floor was built from, or null (the open arena). */
   readonly plan: MapPlan | null;
+  /** Each floor cell's map cell (−1 outside the map), on a generated floor. */
+  private readonly mapOf: Int32Array | null;
+  /** Each map cell's room (its index), −1 in a hall or a wall. */
+  private roomOf: Int16Array | null = null;
+  /** Each room's paving origin (floor cells), or null for its wild ground. */
+  private paved: ({ x0: number; y0: number } | null)[] = [];
+  /** The generator's seeded noise, kept to repaint a cell. */
+  private nz: (x: number, y: number) => number = fbm;
   /** Cells where the river enters; fluid is added here every step. */
   readonly springs: number[] = [];
   /** Cells where fluid drains away every step: the arena's bottom rows, or each river's mouth. */
@@ -300,6 +345,7 @@ export class PixelWorld {
     this.rubble = new Uint32Array(n);
     this.edge = new Uint8Array(n);
     this.plan = opts.plan ?? null;
+    this.mapOf = this.plan ? new Int32Array(n) : null;
     this.chunksW = Math.ceil(this.width / CHUNK);
     this.chunksH = Math.ceil(this.height / CHUNK);
     this.awake = new Uint8Array(this.chunksW * this.chunksH).fill(1);
@@ -316,6 +362,24 @@ export class PixelWorld {
 
   inBounds(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.width && y < this.height;
+  }
+
+  /** Floor cell `i`'s map cell code (`FLOOR_CELL`): a wall off the map, 0 on the open arena. */
+  codeAt(i: number): number {
+    if (!this.mapOf) return 0;
+    const c = this.mapOf[i];
+    return c < 0 ? FLOOR_CELL.wall : this.plan!.cells[c];
+  }
+
+  /** Floor cell `i`'s look (`LOOK`): `plain` off the map and on the open arena. */
+  lookAt(i: number): number {
+    const c = this.mapOf ? this.mapOf[i] : -1;
+    return c < 0 ? LOOK.plain : this.plan!.look[c];
+  }
+
+  /** A ruin, foliage or slow ground: the effects mark it but never change what it is. */
+  isTerrain(i: number): boolean {
+    return this.codeAt(i) >= FLOOR_CELL.cover;
   }
 
   // ── Generation ──────────────────────────────────────────────────────────
@@ -455,39 +519,49 @@ export class PixelWorld {
   }
 
   /**
-   * A generated floor from its map: blocked cells become the biome's cliffs
-   * (pillars and rubble too), halls worn paths, and each room is dressed: the
-   * sealed arenas and special rooms paved (a rune circle in a sanctum and the
-   * boss's room), the rest wild ground with a river running through, a pool,
-   * or neither.
+   * A generated floor from its map, cell by cell (`paint`): walls become the
+   * biome's cliffs, cover and crumbling cover low ruins, foliage shrubs, slow
+   * ground its look (shallow water a pool held full), halls worn paths, and a
+   * room's floor its ground: the sealed arenas and special rooms paved (a rune
+   * circle in a sanctum and the boss's room), the rest grass and bare soil.
+   * Nothing else makes water or shrubs, so nothing cosmetic reads as terrain.
    */
   private generatePlan(plan: MapPlan): void {
-    const { width: W, height: H, margin: M, theme: th } = this;
+    const { width: W, height: H, margin: M } = this;
     const P = plan.ppu;
     const rng = mulberry32(this.seed);
     const ox = rng() * 1000;
     const oy = rng() * 1000;
-    const nz = (x: number, y: number) => fbm(x + ox, y + oy);
-    const grassThr = 0.5 + (0.5 - th.grassCover) * 0.36;
-    const bushThr = 0.5 + (0.5 - th.bushCover) * 0.36;
-    /** The map cell a floor cell lies in, or −1 outside the map. */
-    const mapCell = (x: number, y: number) => {
-      const mx = Math.floor((x - M) / P);
-      const my = Math.floor((y - M) / P);
-      return mx < 0 || my < 0 || mx >= plan.width || my >= plan.height ? -1 : my * plan.width + mx;
-    };
+    this.nz = (x, y) => fbm(x + ox, y + oy);
     const roomOf = new Int16Array(plan.width * plan.height).fill(-1);
     plan.rooms.forEach(({ rect: r }, k) => {
       for (let y = r.y; y < r.y + r.h; y++)
         for (let x = r.x; x < r.x + r.w; x++) roomOf[y * plan.width + x] = k;
     });
+    this.roomOf = roomOf;
+    const circles: { x: number; y: number }[] = [];
+    this.paved = plan.rooms.map(({ kind, rect }) => {
+      if (!PAVED.has(kind)) return null;
+      const x0 = M + rect.x * P;
+      const y0 = M + rect.y * P;
+      if (RUNED.has(kind))
+        circles.push({
+          x: Math.round(x0 + (rect.w * P) / 2),
+          y: Math.round(y0 + (rect.h * P) / 2),
+        });
+      return { x0, y0 };
+    });
 
-    // How deep each cell lies in rock: 0 on open ground, then the chessboard distance to it.
-    const edge = this.edge;
+    // Each floor cell's map cell, and how deep it lies in rock: 0 off it, then the chessboard distance.
+    const { edge, mapOf } = this;
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
-        const c = mapCell(x, y);
-        edge[y * W + x] = c < 0 || solidCell(plan.cells[c]) ? 255 : 0;
+        const mx = Math.floor((x - M) / P);
+        const my = Math.floor((y - M) / P);
+        const c =
+          mx < 0 || my < 0 || mx >= plan.width || my >= plan.height ? -1 : my * plan.width + mx;
+        mapOf![y * W + x] = c;
+        edge[y * W + x] = c < 0 || plan.cells[c] === FLOOR_CELL.wall ? 255 : 0;
       }
     const relax = (i: number, j: number) => {
       if (edge[j] + 1 < edge[i]) edge[i] = edge[j] + 1;
@@ -513,110 +587,93 @@ export class PixelWorld {
         }
       }
 
-    const rw = th.riverWidth;
-    const circles: { x: number; y: number }[] = [];
-    const looks: RoomLook[] = plan.rooms.map(({ kind, rect }) => {
-      const x0 = M + rect.x * P;
-      const y0 = M + rect.y * P;
-      const w = rect.w * P;
-      const h = rect.h * P;
-      if (PAVED.has(kind)) {
-        if (RUNED.has(kind)) circles.push({ x: Math.round(x0 + w / 2), y: Math.round(y0 + h / 2) });
-        return { kind: 'paved', x0, y0 };
-      }
-      const roll = rng();
-      if (roll < 0.4 && w >= rw * 2 + 16) {
-        const cx = x0 + w / 2;
-        const amp = 2 + rng() * (w / 2 - rw - 8);
-        const per = 8 + rng() * 6;
-        const ph = rng() * Math.PI * 2;
-        const x = (y: number) =>
-          clamp(cx + amp * Math.sin(y / per + ph), x0 + rw + 4, x0 + w - rw - 4);
-        // It wells up at the room's top wall, and its bottom rows drain.
-        for (let dx = -Math.floor(rw / 2); dx <= Math.floor(rw / 2); dx++)
-          this.springs.push(y0 * W + Math.round(x(y0)) + dx);
-        for (let y = y0 + h - 2; y < y0 + h; y++)
-          for (let dx = 0; dx < w; dx++) this.drains.push(y * W + x0 + dx);
-        return { kind: 'river', x };
-      }
-      if (roll < 0.75 && th.pools > 0)
-        return {
-          kind: 'pool',
-          x: x0 + w * (0.3 + rng() * 0.4),
-          y: y0 + h * (0.3 + rng() * 0.4),
-          rx: Math.min(18, w / 4),
-          ry: Math.min(14, h / 4),
-        };
-      return { kind: 'wild' };
-    });
-
-    for (let y = 0; y < H; y++) {
+    for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
         this.noise[i] = hash2(x, y, this.seed);
-        const base = 0.36 * (1 - y / H);
-        let hh = base + (nz(x / 15, y / 15) - 0.5) * 0.05;
-        const c = mapCell(x, y);
-        const look =
-          c < 0 || solidCell(plan.cells[c]) ? null : roomOf[c] < 0 ? 'hall' : looks[roomOf[c]];
-        const wild = () =>
-          nz(x / 18 + 20, y / 18 + 7) > grassThr
-            ? nz(x / 9 + 40, y / 9 + 13) > bushThr
-              ? MAT.BUSH
-              : MAT.GRASS
-            : MAT.SOIL;
-        let m: number;
-        let f = 0;
-        if (look === null) {
-          m = MAT.WALL;
-          hh = 0.6 + nz(x / 8, y / 8) * 0.12;
-          this.tone[i] = Math.min(2, (nz(x / 5 + 3, y / 5 + 9) * 3.2) | 0);
-          // Foliage spills over the cliff tops, as round the open arena.
-          const e = edge[i];
-          if (th.grassCover > 0.3 && e < 5 && nz(x / 4 + 11, y / 4 + 5) > 0.5 + (e - 1) * 0.06) {
-            m = MAT.BUSH;
-            this.detail[i] |= DETAIL.OVERHANG;
-          }
-        } else if (look === 'hall') {
-          // A worn path: bare ground, a step up from the rooms so their water stays in them.
-          m = MAT.SOIL;
-          hh += 0.1;
-        } else if (look.kind === 'paved') {
-          m = MAT.STONE;
-          hh = base + 0.018;
-          const fx = x - look.x0;
-          const fy = y - look.y0;
-          const row = Math.floor(fy / 6);
-          const off = (row % 2) * 4;
-          const col = Math.floor((fx + off) / 9);
-          if (fy % 6 === 0 || (fx + off) % 9 === 0) this.detail[i] |= DETAIL.MORTAR;
-          if (nz(x / 4 + 90, y / 4 + 30) > 0.62) this.detail[i] |= DETAIL.MOSS;
-          this.tone[i] = (hash2(col, row, this.seed + 1) * 255) | 0;
-        } else if (look.kind === 'river') {
-          const dr = Math.abs(x - look.x(y));
-          hh -= 0.06 * Math.max(0, 1 - dr / (rw + 3));
-          m = dr < rw + 2 ? MAT.BANK : wild();
-          if (dr < rw) f = 0.018 + 0.012 * (1 - dr / rw);
-        } else if (look.kind === 'pool') {
-          const pd = Math.hypot((x - look.x) / look.rx, (y - look.y) / look.ry);
-          hh -= 0.1 * Math.max(0, 1 - pd);
-          m = pd < 1.18 ? MAT.BANK : wild();
-          if (pd < 0.9) f = 0.1 * (1 - pd) - 0.012;
-        } else m = wild();
-        if (m !== MAT.WALL && m !== MAT.STONE && !(this.detail[i] & DETAIL.OVERHANG))
-          this.tone[i] = Math.min(3, (nz(x / 3 + 7, y / 3 + 3) * 4) | 0);
-        if (m === MAT.BUSH && !(this.detail[i] & DETAIL.OVERHANG)) hh += 0.014;
-        this.mat[i] = m;
-        this.terrain[i] = hh;
-        this.fuel[i] =
-          m === MAT.GRASS ? 150 + ((this.noise[i] * 90) | 0) : m === MAT.BUSH ? 255 : 0;
-        if (f > 0) this.fluid[i] = f;
+        this.paint(i, x, y);
+      }
+
+    // Nothing to settle: each pool is laid level and full, and its springs hold it there.
+    this.placeProps(rng, this.nz, circles);
+    this.seedMotes(rng);
+  }
+
+  /**
+   * Paint floor cell `i` (at x, y) from its map cell: rock (or foliage spilling
+   * over it), a low ruin, foliage, slow ground, or its room's or hall's ground.
+   */
+  private paint(i: number, x: number, y: number): void {
+    const { theme: th, nz } = this;
+    const c = this.mapOf![i];
+    const code = this.codeAt(i);
+    const look = this.lookAt(i);
+    const base = 0.36 * (1 - y / this.height);
+    let hh = base + (nz(x / 15, y / 15) - 0.5) * 0.05;
+    let m: number;
+    let fuel = 0;
+    this.detail[i] = 0;
+    this.fluid[i] = 0;
+    if (code === FLOOR_CELL.wall) {
+      m = MAT.WALL;
+      hh = 0.6 + nz(x / 8, y / 8) * 0.12;
+      this.tone[i] = Math.min(2, (nz(x / 5 + 3, y / 5 + 9) * 3.2) | 0);
+      // Foliage spills over the cliff tops, as round the open arena.
+      const e = this.edge[i];
+      if (th.grassCover > 0.3 && e < 5 && nz(x / 4 + 11, y / 4 + 5) > 0.5 + (e - 1) * 0.06) {
+        m = MAT.BUSH;
+        fuel = 255;
+        this.detail[i] |= DETAIL.OVERHANG;
+      }
+    } else if (code === FLOOR_CELL.cover || code === FLOOR_CELL.crumbling) {
+      // A low ruin of blocks: a step above the ground, well under the cliffs.
+      m = MAT.RUIN;
+      hh = base + 0.16;
+      const row = Math.floor(y / 3);
+      const off = (row % 2) * 2;
+      if (y % 3 === 0 || (x + off) % 5 === 0) this.detail[i] |= DETAIL.MORTAR;
+      this.tone[i] = (hash2(Math.floor((x + off) / 5), row, this.seed + 3) * 255) | 0;
+    } else if (code === FLOOR_CELL.foliage) {
+      // Shrubs that never burn away: the foliage stays where the map has it.
+      m = MAT.BUSH;
+      hh += 0.014;
+    } else if (code === FLOOR_CELL.slow && look === LOOK.shallow_water && !this.isLava) {
+      // A pool dug in, held full by a spring in each of its cells.
+      m = MAT.BANK;
+      hh -= 0.08;
+      this.fluid[i] = SHALLOW;
+      this.springs.push(i);
+    } else if (code === FLOOR_CELL.slow) {
+      m = MAT.SLOW;
+      if (look === LOOK.snowdrift || look === LOOK.rubble) hh += 0.03 * nz(x / 4, y / 4);
+    } else {
+      const pave = this.roomOf![c] < 0 ? undefined : this.paved[this.roomOf![c]];
+      if (pave === undefined) {
+        // A hall's worn path: bare ground, a step up from the rooms so their water stays in them.
+        m = MAT.SOIL;
+        hh += 0.1;
+      } else if (pave) {
+        m = MAT.STONE;
+        hh = base + 0.018;
+        const fx = x - pave.x0;
+        const fy = y - pave.y0;
+        const row = Math.floor(fy / 6);
+        const off = (row % 2) * 4;
+        const col = Math.floor((fx + off) / 9);
+        if (fy % 6 === 0 || (fx + off) % 9 === 0) this.detail[i] |= DETAIL.MORTAR;
+        if (nz(x / 4 + 90, y / 4 + 30) > 0.62) this.detail[i] |= DETAIL.MOSS;
+        this.tone[i] = (hash2(col, row, this.seed + 1) * 255) | 0;
+      } else {
+        const grassThr = 0.5 + (0.5 - th.grassCover) * 0.36;
+        m = nz(x / 18 + 20, y / 18 + 7) > grassThr ? MAT.GRASS : MAT.SOIL;
       }
     }
-
-    this.placeProps(rng, nz, circles);
-    this.settle();
-    this.seedMotes(rng);
+    if (m !== MAT.WALL && m !== MAT.STONE && m !== MAT.RUIN && !(this.detail[i] & DETAIL.OVERHANG))
+      this.tone[i] = Math.min(3, (nz(x / 3 + 7, y / 3 + 3) * 4) | 0);
+    if (m === MAT.GRASS) fuel = 150 + ((this.noise[i] * 90) | 0);
+    this.mat[i] = m;
+    this.terrain[i] = hh;
+    this.fuel[i] = fuel;
   }
 
   /** Let the rivers settle into their beds before the first frame. */
@@ -1274,7 +1331,7 @@ export class PixelWorld {
             pVX[k] *= 0.55;
             pVY[k] *= 0.55;
           } else {
-            if (this.mat[i] !== MAT.WALL) {
+            if (this.mat[i] !== MAT.WALL && !this.isTerrain(i)) {
               this.mat[i] = MAT.RUBBLE;
               this.rubble[i] = this.pColor[k];
               this.fuel[i] = 0;
@@ -1496,7 +1553,7 @@ export class PixelWorld {
         this.terrain[i] -= 0.04 * k;
         if (this.mat[i] === MAT.STONE && d > R * 0.72) {
           if (this.rand() < 0.4) this.detail[i] |= DETAIL.MORTAR;
-        } else {
+        } else if (!this.isTerrain(i)) {
           this.mat[i] = MAT.CRATER;
           this.detail[i] = 0;
           if (this.prop[i] !== PROP.RUNE) this.prop[i] = PROP.NONE;

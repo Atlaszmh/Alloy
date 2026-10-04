@@ -663,7 +663,14 @@ function fromMap(map: FloorMap = ringMap(), seed = 7): PixelWorld {
     theme: PIXEL_THEMES.sunken_quarry,
     weather: false,
     random: seeded(99),
-    plan: { width: map.width, height: map.height, cells: map.cells, rooms: map.rooms, ppu: PPU },
+    plan: {
+      width: map.width,
+      height: map.height,
+      cells: map.cells,
+      look: map.look,
+      rooms: map.rooms,
+      ppu: PPU,
+    },
   });
 }
 
@@ -712,25 +719,14 @@ describe('a floor built from a map', { timeout: 20000 }, () => {
     expect(runes[1]).toBe(0);
   });
 
-  it('runs rivers and pools through its wild rooms, and keeps the water in them', () => {
-    const map = ringMap();
-    const room = roomsOf(map);
-    let wet = 0;
+  it('runs no river or pool through its rooms, nor shrubs: the map has no water or foliage', () => {
     for (let seed = 1; seed <= 2; seed++) {
-      const pw = fromMap(map, seed);
+      const pw = fromMap(ringMap(), seed);
       for (let s = 0; s < 60; s++) pw.step();
-      const water = map.rooms.map(() => 0);
-      for (let c = 0; c < map.cells.length; c++) {
-        if (map.cells[c] === 1) continue;
-        const f = pw.fluid[mid(pw, c % map.width, Math.floor(c / map.width))];
-        if (room[c] < 0) expect(f).toBeLessThan(0.01);
-        else if (f > 0.01) water[room[c]]++;
-      }
-      // The wild rooms (the start, the exit and the combat room) hold the water; the paved ones none.
-      wet += [0, 3, 4].filter((k) => water[k] > 4).length;
-      expect(water[1] + water[2]).toBe(0);
+      expect(pw.fluid.every((f) => f === 0)).toBe(true);
+      for (let i = 0; i < pw.size; i++)
+        if (pw.mat[i] === MAT.BUSH) expect(pw.edge[i]).toBeGreaterThan(0);
     }
-    expect(wet).toBeGreaterThan(3);
   });
 
   it('builds the same floor from the same map and seed, and another from another seed', () => {

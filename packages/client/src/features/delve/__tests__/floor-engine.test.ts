@@ -205,6 +205,15 @@ describe('a generated floor', { timeout: 20000 }, () => {
     expect(engine.world.width).toBe((64 + 2 * FLOOR_MARGIN) * FLOOR_PPU);
   });
 
+  it("carries the map's cells and looks, as its own copies", () => {
+    const map = ringMap();
+    map.look[5] = 3;
+    const init = floorInit(onMap(map));
+    expect(Array.from(init.plan!.look)).toEqual(Array.from(map.look));
+    map.cells[30 * 64 + 30] = 3;
+    expect(init.plan!.cells[30 * 64 + 30]).toBe(0);
+  });
+
   it("builds a generator's floor: rock where its walls are, ground where it walks", () => {
     const map = generateFloor(registry, 11, 3, registry.getBiomeForDepth(3), null);
     const pw = new FloorEngine(floorInit(onMap(map))).world;

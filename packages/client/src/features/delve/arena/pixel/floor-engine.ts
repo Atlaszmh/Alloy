@@ -118,7 +118,8 @@ function hashString(s: string): number {
 /**
  * What a world's floor is built from: the open arena by its size (seeded by
  * its depth and biome, as ever); a generated floor by its map, seeded by the
- * map's cells, the floor seed's own (its `layout` fork).
+ * map's cells, the floor seed's own (its `layout` fork). The map's cells and
+ * looks are copied: the floor's own change only as it is told.
  */
 export function floorInit(w: ArpgWorld): FloorInit {
   const init = { arenaWidth: w.width, arenaHeight: w.height, biomeId: w.biomeId, depth: w.depth };
@@ -133,7 +134,8 @@ export function floorInit(w: ArpgWorld): FloorInit {
     plan: {
       width: map.width,
       height: map.height,
-      cells: map.cells,
+      cells: map.cells.slice(),
+      look: map.look.slice(),
       rooms: map.rooms.map(({ kind, rect }) => ({ kind, rect })),
       ppu: FLOOR_PPU,
     },
