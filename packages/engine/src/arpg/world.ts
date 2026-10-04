@@ -28,7 +28,7 @@ import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
 import { openRoom, snapToWalkable } from './grid.js';
 import { floorPacks, planFloor } from './layout/generate.js';
-import { tutorialFloorMap } from './tutorial-floor.js';
+import { seedSetDrops, tutorialFloorMap } from './tutorial-floor.js';
 import { emptyHaul } from '../loot/materials.js';
 
 export interface FloorOptions {
@@ -588,6 +588,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
       world.monsters.push(m);
       if (s.boss) world.bossId = m.id;
     }
+    seedSetDrops(world, rng);
     world.totalMonsters = world.monsters.length;
     return world;
   }
