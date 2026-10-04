@@ -1,16 +1,16 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { ArpgWorld, MonsterEntity, Vec } from '../types/arpg.js';
 import { CELL, LOOK_IDS, type FloorMap, type Structure } from '../types/floor-map.js';
-import type { SimCtx } from './combat.js';
+import { hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, clamp } from './geometry.js';
 import { bindTerrain, groundAt, perceives, sees, solid } from './grid.js';
 import { depthGrowth } from './world.js';
 
 /**
- * Terrain in a fight (B2; see the room objects spec's "Objects in a fight"):
- * slow ground, foliage's lost sight and search, crumbling structures and wall
- * slams. Each hook is called from its place in the sim; until B2 each is inert.
- * Foliage's sight rules are `perceives` (`grid.ts`).
+ * Terrain in a fight (see the room objects spec's "Objects in a fight"): slow
+ * ground, foliage's lost sight and search, crumbling structures and wall
+ * slams, each hook called from its place in the sim. Foliage's sight rules are
+ * `perceives`, and the ground under a point `groundAt` (`grid.ts`).
  */
 
 /**
@@ -26,10 +26,30 @@ export function groundSpeed(world: ArpgWorld, body: Vec, boss = false): number {
 /**
  * A knocked-back foe's move this tick: it stood at `from` and its knockback
  * asked for `want`. Where a wall or cover stopped it short it is slammed, once
- * a knockback (`terrain.slamDamage` × `MonsterEntity.kbHit`, `slamStagger`).
- * Stub: a no-op.
+ * a knockback (`kbHit` spent): a `wallSlam` event, a stagger of
+ * `terrain.slamStagger` (a boss's 0.4 of it, as every stagger; its wind-up
+ * dropped) and `slamDamage` × the knockback's hit, a hit of no element. Both
+ * numbers 0: no slam at all. None on the open room.
  */
-export function wallSlam(_ctx: SimCtx, _m: MonsterEntity, _from: Vec, _want: Vec): void {}
+export function wallSlam(ctx: SimCtx, m: MonsterEntity, from: Vec, want: Vec): void {
+  const { world, bal } = ctx;
+  const { slamDamage, slamStagger } = bal.terrain;
+  if (world.map.open || m.kbHit <= 0 || (slamDamage <= 0 && slamStagger <= 0)) return;
+  const moved = Math.hypot(m.x - from.x, m.y - from.y);
+  if (Math.hypot(want.x, want.y) - moved <= 1e-6) return;
+  const hit = m.kbHit;
+  m.kbHit = 0;
+  ctx.events.push({ kind: 'wallSlam', id: m.id, x: m.x, y: m.y });
+  if (slamStagger > 0) {
+    const s = m.status;
+    s.staggerUntil = Math.max(
+      s.staggerUntil,
+      world.t + slamStagger * (m.kind === 'boss' ? 0.4 : 1),
+    );
+    m.windupUntil = 0;
+  }
+  if (slamDamage > 0) hitMonster(ctx, m, hit * slamDamage, null, { source: 'reaction' });
+}
 
 /**
  * A crumbling structure's life (see the room objects spec): `terrain.structureLife`
