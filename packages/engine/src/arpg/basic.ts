@@ -12,6 +12,8 @@ import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
 import { alive, muzzle, nearestMonster, spawnProjectile } from './abilities/targeting.js';
+import { hitObject, objectsIn } from './objects.js';
+import { hitStructures } from './terrain.js';
 
 /**
  * The basic attack: each blow of the hero's basic chain (its kind's row, in
@@ -349,6 +351,10 @@ export function landBlow(
           noReact: true,
         });
     }
+    // The swing reaches the props and hazards in its arc; a heavy or hold blow wears crumbling
+    // cover too (see the room objects spec).
+    for (const obj of objectsIn(world, h, reach, dir, arc)) hitObject(ctx, obj, 'hero');
+    if (kind === 'heavy' || kind === 'hold') hitStructures(ctx, h, reach, base, dir, arc);
     // Chain: jumps from the first foe struck. Linger: a zone ahead, at half the reach.
     if (first) {
       const jump = { source: 'basic' as const, canCrit: true, applies, rattles, ...knobbed };
@@ -522,5 +528,6 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       ...(p.knobs ? knobHitOpts(p.knobs) : {}),
     });
   }
+  for (const obj of objectsIn(ctx.world, p, p.explodeRadius)) hitObject(ctx, obj, 'hero');
   if (p.knobs && hit.length > 0) shotLands(ctx, p, hit);
 }

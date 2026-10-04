@@ -30,7 +30,7 @@ export function echoTick(ctx: SimCtx): void {
     if (e.ability) {
       const ab = e.ability;
       const knobs = { ...ab.knobs, echo: 0, guardOnLand: 0 };
-      const copy: ResolvedAbility = { ...ab, power: ab.power * ab.knobs.echo, knobs };
+      const copy: ResolvedAbility = { ...ab, power: ab.power * ab.knobs.echo, knobs, replay: true };
       const facing = h.facing;
       const res = executeForm(ctx, copy, e.aim);
       h.facing = facing;

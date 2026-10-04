@@ -6,6 +6,7 @@ import { clipSight, moveCircle, perceives, sees, snapToWalkable } from '../grid.
 import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
 import { stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, alive, muzzle, spawnProjectile } from './targeting.js';
+import { hitObject, objectsIn, objectsOnBeam } from '../objects.js';
 
 export interface FormResult {
   ok: boolean;
@@ -141,6 +142,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           struck.add(m.id);
           hitMonster(ctx, m, hit, ab.element, opts);
         }
+        for (const obj of objectsOnBeam(world, h, { x: ex, y: ey }, width))
+          hitObject(ctx, obj, 'hero');
         if (hits.length > 0) {
           chainFrom(ctx, ab, hits[hits.length - 1], hit, struck);
           leaveZone(ctx, ab, hits[0].x, hits[0].y, Math.max(1.2, width * 2), hit);
@@ -201,6 +204,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
+      for (const obj of objectsIn(world, h, reach, dir, arc)) hitObject(ctx, obj, 'hero');
       if (hits.length > 0) {
         chainFrom(ctx, ab, hits[0], hit, new Set(hits.map((m) => m.id)));
         leaveZone(ctx, ab, h.x + dir.x * reach * 0.5, h.y + dir.y * reach * 0.5, reach * 0.7, hit);

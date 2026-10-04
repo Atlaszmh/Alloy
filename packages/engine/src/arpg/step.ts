@@ -58,7 +58,7 @@ import { fogTick } from './fog.js';
 import { tutorialTick } from './tutorial.js';
 import { scriptTick, spawnMults } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
-import { objectsSeparate, objectsTick } from './objects.js';
+import { hitObject, objectsIn, objectsSeparate, objectsTick, objectsTouching } from './objects.js';
 import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
 import { directorTick } from './pack.js';
 
@@ -408,7 +408,13 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
     // A wall stops it at its face (where a bolt bursts); off the map ends it too.
     const wall = !sees(world.map, before, p);
     if (wall) Object.assign(p, clipSight(world.map, before, p));
-    const outside = wall || !isWalkable(world.map, p.x, p.y);
+    // A prop or a hazard it meets is hit, and (as `hitObject` says) stops it there as a wall does.
+    let stopped = false;
+    for (const o of objectsTouching(world, p)) {
+      stopped = hitObject(ctx, o, p.owner === 'hero' ? 'hero' : 'foe');
+      if (stopped) break;
+    }
+    const outside = wall || stopped || !isWalkable(world.map, p.x, p.y);
     const expired = p.traveled >= p.maxDist || outside;
 
     if (p.owner === 'monster') {
@@ -500,7 +506,8 @@ function zonesTick(ctx: SimCtx): void {
           element: z.element,
           infusion: null,
         });
-        // The slam reaches only what it sees.
+        // The slam reaches only what it sees, props and hazards too.
+        for (const obj of objectsIn(world, z, z.radius)) hitObject(ctx, obj, 'foe');
         const o = perfectOrigin(ctx);
         if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius && sees(world.map, z, h))
           hurtHero(ctx, z.damage, z.element, null);
@@ -764,6 +771,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       case 'charger': {
         if (m.chargeUntil > world.t) {
           moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt, false);
+          // The dash passes through props and hazards, setting them off.
+          for (const o of objectsTouching(world, m)) hitObject(ctx, o, 'foe');
           if (!m.chargeHit && gap <= 0.25) {
             m.chargeHit = true;
             m.chargeUntil = world.t;
