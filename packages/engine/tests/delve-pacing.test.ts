@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { runAutopilot, type AutopilotDiveReport } from '../src/delve/autopilot.js';
 import { GEAR_SLOTS } from '../src/types/gear.js';
-import { essenceForgedAtOnce, firstEpicDive, pacingRun } from './fixtures/pacing.js';
+import { firstEpicDive, legendaryFollowsEssence, pacingRun } from './fixtures/pacing.js';
 
 /**
  * Guard rails for the Delve ARPG progression curve. The autopilot plays the
@@ -112,9 +112,8 @@ describe('Delve crafting pacing targets (economySim)', () => {
     expect(avg(first)).toBeLessThanOrEqual(5);
   });
 
-  // Fails since B3: the first boss drops no essence (none below depth 20). B4 replaces this target
-  // with the spec's "the first legendary within two Anvil visits of the first essence banking".
-  it.fails("the first boss's essence becomes a forged legendary on the Anvil visit after its dive", () => {
-    for (const e of economies) expect(essenceForgedAtOnce(e), `seed ${e.seed}`).toBe(true);
+  // The tutorial spec's target: no essence comes before drops.essenceMinDepth (20).
+  it('the first legendary is forged within two Anvil visits of the first essence banking', () => {
+    for (const e of economies) expect(legendaryFollowsEssence(e), `seed ${e.seed}`).toBe(true);
   });
 });
