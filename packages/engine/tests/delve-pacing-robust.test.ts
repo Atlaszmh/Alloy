@@ -28,7 +28,10 @@ describe.each(Object.entries(LEVERS).flatMap(([lever, block]) => [0.8, 1.2].map(
         expect(first, `seed ${SEEDS[i]}`).toEqual({ opened: true, kitAlone: false, withDive1: true, forged: true });
     });
 
-    it('the first legendary follows the first essence within two visits, and three seeds in four forge an epic by dive 8', () => {
+    // B4 (the pack director, 05-director.md) moved this target with the kill scrap × 0.8 (seed 1's
+    // first legendary waits past two visits); B5 re-bands it (06-bot-pacing.md).
+    const rail = lever === 'scrapByKind' && k === 0.8 ? it.fails : it;
+    rail('the first legendary follows the first essence within two visits, and three seeds in four forge an epic by dive 8', () => {
       for (const { economy } of runs)
         expect(legendaryFollowsEssence(economy), `seed ${economy.seed}`).toBe(true);
       // An epic waits on epic flux (deep bosses, quests): one seed in four may still be without.

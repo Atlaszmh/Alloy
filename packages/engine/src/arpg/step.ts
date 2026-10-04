@@ -58,9 +58,16 @@ import { fogTick } from './fog.js';
 import { tutorialTick } from './tutorial.js';
 import { scriptTick, spawnMults } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
-import { hitObject, objectsIn, objectsSeparate, objectsTick, objectsTouching } from './objects.js';
+import {
+  hitObject,
+  objectsIn,
+  objectsOnBeam,
+  objectsSeparate,
+  objectsTick,
+  objectsTouching,
+} from './objects.js';
 import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
-import { directorTick } from './pack.js';
+import { directorTick, goalWay, laneOpen } from './pack.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -607,6 +614,38 @@ function pursue(
   if (way) moveMonster(ctx, m, way, speed, dt);
 }
 
+/**
+ * A foe's walk this tick (see the room objects spec's pack director): toward
+ * its goal (`goalWay`: a job's spot or a search's last-seen point), else after
+ * the hero (`pursue`).
+ */
+function advance(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  toTarget: Vec,
+  near: boolean,
+  speed: number,
+  dt: number,
+): void {
+  const way = goalWay(ctx, m, near);
+  if (way) moveMonster(ctx, m, way, speed, dt);
+  else pursue(ctx, m, toTarget, near, speed, dt);
+}
+
+/**
+ * A charger whose dash met a wall or cover (the director's charge job): its
+ * dash ends, it is stunned `charge.chargeStun` and slammed for `chargeSlam` ×
+ * its own hit.
+ */
+function stunCharger(ctx: SimCtx, m: MonsterEntity): void {
+  const { world, bal } = ctx;
+  const { chargeStun, chargeSlam } = bal.ai.pack.charge;
+  m.chargeUntil = world.t;
+  m.status.staggerUntil = Math.max(m.status.staggerUntil, world.t + chargeStun);
+  ctx.events.push({ kind: 'chargeStun', id: m.id, x: m.x, y: m.y });
+  hitMonster(ctx, m, m.damage * chargeSlam, null, { source: 'dot', noReact: true });
+}
+
 function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
   const { world, registry } = ctx;
   const h = world.hero;
@@ -685,6 +724,13 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
   m.nextSpecialAt = world.t + 6 + world.rng.next() * 2 - (enrageMult(ctx, m) > 1 ? 2 : 0);
 }
 
+/** Whether a foe of `m`'s room is awake (an ambusher wakes with its room). */
+function roomAwake(world: ArpgWorld, m: MonsterEntity): boolean {
+  return (
+    m.roomId !== null && world.monsters.some((o) => !o.dead && o.aggro && o.roomId === m.roomId)
+  );
+}
+
 function monstersTick(ctx: SimCtx, dt: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
@@ -738,9 +784,14 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       continue;
     }
 
-    // A foe wakes when it perceives the hero near (or is hit), and its pack with it.
+    // A foe wakes when it perceives the hero near (or is hit), and its pack with it; one hidden in
+    // ambush only when the hero comes within `ambushWake` or a pack in its room wakes.
     if (!m.aggro) {
-      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && perceives(world.map, m, h)) {
+      const d = dist(m.x, m.y, h.x, h.y);
+      const wakes = m.ambush
+        ? d < bal.ai.pack.ambush.ambushWake || roomAwake(world, m)
+        : d < bal.monster.aggroRadius && perceives(world.map, m, h);
+      if (wakes) {
         for (const o of world.monsters) {
           if (!o.dead && !o.aggro && o.packId === m.packId) {
             o.aggro = true;
@@ -750,6 +801,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
         if (m.kind === 'boss') m.nextSpecialAt = world.t + AGGRO_SPECIAL_DELAY;
       } else continue;
     }
+    // Awake, an ambusher hides no more.
+    m.ambush = false;
     if (isStunned(ctx, m)) continue;
     // A hand-built floor's scripted foe (see the tutorial spec) plays its script, not its AI.
     if (m.script) {
@@ -759,9 +812,13 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
-    // It attacks only what it perceives; with sight in `ai.directRange` it steers straight at it.
+    // It attacks only what it perceives; with sight in `ai.directRange` it steers straight at it,
+    // unless a prop or a hazard stands in the way (the flow fields go round them).
     const seen = perceives(world.map, m, h);
-    const near = seen && dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange;
+    const near =
+      seen &&
+      dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange &&
+      objectsOnBeam(world, m, h, m.radius).length === 0;
     const chill = Math.min(bal.stacks.frostSlowCap, s.stacks.frost * bal.stacks.frostSlowPerStack);
     const speed = m.speed * (1 - chill);
 
@@ -770,7 +827,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     switch (m.ai) {
       case 'charger': {
         if (m.chargeUntil > world.t) {
-          moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt, false);
+          const from = { x: m.x, y: m.y };
+          const pace = m.speed * 3.4;
+          moveMonster(ctx, m, m.chargeDir, pace, dt, false);
           // The dash passes through props and hazards, setting them off.
           for (const o of objectsTouching(world, m)) hitObject(ctx, o, 'foe');
           if (!m.chargeHit && gap <= 0.25) {
@@ -778,6 +837,14 @@ function monstersTick(ctx: SimCtx, dt: number): void {
             m.chargeUntil = world.t;
             damageHero(ctx, m, m.damage * 1.4, true);
           } else if (!m.chargeHit && gapFromDodge(ctx, m) <= 0.25) notePerfect(ctx);
+          // Stopped short by a wall or cover (not a root), a directed charger is stunned.
+          if (
+            m.job === 'charge' &&
+            m.chargeUntil > world.t &&
+            !isRooted(ctx, m) &&
+            dist(from.x, from.y, m.x, m.y) < pace * dt * 0.5
+          )
+            stunCharger(ctx, m);
           break;
         }
         if (m.windupUntil > 0) {
@@ -789,7 +856,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7.5 || !seen) pursue(ctx, m, toTarget, near, speed, dt);
+        // A directed charger charges only down an open lane; till then it closes in.
+        const lane = m.job !== 'charge' || laneOpen(world.map, m, h, m.radius);
+        if (gap > 7.5 || !seen || !lane) advance(ctx, m, toTarget, near && lane, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.75;
@@ -825,7 +894,10 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7 || !seen) pursue(ctx, m, toTarget, seen, speed, dt);
+        // A ranged foe in cover walks to its spot (`goalWay`); else it keeps its distance.
+        const way = goalWay(ctx, m, seen);
+        if (way) moveMonster(ctx, m, way, speed, dt);
+        else if (gap > 7 || !seen) pursue(ctx, m, toTarget, seen, speed, dt);
         else if (gap < 3.5) moveMonster(ctx, m, toTarget, -speed * 0.7, dt);
         if (seen && gap <= 8 && world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
@@ -843,10 +915,14 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > m.attackRange || !seen) pursue(ctx, m, toTarget, near, speed, dt);
+        if (gap > m.attackRange || !seen) advance(ctx, m, toTarget, near, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + bal.monster.windup * (m.kind === 'boss' ? 1.5 : 1);
+        } else {
+          // Between blows a foe with a ring slot moves round to it.
+          const way = goalWay(ctx, m, near);
+          if (way) moveMonster(ctx, m, way, speed, dt);
         }
       }
     }
