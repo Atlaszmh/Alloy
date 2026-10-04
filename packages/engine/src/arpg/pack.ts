@@ -4,7 +4,7 @@ import type { SimCtx } from './combat.js';
 import { clamp, dirTo, dist } from './geometry.js';
 import { isWalkable, perceives, sees, snapToWalkable, solid } from './grid.js';
 import { clearanceOf, downhill, flowField } from './flow.js';
-import { objectsOnBeam } from './objects.js';
+import { objectsOnBeam, objectsTouching } from './objects.js';
 
 /**
  * The pack director (see the room objects spec's "Smarter packs"): every
@@ -17,6 +17,10 @@ import { objectsOnBeam } from './objects.js';
 
 /** A goal this near is reached. */
 const REACHED = 0.25;
+/** A foe this near a prop, a hazard or cover is pressed against it. */
+const PRESS = 0.05;
+/** A pressed foe that has moved less than this since it was first pressed is pinned. */
+const PINNED = 0.5;
 /** A ranged foe's cover lies at most this far from the hero (it fires from 8). */
 const SHOOT_RANGE = 7;
 /** A ranged foe hiding between volleys steps back out this long before its next. */
@@ -41,6 +45,10 @@ interface DirectorState {
   kite: Map<number, { d: number; since: number | null }>;
   /** Per ranged foe in cover: the cell it shoots from. */
   cover: Map<number, number>;
+  /** Per foe pressed against something: where it stood, since when. */
+  pressed: Map<number, { at: Vec; since: number }>;
+  /** Per foe that was pinned: the point beside the obstacle it steps to, until when. */
+  detour: Map<number, { at: Vec; until: number }>;
   /** Goal fields built since the last pass, by the map's version, the goal's cell and a clearance. */
   fields: Map<string, Uint16Array>;
 }
@@ -50,7 +58,17 @@ const STATES = new WeakMap<ArpgWorld, DirectorState>();
 function stateOf(world: ArpgWorld): DirectorState {
   let s = STATES.get(world);
   if (!s)
-    STATES.set(world, (s = { hero: null, kite: new Map(), cover: new Map(), fields: new Map() }));
+    STATES.set(
+      world,
+      (s = {
+        hero: null,
+        kite: new Map(),
+        cover: new Map(),
+        pressed: new Map(),
+        detour: new Map(),
+        fields: new Map(),
+      }),
+    );
   return s;
 }
 
@@ -260,18 +278,79 @@ export function laneOpen(map: FloorMap, a: Vec, b: Vec, r: number): boolean {
   return true;
 }
 
+/** What `m` is pressed against: a standing prop or hazard, or a cover cell (as a circle); else null. */
+function pressedOn(world: ArpgWorld, m: MonsterEntity): (Vec & { radius: number }) | null {
+  const r = m.radius + PRESS;
+  const o = objectsTouching(world, { x: m.x, y: m.y, radius: r })[0];
+  if (o) return o;
+  const { map } = world;
+  for (let y = Math.floor(m.y - r); y <= Math.floor(m.y + r); y++)
+    for (let x = Math.floor(m.x - r); x <= Math.floor(m.x + r); x++) {
+      if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
+      const c = map.cells[y * map.width + x];
+      if (c === CELL.cover || c === CELL.crumbling) return { x: x + 0.5, y: y + 0.5, radius: 0.5 };
+    }
+  return null;
+}
+
+/**
+ * No pinning: a foe that wants to move (no wind-up, out of reach of the hero,
+ * not at its goal, not holding cover) and has stayed pressed against a prop, a
+ * hazard or cover without getting `PINNED` further steps round it before
+ * `stuckTime` is up (its passes come `directorEvery` apart, and a pass may see
+ * the press late and the step take a moment): to a point beside the obstacle
+ * on the hero's side, for at most `stuckTime`.
+ */
+function unpin(ctx: SimCtx, st: DirectorState, led: MonsterEntity[]): void {
+  const { world, bal } = ctx;
+  const { stuckTime, directorEvery } = bal.ai.pack;
+  const h = world.hero;
+  for (const m of led) {
+    const d = st.detour.get(m.id);
+    if (d && (world.t >= d.until || dist(m.x, m.y, d.at.x, d.at.y) <= REACHED))
+      st.detour.delete(m.id);
+    const o = pressedOn(world, m);
+    const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
+    const holding = m.goal !== null && dist(m.x, m.y, m.goal.x, m.goal.y) <= REACHED;
+    const p = st.pressed.get(m.id);
+    if (!o || m.windupUntil > 0 || gap <= m.attackRange || holding || m.job === 'cover')
+      st.pressed.delete(m.id);
+    else if (!p || dist(m.x, m.y, p.at.x, p.at.y) > PINNED)
+      st.pressed.set(m.id, { at: { x: m.x, y: m.y }, since: world.t });
+    else if (world.t - p.since >= stuckTime - 2 * directorEvery - 1e-9) {
+      // Round it on the side the hero is: the tangent nearer the way to the hero.
+      const n = dirTo(o.x, o.y, m.x, m.y);
+      const want = dirTo(m.x, m.y, h.x, h.y);
+      const side = -n.y * want.x + n.x * want.y >= 0 ? 1 : -1;
+      const reach = o.radius + m.radius + 0.6;
+      const at = snapToWalkable(world.map, o.x - n.y * side * reach, o.y + n.x * side * reach);
+      st.detour.set(m.id, { at, until: world.t + stuckTime });
+      st.pressed.delete(m.id);
+    }
+    const detour = st.detour.get(m.id);
+    if (detour && !m.search) m.goal = detour.at;
+  }
+  const ids = new Set(led.map((m) => m.id));
+  for (const id of st.pressed.keys()) if (!ids.has(id)) st.pressed.delete(id);
+  for (const id of st.detour.keys()) if (!ids.has(id)) st.detour.delete(id);
+}
+
 /**
  * Where `m` walks this tick toward its goal, or null to go after the hero as
  * before (`pursue`). A ring slot is walked to only `near` the hero (with sight,
  * in `ai.directRange`) and a flanker turns on the hero there; any other goal
  * (a search's, an intercept) is walked straight when in reach and sight with
- * no prop or hazard in the way, else down its field; a reached goal holds.
+ * no prop or hazard in the way, else down its field; a reached goal holds. A
+ * pinned foe's step round its obstacle (`unpin`) goes straight.
  */
 export function goalWay(ctx: SimCtx, m: MonsterEntity, near: boolean): Vec | null {
   const goal = m.goal;
   if (!goal) return null;
   const { world, bal } = ctx;
   const d = dist(m.x, m.y, goal.x, goal.y);
+  // A pinned foe's step round its obstacle: straight there, then on as before.
+  if (goal === stateOf(world).detour.get(m.id)?.at)
+    return d > REACHED ? dirTo(m.x, m.y, goal.x, goal.y) : null;
   if (!m.search) {
     if (m.job === 'ring') return near && d > REACHED ? dirTo(m.x, m.y, goal.x, goal.y) : null;
     if (m.job === 'flank' && near) return null;
@@ -344,4 +423,5 @@ export function directorTick(ctx: SimCtx): void {
   for (const id of st.cover.keys())
     if (!world.monsters.some((m) => m.id === id && m.job === 'cover')) st.cover.delete(id);
   ringSlots(world, ring);
+  unpin(ctx, st, [...packs.values()].flat());
 }
