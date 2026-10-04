@@ -58,6 +58,7 @@ import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './pal
 import { PixelFloor } from './pixel/pixel-floor';
 import { FLOOR_MARGIN, floorInit } from './pixel/floor-engine';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
+import { RoomSprites } from './room-sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
 import { RARITY_TEXT } from '../format';
@@ -209,6 +210,8 @@ export class ArenaRenderer {
   private fog: FogLayer | null = null;
   private dropLayer = new Container();
   private entities = new Container();
+  /** The room objects from the atlas: props, hazards and the sprite-drawn cover (room-sprites.ts). */
+  private roomSprites = new RoomSprites(this.entities);
   private textLayer = new Container();
 
   private hero = new Container();
@@ -297,6 +300,7 @@ export class ArenaRenderer {
     this.doorShut.clear();
     this.doorHeld.clear();
     this.makeProps(world);
+    this.roomSprites.load(world);
     this.fog?.sprite.destroy({ texture: true, textureSource: true });
     this.fog = world.map.open ? null : this.makeFog(world.map);
     // The marker's beacon shows through the fog: it guides to what isn't seen yet.
@@ -784,6 +788,7 @@ export class ArenaRenderer {
     this.syncMonsters(w);
     this.syncDrops(w);
     this.syncProps(w);
+    this.roomSprites.update(w);
     this.drawDoors(w, dt);
     this.drawMarker(w);
     const fog = this.fog;

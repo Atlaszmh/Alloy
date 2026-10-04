@@ -48,6 +48,7 @@ import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
 import { useUIStore } from '@/stores/uiStore';
 import { ringMap } from './hand-map';
+import { RoomSprites } from '../arena/room-sprites';
 
 // The props' art: two frames each (the atlas isn't loaded under jsdom; nothing else has art here).
 vi.mock('../arena/sprites', async (importOriginal) => {
@@ -827,5 +828,23 @@ describe("the room objects' moments on the floor", { timeout: 20000 }, () => {
     w.fog[10 * 64 + 6] = 1; // seen once, out of sight now
     r.update(0);
     expect(ground()).toBe(none);
+  });
+});
+
+describe("the room objects' sprites (C2's RoomSprites)", { timeout: 20000 }, () => {
+  it('are loaded with each floor and updated every frame', () => {
+    const load = vi.spyOn(RoomSprites.prototype, 'load');
+    const update = vi.spyOn(RoomSprites.prototype, 'update');
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w); // loadFloor draws a still frame, then show draws one
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith(w);
+    expect(update).toHaveBeenCalledTimes(2);
+    r.update(0.1);
+    expect(update).toHaveBeenLastCalledWith(w);
+    expect(update).toHaveBeenCalledTimes(3);
+    load.mockRestore();
+    update.mockRestore();
   });
 });
