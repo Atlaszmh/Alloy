@@ -468,7 +468,9 @@
           "monster": "foreman_grask",
           "at": { "x": 17.5, "y": 9.5 },
           "room": 1,
-          "boss": true
+          "boss": true,
+          "hpMult": 0.4,
+          "damageMult": 0.35
         }
       ],
       "markers": [],

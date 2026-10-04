@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { botInput } from '../src/arpg/bot.js';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
+import { exitFloor } from '../src/arpg/interact.js';
+import { stepWorld } from '../src/arpg/step.js';
 import { createFloorWorld } from '../src/arpg/world.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { forge, hone, refine } from '../src/delve/crafting.js';
@@ -14,14 +17,16 @@ import {
 } from '../src/delve/profile.js';
 import { addMaterial, emptyHaul, stockHaul } from '../src/loot/materials.js';
 import { heroChains, movesetOf } from '../src/loot/moveset.js';
-import type { ArpgWorld } from '../src/types/arpg.js';
+import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { Haul } from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
 
 // See the tutorial spec: the Anvil lessons paid from the starter kit and the set drops alone (the
-// eight hand-built floors' gear and rune as the engine drops them).
+// eight hand-built floors' gear and rune as the engine drops them), and a starter hero (the bot)
+// clearing the eight floors in turn, with what the script's steps need on the way: three casts at
+// d1-2's start room's foes, a reaction on d2-1 and five on d2-2.
 
 const registry = createDefaultRegistry();
 const data = registry.getTutorialData();
@@ -127,5 +132,46 @@ describe('the Anvil lessons', () => {
     p = stockHaul({ ...p, bag: [...p.bag, crown], bestDepth: 5 }, setHaul(2));
     p = ok(transferMoveset(registry, p, crown.uid));
     ok(hone(registry, p, crown.uid, 0));
+  });
+});
+
+/** The bot plays `w` until it takes the exit or dies (four minutes at most); what happened. */
+function play(w: ArpgWorld): ArpgEvent[] {
+  const step = registry.getDelveBalance().arena.step;
+  const events: ArpgEvent[] = [];
+  while (!w.heroDead && !w.exited && w.t < 240)
+    for (const e of stepWorld(registry, w, botInput(registry, w), step)) {
+      events.push(e);
+      if (e.kind === 'exitRequest') exitFloor(w);
+    }
+  return events;
+}
+
+describe('the eight floors', () => {
+  it.each(MANA_TYPES)('a starter hero clears each in turn (%s)', (primary) => {
+    const start = fresh(primary);
+    const heroes = { 1: armed(start), 2: afterLesson1(primary) };
+    const { potions, healOnDepthClear } = registry.getDelveBalance().dive;
+    let hp = 1;
+    let flasks = potions;
+    const cleared: string[] = [];
+    const seen: Record<string, ArpgEvent[]> = {};
+    for (const f of data.floors) {
+      if (f.depth === 1) [hp, flasks] = [1, potions];
+      // A new save's common sword carries the Basic alone (the spec's carries).
+      const p = f.id === 'd1-1' ? start : heroes[f.dive as 1 | 2];
+      const w = world(p, f.id, hp, flasks, f.id !== 'd1-1');
+      seen[f.id] = play(w);
+      if (w.exited) cleared.push(f.id);
+      hp = Math.min(1, w.hero.hp / w.hero.stats.maxHp + healOnDepthClear);
+      flasks = w.hero.potions;
+    }
+    expect(cleared).toEqual(data.floors.map((f) => f.id));
+    const range = seen['d1-2'];
+    const rangeCleared = range.findIndex((e) => e.kind === 'roomCleared' && e.roomId === 0);
+    const casts = range.slice(0, rangeCleared).filter((e) => e.kind === 'cast' && e.slot === 0);
+    const reactions = (id: string) => seen[id].filter((e) => e.kind === 'reaction').length;
+    expect(casts.length).toBeGreaterThanOrEqual(3);
+    expect([reactions('d2-1') >= 1, reactions('d2-2') >= 5]).toEqual([true, true]);
   });
 });
