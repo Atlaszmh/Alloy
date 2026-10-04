@@ -3,7 +3,7 @@ import type { FloorOptions } from '../arpg/world.js';
 import { nextMove } from '../arpg/abilities/cast.js';
 import { honeCost, previewForge } from '../loot/forge.js';
 import { materialCount, refineCost } from '../loot/materials.js';
-import { movesetOf, movesetTransfer } from '../loot/moveset.js';
+import { baseSlots, movesetOf, movesetTransfer } from '../loot/moveset.js';
 import { socketsOf } from '../loot/runes.js';
 import type { Move } from '../types/ability.js';
 import type { ArpgWorld } from '../types/arpg.js';
@@ -203,7 +203,8 @@ function primaryMoves(registry: DataRegistry, profile: DelveProfile): Move[] {
  * `bind` a secondary bound; `setChains` the Primary at `moves` moves, its last
  * in the secondary and a rune in its first; `salvage` no item of `slot` and
  * exactly `rarity` left; `refine` a bar of `metal`; `transfer` a weapon of
- * `rarity` or better equipped; `hone` an item honed. Any other step has no
+ * `rarity` or better equipped, its Primary past its base slots (the moveset
+ * moved onto it); `hone` an item honed. Any other step has no
  * state: false (it waits for its event, or a floor's tallies).
  */
 export function tutorialHolds(
@@ -236,8 +237,14 @@ export function tutorialHolds(
       return !items.some((i) => i.slot === f.slot && i.rarity === f.rarity);
     case 'refine':
       return materialCount(profile.materials, { kind: 'metal', metal: f.metal as MetalId }) > 0;
-    case 'transfer':
-      return atLeast(profile.equipped.weapon, f.rarity);
+    case 'transfer': {
+      // The moveset moved with it: a plain Equip leaves the Primary at its base slots.
+      const weapon = profile.equipped.weapon;
+      return (
+        atLeast(weapon, f.rarity) &&
+        primaryMoves(registry, profile).length > baseSlots(registry, weapon!.baseId, 'primary')
+      );
+    }
     case 'hone':
       return items.some((i) => i.hones > 0);
     default:

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
-import { addLootToBag, createDelveProfile } from '../src/delve/profile.js';
+import { transferMoveset } from '../src/delve/moveset.js';
+import { addLootToBag, createDelveProfile, equipItem } from '../src/delve/profile.js';
 import { startTutorial, tutorialSkippable } from '../src/delve/tutorial.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
 import { generateItem } from '../src/loot/item-generator.js';
@@ -94,5 +95,27 @@ describe('impossible Anvil steps offer "Skip this step"', () => {
     expect(tutorialSkippable(registry, p, p.tutorial!)).toBe(false);
     const broke = { ...p, scrap: 0 };
     expect(tutorialSkippable(registry, broke, p.tutorial!)).toBe(true);
+  });
+});
+
+describe('the Transfer step', () => {
+  const rare = () => {
+    const item = generateItem(
+      registry,
+      { uid: 'gRare', ilvl: 5, rarity: 'rare', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(1),
+    );
+    return { ...item, moveset: defaultMoveset(registry, item, 'fire') };
+  };
+  it('a plain Equip of the rare leaves it current; a Transfer completes it', () => {
+    const p = {
+      ...atStep('l2-transfer'),
+      equipped: { ...fresh().equipped, weapon: blade([['fire'], ['fire'], ['frost']]) },
+      bag: [rare()],
+    };
+    expect(equipItem(registry, p, 'gRare').tutorial!.step).toBe('l2-transfer');
+    const moved = transferMoveset(registry, p, 'gRare');
+    expect(moved.ok).toBe(true);
+    expect(moved.profile.tutorial!.step).not.toBe('l2-transfer');
   });
 });

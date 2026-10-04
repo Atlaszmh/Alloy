@@ -17,6 +17,7 @@ import {
   tutorialSkippable,
 } from '../src/delve/tutorial.js';
 import { generateItem } from '../src/loot/item-generator.js';
+import { defaultMoveset } from '../src/loot/moveset.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { Move } from '../src/types/ability.js';
 import type { DelveProfile } from '../src/types/delve.js';
@@ -205,8 +206,14 @@ describe('tutorialHolds', () => {
     };
     expect(tutorialHolds(script, iron, refine)).toBe(true);
     expect(tutorialHolds(script, swapped, transfer)).toBe(false);
-    const rare = { ...p, equipped: { ...p.equipped, weapon: weapon('rare') } };
-    expect(tutorialHolds(script, rare, transfer)).toBe(true);
+    // A rare worn with the moveset moved onto it: its Primary past its base slots.
+    const rare = (primary: number) => {
+      const w = weapon('rare');
+      const moveset = defaultMoveset(script, w, 'fire', { primary });
+      return { ...p, equipped: { ...p.equipped, weapon: { ...w, moveset } } };
+    };
+    expect(tutorialHolds(script, rare(1), transfer)).toBe(false);
+    expect(tutorialHolds(script, rare(2), transfer)).toBe(true);
     expect(tutorialHolds(script, p, hone)).toBe(false);
     expect(tutorialHolds(script, replaceItem(p, { ...p.equipped.chest!, hones: 1 }), hone)).toBe(
       true,

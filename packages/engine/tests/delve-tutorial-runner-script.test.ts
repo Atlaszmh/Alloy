@@ -18,7 +18,7 @@ import {
   tutorialText,
 } from '../src/delve/tutorial.js';
 import { generateItem } from '../src/loot/item-generator.js';
-import { movesetOf } from '../src/loot/moveset.js';
+import { defaultMoveset, movesetOf } from '../src/loot/moveset.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { Chain, Move } from '../src/types/ability.js';
 import type { DelveProfile } from '../src/types/delve.js';
@@ -221,7 +221,9 @@ describe('the guided path', () => {
   });
 
   it('Anvil lesson 2: the compare beat, Transfer, hone, claim, the board, the Training Grounds, farewell', () => {
-    const blade = sword('uncommon', 'b1');
+    // The blade as dive 1 drops it: its Primary at two slots, which the Transfer carries over.
+    const b1 = sword('uncommon', 'b1');
+    const blade = { ...b1, moveset: defaultMoveset(registry, b1, 'fire', { primary: 2 }) };
     const rare = sword('rare', 'r1');
     let p = createDelveProfile(registry, 7, { primary: 'fire' });
     p = {
