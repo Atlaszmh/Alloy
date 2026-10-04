@@ -14,39 +14,206 @@
     { "id": "fire_vent", "element": "fire", "radius": 0.4, "burst": 2.5 }
   ],
   "pieces": [
-    { "id": "wall_line", "rows": ["#c##c#"], "tags": ["edge"], "weight": 2, "turns": true },
+    { "id": "wall_line", "rows": ["#####"], "tags": ["centre"], "weight": 2, "turns": true },
+    { "id": "broken_wall", "rows": ["###ccc###"], "tags": ["centre"], "weight": 2, "turns": true },
+    {
+      "id": "collapsed_wall",
+      "rows": ["##", "##", "cc", "cc"],
+      "tags": ["edge"],
+      "weight": 2,
+      "turns": true
+    },
+    {
+      "id": "pillar_pair",
+      "rows": ["##...##", "##...##"],
+      "tags": ["centre"],
+      "weight": 2,
+      "turns": true
+    },
     {
       "id": "statue_ring",
-      "rows": ["c...c", ".....", "..u..", ".....", "c...c"],
+      "rows": ["c.....c", ".......", ".......", "...u...", ".......", ".......", "c.....c"],
       "tags": ["centre"],
       "weight": 1,
       "turns": false,
       "looks": { "c": "statue" }
     },
     {
-      "id": "grove",
-      "rows": ["ffff", "ffff", "ffff"],
-      "tags": ["corner", "edge"],
-      "biomes": ["sunken_quarry"],
+      "id": "ruined_chapel",
+      "rows": [
+        "??????????",
+        "??????????",
+        "??????????",
+        "???####cc?",
+        "???#......",
+        "???#......",
+        "???c...u..",
+        "???c......"
+      ],
+      "tags": ["corner"],
+      "weight": 1,
+      "turns": true
+    },
+    {
+      "id": "rubble_patch",
+      "rows": ["?~~~?", "~~~~~", "?~~~?"],
+      "tags": ["centre"],
       "weight": 2,
       "turns": true
     },
     {
       "id": "flooded_dip",
-      "rows": ["?~~?", "~~~~", "~~~~", "?~~?"],
+      "rows": ["??~~~??", "?~~~~~?", "~~~~~~~", "?~~~~~?", "??~~~??"],
       "tags": ["centre"],
       "weight": 1,
       "turns": false
     },
     { "id": "brazier_pair", "rows": ["h...h"], "tags": ["edge"], "weight": 1, "turns": true },
+    { "id": "urn_cluster", "rows": ["uu", "u?"], "tags": ["corner"], "weight": 1, "turns": true },
+    { "id": "crate_stack", "rows": ["u#u"], "tags": ["edge"], "weight": 1, "turns": true },
     {
       "id": "minecart_wreck",
-      "rows": ["##u"],
+      "rows": ["##u", "~~~"],
       "tags": ["edge", "corner"],
       "biomes": ["cinder_mines"],
-      "weight": 1,
+      "weight": 2,
       "turns": true,
       "looks": { "#": "minecart" }
+    },
+    {
+      "id": "timber_supports",
+      "rows": ["#...#...#"],
+      "tags": ["centre"],
+      "biomes": ["cinder_mines"],
+      "weight": 2,
+      "turns": true,
+      "looks": { "#": "timber" }
+    },
+    {
+      "id": "coal_heap",
+      "rows": ["~~~~", "~~~~"],
+      "tags": ["edge"],
+      "biomes": ["cinder_mines"],
+      "weight": 1,
+      "turns": true
+    },
+    {
+      "id": "ice_pillars",
+      "rows": ["#.....#", ".......", ".......", "...h...", ".......", ".......", "#.....#"],
+      "tags": ["centre"],
+      "biomes": ["frostvault"],
+      "weight": 2,
+      "turns": false,
+      "looks": { "#": "ice_pillar" }
+    },
+    {
+      "id": "snowdrift",
+      "rows": ["~~~~~", "~~~~~", "?~~~?"],
+      "tags": ["edge"],
+      "biomes": ["frostvault"],
+      "weight": 2,
+      "turns": true
+    },
+    {
+      "id": "frozen_wall",
+      "rows": ["cc", "cc", "cc"],
+      "tags": ["edge"],
+      "biomes": ["frostvault"],
+      "weight": 1,
+      "turns": true
+    },
+    {
+      "id": "machinery_block",
+      "rows": ["###...h", "###...."],
+      "tags": ["centre"],
+      "biomes": ["storm_foundry"],
+      "weight": 2,
+      "turns": true,
+      "looks": { "#": "machinery" }
+    },
+    {
+      "id": "oil_slick",
+      "rows": ["?~~~", "~~~~", "~~~?"],
+      "tags": ["centre"],
+      "biomes": ["storm_foundry"],
+      "weight": 2,
+      "turns": true
+    },
+    {
+      "id": "coil_row",
+      "rows": ["h...#...h"],
+      "tags": ["edge"],
+      "biomes": ["storm_foundry"],
+      "weight": 1,
+      "turns": true
+    },
+    {
+      "id": "grove",
+      "rows": ["ffffff", "ffffff", "ffffff", "ffff??"],
+      "tags": ["corner", "edge"],
+      "biomes": ["sunken_quarry"],
+      "weight": 3,
+      "turns": true
+    },
+    {
+      "id": "undergrowth",
+      "rows": ["?fff?", "fffff", "fffff", "fffff", "?fff?"],
+      "tags": ["centre"],
+      "biomes": ["sunken_quarry"],
+      "weight": 2,
+      "turns": true
+    },
+    {
+      "id": "boulders",
+      "rows": ["##....", "##...#"],
+      "tags": ["centre"],
+      "biomes": ["sunken_quarry"],
+      "weight": 2,
+      "turns": true,
+      "looks": { "#": "boulder" }
+    },
+    {
+      "id": "tomb_row",
+      "rows": ["##...##...##"],
+      "tags": ["centre"],
+      "biomes": ["bone_crypts"],
+      "weight": 2,
+      "turns": true,
+      "looks": { "#": "tomb" }
+    },
+    {
+      "id": "fallen_statues",
+      "rows": ["cc", "cc"],
+      "tags": ["edge", "corner"],
+      "biomes": ["bone_crypts"],
+      "weight": 2,
+      "turns": true,
+      "looks": { "c": "statue" }
+    },
+    {
+      "id": "spire_field",
+      "rows": ["#...#", ".....", "..h..", ".....", "#...#"],
+      "tags": ["centre"],
+      "biomes": ["molten_core"],
+      "weight": 2,
+      "turns": false,
+      "looks": { "#": "spire" }
+    },
+    {
+      "id": "cooled_flow",
+      "rows": ["cccc", "cccc"],
+      "tags": ["edge"],
+      "biomes": ["molten_core"],
+      "weight": 1,
+      "turns": true
+    },
+    {
+      "id": "ash_flats",
+      "rows": ["~~~~", "~~~~", "~~~~"],
+      "tags": ["centre"],
+      "biomes": ["molten_core"],
+      "weight": 1,
+      "turns": true
     }
   ],
   "palettes": {

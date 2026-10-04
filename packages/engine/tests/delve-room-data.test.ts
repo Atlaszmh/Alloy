@@ -57,6 +57,7 @@ describe('setpieces.json', () => {
     };
     expect(setPiecesProblems(new DataRegistry({ ...d, setPieces: odd }))).toEqual([
       'no palette for cinder_mines',
+      'palette sunken_quarry: no foliage 3 thick to hide in',
       'palette moon: no such biome',
       'palette moon: no prop vase',
       'palette moon: no hazard geyser',

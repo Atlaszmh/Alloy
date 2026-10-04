@@ -72,7 +72,19 @@ export const SetPiecesDataSchema = z
   })
   .strict();
 
-/** `setpieces.json`'s references: a palette for every biome and only for biomes, known props and hazards. */
+/** Whether a piece's rows hold a 3×3 of foliage: somewhere an ambush pack can hide (see the room objects spec). */
+export function hidesPack(rows: string[]): boolean {
+  for (let y = 0; y + 3 <= rows.length; y++)
+    for (let x = 0; x + 3 <= rows[0].length; x++)
+      if (rows.slice(y, y + 3).every((row) => row.slice(x, x + 3) === 'fff')) return true;
+  return false;
+}
+
+/**
+ * `setpieces.json`'s references: a palette for every biome and only for biomes, known props
+ * and hazards; and its foliage at least 3 thick, so every palette with foliage can hide an
+ * ambush pack in a piece of its own.
+ */
 export function setPiecesProblems(registry: DataRegistry): string[] {
   const data = registry.getSetPieces();
   const biomes = registry.getDelveData().biomes.map((b) => b.id);
@@ -84,9 +96,17 @@ export function setPiecesProblems(registry: DataRegistry): string[] {
       if (!data.props.some((d) => d.id === x)) problems.push(`palette ${id}: no prop ${x}`);
     for (const x of p.hazards)
       if (!data.hazards.some((d) => d.id === x)) problems.push(`palette ${id}: no hazard ${x}`);
+    const hides = data.pieces.some(
+      (piece) => (piece.biomes ?? [id]).includes(id) && hidesPack(piece.rows),
+    );
+    if (p.looks.foliage.length > 0 && !hides)
+      problems.push(`palette ${id}: no foliage 3 thick to hide in`);
   }
-  for (const piece of data.pieces)
+  for (const piece of data.pieces) {
     for (const b of piece.biomes ?? [])
       if (!biomes.includes(b)) problems.push(`piece ${piece.id}: no biome ${b}`);
+    if (piece.rows.some((row) => row.includes('f')) && !hidesPack(piece.rows))
+      problems.push(`piece ${piece.id}: foliage under 3 thick`);
+  }
   return problems;
 }
