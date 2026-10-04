@@ -7,6 +7,7 @@ import {
   startDive,
   type FloorMap,
   type LookId,
+  type Rect,
 } from '@alloy/engine';
 import { FLOOR_CELL, FLOOR_LOOKS, LOOK, MAT, PixelWorld } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
@@ -20,7 +21,7 @@ import {
 } from '../arena/pixel/floor-engine';
 import { PixelFloor } from '../arena/pixel/pixel-floor';
 import { getDelveRegistry } from '../registry';
-import { ringMap } from './hand-map';
+import { handMap, ringMap, type HandRoom } from './hand-map';
 
 // See the room objects spec's "Client": the pixel floor paints its terrain from the map's cells
 // (cover and crumbling cover as low ruins, foliage, slow ground by its look) and nothing else.
@@ -380,5 +381,41 @@ describe("the foliage's canopy", { timeout: 20000 }, () => {
     const snap = snapshotArena(world, 0.1, [], frame().view);
     expect(snap.bodies.map(([key]) => key)).not.toContain(`m${world.monsters[0].id}`);
     expect(snap.bodies).toHaveLength(world.monsters.length);
+  });
+});
+
+/**
+ * A 96 × 96 map, the largest a generated floor makes: 4 × 4 rooms of 20 × 20
+ * in coarse cells of 24, joined by halls, a pool of shallow water in each.
+ */
+function bigMap(): FloorMap {
+  const rooms: HandRoom[] = [];
+  const halls: Rect[] = [];
+  for (let r = 0; r < 4; r++)
+    for (let c = 0; c < 4; c++) {
+      rooms.push({
+        kind: r + c ? 'combat' : 'start',
+        rect: { x: 2 + 24 * c, y: 2 + 24 * r, w: 20, h: 20 },
+      });
+      if (c < 3) halls.push({ x: 22 + 24 * c, y: 10 + 24 * r, w: 4, h: 3 });
+      if (r < 3) halls.push({ x: 10 + 24 * c, y: 22 + 24 * r, w: 3, h: 4 });
+    }
+  const map = handMap(96, 96, rooms, halls);
+  for (const { rect } of map.rooms)
+    for (let y = rect.y + 12; y < rect.y + 15; y++)
+      for (let x = rect.x + 12; x < rect.x + 15; x++) {
+        map.cells[y * 96 + x] = CELL.slow;
+        map.look[y * 96 + x] = LOOK.shallow_water;
+      }
+  return map;
+}
+
+describe('a 96 × 96 floor', { timeout: 20000 }, () => {
+  it('simulates round the view only: a screen of it wakes at most a third of its chunks', () => {
+    const engine = new FloorEngine(floorInit(onMap(bigMap())));
+    expect(engine.world.awake.length).toBe(16 * 16);
+    const view = { left: 24, top: 34.5, right: 72, bottom: 61.5 }; // 48 × 27 units, the camera's
+    engine.frame(frame({ dt: 0.1, hero: { x: 48, y: 48, element: null }, view }));
+    expect(engine.world.awake.reduce((n, a) => n + a, 0)).toBeLessThanOrEqual((16 * 16) / 3);
   });
 });
