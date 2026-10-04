@@ -25,6 +25,7 @@ import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
+import { offFootprints } from './objects-base.js';
 import { dropRune } from './rune-drops.js';
 import { dropMaterials } from './material-drops.js';
 import { onMonsterKilled } from './interact.js';
@@ -682,8 +683,8 @@ export function hitMonster(
 
 /**
  * A drop from `from` (a dying foe, a broken prop) thrown toward (x, y): it
- * lands short of any wall between them, and belongs to its room (see the floor
- * maps spec).
+ * lands short of any wall between them and off every prop's and hazard's
+ * footprint, and belongs to its room (see the floor maps spec).
  */
 export function spawnDrop(
   ctx: SimCtx,
@@ -702,7 +703,7 @@ export function spawnDrop(
 ): void {
   const { world } = ctx;
   const id = world.nextId++;
-  const { x, y } = clipSight(world.map, from, { x: tx, y: ty });
+  const { x, y } = offFootprints(world, from, clipSight(world.map, from, { x: tx, y: ty }));
   world.drops.push({
     id,
     kind,

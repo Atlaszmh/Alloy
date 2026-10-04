@@ -2,6 +2,7 @@ import { rollRuneDrop } from '../loot/runes.js';
 import type { MonsterEntity } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
 import { clipSight, snapToWalkable } from './grid.js';
+import { offFootprints } from './objects-base.js';
 
 /**
  * A slain foe's rune (see the runes spec), rolled on the world's own stream
@@ -18,9 +19,10 @@ export function dropRune(ctx: SimCtx, m: MonsterEntity): void {
   if (!rune) return;
   const angle = rng.next() * Math.PI * 2;
   const r = 0.6 + rng.next() * 0.9;
-  // Short of any wall between it and its foe, in the foe's room (see the floor maps spec).
+  // Short of any wall between it and its foe, off every prop's and hazard's footprint, in the
+  // foe's room (see the floor maps and room objects specs).
   const at = snapToWalkable(world.map, m.x + Math.cos(angle) * r, m.y + Math.sin(angle) * r, 1);
-  const { x, y } = clipSight(world.map, m, at);
+  const { x, y } = offFootprints(world, m, clipSight(world.map, m, at));
   const id = world.nextId++;
   world.drops.push({
     id,

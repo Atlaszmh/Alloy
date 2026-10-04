@@ -15,8 +15,8 @@ import { depthGrowth } from './world.js';
  * (an area's circle, a melee arc's cone, a beam's segment, a body's contact),
  * seen from the hit's origin as foes are; `hitObject` is a hit reaching one,
  * `objectsTick` the hazards' fuses and recharge, `objectsSeparate` their
- * bodies. Placing them and their footprints live in `objects-base.ts`
- * (re-exported here).
+ * bodies. Placing them, their footprints and where drops land off them live in
+ * `objects-base.ts` (re-exported here).
  */
 
 /** A prop or a hazard. */
@@ -25,7 +25,7 @@ export type RoomObject = PropEntity | HazardEntity;
 /** Whose hit reached an object: the hero's, a foe's, or a hazard's burst (a chain). */
 export type ObjectHitSource = 'hero' | 'foe' | 'hazard';
 
-export { footprint, footprints, placeObjects, standing } from './objects-base.js';
+export { footprint, footprints, offFootprints, placeObjects, standing } from './objects-base.js';
 
 /**
  * What an area round `at` reaches (to an object's edge): the circle of
