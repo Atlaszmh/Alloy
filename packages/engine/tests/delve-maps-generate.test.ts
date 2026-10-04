@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blocked, isWalkable } from '../src/arpg/grid.js';
+import { isWalkable, solid } from '../src/arpg/grid.js';
 import { floorPacks, generateFloor, planFloor } from '../src/arpg/layout/generate.js';
 import { createFloorWorld, isBossFloor, type FloorOptions } from '../src/arpg/world.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
@@ -63,7 +63,7 @@ function reach(map: FloorMap): Set<number> {
       [x, y - 1],
     ]) {
       const n = j * map.width + i;
-      if (!blocked(map, i, j) && !seen.has(n)) {
+      if (!solid(map, i, j) && !seen.has(n)) {
         seen.add(n);
         queue.push(n);
       }
@@ -234,16 +234,16 @@ describe('the generated map', () => {
         );
       for (let y = 0; y < map.height; y++)
         for (let x = 0; x < map.width; x++) {
-          if (blocked(map, x, y)) continue;
+          if (solid(map, x, y)) continue;
           // From a floor cell, a wall (not a pillar) right or below runs minWall cells on.
           for (const [dx, dy] of [
             [1, 0],
             [0, 1],
           ]) {
-            if (!blocked(map, x + dx, y + dy) || pillar(x + dx, y + dy)) continue;
+            if (!solid(map, x + dx, y + dy) || pillar(x + dx, y + dy)) continue;
             for (let k = 2; k <= L.minWall; k++)
               expect(
-                blocked(map, x + k * dx, y + k * dy),
+                solid(map, x + k * dx, y + k * dy),
                 `seed ${seed} depth ${depth} at ${x},${y}`,
               ).toBe(true);
           }

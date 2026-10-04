@@ -1,7 +1,7 @@
 import type { ArpgWorld } from '../types/arpg.js';
 import type { FloorMap, HudIcon, HudMap, InteractableKind, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
-import { blocked, doorShut, lineOfSight } from './grid.js';
+import { doorShut, perceives, solid } from './grid.js';
 
 /**
  * The fog of war and the minimap (see the floor maps spec).
@@ -49,15 +49,15 @@ export function fogTick(ctx: SimCtx): void {
     for (let y = y0; y <= y1; y++)
       for (let x = x0; x <= x1; x++) {
         const c = { x: x + 0.5, y: y + 0.5 };
-        if (blocked(map, x, y) || Math.hypot(c.x - o.x, c.y - o.y) > r) continue;
-        if (lineOfSight(map, o, c)) fog[y * w + x] = 2;
+        if (solid(map, x, y) || Math.hypot(c.x - o.x, c.y - o.y) > r) continue;
+        if (perceives(map, o, c)) fog[y * w + x] = 2;
       }
     // The walls beside a floor cell in sight are in sight too.
     const lit = (x: number, y: number) =>
-      x >= 0 && y >= 0 && x < w && y < map.height && !blocked(map, x, y) && fog[y * w + x] === 2;
+      x >= 0 && y >= 0 && x < w && y < map.height && !solid(map, x, y) && fog[y * w + x] === 2;
     for (let y = y0; y <= y1; y++)
       for (let x = x0; x <= x1; x++) {
-        if (!blocked(map, x, y)) continue;
+        if (!solid(map, x, y)) continue;
         let near = false;
         for (let j = -1; j <= 1 && !near; j++)
           for (let i = -1; i <= 1; i++) near ||= lit(x + i, y + j);

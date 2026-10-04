@@ -3,8 +3,61 @@ import type { DropKind, MonsterKind, Vec } from './arpg.js';
 // Delve floor maps (see the floor maps spec): the grid, its rooms and doors,
 // what can be used in them, the shrines' blessings, the data and the HUD's map.
 
-/** A grid cell: 0 floor, 1 wall, 2 door (a wall while its door is closed). */
-export type Cell = 0 | 1 | 2;
+/**
+ * A grid cell (see the room objects spec): 0 floor, 1 wall, 2 door (solid while
+ * its door is shut), 3 cover, 4 crumbling cover, 5 foliage, 6 slow ground.
+ */
+export type Cell = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** The cell codes by name. */
+export const CELL = {
+  floor: 0,
+  wall: 1,
+  door: 2,
+  cover: 3,
+  crumbling: 4,
+  foliage: 5,
+  slow: 6,
+} as const;
+
+/**
+ * What a cell is drawn as (`FloorMap.look`, for the client only): its index in
+ * this list. `plain` (0) is the cell's own default (a floor's ground, a wall's
+ * stone); the rest are the biome palettes' cover, crumbling cover, foliage and
+ * slow ground (`setpieces.json → palettes`), and `rubble`, what a crumbled
+ * structure leaves.
+ */
+export const LOOK_IDS = [
+  'plain',
+  'ruin',
+  'timber',
+  'minecart',
+  'ice_pillar',
+  'machinery',
+  'boulder',
+  'tomb',
+  'statue',
+  'spire',
+  'cracked_wall',
+  'vines',
+  'undergrowth',
+  'coal_rubble',
+  'snowdrift',
+  'oil',
+  'shallow_water',
+  'mud',
+  'ash',
+  'rubble',
+] as const;
+export type LookId = (typeof LOOK_IDS)[number];
+
+/** A crumbling structure: its cells (code 4), and its life (see the room objects spec). */
+export interface Structure {
+  id: number;
+  cells: Vec[];
+  life: number;
+  maxLife: number;
+}
 
 /** A rectangle of cells: its top-left cell and its size. */
 export interface Rect {
@@ -79,6 +132,16 @@ export interface FloorMap {
   height: number;
   /** `Cell`s, row by row (`y * width + x`). */
   cells: Uint8Array;
+  /** Each cell's look (`LOOK_IDS` index), row by row: what the client draws it as. */
+  look: Uint8Array;
+  /** The crumbling structures (their cells are code 4 until they crumble to slow ground). */
+  structures: Structure[];
+  /**
+   * Bumped whenever a cell changes (a crumble) or a door opens or shuts: what
+   * caches the map's cells or doors (the fog's sight, the bot's paths, the
+   * client's layers) keys on it.
+   */
+  version: number;
   rooms: Room[];
   doors: Door[];
   /** Where the hero starts. */

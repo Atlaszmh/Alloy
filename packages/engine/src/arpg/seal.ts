@@ -3,7 +3,7 @@ import type { Door, FloorMap, Rect, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { roomAt } from './fog.js';
 import { clamp, dirTo } from './geometry.js';
-import { blocked, isWalkable, moveCircle } from './grid.js';
+import { isWalkable, moveCircle, solid } from './grid.js';
 
 /**
  * Sealed rooms (see the floor maps spec): a den or the boss room closes its
@@ -48,7 +48,7 @@ function freeSpot(map: FloorMap, room: Room, doors: Door[], c: Circle, within: b
     let bestD = Infinity;
     for (let j = cy - ring; j <= cy + ring; j++)
       for (let i = cx - ring; i <= cx + ring; i++) {
-        if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== ring || blocked(map, i, j)) continue;
+        if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== ring || solid(map, i, j)) continue;
         const p = { x: i + 0.5, y: j + 0.5 };
         if (inside(room.rect, p) !== within || inDoor({ ...p, radius: c.radius }, doors)) continue;
         const d = (p.x - c.x) ** 2 + (p.y - c.y) ** 2;

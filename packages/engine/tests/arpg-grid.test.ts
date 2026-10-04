@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  blocked,
   isWalkable,
   lineOfSight,
   moveCircle,
   openRoom,
   snapToWalkable,
+  solid,
 } from '../src/arpg/grid.js';
 import { clamp } from '../src/arpg/geometry.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
@@ -33,11 +33,11 @@ const WALL = mapOf(Array.from({ length: 10 }, () => '.....#....'));
 const DOORWAY = Array.from({ length: 10 }, (_, y) => (y === 5 ? '.....D....' : '.....#....'));
 const R = 0.4;
 
-/** Whether a circle's bounding square overlaps a blocked cell. */
+/** Whether a circle's bounding square overlaps a solid cell. */
 function overlaps(map: FloorMap, p: { x: number; y: number }, r: number): boolean {
   for (let cy = Math.floor(p.y - r + 1e-9); cy <= Math.floor(p.y + r - 1e-9); cy++)
     for (let cx = Math.floor(p.x - r + 1e-9); cx <= Math.floor(p.x + r - 1e-9); cx++)
-      if (blocked(map, cx, cy)) return true;
+      if (solid(map, cx, cy)) return true;
   return false;
 }
 

@@ -22,7 +22,15 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
-import { clipSight, isWalkable, moveCircle, sees, shift, snapToWalkable } from './grid.js';
+import {
+  clipSight,
+  isWalkable,
+  moveCircle,
+  perceives,
+  sees,
+  shift,
+  snapToWalkable,
+} from './grid.js';
 import {
   canAfford,
   castAbility,
@@ -355,11 +363,11 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
 
 // ── Projectiles ────────────────────────────────────────────────────────────
 
-/** Volley darts turn toward their foe while they see it (else the next nearest they see). */
+/** Volley darts turn toward their foe while they perceive it (else the next nearest they do). */
 function steer(ctx: SimCtx, p: Projectile, dt: number): void {
   const map = ctx.world.map;
   let target =
-    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && sees(map, p, m)) ?? null;
+    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && perceives(map, p, m)) ?? null;
   if (!target) {
     target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds));
     p.homingId = target?.id ?? null;
@@ -696,9 +704,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       continue;
     }
 
-    // A foe wakes when it sees the hero near (or is hit), and its pack with it.
+    // A foe wakes when it perceives the hero near (or is hit), and its pack with it.
     if (!m.aggro) {
-      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && sees(world.map, m, h)) {
+      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && perceives(world.map, m, h)) {
         for (const o of world.monsters) {
           if (!o.dead && !o.aggro && o.packId === m.packId) {
             o.aggro = true;
@@ -717,8 +725,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
-    // It attacks only what it sees; with sight in `ai.directRange` it steers straight at it.
-    const seen = sees(world.map, m, h);
+    // It attacks only what it perceives; with sight in `ai.directRange` it steers straight at it.
+    const seen = perceives(world.map, m, h);
     const near = seen && dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange;
     const chill = Math.min(bal.stacks.frostSlowCap, s.stacks.frost * bal.stacks.frostSlowPerStack);
     const speed = m.speed * (1 - chill);

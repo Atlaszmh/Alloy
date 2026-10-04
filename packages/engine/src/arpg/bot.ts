@@ -1,12 +1,12 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { ArpgInput, ArpgWorld, MonsterEntity, Vec } from '../types/arpg.js';
-import type { FloorMap, Room } from '../types/floor-map.js';
+import { CELL, type FloorMap, type Room } from '../types/floor-map.js';
 import { makeCtx } from './combat.js';
 import { dirTo, dist } from './geometry.js';
 import { abilityReady, holdCharge, nextMove } from './abilities/cast.js';
 import { nearestMonster } from './abilities/targeting.js';
 import { UNREACHED, downhill, flowField } from './flow.js';
-import { doorShut, moveCircle, sees } from './grid.js';
+import { doorShut, moveCircle, perceives, solidCode } from './grid.js';
 import { roomAt } from './fog.js';
 import { openedAlcove } from './interact.js';
 import { tutorialStep } from '../delve/tutorial.js';
@@ -140,7 +140,7 @@ function plainInput(registry: DataRegistry, world: ArpgWorld, policy: BotPolicy)
   const w = h.stats.weapon;
   let move: Vec = { x: 0, y: 0 };
   // Out of reach, or out of sight round a wall's edge: go to it.
-  const far = gap > w.range * 0.8 || !sees(world.map, h, target);
+  const far = gap > w.range * 0.8 || !perceives(world.map, h, target);
   if (w.kind === 'melee') {
     if (far) move = toward(world, target);
   } else if (far) move = toward(world, target);
@@ -232,20 +232,22 @@ const paths = new WeakMap<
 >();
 
 /**
- * `map` with every one-cell gap walled (a floor cell with a wall on each side
- * across it, as between two pillars): the hero's bounding square (radius 0.5)
- * passes one only dead on its centre line, which a step at its pace rarely
- * lands on.
+ * `map` with every one-cell gap walled (a walkable cell, not a door's, with a
+ * solid cell on each side across it, as between two pillars): the hero's
+ * bounding square (radius 0.5) passes one only dead on its centre line, which
+ * a step at its pace rarely lands on. Only the cells' codes count here: the
+ * doors are read live (`solid`, through the shared `doors`).
  */
 function heroMap(map: FloorMap): FloorMap {
   const { width: w, height: h } = map;
   const wall = (x: number, y: number) =>
-    x < 0 || y < 0 || x >= w || y >= h || map.cells[y * w + x] === 1;
+    x < 0 || y < 0 || x >= w || y >= h || solidCode(map.cells[y * w + x]);
   const cells = map.cells.slice();
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const squeezed = (wall(x - 1, y) && wall(x + 1, y)) || (wall(x, y - 1) && wall(x, y + 1));
-      if (cells[y * w + x] === 0 && squeezed) cells[y * w + x] = 1;
+      const c = cells[y * w + x];
+      if (c !== CELL.door && !solidCode(c) && squeezed) cells[y * w + x] = CELL.wall;
     }
   return { ...map, cells };
 }
