@@ -1,0 +1,114 @@
+{
+  "props": [
+    { "id": "urn", "radius": 0.35 },
+    { "id": "crate", "radius": 0.4 },
+    { "id": "barrel", "radius": 0.4 },
+    { "id": "bone_pile", "radius": 0.4 }
+  ],
+  "hazards": [
+    { "id": "brazier", "element": "fire", "radius": 0.4, "burst": 2.5 },
+    { "id": "frost_crystal", "element": "frost", "radius": 0.4, "burst": 2.5 },
+    { "id": "storm_coil", "element": "storm", "radius": 0.4, "burst": 2.5 },
+    { "id": "spore_pod", "element": "nature", "radius": 0.4, "burst": 2.5 },
+    { "id": "shadow_brazier", "element": "shadow", "radius": 0.4, "burst": 2.5 },
+    { "id": "fire_vent", "element": "fire", "radius": 0.4, "burst": 2.5 }
+  ],
+  "pieces": [
+    { "id": "wall_line", "rows": ["#c##c#"], "tags": ["edge"], "weight": 2, "turns": true },
+    {
+      "id": "statue_ring",
+      "rows": ["c...c", ".....", "..u..", ".....", "c...c"],
+      "tags": ["centre"],
+      "weight": 1,
+      "turns": false,
+      "looks": { "c": "statue" }
+    },
+    {
+      "id": "grove",
+      "rows": ["ffff", "ffff", "ffff"],
+      "tags": ["corner", "edge"],
+      "biomes": ["sunken_quarry"],
+      "weight": 2,
+      "turns": true
+    },
+    {
+      "id": "flooded_dip",
+      "rows": ["?~~?", "~~~~", "~~~~", "?~~?"],
+      "tags": ["centre"],
+      "weight": 1,
+      "turns": false
+    },
+    { "id": "brazier_pair", "rows": ["h...h"], "tags": ["edge"], "weight": 1, "turns": true },
+    {
+      "id": "minecart_wreck",
+      "rows": ["##u"],
+      "tags": ["edge", "corner"],
+      "biomes": ["cinder_mines"],
+      "weight": 1,
+      "turns": true,
+      "looks": { "#": "minecart" }
+    }
+  ],
+  "palettes": {
+    "cinder_mines": {
+      "looks": {
+        "cover": ["timber", "ruin"],
+        "crumbling": ["cracked_wall"],
+        "foliage": [],
+        "slow": ["coal_rubble"]
+      },
+      "props": ["crate", "barrel"],
+      "hazards": ["brazier"]
+    },
+    "frostvault": {
+      "looks": {
+        "cover": ["ice_pillar", "ruin"],
+        "crumbling": ["cracked_wall"],
+        "foliage": [],
+        "slow": ["snowdrift"]
+      },
+      "props": ["urn", "crate"],
+      "hazards": ["frost_crystal"]
+    },
+    "storm_foundry": {
+      "looks": {
+        "cover": ["machinery", "ruin"],
+        "crumbling": ["cracked_wall"],
+        "foliage": [],
+        "slow": ["oil"]
+      },
+      "props": ["crate", "barrel"],
+      "hazards": ["storm_coil"]
+    },
+    "sunken_quarry": {
+      "looks": {
+        "cover": ["boulder"],
+        "crumbling": ["cracked_wall"],
+        "foliage": ["vines", "undergrowth"],
+        "slow": ["shallow_water", "mud"]
+      },
+      "props": ["urn", "crate"],
+      "hazards": ["spore_pod"]
+    },
+    "bone_crypts": {
+      "looks": {
+        "cover": ["tomb", "ruin"],
+        "crumbling": ["statue", "cracked_wall"],
+        "foliage": [],
+        "slow": ["mud"]
+      },
+      "props": ["urn", "bone_pile"],
+      "hazards": ["shadow_brazier"]
+    },
+    "molten_core": {
+      "looks": {
+        "cover": ["spire"],
+        "crumbling": ["cracked_wall"],
+        "foliage": [],
+        "slow": ["ash"]
+      },
+      "props": ["urn", "barrel"],
+      "hazards": ["fire_vent"]
+    }
+  }
+}

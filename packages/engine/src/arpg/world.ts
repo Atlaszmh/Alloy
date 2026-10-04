@@ -99,6 +99,25 @@ export function biomeCycle(registry: DataRegistry, depth: number): number {
   return Math.floor((Math.max(1, depth) - 1) / (every * biomes));
 }
 
+/**
+ * A depth's growth for foes (see the room objects spec): `growth.monsterHp`
+ * and `monsterDmg` to the power depth − 1, and `monster.earlyRamp`. A foe's
+ * life is `baseHp × hp × def.hp × ramp`; a crumbling structure's life scales
+ * by `hp × ramp` and a hazard's burst by `dmg × ramp`.
+ */
+export function depthGrowth(
+  registry: DataRegistry,
+  depth: number,
+): { hp: number; dmg: number; ramp: number } {
+  const bal = registry.getDelveBalance();
+  const d = Math.max(0, depth - 1);
+  return {
+    hp: Math.pow(bal.growth.monsterHp, d),
+    dmg: Math.pow(bal.growth.monsterDmg, d),
+    ramp: bal.monster.earlyRamp[depth - 1] ?? 1,
+  };
+}
+
 interface MonsterSpawn {
   id: number;
   def: MonsterDef;
@@ -125,12 +144,11 @@ export function createMonsterEntity(
 ): MonsterEntity {
   const bal = registry.getDelveBalance();
   const m = bal.monster;
-  const d = Math.max(0, spawn.depth - 1);
-  const ramp = m.earlyRamp[spawn.depth - 1] ?? 1;
+  const growth = depthGrowth(registry, spawn.depth);
   const def = spawn.def;
 
-  let hp = m.baseHp * Math.pow(bal.growth.monsterHp, d) * def.hp * ramp;
-  let damage = m.baseDmg * Math.pow(bal.growth.monsterDmg, d) * def.dmg * ramp;
+  let hp = m.baseHp * growth.hp * def.hp * growth.ramp;
+  let damage = m.baseDmg * growth.dmg * def.dmg * growth.ramp;
   let interval = def.interval;
   let speed = m.speed * (def.speed ?? 1);
   let radius = m.radius * (def.size ?? 1);
@@ -186,6 +204,10 @@ export function createMonsterEntity(
     roomId: spawn.roomId ?? null,
     farSince: null,
     goingHome: false,
+    job: null,
+    goal: null,
+    search: null,
+    ambush: false,
     x: spawn.x,
     y: spawn.y,
     radius,
@@ -205,6 +227,7 @@ export function createMonsterEntity(
     chargeHit: false,
     kbx: 0,
     kby: 0,
+    kbHit: 0,
     status: emptyStatus(),
     lastHitAt: -1,
     nextSpecialAt: 0,
@@ -438,6 +461,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     lootRng: rng.fork(`loot:${opts.loot.nextUid}`),
     runeRng: rng.fork(`runes:${opts.loot.nextUid}`),
     materialRng: rng.fork(`materials:${opts.loot.nextUid}`),
+    propRng: rng.fork(`props:${opts.loot.nextUid}`),
     depth: opts.depth,
     biomeId: biome.id,
     element: biome.mana,
@@ -465,6 +489,9 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     projectiles: [],
     zones: [],
     drops: [],
+    props: [],
+    hazards: [],
+    director: { nextAt: 0 },
     nextId: 1,
     loot: {
       ...opts.loot,

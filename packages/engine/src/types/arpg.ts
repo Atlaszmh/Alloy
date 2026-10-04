@@ -174,6 +174,13 @@ export interface StatusState {
   reactionLockUntil: number;
 }
 
+/**
+ * The pack director's jobs (see the room objects spec): a ring slot round the
+ * hero, a flanker's intercept, a ranged foe's cover, a charger's lane.
+ */
+export const PACK_JOBS = ['ring', 'flank', 'cover', 'charge'] as const;
+export type PackJob = (typeof PACK_JOBS)[number];
+
 export interface MonsterEntity {
   id: number;
   defId: string;
@@ -190,6 +197,17 @@ export interface MonsterEntity {
   farSince: number | null;
   /** Leashed: going home along its room's `homeField`, to heal and sleep. */
   goingHome: boolean;
+  /** Its job from the pack director (see the room objects spec), or null. */
+  job: PackJob | null;
+  /**
+   * Where it walks instead of at the hero: its job's spot, or the last-seen
+   * point a foliage search goes to (a search's wins); null: at the hero.
+   */
+  goal: Vec | null;
+  /** It lost the hero to foliage: searching `at` (where it was last seen) until `until`. */
+  search: { at: Vec; until: number } | null;
+  /** It spawned hidden in foliage, asleep, until the hero comes near or its room wakes. */
+  ambush: boolean;
   x: number;
   y: number;
   radius: number;
@@ -213,6 +231,8 @@ export interface MonsterEntity {
   /** Knockback velocity, decays quickly. */
   kbx: number;
   kby: number;
+  /** The hit that set its knockback going (a wall slam deals a share of it); 0: none. */
+  kbHit: number;
   status: StatusState;
   lastHitAt: number;
   /** Boss special-attack clock. */
@@ -317,6 +337,41 @@ export interface Drop {
   /** Pulled to the hero regardless of distance (floor cleared). */
   vacuum: boolean;
   dead: boolean;
+}
+
+/** A breakable prop (see the room objects spec): a fixed circle that stops bodies and shots, never sight. */
+export interface PropEntity {
+  type: 'prop';
+  id: number;
+  /** Its `setpieces.json → props` id. */
+  kind: string;
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+  /** Broken (its `propBreak` event plays the break). */
+  dead: boolean;
+}
+
+/** A hazard's state: ready to be set off, primed (its fuse burning), or dormant (recharging). */
+export type HazardState = 'ready' | 'primed' | 'dormant';
+
+/** An elemental hazard (see the room objects spec): a fixed circle any hit sets off; its burst hits everyone. */
+export interface HazardEntity {
+  type: 'hazard';
+  id: number;
+  /** Its `setpieces.json → hazards` id. */
+  kind: string;
+  element: ManaType;
+  x: number;
+  y: number;
+  /** Its body. */
+  radius: number;
+  /** Its burst's reach. */
+  burst: number;
+  state: HazardState;
+  /** Primed: when it bursts; dormant: when it is ready again. */
+  until: number;
 }
 
 /**
@@ -531,8 +586,8 @@ export interface ArpgInput {
   attackAim?: Vec | null;
 }
 
-/** Where a hit on a monster came from (display data: the damage meter's buckets). */
-export type HitSource = 'basic' | 'skill' | 'dot' | 'reaction' | 'thorns';
+/** Where a hit on a monster came from (display data: the damage meter's buckets); `hazard` a hazard's burst. */
+export type HitSource = 'basic' | 'skill' | 'dot' | 'reaction' | 'thorns' | 'hazard';
 
 export type ArpgEvent =
   | {
@@ -694,6 +749,35 @@ export type ArpgEvent =
   | { kind: 'roomCleared'; roomId: number }
   /** The exit unfound after `ai.exitHintSeconds`: the compass points at it. */
   | { kind: 'exitHint'; x: number; y: number }
+  /** A prop broke (see the room objects spec). */
+  | { kind: 'propBreak'; id: number; prop: string; x: number; y: number }
+  /** A hazard was set off: it bursts after `fuse` seconds (its telegraph). */
+  | {
+      kind: 'hazardPrime';
+      id: number;
+      hazard: string;
+      element: ManaType;
+      x: number;
+      y: number;
+      radius: number;
+      fuse: number;
+    }
+  /** A hazard burst: everyone within `radius` was hit. */
+  | {
+      kind: 'hazardBurst';
+      id: number;
+      hazard: string;
+      element: ManaType;
+      x: number;
+      y: number;
+      radius: number;
+    }
+  /** A crumbling structure crumbled: its cells are slow ground (rubble) now. */
+  | { kind: 'crumble'; structure: number; cells: Vec[] }
+  /** A knocked-back foe met a wall or cover. */
+  | { kind: 'wallSlam'; id: number; x: number; y: number }
+  /** A charger's dash met a wall or cover: it is stunned. */
+  | { kind: 'chargeStun'; id: number; x: number; y: number }
   | { kind: 'cleared' }
   | { kind: 'revive'; amount: number }
   | { kind: 'heroDeath' };
@@ -813,6 +897,13 @@ export interface ArpgWorld {
   projectiles: Projectile[];
   zones: Zone[];
   drops: Drop[];
+  /** The floor's props and hazards (see the room objects spec): none off a furnished floor. */
+  props: PropEntity[];
+  hazards: HazardEntity[];
+  /** Broken props' drops' own stream, so every other roll stays as it was. */
+  propRng: SeededRNG;
+  /** The pack director (`directorTick`): when it next runs. */
+  director: { nextAt: number };
   nextId: number;
   loot: LootContext;
   /** Rewards collected since the last bank into the profile. */

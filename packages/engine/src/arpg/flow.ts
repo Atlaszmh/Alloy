@@ -2,7 +2,7 @@ import type { MonsterEntity, Vec } from '../types/arpg.js';
 import type { FloorMap, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { dirTo, dist } from './geometry.js';
-import { blocked } from './grid.js';
+import { solid } from './grid.js';
 
 /**
  * Foes' pathing and leashing on the grid (see the floor maps spec's
@@ -43,7 +43,7 @@ export function flowField(
   const half = Math.floor(clearance / 2);
   const fits = (cx: number, cy: number) => {
     for (let y = cy - half; y <= cy + half; y++)
-      for (let x = cx - half; x <= cx + half; x++) if (blocked(map, x, y)) return false;
+      for (let x = cx - half; x <= cx + half; x++) if (solid(map, x, y)) return false;
     return true;
   };
   const queue = new Int32Array(w * h);

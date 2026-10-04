@@ -1,10 +1,64 @@
 import type { DropKind, MonsterKind, Vec } from './arpg.js';
+import type { ManaType } from './mana.js';
 
 // Delve floor maps (see the floor maps spec): the grid, its rooms and doors,
 // what can be used in them, the shrines' blessings, the data and the HUD's map.
 
-/** A grid cell: 0 floor, 1 wall, 2 door (a wall while its door is closed). */
-export type Cell = 0 | 1 | 2;
+/**
+ * A grid cell (see the room objects spec): 0 floor, 1 wall, 2 door (solid while
+ * its door is shut), 3 cover, 4 crumbling cover, 5 foliage, 6 slow ground.
+ */
+export type Cell = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** The cell codes by name. */
+export const CELL = {
+  floor: 0,
+  wall: 1,
+  door: 2,
+  cover: 3,
+  crumbling: 4,
+  foliage: 5,
+  slow: 6,
+} as const;
+
+/**
+ * What a cell is drawn as (`FloorMap.look`, for the client only): its index in
+ * this list. `plain` (0) is the cell's own default (a floor's ground, a wall's
+ * stone); the rest are the biome palettes' cover, crumbling cover, foliage and
+ * slow ground (`setpieces.json → palettes`), and `rubble`, what a crumbled
+ * structure leaves.
+ */
+export const LOOK_IDS = [
+  'plain',
+  'ruin',
+  'timber',
+  'minecart',
+  'ice_pillar',
+  'machinery',
+  'boulder',
+  'tomb',
+  'statue',
+  'spire',
+  'cracked_wall',
+  'vines',
+  'undergrowth',
+  'coal_rubble',
+  'snowdrift',
+  'oil',
+  'shallow_water',
+  'mud',
+  'ash',
+  'rubble',
+] as const;
+export type LookId = (typeof LOOK_IDS)[number];
+
+/** A crumbling structure: its cells (code 4), and its life (see the room objects spec). */
+export interface Structure {
+  id: number;
+  cells: Vec[];
+  life: number;
+  maxLife: number;
+}
 
 /** A rectangle of cells: its top-left cell and its size. */
 export interface Rect {
@@ -79,6 +133,16 @@ export interface FloorMap {
   height: number;
   /** `Cell`s, row by row (`y * width + x`). */
   cells: Uint8Array;
+  /** Each cell's look (`LOOK_IDS` index), row by row: what the client draws it as. */
+  look: Uint8Array;
+  /** The crumbling structures (their cells are code 4 until they crumble to slow ground). */
+  structures: Structure[];
+  /**
+   * Bumped whenever a cell changes (a crumble) or a door opens or shuts: what
+   * caches the map's cells or doors (the fog's sight, the bot's paths, the
+   * client's layers) keys on it.
+   */
+  version: number;
   rooms: Room[];
   doors: Door[];
   /** Where the hero starts. */
@@ -149,6 +213,63 @@ export interface LayoutsData {
   props: Record<PropId, number>;
 }
 
+// ── Set pieces (setpieces.json; see the room objects spec) ─────────────────
+
+/** Where a set piece may stand in a room: against a wall, in a corner, or in the middle. */
+export const PIECE_TAGS = ['edge', 'corner', 'centre'] as const;
+export type PieceTag = (typeof PIECE_TAGS)[number];
+
+/** The legend's cells that take a look: cover, crumbling cover, foliage and slow ground. */
+export type PieceLookChar = '#' | 'c' | 'f' | '~';
+
+/**
+ * A hand-drawn piece of furnishing: rows over the legend ('#' cover, 'c'
+ * crumbling cover, 'f' foliage, '~' slow ground, 'u' a prop's spot, 'h' a
+ * hazard's spot, '.' open floor, '?' don't care); its size is its rows'.
+ */
+export interface SetPiece {
+  id: string;
+  rows: string[];
+  tags: PieceTag[];
+  /** The biomes it may furnish (by id); absent: every biome. */
+  biomes?: string[];
+  weight: number;
+  /** It may be mirrored and turned. */
+  turns: boolean;
+  /** A legend cell's look in place of the palette's (a statue ring's statues). */
+  looks?: Partial<Record<PieceLookChar, LookId>>;
+}
+
+/** A breakable prop (an urn, a crate…): its body's radius. */
+export interface PropDef {
+  id: string;
+  radius: number;
+}
+
+/** An elemental hazard (a brazier, a storm coil…): its element, its body's radius and its burst's. */
+export interface HazardDef {
+  id: string;
+  element: ManaType;
+  radius: number;
+  burst: number;
+}
+
+/** A biome's furnishing: the looks its cells take, and the props and hazards it places (by id). */
+export interface BiomePalette {
+  looks: Record<'cover' | 'crumbling' | 'foliage' | 'slow', LookId[]>;
+  props: string[];
+  hazards: string[];
+}
+
+/** `setpieces.json` (`registry.getSetPieces()`). */
+export interface SetPiecesData {
+  props: PropDef[];
+  hazards: HazardDef[];
+  pieces: SetPiece[];
+  /** By biome id: every biome has one. */
+  palettes: Record<string, BiomePalette>;
+}
+
 // ── Balance (balance.json → delve.layout, delve.ai) ────────────────────────
 
 /** How a floor is generated (see the floor maps spec's "Generator"). */
@@ -209,6 +330,71 @@ export interface AiBalance {
   interactRadius: number;
   /** Seconds a shrine's prayer takes. */
   shrineChannel: number;
+  /** The pack director (see the room objects spec). */
+  pack: PackAiBalance;
+}
+
+/**
+ * The pack director's numbers (`balance.json → delve.ai.pack`; see the room
+ * objects spec's "Smarter packs"): each job's switch (`on`) and its numbers.
+ */
+export interface PackAiBalance {
+  /** Seconds between the director's passes. */
+  directorEvery: number;
+  /** A pack's fields reach this many cells. */
+  flowRadius: number;
+  /** No foe stays pressed against a prop, a hazard or cover longer than this (seconds). */
+  stuckTime: number;
+  /** Melee foes take slots on a ring round the hero. */
+  ring: { on: boolean };
+  /**
+   * After `kiteTime` of the hero moving away from the pack's centre, a share of
+   * its melee foes (`flankShare`: 0 before `fromDepth`, then `base` + `perDepth`
+   * a depth past it, at most `max`) cut it off `leadTime` ahead of its motion.
+   */
+  flank: {
+    on: boolean;
+    kiteTime: number;
+    leadTime: number;
+    flankShare: { fromDepth: number; base: number; perDepth: number; max: number };
+  };
+  /** A ranged foe shoots from beside cover within `coverSearch` cells, and moves when the hero comes within `coverFlee`. */
+  cover: { on: boolean; coverSearch: number; coverFlee: number };
+  /** A charger meeting cover or a wall is stunned `chargeStun` seconds and takes `chargeSlam` × its own hit. */
+  charge: { on: boolean; chargeStun: number; chargeSlam: number };
+  /** A pack in a room with foliage hides in it at `ambushChance`, waking within `ambushWake` of the hero. */
+  ambush: { on: boolean; ambushChance: number; ambushWake: number };
+}
+
+/** The room objects' numbers (`balance.json → delve.terrain`; see the room objects spec's "Objects in a fight"). */
+export interface TerrainBalance {
+  /** Anyone walking on slow ground moves at this × its speed (pushes too); a boss at `bossSlowMult`. */
+  slowMult: number;
+  bossSlowMult: number;
+  /** What stands in foliage is seen only this near (units). */
+  foliageSight: number;
+  /** A sight line crossing more foliage than this (units, the ends' cells left out) is blocked. */
+  foliageDepth: number;
+  /** A foe that lost the hero to foliage searches the last-seen point this long (seconds). */
+  searchTime: number;
+  /** A pack leashes this far outside its room's rect. */
+  leashMargin: number;
+  /** A crumbling structure's life per cell, × the depth's foe life growth (`depthGrowth`). */
+  structureLife: number;
+  /** A knocked-back foe meeting cover or a wall: × the knockback's hit, and this stagger (seconds). */
+  slamDamage: number;
+  slamStagger: number;
+  /** A prop's life. */
+  propLife: number;
+  /** A broken prop drops with `chance`: a material with `material`, else scrap. */
+  propDrops: { chance: number; material: number };
+  /** A hazard's burst: × the depth's foe damage growth (`depthGrowth`). */
+  hazardDamage: number;
+  /** Seconds from a hazard set off to its burst, and from its burst to ready again. */
+  fuse: number;
+  recharge: number;
+  /** Chance a placed hazard is of another element than the biome's. */
+  hazardOffElement: number;
 }
 
 // ── The HUD's map (`hudMapOf`) ─────────────────────────────────────────────

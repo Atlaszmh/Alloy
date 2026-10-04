@@ -4,7 +4,7 @@ import type { ComboStepDef, DelveBalance, HeroBlow, HeroWeapon } from '../types/
 import type { ManaType } from '../types/mana.js';
 import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
-import { sees } from './grid.js';
+import { perceives, sees } from './grid.js';
 import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
@@ -12,6 +12,8 @@ import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
 import { alive, muzzle, nearestMonster, spawnProjectile } from './abilities/targeting.js';
+import { hitObject, objectsIn } from './objects.js';
+import { hitStructures } from './terrain.js';
 
 /**
  * The basic attack: each blow of the hero's basic chain (its kind's row, in
@@ -26,7 +28,7 @@ function haste(ctx: SimCtx): number {
   return surge ? 1 + surge.effect : 1;
 }
 
-/** The nearest foe the hero sees within `range` inside the arc around `dir` (where a manual lunge stops). */
+/** The nearest foe the hero perceives within `range` inside the arc around `dir` (where a manual lunge stops). */
 function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): MonsterEntity | null {
   const h = ctx.world.hero;
   const half = (arcDeg * Math.PI) / 360;
@@ -36,7 +38,7 @@ function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): Monster
     const d = dist(h.x, h.y, m.x, m.y) - m.radius;
     if (d > range || d >= bestD) continue;
     if (arcDeg < 360 && angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > half) continue;
-    if (!sees(ctx.world.map, h, m)) continue;
+    if (!perceives(ctx.world.map, h, m)) continue;
     best = m;
     bestD = d;
   }
@@ -349,6 +351,10 @@ export function landBlow(
           noReact: true,
         });
     }
+    // The swing reaches the props and hazards in its arc; a heavy or hold blow wears crumbling
+    // cover too (see the room objects spec).
+    for (const obj of objectsIn(world, h, reach, dir, arc)) hitObject(ctx, obj, 'hero');
+    if (kind === 'heavy' || kind === 'hold') hitStructures(ctx, h, reach, base, dir, arc);
     // Chain: jumps from the first foe struck. Linger: a zone ahead, at half the reach.
     if (first) {
       const jump = { source: 'basic' as const, canCrit: true, applies, rattles, ...knobbed };
@@ -522,5 +528,6 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       ...(p.knobs ? knobHitOpts(p.knobs) : {}),
     });
   }
+  for (const obj of objectsIn(ctx.world, p, p.explodeRadius)) hitObject(ctx, obj, 'hero');
   if (p.knobs && hit.length > 0) shotLands(ctx, p, hit);
 }

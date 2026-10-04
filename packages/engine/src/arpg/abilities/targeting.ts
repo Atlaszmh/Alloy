@@ -2,13 +2,13 @@ import type { ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity, Projectile, Vec } from '../../types/arpg.js';
 import type { SimCtx } from '../combat.js';
 import { dirTo, dist } from '../geometry.js';
-import { clipSight, sees, snapToWalkable } from '../grid.js';
+import { clipSight, perceives, sees, snapToWalkable } from '../grid.js';
 
 export function alive(ctx: SimCtx): MonsterEntity[] {
   return ctx.world.monsters.filter((m) => !m.dead);
 }
 
-/** Nearest living monster whose edge is within `range` of (x, y), and that (x, y) sees. */
+/** Nearest living monster whose edge is within `range` of (x, y), and that (x, y) perceives. */
 export function nearestMonster(
   ctx: SimCtx,
   x: number,
@@ -21,7 +21,7 @@ export function nearestMonster(
   for (const m of ctx.world.monsters) {
     if (m.dead || exclude?.has(m.id)) continue;
     const d = dist(x, y, m.x, m.y) - m.radius;
-    if (d <= range && d < bestD && sees(ctx.world.map, { x, y }, m)) {
+    if (d <= range && d < bestD && perceives(ctx.world.map, { x, y }, m)) {
       best = m;
       bestD = d;
     }
@@ -29,11 +29,11 @@ export function nearestMonster(
   return best;
 }
 
-/** The in-range monster the hero sees whose surroundings hold the most foes (for placed abilities). */
+/** The in-range monster the hero perceives whose surroundings hold the most foes (for placed abilities). */
 export function bestCluster(ctx: SimCtx, range: number, radius: number): MonsterEntity | null {
   const h = ctx.world.hero;
   const candidates = alive(ctx).filter(
-    (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= range && sees(ctx.world.map, h, m),
+    (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= range && perceives(ctx.world.map, h, m),
   );
   let best: MonsterEntity | null = null;
   let bestScore = -1;

@@ -3,7 +3,7 @@ import type { Door, FloorMap, Rect, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { roomAt } from './fog.js';
 import { clamp, dirTo } from './geometry.js';
-import { blocked, isWalkable, moveCircle } from './grid.js';
+import { isWalkable, moveCircle, setDoor, solid } from './grid.js';
 
 /**
  * Sealed rooms (see the floor maps spec): a den or the boss room closes its
@@ -48,7 +48,7 @@ function freeSpot(map: FloorMap, room: Room, doors: Door[], c: Circle, within: b
     let bestD = Infinity;
     for (let j = cy - ring; j <= cy + ring; j++)
       for (let i = cx - ring; i <= cx + ring; i++) {
-        if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== ring || blocked(map, i, j)) continue;
+        if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== ring || solid(map, i, j)) continue;
         const p = { x: i + 0.5, y: j + 0.5 };
         if (inside(room.rect, p) !== within || inDoor({ ...p, radius: c.radius }, doors)) continue;
         const d = (p.x - c.x) ** 2 + (p.y - c.y) ** 2;
@@ -79,7 +79,7 @@ export function sealTick(ctx: SimCtx): void {
   if (map.open) return;
   const foesOf = (room: Room) => world.monsters.filter((m) => !m.dead && m.roomId === room.id);
   const open = (room: Room) => {
-    for (const d of doorsOf(map, room)) d.closed = false;
+    for (const d of doorsOf(map, room)) setDoor(map, d, 'closed', false);
     if (world.sealing?.roomId === room.id) world.sealing = null;
   };
 
@@ -125,7 +125,7 @@ export function sealTick(ctx: SimCtx): void {
         Object.assign(h, moveCircle(map, h, h.radius, dir.x * h.radius, dir.y * h.radius));
       }
     }
-    if (late || standing.length === 0) d.closed = true;
+    if (late || standing.length === 0) setDoor(map, d, 'closed', true);
   }
   if (doors.every((d) => d.closed)) {
     room.sealed = true;

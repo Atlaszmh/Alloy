@@ -10,6 +10,7 @@ import type { ArpgEvent, ArpgWorld } from '../types/arpg.js';
 import type { TutorialEvent } from '../types/tutorial.js';
 import type { SimCtx } from './combat.js';
 import { dist } from './geometry.js';
+import { setDoor } from './grid.js';
 
 /**
  * The guided start on a floor (see the tutorial spec): the world's tallies,
@@ -165,7 +166,7 @@ function settle(registry: DataRegistry, world: ArpgWorld): void {
   const gate =
     step?.where === 'floor' && step.floor === world.tutorialFloor ? step.gate : undefined;
   world.map.doors.forEach((d, i) => {
-    if (!!d.held !== (gate?.door === i)) d.held = gate?.door === i;
+    if (!!d.held !== (gate?.door === i)) setDoor(world.map, d, 'held', gate?.door === i);
   });
   exitHeld.set(world, !!gate?.exit);
 }

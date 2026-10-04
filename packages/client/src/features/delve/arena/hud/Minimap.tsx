@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
-import type { HudIcon } from '@alloy/engine';
+import { solidCode, type HudIcon } from '@alloy/engine';
 import { useUiScale, type GlyphId } from '../../kit';
 import { GLYPH_ART, pixelRuns } from '../../kit/glyph-art';
 import type { HudMap } from '../useArenaCore';
@@ -33,7 +33,8 @@ export function minimapScale(map: { width: number; height: number }, w: number, 
 }
 
 /**
- * A generated floor's fog layer at `s` device px a cell: each floor cell the hero has seen, those in
+ * A generated floor's fog layer at `s` device px a cell: each cell that isn't solid
+ * (`solidCode`) the hero has seen, those in
  * sight now brighter. The minimap keeps it and redraws it only when the fog moves (`fogVersion`).
  */
 export function drawFog(
@@ -48,7 +49,7 @@ export function drawFog(
   ] as const) {
     ctx.fillStyle = color;
     floor.fog.forEach((f, i) => {
-      if (f === level && floor.cells[i] !== 1)
+      if (f === level && !solidCode(floor.cells[i]))
         ctx.fillRect((i % floor.width) * s, Math.floor(i / floor.width) * s, s, s);
     });
   }

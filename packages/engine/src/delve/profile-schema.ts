@@ -13,7 +13,7 @@ import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import { CONTRACT_TIERS } from '../types/quests.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves (version 11 only) — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 12 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
@@ -279,9 +279,12 @@ const QuestsSchema = z.object({
 /** The guided start's state (see the tutorial spec). */
 const TutorialStateSchema = z.object({ step: z.string().min(1), count, misses: count });
 
-/** Version 11: the guided start (see the tutorial spec); older saves reset. Every field but the dive. */
+/**
+ * Version 12: the room objects (see the room objects spec: a resumed dive would
+ * rebuild a different floor); older saves reset. Every field but the dive.
+ */
 const ProfileSchema = z.object({
-  version: z.literal(11),
+  version: z.literal(12),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),

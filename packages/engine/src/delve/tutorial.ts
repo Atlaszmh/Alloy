@@ -1,6 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { FloorOptions } from '../arpg/world.js';
 import { nextMove } from '../arpg/abilities/cast.js';
+import { setDoor } from '../arpg/grid.js';
 import { honeCost, previewForge } from '../loot/forge.js';
 import { materialCount, refineCost } from '../loot/materials.js';
 import { baseSlots, movesetOf, movesetTransfer } from '../loot/moveset.js';
@@ -101,7 +102,7 @@ export function startTutorial(registry: DataRegistry, profile: DelveProfile): De
 export function skipTutorial(profile: DelveProfile, world?: ArpgWorld | null): DelveProfile {
   if (world) {
     world.tutorial = null;
-    for (const d of world.map.doors) d.held = false;
+    for (const d of world.map.doors) setDoor(world.map, d, 'held', false);
   }
   const dive = profile.dive;
   return {

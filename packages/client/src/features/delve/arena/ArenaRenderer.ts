@@ -10,6 +10,7 @@ import {
 import {
   activeMove,
   doorShut,
+  solidCode,
   tutorialExitHeld,
   type ArpgEvent,
   type ArpgWorld,
@@ -1283,8 +1284,9 @@ export function seenAt(w: ArpgWorld, x: number, y: number): boolean {
 
 /**
  * The fog layer's pixels (black, at `FOG_ALPHA`), one a cell over the map and
- * `pad` cells round it. A wall takes the clearest fog of the floor beside it,
- * so the walls round what the hero sees show; past the map's edge, the edge's.
+ * `pad` cells round it. A solid cell (a wall, cover; `solidCode`) takes the
+ * clearest fog of the floor beside it, so the walls round what the hero sees
+ * show; past the map's edge, the edge's.
  */
 export function paintFog(map: FloorMap, fog: Uint8Array, pad: number, out: Uint8Array): void {
   const { width: W, height: H, cells } = map;
@@ -1294,10 +1296,10 @@ export function paintFog(map: FloorMap, fog: Uint8Array, pad: number, out: Uint8
       const x = Math.min(W - 1, Math.max(0, ox - pad));
       const y = Math.min(H - 1, Math.max(0, oy - pad));
       let f = fog[y * W + x];
-      if (cells[y * W + x] === 1)
+      if (solidCode(cells[y * W + x]))
         for (let ny = Math.max(0, y - 1); ny <= Math.min(H - 1, y + 1); ny++)
           for (let nx = Math.max(0, x - 1); nx <= Math.min(W - 1, x + 1); nx++)
-            if (cells[ny * W + nx] !== 1) f = Math.max(f, fog[ny * W + nx]);
+            if (!solidCode(cells[ny * W + nx])) f = Math.max(f, fog[ny * W + nx]);
       out[(oy * OW + ox) * 4 + 3] = FOG_ALPHA[f];
     }
 }

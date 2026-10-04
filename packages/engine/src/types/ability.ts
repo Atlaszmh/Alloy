@@ -239,6 +239,8 @@ export interface ResolvedAbility {
    * attunement). Set with or without runes.
    */
   ease: number;
+  /** An Echo's replay (`echoTick`): its impacts set off no prop or hazard (see the room objects spec). */
+  replay?: boolean;
 }
 
 /** A slot's chain compiled: its moves (a hold's at stage 0) and each hold move's three stages. */

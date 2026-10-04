@@ -14,7 +14,7 @@ import {
   type RoomKind,
 } from '../../types/floor-map.js';
 import { clamp } from '../geometry.js';
-import { snapToWalkable } from '../grid.js';
+import { snapToWalkable, solid } from '../grid.js';
 import { isBossFloor } from '../world.js';
 
 /** How far a room may sit off its coarse cell's centre, in cells (so facing walls share a hall's width). */
@@ -221,6 +221,9 @@ export function planFloor(
     width,
     height,
     cells,
+    look: new Uint8Array(width * height),
+    structures: [],
+    version: 0,
     rooms,
     doors,
     start: { x: 0, y: 0 },
@@ -277,9 +280,9 @@ function graphSteps(near: number[][], from: number): number[] {
   return steps;
 }
 
-/** Steps from `p`'s cell to every cell, over cells that aren't walls (`UNREACHED` past them). */
+/** Steps from `p`'s cell to every cell, over cells that aren't solid (`UNREACHED` past them). */
 function cellSteps(map: FloorMap, p: Vec): Uint16Array {
-  const { width, height, cells } = map;
+  const { width, height } = map;
   const field = new Uint16Array(width * height).fill(UNREACHED);
   const first = Math.floor(p.y) * width + Math.floor(p.x);
   field[first] = 0;
@@ -291,8 +294,7 @@ function cellSteps(map: FloorMap, p: Vec): Uint16Array {
       const i = x + d.c;
       const j = y + d.r;
       const n = j * width + i;
-      if (i < 0 || j < 0 || i >= width || j >= height || cells[n] === 1 || field[n] !== UNREACHED)
-        continue;
+      if (solid(map, i, j) || field[n] !== UNREACHED) continue;
       field[n] = field[k] + 1;
       queue.push(n);
     }

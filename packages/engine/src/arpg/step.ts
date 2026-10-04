@@ -22,7 +22,15 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
-import { clipSight, isWalkable, moveCircle, sees, shift, snapToWalkable } from './grid.js';
+import {
+  clipSight,
+  isWalkable,
+  moveCircle,
+  perceives,
+  sees,
+  shift,
+  snapToWalkable,
+} from './grid.js';
 import {
   canAfford,
   castAbility,
@@ -50,6 +58,9 @@ import { fogTick } from './fog.js';
 import { tutorialTick } from './tutorial.js';
 import { scriptTick, spawnMults } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
+import { hitObject, objectsIn, objectsSeparate, objectsTick, objectsTouching } from './objects.js';
+import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
+import { directorTick } from './pack.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -124,7 +135,11 @@ function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   interactTick(ctx);
   projectilesTick(ctx, dt);
   zonesTick(ctx);
+  // The room objects' hooks (see the room objects spec): each a no-op until its area fills it.
+  objectsTick(ctx);
   flowTick(ctx);
+  terrainTick(ctx);
+  directorTick(ctx);
   monstersTick(ctx, dt);
   leashTick(ctx);
   separate(ctx);
@@ -237,8 +252,13 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     );
     // Lightning Rod quickens the step, on top of Surge and any slowing.
     const quick = t < h.quickUntil ? 1 + bal.reactions.lightningRodMove : 1;
+    // Slow ground slows the walk (`groundSpeed`), whatever else does.
     const pace =
-      h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1) * quick * slow;
+      h.stats.moveSpeed *
+      (surge ? 1 + bal.abilities.defend.surgeMove : 1) *
+      quick *
+      slow *
+      groundSpeed(world, h);
     Object.assign(h, moveCircle(world.map, h, h.radius, v.x * pace * dt, v.y * pace * dt));
   }
   if (!dashing) pushesTick(ctx, heading);
@@ -355,11 +375,11 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
 
 // ── Projectiles ────────────────────────────────────────────────────────────
 
-/** Volley darts turn toward their foe while they see it (else the next nearest they see). */
+/** Volley darts turn toward their foe while they perceive it (else the next nearest they do). */
 function steer(ctx: SimCtx, p: Projectile, dt: number): void {
   const map = ctx.world.map;
   let target =
-    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && sees(map, p, m)) ?? null;
+    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && perceives(map, p, m)) ?? null;
   if (!target) {
     target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds));
     p.homingId = target?.id ?? null;
@@ -388,7 +408,13 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
     // A wall stops it at its face (where a bolt bursts); off the map ends it too.
     const wall = !sees(world.map, before, p);
     if (wall) Object.assign(p, clipSight(world.map, before, p));
-    const outside = wall || !isWalkable(world.map, p.x, p.y);
+    // A prop or a hazard it meets is hit, and (as `hitObject` says) stops it there as a wall does.
+    let stopped = false;
+    for (const o of objectsTouching(world, p)) {
+      stopped = hitObject(ctx, o, p.owner === 'hero' ? 'hero' : 'foe');
+      if (stopped) break;
+    }
+    const outside = wall || stopped || !isWalkable(world.map, p.x, p.y);
     const expired = p.traveled >= p.maxDist || outside;
 
     if (p.owner === 'monster') {
@@ -480,7 +506,8 @@ function zonesTick(ctx: SimCtx): void {
           element: z.element,
           infusion: null,
         });
-        // The slam reaches only what it sees.
+        // The slam reaches only what it sees, props and hazards too.
+        for (const obj of objectsIn(world, z, z.radius)) hitObject(ctx, obj, 'foe');
         const o = perfectOrigin(ctx);
         if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius && sees(world.map, z, h))
           hurtHero(ctx, z.damage, z.element, null);
@@ -533,10 +560,21 @@ function gapFromDodge(ctx: SimCtx, m: MonsterEntity): number {
   return o ? dist(m.x, m.y, o.x, o.y) - m.radius - ctx.world.hero.radius : Infinity;
 }
 
-/** Rooted foes stay put (they can still attack in reach); a wall stops the rest. */
-function moveMonster(ctx: SimCtx, m: MonsterEntity, dir: Vec, speed: number, dt: number): void {
+/**
+ * Rooted foes stay put (they can still attack in reach); a wall stops the rest.
+ * Slow ground slows the walk (`groundSpeed`), but not a charger's dash (`ground` false).
+ */
+function moveMonster(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  dir: Vec,
+  speed: number,
+  dt: number,
+  ground = true,
+): void {
   if (isRooted(ctx, m)) return;
-  shift(ctx.world.map, m, m.radius, dir.x * speed * dt, dir.y * speed * dt);
+  const pace = ground ? speed * groundSpeed(ctx.world, m, m.kind === 'boss') : speed;
+  shift(ctx.world.map, m, m.radius, dir.x * pace * dt, dir.y * pace * dt);
   keepInRoom(ctx, m);
 }
 
@@ -680,8 +718,12 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       m.hp = Math.min(m.maxHp, m.hp + m.maxHp * bal.monster.traits.regenPerSecond * dt);
 
     if (m.kbx !== 0 || m.kby !== 0) {
-      shift(world.map, m, m.radius, m.kbx * dt, m.kby * dt);
+      // A wall or cover that stops it short slams it (`wallSlam`).
+      const from = { x: m.x, y: m.y };
+      const want = { x: m.kbx * dt, y: m.kby * dt };
+      shift(world.map, m, m.radius, want.x, want.y);
       keepInRoom(ctx, m);
+      wallSlam(ctx, m, from, want);
       const decay = Math.exp(-10 * dt);
       m.kbx = Math.abs(m.kbx * decay) < 0.05 ? 0 : m.kbx * decay;
       m.kby = Math.abs(m.kby * decay) < 0.05 ? 0 : m.kby * decay;
@@ -696,9 +738,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       continue;
     }
 
-    // A foe wakes when it sees the hero near (or is hit), and its pack with it.
+    // A foe wakes when it perceives the hero near (or is hit), and its pack with it.
     if (!m.aggro) {
-      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && sees(world.map, m, h)) {
+      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && perceives(world.map, m, h)) {
         for (const o of world.monsters) {
           if (!o.dead && !o.aggro && o.packId === m.packId) {
             o.aggro = true;
@@ -717,8 +759,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
-    // It attacks only what it sees; with sight in `ai.directRange` it steers straight at it.
-    const seen = sees(world.map, m, h);
+    // It attacks only what it perceives; with sight in `ai.directRange` it steers straight at it.
+    const seen = perceives(world.map, m, h);
     const near = seen && dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange;
     const chill = Math.min(bal.stacks.frostSlowCap, s.stacks.frost * bal.stacks.frostSlowPerStack);
     const speed = m.speed * (1 - chill);
@@ -728,7 +770,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     switch (m.ai) {
       case 'charger': {
         if (m.chargeUntil > world.t) {
-          moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt);
+          moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt, false);
+          // The dash passes through props and hazards, setting them off.
+          for (const o of objectsTouching(world, m)) hitObject(ctx, o, 'foe');
           if (!m.chargeHit && gap <= 0.25) {
             m.chargeHit = true;
             m.chargeUntil = world.t;
@@ -849,7 +893,9 @@ function separate(ctx: SimCtx): void {
       shift(map, h, h.radius, -n.x * overlap * heroShare, -n.y * overlap * heroShare);
     }
   }
-  // Whatever the moves and pushes left pressed into a wall goes back out.
+  // Props and hazards push bodies out (`objectsSeparate`); then whatever the moves and pushes
+  // left pressed into a wall goes back out.
+  objectsSeparate(ctx);
   for (const m of ms) Object.assign(m, moveCircle(world.map, m, m.radius, 0, 0));
   Object.assign(h, moveCircle(world.map, h, h.radius, 0, 0));
 }
