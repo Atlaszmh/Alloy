@@ -5,7 +5,15 @@ import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { SettingsPanel } from '@/features/delve/hub/SettingsPanel';
-import { Button, Footer, Glyph, PixelSprite, Screen, usePrompts, type Prompt } from '@/features/delve/kit';
+import {
+  Button,
+  Footer,
+  Glyph,
+  PixelSprite,
+  Screen,
+  usePrompts,
+  type Prompt,
+} from '@/features/delve/kit';
 import { version } from '../../package.json';
 import '@/features/delve/delve.css';
 
