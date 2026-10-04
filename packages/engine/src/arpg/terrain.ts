@@ -3,7 +3,7 @@ import type { ArpgWorld, MonsterEntity, Vec } from '../types/arpg.js';
 import { CELL, LOOK_IDS, type FloorMap, type Structure } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { angleBetween, clamp } from './geometry.js';
-import { bindTerrain, groundAt, sees, solid } from './grid.js';
+import { bindTerrain, groundAt, perceives, sees, solid } from './grid.js';
 import { depthGrowth } from './world.js';
 
 /**
@@ -112,14 +112,68 @@ function crumble(ctx: SimCtx, s: Structure): void {
   ctx.events.push({ kind: 'crumble', structure: s.id, cells: s.cells.map((c) => ({ ...c })) });
 }
 
+/** Each world's packs' last-seen points of the hero, by pack id: where a search goes. */
+const lastSeen = new WeakMap<ArpgWorld, Map<number, Vec>>();
+
 /**
  * Each tick, before the director: binds `delve.terrain` to the floor's map
- * (`bindTerrain`: foliage's sight and slow ground). Foes that lost the hero to
- * foliage search its last-seen point (`MonsterEntity.search`, `goal`), and
- * give up. A no-op on the open room.
+ * (`bindTerrain`: foliage's sight and slow ground), and only foliage sheds
+ * aggro (see the room objects spec's "Foliage"). An awake pack none of whose
+ * members perceives the hero, though one sees it (only foliage between),
+ * searches where it last perceived it for `terrain.searchTime` (each member's
+ * `search`, its `goal` that point); any member perceiving the hero ends the
+ * search, and at its end the pack gives up: it walks home and sleeps there,
+ * healed, as after a leash (`leashTick`). Lost behind walls or cover, it keeps
+ * after the hero down the flow field. A boss's pack never searches. A no-op on
+ * the open room.
  */
 export function terrainTick(ctx: SimCtx): void {
   const { world, bal } = ctx;
-  if (world.map.open) return;
-  bindTerrain(world.map, bal.terrain);
+  const { map, hero: h } = world;
+  if (map.open) return;
+  bindTerrain(map, bal.terrain);
+  let seen = lastSeen.get(world);
+  if (!seen) lastSeen.set(world, (seen = new Map()));
+  for (const [id, pack] of awakePacks(world)) {
+    const search = pack.find((m) => m.search)?.search ?? null;
+    if (pack.some((m) => perceives(map, m, h))) {
+      seen.set(id, { x: h.x, y: h.y });
+      if (search) for (const m of pack) Object.assign(m, { search: null, goal: null });
+    } else if (search) {
+      if (world.t >= search.until) for (const m of pack) giveUp(m);
+    } else if (pack.some((m) => sees(map, m, h))) {
+      const at = seen.get(id) ?? { x: h.x, y: h.y };
+      const until = world.t + bal.terrain.searchTime;
+      for (const m of pack) Object.assign(m, { search: { at, until }, goal: at });
+    } else seen.set(id, { x: h.x, y: h.y });
+  }
+}
+
+/**
+ * The awake packs by id, in the list's order: foes awake, not going home,
+ * with a room to go home to, neither dummies nor in a boss's pack.
+ */
+function awakePacks(world: ArpgWorld): Map<number, MonsterEntity[]> {
+  const bosses = new Set(world.monsters.filter((m) => m.kind === 'boss').map((m) => m.packId));
+  const packs = new Map<number, MonsterEntity[]>();
+  for (const m of world.monsters) {
+    if (m.dead || m.dummy || !m.aggro || m.goingHome || m.roomId === null) continue;
+    if (bosses.has(m.packId)) continue;
+    const pack = packs.get(m.packId);
+    if (pack) pack.push(m);
+    else packs.set(m.packId, [m]);
+  }
+  return packs;
+}
+
+/** A search given up: the foe walks home and sleeps there, healed (`leashTick`). */
+function giveUp(m: MonsterEntity): void {
+  Object.assign(m, {
+    search: null,
+    goal: null,
+    goingHome: true,
+    farSince: null,
+    windupUntil: 0,
+    chargeUntil: 0,
+  });
 }
