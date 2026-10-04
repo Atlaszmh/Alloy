@@ -1,5 +1,11 @@
 import type { DataRegistry } from '../data/registry.js';
-import { triggerMatches, tutorialAdvance, tutorialNext, tutorialStep } from '../delve/tutorial.js';
+import {
+  floorSkippable,
+  triggerMatches,
+  tutorialAdvance,
+  tutorialNext,
+  tutorialStep,
+} from '../delve/tutorial.js';
 import type { ArpgEvent, ArpgWorld } from '../types/arpg.js';
 import type { TutorialEvent } from '../types/tutorial.js';
 import type { SimCtx } from './combat.js';
@@ -171,7 +177,7 @@ export function tutorialExitHeld(world: ArpgWorld): boolean {
 
 /**
  * Events the client raises mid-floor fed into `world.tutorial`: a beat's
- * `ack`, and a `skipStep` (only at the step's `skipAfter` misses); then the
+ * `ack`, and a `skipStep` (only while `floorSkippable`); then the
  * floor's steps and gates settle as a tick's do.
  */
 export function worldTutorialEvents(
@@ -182,9 +188,7 @@ export function worldTutorialEvents(
   for (const e of events) {
     const tut = world.tutorial;
     if (!tut) break;
-    const step = tutorialStep(registry, tut);
-    const skippable = step?.skipAfter !== undefined && tut.misses >= step.skipAfter;
-    if (e.type === 'skipStep' && !skippable) continue;
+    if (e.type === 'skipStep' && !floorSkippable(registry, tut, world)) continue;
     const next = tutorialAdvance(registry, tut, e);
     if (next !== tut) world.tutorial = next && { ...next, tally: tut.tally };
   }

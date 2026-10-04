@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { killMonster, makeCtx } from '../src/arpg/combat.js';
+import { stepWorld } from '../src/arpg/step.js';
+import { worldTutorialEvents } from '../src/arpg/tutorial.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
+import { beginFloor, startDive } from '../src/delve/dive.js';
 import { addSlot, transferMoveset } from '../src/delve/moveset.js';
 import { addLootToBag, createDelveProfile, equipItem } from '../src/delve/profile.js';
 import { startTutorial, tutorialSkippable } from '../src/delve/tutorial.js';
@@ -9,6 +13,7 @@ import { rollEncounterDrops } from '../src/loot/drops.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { defaultMoveset } from '../src/loot/moveset.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
+import type { ArpgWorld } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
@@ -16,8 +21,7 @@ import type { ManaType } from '../src/types/mana.js';
 // The guided start's whole-feature review: each finding's fix.
 
 const registry = createDefaultRegistry();
-const fresh = (primary: 'fire' | 'frost' = 'fire') =>
-  createDelveProfile(registry, 7, { primary });
+const fresh = (primary: 'fire' | 'frost' = 'fire') => createDelveProfile(registry, 7, { primary });
 
 describe('auto-salvage waits for the tutorial', () => {
   it('keeps an uncommon set drop with uncommon auto-salvage on, while the tutorial runs', () => {
@@ -39,7 +43,10 @@ describe('no legendary gear below essenceMinDepth', () => {
   // Luck so high a boss's roll is all but always legendary where it may be.
   const lucky = new DataRegistry({
     ...data,
-    balance: { ...data.balance, delve: { ...data.balance.delve, loot: { ...loot, bossLuck: 1000 } } },
+    balance: {
+      ...data.balance,
+      delve: { ...data.balance.delve, loot: { ...loot, bossLuck: 1000 } },
+    },
   });
   const roll = (depth: number, seed: number) =>
     rollEncounterDrops(
@@ -131,5 +138,34 @@ describe('addSlot checks the tutorial', () => {
     const res = addSlot(registry, p, 'primary');
     expect(res.ok).toBe(true);
     expect(res.profile.tutorial!.step).toBe('l1-salvage');
+  });
+});
+
+describe('a floor step that needs foes, once they are all dead', () => {
+  /** Dive 2's first floor at step `step` (its own step names it). */
+  const floorAt = (step: string) => {
+    const start = startDive(registry, startTutorial(registry, fresh()), 1);
+    const p = { ...atStep(step, start), dive: start.dive };
+    return { p, w: beginFloor(registry, p) };
+  };
+  const killAll = (w: ArpgWorld) => {
+    for (const m of [...w.monsters]) killMonster(makeCtx(registry, w, []), m);
+    stepWorld(registry, w, { move: { x: 0, y: 0 } }, registry.getDelveBalance().arena.step);
+  };
+
+  it('d2-pips offers Skip this step after its seconds, as d2-five does', () => {
+    const steps = registry.getTutorialData().steps;
+    expect(steps.find((s) => s.id === 'd2-pips')!.skipAfter).toBeGreaterThan(0);
+  });
+
+  it('offers Skip this step with every foe dead and no reaction set off, and the skip goes', () => {
+    const { p, w } = floorAt('d2-pips');
+    expect(w.tutorialFloor).toBe('d2-1');
+    expect(tutorialSkippable(registry, p, w.tutorial!, w)).toBe(false);
+    killAll(w);
+    expect(w.tutorial!.step).toBe('d2-pips');
+    expect(tutorialSkippable(registry, p, w.tutorial!, w)).toBe(true);
+    worldTutorialEvents(registry, w, [{ type: 'skipStep' }]);
+    expect(w.tutorial!.step).not.toBe('d2-pips');
   });
 });

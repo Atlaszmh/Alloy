@@ -321,20 +321,41 @@ function unaffordable(registry: DataRegistry, profile: DelveProfile, step: Tutor
   }
 }
 
+/** The floor triggers a foe must be alive for: with every foe dead, their step can't complete. */
+const NEEDS_FOES: ReadonlySet<string> = new Set(['kill', 'boss', 'reaction', 'perfectDodge']);
+
 /**
  * Whether "Skip this step" is offered for `state` (the profile's, or a floor's
- * `world.tutorial`): its misses at the step's `skipAfter`, or an Anvil step
- * whose op the hero can't pay. False with no tutorial.
+ * `world.tutorial`): its misses at the step's `skipAfter`, a floor step that
+ * needs foes with every foe on `world`'s floor dead, or an Anvil step whose op
+ * the hero can't do. False with no tutorial.
  */
 export function tutorialSkippable(
   registry: DataRegistry,
   profile: DelveProfile,
   state: TutorialState,
+  world?: ArpgWorld | null,
+): boolean {
+  const step = tutorialStep(registry, state);
+  if (!step) return false;
+  if (step.where === 'floor') return floorSkippable(registry, state, world);
+  if (step.skipAfter !== undefined && state.misses >= step.skipAfter) return true;
+  return step.where === 'anvil' && unaffordable(registry, profile, step);
+}
+
+/**
+ * `tutorialSkippable` for a floor step (`worldTutorialEvents`' too): its misses
+ * at its `skipAfter`, or its trigger needing foes and none left alive on `world`.
+ */
+export function floorSkippable(
+  registry: DataRegistry,
+  state: TutorialState,
+  world?: ArpgWorld | null,
 ): boolean {
   const step = tutorialStep(registry, state);
   if (!step) return false;
   if (step.skipAfter !== undefined && state.misses >= step.skipAfter) return true;
-  return step.where === 'anvil' && unaffordable(registry, profile, step);
+  return !!world && NEEDS_FOES.has(step.trigger.type) && !world.monsters.some((m) => !m.dead);
 }
 
 /**

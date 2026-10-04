@@ -308,6 +308,7 @@
       "line": "Every hit leaves its element on a foe: the pips under it. Land {primary} and {secondary} on the same foe and they react.",
       "objective": "Set off {reaction}",
       "gate": { "exit": true },
+      "skipAfter": 120,
       "trigger": { "type": "reaction", "filter": { "pair": true }, "count": 1 }
     },
     {

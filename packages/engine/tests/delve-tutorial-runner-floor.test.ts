@@ -74,7 +74,8 @@ describe('a floor step', () => {
   });
 
   it('a perfect-dodge step counts each dodge as a miss, and takes a skip only at skipAfter', () => {
-    const w = guided('perfect');
+    // A foe stands (with none left, a step that needs one is skippable at once).
+    const w = guided('perfect', twoRooms('combat'), 'd1-1', [dummy(22, 3)]);
     tick(w, { dodge: true });
     runFor(w, 1);
     worldTutorialEvents(script, w, [{ type: 'skipStep' }]);

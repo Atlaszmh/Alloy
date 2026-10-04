@@ -107,7 +107,7 @@ export function TutorialPanel({
   if (!step) return null;
   const giver = registry.getQuestsData().giver;
   const text = tutorialText(registry, profile, step.id, world);
-  const skippable = tutorialSkippable(registry, profile, state);
+  const skippable = tutorialSkippable(registry, profile, state, world);
   const need = step.trigger.count;
   return (
     <Panel
