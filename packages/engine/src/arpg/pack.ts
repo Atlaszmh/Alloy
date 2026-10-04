@@ -5,6 +5,7 @@ import { clamp, dirTo, dist } from './geometry.js';
 import { isWalkable, perceives, sees, snapToWalkable, solid } from './grid.js';
 import { clearanceOf, downhill, flowField } from './flow.js';
 import { objectsOnBeam, objectsTouching } from './objects.js';
+import { footprints } from './objects-base.js';
 
 /**
  * The pack director (see the room objects spec's "Smarter packs"): every
@@ -192,7 +193,11 @@ function goalField(ctx: SimCtx, m: MonsterEntity, goal: Vec): Uint16Array {
   const key = `${map.version}:${cell}:${clear}`;
   const fields = stateOf(world).fields;
   let field = fields.get(key);
-  if (!field) fields.set(key, (field = flowField(map, goal, bal.ai.pack.flowRadius, clear)));
+  if (!field)
+    fields.set(
+      key,
+      (field = flowField(map, goal, bal.ai.pack.flowRadius, clear, footprints(world))),
+    );
   return field;
 }
 
@@ -231,7 +236,7 @@ function coverSpot(ctx: SimCtx, st: DirectorState, m: MonsterEntity): Vec | null
   let fire = st.cover.get(m.id);
   if (fire === undefined || !serves(fire)) {
     fire = undefined;
-    const steps = flowField(map, m, coverSearch, clearanceCells(ctx, m));
+    const steps = flowField(map, m, coverSearch, clearanceCells(ctx, m), footprints(ctx.world));
     const cx = Math.floor(m.x);
     const cy = Math.floor(m.y);
     for (

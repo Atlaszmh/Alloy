@@ -3,7 +3,7 @@ import type { FloorMap, Rect, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { dirTo, dist } from './geometry.js';
 import { solid } from './grid.js';
-import { footprints } from './objects.js';
+import { footprints } from './objects-base.js';
 
 /**
  * Foes' pathing and leashing on the grid (see the floor maps spec's
