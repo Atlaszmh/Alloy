@@ -854,7 +854,10 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7 || !seen) pursue(ctx, m, toTarget, seen, speed, dt);
+        // A ranged foe in cover walks to its spot (`goalWay`); else it keeps its distance.
+        const way = goalWay(ctx, m, seen);
+        if (way) moveMonster(ctx, m, way, speed, dt);
+        else if (gap > 7 || !seen) pursue(ctx, m, toTarget, seen, speed, dt);
         else if (gap < 3.5) moveMonster(ctx, m, toTarget, -speed * 0.7, dt);
         if (seen && gap <= 8 && world.t >= m.nextAttackAt) {
           m.windupStart = world.t;

@@ -1,8 +1,8 @@
 import type { ArpgWorld, MonsterEntity, Vec } from '../types/arpg.js';
-import type { FloorMap, PackAiBalance, Rect } from '../types/floor-map.js';
+import { CELL, type FloorMap, type PackAiBalance, type Rect } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { clamp, dirTo, dist } from './geometry.js';
-import { isWalkable, sees, snapToWalkable } from './grid.js';
+import { isWalkable, perceives, sees, snapToWalkable, solid } from './grid.js';
 import { clearanceOf, downhill, flowField } from './flow.js';
 import { objectsOnBeam } from './objects.js';
 
@@ -17,6 +17,21 @@ import { objectsOnBeam } from './objects.js';
 
 /** A goal this near is reached. */
 const REACHED = 0.25;
+/** A ranged foe's cover lies at most this far from the hero (it fires from 8). */
+const SHOOT_RANGE = 7;
+/** A ranged foe hiding between volleys steps back out this long before its next. */
+const PEEK = 0.6;
+/** The eight neighbours, orthogonal first. */
+const AROUND = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [-1, 1],
+  [1, -1],
+  [-1, -1],
+];
 
 /** What the director remembers of a world between its passes. */
 interface DirectorState {
@@ -24,6 +39,8 @@ interface DirectorState {
   hero: Vec | null;
   /** Per pack: the hero's distance from its centre at the last pass, and since when it has grown. */
   kite: Map<number, { d: number; since: number | null }>;
+  /** Per ranged foe in cover: the cell it shoots from. */
+  cover: Map<number, number>;
   /** Goal fields built since the last pass, by the map's version, the goal's cell and a clearance. */
   fields: Map<string, Uint16Array>;
 }
@@ -32,7 +49,8 @@ const STATES = new WeakMap<ArpgWorld, DirectorState>();
 
 function stateOf(world: ArpgWorld): DirectorState {
   let s = STATES.get(world);
-  if (!s) STATES.set(world, (s = { hero: null, kite: new Map(), fields: new Map() }));
+  if (!s)
+    STATES.set(world, (s = { hero: null, kite: new Map(), cover: new Map(), fields: new Map() }));
   return s;
 }
 
@@ -160,6 +178,71 @@ function goalField(ctx: SimCtx, m: MonsterEntity, goal: Vec): Uint16Array {
   return field;
 }
 
+/** Whether cell `i` lies beside cover (a cover or crumbling cell, side by side). */
+function besideCover(map: FloorMap, i: number): boolean {
+  const x = i % map.width;
+  const y = (i - x) / map.width;
+  return AROUND.slice(0, 4).some(([dx, dy]) => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) return false;
+    const c = map.cells[ny * map.width + nx];
+    return c === CELL.cover || c === CELL.crumbling;
+  });
+}
+
+/**
+ * A ranged foe's spot in cover: the cell it shoots from, kept while it still
+ * serves, else the nearest by steps (within `coverSearch`; ties in row order)
+ * walkable cell beside cover that perceives the hero, within `SHOOT_RANGE` of
+ * it and farther than `coverFlee`. Between volleys it waits on a cell beside
+ * that one the hero can't see (if any). Null when there is none: it fights in
+ * the open, as before.
+ */
+function coverSpot(ctx: SimCtx, st: DirectorState, m: MonsterEntity): Vec | null {
+  const { world, bal } = ctx;
+  const { map, hero: h } = world;
+  const w = map.width;
+  const { coverSearch, coverFlee } = bal.ai.pack.cover;
+  const centre = (i: number): Vec => ({ x: (i % w) + 0.5, y: Math.floor(i / w) + 0.5 });
+  const serves = (i: number) => {
+    const c = centre(i);
+    const d = dist(c.x, c.y, h.x, h.y);
+    return d > coverFlee && d <= SHOOT_RANGE && besideCover(map, i) && perceives(map, c, h);
+  };
+  let fire = st.cover.get(m.id);
+  if (fire === undefined || !serves(fire)) {
+    fire = undefined;
+    const steps = flowField(map, m, coverSearch, clearanceCells(ctx, m));
+    const cx = Math.floor(m.x);
+    const cy = Math.floor(m.y);
+    for (
+      let y = Math.max(0, cy - coverSearch);
+      y <= Math.min(map.height - 1, cy + coverSearch);
+      y++
+    )
+      for (let x = Math.max(0, cx - coverSearch); x <= Math.min(w - 1, cx + coverSearch); x++) {
+        const i = y * w + x;
+        if (steps[i] > coverSearch || !serves(i)) continue;
+        if (fire === undefined || steps[i] < steps[fire]) fire = i;
+      }
+    if (fire === undefined) {
+      st.cover.delete(m.id);
+      return null;
+    }
+    st.cover.set(m.id, fire);
+  }
+  if (world.t < m.nextAttackAt - PEEK) {
+    const fx = fire % w;
+    const fy = (fire - fx) / w;
+    for (const [dx, dy] of AROUND) {
+      const c = { x: fx + dx + 0.5, y: fy + dy + 0.5 };
+      if (!solid(map, fx + dx, fy + dy) && !perceives(map, c, h)) return c;
+    }
+  }
+  return centre(fire);
+}
+
 /**
  * Where `m` walks this tick toward its goal, or null to go after the hero as
  * before (`pursue`). A ring slot is walked to only `near` the hero (with sight,
@@ -222,6 +305,13 @@ export function directorTick(ctx: SimCtx): void {
     for (const m of members) {
       m.job = null;
       if (!m.search) m.goal = null;
+      if (m.ai === 'ranged') {
+        const spot = cfg.cover.on ? coverSpot(ctx, st, m) : null;
+        if (spot) {
+          m.job = 'cover';
+          if (!m.search) m.goal = spot;
+        } else st.cover.delete(m.id);
+      }
       if (m.ai !== 'melee') continue;
       if (flank.foes.includes(m)) {
         m.job = 'flank';
@@ -233,5 +323,7 @@ export function directorTick(ctx: SimCtx): void {
     }
   }
   for (const id of st.kite.keys()) if (!packs.has(id)) st.kite.delete(id);
+  for (const id of st.cover.keys())
+    if (!world.monsters.some((m) => m.id === id && m.job === 'cover')) st.cover.delete(id);
   ringSlots(world, ring);
 }
