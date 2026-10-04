@@ -17,7 +17,8 @@ import {
 } from '../types/tutorial-floor.js';
 import type { SimCtx } from './combat.js';
 import { flowField } from './flow.js';
-import { clipSight, snapToWalkable } from './grid.js';
+import { dist } from './geometry.js';
+import { clipSight, sees, snapToWalkable } from './grid.js';
 
 /**
  * The guided start's hand-built floors (see the tutorial spec): building them,
@@ -217,6 +218,48 @@ export function tutorialDrops(ctx: SimCtx, m: MonsterEntity): void {
     if (d.drop.kind === 'gear' && !loot.dropsGiven.includes(m.id)) loot.dropsGiven.push(m.id);
     setDrop(ctx, d, m, m.roomId);
   }
+}
+
+/**
+ * The `slamOnly` script: a slam at most every `every` seconds, at a hero it sees within
+ * `reach`, a telegraph `radius` round where the hero stood that lands `telegraph`
+ * seconds later for `power` × the foe's damage.
+ */
+// ponytail: constants; into balance.json if the guided start's brute is ever tuned there.
+const SLAM = { every: 3.5, telegraph: 1.5, radius: 2.2, reach: 9, power: 2 };
+
+/**
+ * A scripted foe's turn (`monstersTick`'s, awake and not stunned, in place of its AI):
+ * `slamOnly` holds its ground and only slams, winding up through each telegraph (a
+ * monster zone, as the boss's slam: `zonesTick` lands it, and a dodge just before is a
+ * perfect one), never chasing.
+ */
+export function scriptTick(ctx: SimCtx, m: MonsterEntity): void {
+  const { world } = ctx;
+  const h = world.hero;
+  if (m.windupUntil > 0 && world.t >= m.windupUntil) m.windupUntil = 0;
+  if (world.t < m.nextAttackAt || dist(m.x, m.y, h.x, h.y) > SLAM.reach || !sees(world.map, m, h))
+    return;
+  m.nextAttackAt = world.t + SLAM.every;
+  m.windupStart = world.t;
+  m.windupUntil = world.t + SLAM.telegraph;
+  world.zones.push({
+    id: world.nextId++,
+    owner: 'monster',
+    source: null,
+    ability: null,
+    x: h.x,
+    y: h.y,
+    radius: SLAM.radius,
+    born: world.t,
+    until: world.t + SLAM.telegraph + 0.1,
+    tick: 0,
+    nextTick: 0,
+    damage: m.damage * SLAM.power,
+    element: m.element,
+    detonateAt: world.t + SLAM.telegraph,
+    dead: false,
+  });
 }
 
 /**

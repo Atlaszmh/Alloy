@@ -48,6 +48,7 @@ import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
 import { tutorialTick } from './tutorial.js';
+import { scriptTick } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
@@ -706,6 +707,11 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       } else continue;
     }
     if (isStunned(ctx, m)) continue;
+    // A hand-built floor's scripted foe (see the tutorial spec) plays its script, not its AI.
+    if (m.script) {
+      scriptTick(ctx, m);
+      continue;
+    }
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
