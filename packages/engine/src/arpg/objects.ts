@@ -1,10 +1,12 @@
 import type { ArpgWorld, HazardEntity, PropEntity, Vec } from '../types/arpg.js';
-import { killScrap, spawnDrop, type SimCtx } from './combat.js';
+import { BASIC_STATUS, hitMonster, hurtHero, killScrap, spawnDrop, type SimCtx } from './combat.js';
 import { roomAt } from './fog.js';
 import { angleBetween, dirTo, dist, distToSegment } from './geometry.js';
 import { sees, snapToWalkable } from './grid.js';
 import { rollMetal } from './material-drops.js';
 import { standing } from './objects-base.js';
+import { hitStructures } from './terrain.js';
+import { depthGrowth } from './world.js';
 
 /**
  * The room's living things (see the room objects spec): props and hazards, on
@@ -61,11 +63,14 @@ export function objectsTouching(
 
 /**
  * A hit reaching a prop or a hazard (see the room objects spec): a prop takes
- * one of its `life` hits and breaks at none. Whatever it is, the object stops
- * what hit it (a shot ends at it as at a wall); `source` is whose hit it was.
+ * one of its `life` hits and breaks at none; a ready hazard is set off (a
+ * primed or dormant one shrugs it off). Whatever it is, the object stops what
+ * hit it (a shot ends at it as at a wall); `source` is whose hit it was.
  */
 export function hitObject(ctx: SimCtx, obj: RoomObject, _source: ObjectHitSource): boolean {
-  if (obj.type === 'prop' && !obj.dead) {
+  if (obj.type === 'hazard') {
+    if (obj.state === 'ready') prime(ctx, obj);
+  } else if (!obj.dead) {
     obj.life -= 1;
     if (obj.life <= 0) breakProp(ctx, obj);
   }
@@ -97,11 +102,60 @@ function breakProp(ctx: SimCtx, p: PropEntity): void {
   } else spawnDrop(ctx, 'scrap', from, at.x, at.y, { amount: killScrap(ctx, 'normal') });
 }
 
+/** A ready hazard set off: it bursts `terrain.fuse` from now (`hazardPrime`, its telegraph). */
+function prime(ctx: SimCtx, hz: HazardEntity): void {
+  const fuse = ctx.bal.terrain.fuse;
+  hz.state = 'primed';
+  hz.until = ctx.world.t + fuse;
+  const { id, kind: hazard, element, x, y, burst: radius } = hz;
+  ctx.events.push({ kind: 'hazardPrime', id, hazard, element, x, y, radius, fuse });
+}
+
 /**
- * Each tick, after the zones (B3): fuses burn down and burst, dormant hazards
- * recharge, broken props go. Stub: a no-op.
+ * A primed hazard bursts (`hazardBurst`) on everyone within its `burst` that it
+ * sees, for `terrain.hazardDamage` × the depth's foe damage (`depthGrowth`):
+ * the hero takes the damage only (`noPerfect`: a dodge's i-frames avoid it, but
+ * it is never a perfect dodge); each foe takes it as nobody's hit (source
+ * `hazard`: no crit, none of the hero's element power) with its element's
+ * stacks as a heavy blow brings them, reactions as usual. It wears crumbling
+ * cover, sets off the hazards and breaks the props it reaches (a chain), and
+ * is dormant for `terrain.recharge`.
  */
-export function objectsTick(_ctx: SimCtx): void {}
+function burst(ctx: SimCtx, hz: HazardEntity): void {
+  const { world, bal, registry } = ctx;
+  const g = depthGrowth(registry, world.depth);
+  const damage = bal.terrain.hazardDamage * bal.monster.baseDmg * g.dmg * g.ramp;
+  const { id, kind: hazard, element, x, y, burst: radius } = hz;
+  hz.state = 'dormant';
+  hz.until = world.t + bal.terrain.recharge;
+  ctx.events.push({ kind: 'hazardBurst', id, hazard, element, x, y, radius });
+  const reaches = (b: { x: number; y: number; radius: number }) =>
+    dist(x, y, b.x, b.y) <= radius + b.radius && sees(world.map, hz, b);
+  if (reaches(world.hero)) hurtHero(ctx, damage, element, null, { noPerfect: true });
+  for (const m of world.monsters)
+    if (!m.dead && reaches(m))
+      hitMonster(ctx, m, damage, element, {
+        source: 'hazard',
+        applies: [BASIC_STATUS[element]],
+        stacks: bal.stacks.basicByKind.heavy,
+        rattles: element === 'earth',
+      });
+  hitStructures(ctx, hz, radius, damage);
+  for (const o of objectsIn(world, hz, radius)) if (o !== hz) hitObject(ctx, o, 'hazard');
+}
+
+/**
+ * Each tick, after the zones: a primed hazard's fuse ends in its burst, and a
+ * dormant one is ready again at `until`.
+ */
+export function objectsTick(ctx: SimCtx): void {
+  const { world } = ctx;
+  for (const hz of world.hazards)
+    if (world.t >= hz.until) {
+      if (hz.state === 'primed') burst(ctx, hz);
+      else if (hz.state === 'dormant') hz.state = 'ready';
+    }
+}
 
 /**
  * At the end of `separate`, before the walls' push-out (B3): bodies are pushed

@@ -541,7 +541,9 @@ export function hitMonster(
   // A dummy resists as its own setting says (Neutral: nothing); its `element` is only its look.
   const resists = m.dummy ? m.dummy.element : m.element;
   if (element) {
-    if (opts.source !== 'dot') amount *= 1 + stats.elementPower[element];
+    // A DoT's power was in when it was applied; a hazard's burst is nobody's (none of the hero's).
+    if (opts.source !== 'dot' && opts.source !== 'hazard')
+      amount *= 1 + stats.elementPower[element];
     if (resists && element === resists) amount *= 1 - bal.monster.resist;
     if (resists && element === ctx.data.weakness[resists]) amount *= 1 + bal.monster.weakness;
   }
@@ -664,7 +666,13 @@ export function hitMonster(
     m.kbHit = amount;
   }
 
-  if (m.traits.includes('spiked') && opts.source !== 'dot' && opts.source !== 'reaction') {
+  // Spikes send back what the hero dealt: never a DoT's, a reaction's or a hazard's.
+  if (
+    m.traits.includes('spiked') &&
+    opts.source !== 'dot' &&
+    opts.source !== 'reaction' &&
+    opts.source !== 'hazard'
+  ) {
     hurtHero(ctx, amount * bal.monster.traits.spikedFraction, m.element, null, {
       unavoidable: true,
     });
