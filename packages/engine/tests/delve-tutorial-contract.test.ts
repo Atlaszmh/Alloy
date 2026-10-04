@@ -92,7 +92,6 @@ describe('the stubs', () => {
     const p = createDelveProfile(registry, 5, { primary: 'fire' });
     expect(() => engine.startTutorial(registry, p)).toThrow('startTutorial: not implemented');
     expect(() => engine.retryTutorialDepth(registry, p)).toThrow('not implemented');
-    expect(() => engine.awaken(registry, p, 'g0')).toThrow('awaken: not implemented');
   });
 });
 
