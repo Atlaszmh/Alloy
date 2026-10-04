@@ -9,6 +9,7 @@ import { UNREACHED, downhill, flowField } from './flow.js';
 import { doorShut, moveCircle, sees } from './grid.js';
 import { roomAt } from './fog.js';
 import { openedAlcove } from './interact.js';
+import { tutorialStep } from '../delve/tutorial.js';
 
 /**
  * How the bot plays a generated floor (see the floor maps spec's "The autopilot
@@ -31,13 +32,42 @@ const BEELINE_FIGHT = 8;
  * charges to full before it lets go (the bot never taps one). On a generated
  * floor it walks by flow fields, plays `policy` (`explore`) and presses
  * interact at what it uses; its loop answers `exitRequest` and `alcoveOpen`
- * (`botStep`). Drives the pacing tests.
+ * (`botStep`). On a guided floor it also follows the step (`guided`). Drives
+ * the pacing tests.
  */
 export function botInput(
   registry: DataRegistry,
   world: ArpgWorld,
   policy: BotPolicy = 'thorough',
 ): ArpgInput {
+  const input = plainInput(registry, world, policy);
+  return world.tutorial ? guided(registry, world, input) : input;
+}
+
+/**
+ * The guided start's floor step (see the tutorial spec's "The bot"): it walks
+ * to the step's marker, aims a cast the step wants aimed at the nearest foe,
+ * drinks at the potion step once hurt, and dodges at a dodge step once no foe
+ * is left (while one lives, its slams are the usual dodging). Its beats and
+ * "Skip this step" are its loop's (`worldTutorialEvents`).
+ */
+function guided(registry: DataRegistry, world: ArpgWorld, input: ArpgInput): ArpgInput {
+  const step = tutorialStep(registry, world.tutorial);
+  if (!step) return input;
+  const h = world.hero;
+  const floor = registry.getTutorialData().floors.find((f) => f.id === world.tutorialFloor);
+  const marker = floor?.markers.find((m) => m.id === step.marker);
+  if (marker) input.move = toward(world, marker.at);
+  const foe = nearestMonster(makeCtx(registry, world, []), h.x, h.y, 60);
+  if (step.trigger.filter?.aimed && input.cast && foe) input.cast.aim = { x: foe.x, y: foe.y };
+  if (step.trigger.type === 'potion' && h.hp < h.stats.maxHp && h.potions > 0) input.potion = true;
+  const dodging = step.trigger.type === 'dodge' || step.trigger.type === 'perfectDodge';
+  if (dodging && world.monsters.every((m) => m.dead)) input.dodge = true;
+  return input;
+}
+
+/** `botInput` without the guided start's step. */
+function plainInput(registry: DataRegistry, world: ArpgWorld, policy: BotPolicy): ArpgInput {
   const ctx = makeCtx(registry, world, []);
   const h = world.hero;
   const input: ArpgInput = { move: { x: 0, y: 0 } };
