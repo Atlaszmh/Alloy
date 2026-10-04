@@ -343,7 +343,8 @@ export interface BagInsertResult extends Melted {
 }
 
 /**
- * Put fresh loot in the bag, honouring auto-salvage and bag capacity. What
+ * Put fresh loot in the bag, honouring auto-salvage (off while the tutorial
+ * runs) and bag capacity. What
  * doesn't fit or is set to auto-salvage melts (`melt`): mid-dive its yield
  * goes to the floor's haul (see the crafting spec), and a melted weapon's
  * runes leave by the parts rule (`opts.unsocket`, else the balance's).
@@ -361,7 +362,9 @@ export function addLootToBag(
   const salvaged: GearItem[] = [];
   let bagFull = false;
   for (const item of items) {
-    const auto = item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
+    // Never while the tutorial runs: its set gear is the next steps' (see the tutorial spec).
+    const auto =
+      !profile.tutorial && item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
     if (auto || bag.length >= bagSize) {
       if (!auto) bagFull = true;
       salvaged.push(item);
