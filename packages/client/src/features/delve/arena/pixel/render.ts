@@ -1,5 +1,5 @@
 import type { RGB } from './themes';
-import { DETAIL, LOOK, MAT, PART, PROP, type PixelWorld } from './world';
+import { DETAIL, FLOOR_CELL, LOOK, MAT, PART, PROP, type PixelWorld } from './world';
 
 /**
  * Draws a PixelWorld into an RGBA buffer, lit like a night scene:
@@ -22,6 +22,8 @@ export interface RenderView {
   h: number;
   /** Output pixels per cell (1 or 2). */
   scale: number;
+  /** `out` holds a second picture under the first: the foliage's leaves (`passCanopy`). */
+  canopy?: boolean;
 }
 
 const LIGHT_GAIN = 1.6;
@@ -1195,6 +1197,62 @@ function puff(
     for (let dx = 0; dx < size; dx++) put(F, rx + dx, ry + dy, r, g, b, a);
 }
 
+/**
+ * The foliage's leaves, drawn over everything on the floor: a second picture
+ * under the first (premultiplied alpha, lit as the floor). What stands in
+ * foliage shows only through the gaps, trampled leaves part, and round the
+ * hero standing in it (`seeThrough`) they turn see-through.
+ */
+function passCanopy(F: Frame): void {
+  const { pw, out, S, V, x0, y0, vw, vh, s, RW, RH } = F;
+  const W = pw.width;
+  const base = RW * RH * 4;
+  out.fill(0, base, base * 2);
+  const { mat, trample, frost } = pw;
+  const { sway, sw: sgw, tint, bushBlade, bladeThr } = S;
+  const LF = V.lightF;
+  const see = pw.seeThrough;
+  const leaf = pw.theme.bush[2];
+  const vine = greener(leaf);
+  for (let y = y0; y < y0 + vh; y++) {
+    for (let x = x0; x < x0 + vw; x++) {
+      const i = y * W + x;
+      if (mat[i] !== MAT.BUSH || pw.codeAt(i) !== FLOOR_CELL.foliage) continue;
+      let a = 0.85 * (1 - trample[i]);
+      if (see) {
+        const d = Math.hypot(x - see.x, y - see.y) / see.r;
+        if (d < 1) a *= 0.15 + 0.85 * d * d;
+      }
+      if (a < 0.02) continue;
+      const c: RGB = frost[i] > 0.2 ? [230, 242, 255] : pw.lookAt(i) === LOOK.vines ? vine : leaf;
+      const lift = (1.12 + tint[i] * 0.18) * a;
+      const kc = ((y - y0) * vw + (x - x0)) * 3;
+      const r = c[0] * lift * LF[kc];
+      const g = c[1] * lift * LF[kc + 1];
+      const b = c[2] * lift * LF[kc + 2];
+      const sv = sway[(y >> 2) * sgw + (x >> 2)];
+      const blades = bushBlade[i];
+      for (let sy = 0; sy < s; sy++) {
+        // A cell up from its stem: the leaves stand over what is in them.
+        const ry = (y - y0 - 1) * s + sy;
+        if (ry < 0 || ry >= RH) continue;
+        for (let sx = 0; sx < s; sx++) {
+          const q = sx + sy * MAX_SCALE;
+          if (!((blades >> q) & 1)) continue;
+          const thr = bladeThr[i * SUBS + q];
+          const rx = (x - x0) * s + sx + (sv > thr ? 1 : sv < -thr ? -1 : 0);
+          if (rx < 0 || rx >= RW) continue;
+          const o = base + (ry * RW + rx) * 4;
+          out[o] = r;
+          out[o + 1] = g;
+          out[o + 2] = b;
+          out[o + 3] = a * 255;
+        }
+      }
+    }
+  }
+}
+
 /** albedo × (ambient + light) + emissive. */
 function composite(F: Frame): void {
   const { out, V, vw, s, RW, RH } = F;
@@ -1256,4 +1314,5 @@ export function renderPixelWorld(
   passProps(F);
   passParticles(F);
   composite(F);
+  if (view?.canopy) passCanopy(F);
 }

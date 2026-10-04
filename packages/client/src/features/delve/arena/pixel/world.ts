@@ -263,6 +263,10 @@ export class PixelWorld {
   private readonly structOf: Int16Array | null;
   /** How worn each crumbling structure is (0 whole, 1 about to crumble): its cracks. */
   readonly damage: Float32Array;
+  /** The map holds foliage: the render lays its leaves in a picture of their own (the canopy). */
+  readonly hasFoliage: boolean;
+  /** Where the hero stands in foliage (cells), and how far round it the leaves turn see-through; null outside it. */
+  seeThrough: { x: number; y: number; r: number } | null = null;
   /** Each map cell's room (its index), −1 in a hall or a wall. */
   private roomOf: Int16Array | null = null;
   /** Each room's paving origin (floor cells), or null for its wild ground. */
@@ -357,6 +361,7 @@ export class PixelWorld {
     this.plan?.structures.forEach((cells, k) => {
       for (const { x, y } of cells) this.structOf![y * this.plan!.width + x] = k;
     });
+    this.hasFoliage = this.plan?.cells.includes(FLOOR_CELL.foliage) ?? false;
     this.chunksW = Math.ceil(this.width / CHUNK);
     this.chunksH = Math.ceil(this.height / CHUNK);
     this.awake = new Uint8Array(this.chunksW * this.chunksH).fill(1);

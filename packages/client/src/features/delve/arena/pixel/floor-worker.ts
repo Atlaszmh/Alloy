@@ -19,6 +19,7 @@ export type FloorResponse =
       height: number;
       x: number;
       y: number;
+      layers: number;
       cost: number;
     }
   | { type: 'idle'; buffer: ArrayBuffer | null };
@@ -51,6 +52,7 @@ scope.onmessage = (e: MessageEvent<FloorRequest>) => {
     height: picture.height,
     x: picture.x,
     y: picture.y,
+    layers: picture.layers,
     cost: engine.renderCost,
   };
   scope.postMessage(reply, [buffer]);

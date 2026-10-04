@@ -11,7 +11,13 @@ import {
 import { FLOOR_CELL, FLOOR_LOOKS, LOOK, MAT, PixelWorld } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
-import { FloorEngine, floorInit, type FloorFrame } from '../arena/pixel/floor-engine';
+import { Texture } from 'pixi.js';
+import {
+  FloorEngine,
+  floorInit,
+  snapshotArena,
+  type FloorFrame,
+} from '../arena/pixel/floor-engine';
 import { PixelFloor } from '../arena/pixel/pixel-floor';
 import { getDelveRegistry } from '../registry';
 import { ringMap } from './hand-map';
@@ -296,5 +302,83 @@ describe('the floor follows the map', { timeout: 20000 }, () => {
     expect(sent[4].cells).toBeUndefined();
     spy.mockRestore();
     floor.destroy();
+  });
+});
+
+describe("the foliage's canopy", { timeout: 20000 }, () => {
+  /** The canopy's alpha at each floor cell, drawn whole at a pixel a cell. */
+  function canopy(pw: PixelWorld): (i: number) => number {
+    const out = new Uint8ClampedArray(pw.size * 8);
+    renderPixelWorld(pw, out, 1, {
+      x0: 0,
+      y0: 0,
+      w: pw.width,
+      h: pw.height,
+      scale: 1,
+      canopy: true,
+    });
+    return (i) => out[(pw.size + i) * 4 + 3];
+  }
+
+  it('lays leaves over the foliage alone, in a second picture under the floor', () => {
+    const pw = floor(furnished());
+    expect(pw.hasFoliage).toBe(true);
+    expect(floor(ringMap()).hasFoliage).toBe(false);
+    const alpha = canopy(pw);
+    // The patch (26–28, 30–32), a cell higher (the leaves stand up) and one to each side (the sway).
+    const [x0, y0] = [pw.margin + 26 * PPU - 1, pw.margin + 30 * PPU - 1];
+    const [x1, y1] = [pw.margin + 29 * PPU, pw.margin + 33 * PPU - 1];
+    let leaves = 0;
+    for (let i = 0; i < pw.size; i++) {
+      const [x, y] = [i % pw.width, Math.floor(i / pw.width)];
+      if (x < x0 || x > x1 || y < y0 || y >= y1) expect(alpha(i)).toBe(0);
+      else if (alpha(i) > 0) leaves++;
+    }
+    expect(leaves).toBeGreaterThan(80);
+  });
+
+  it('turns see-through round the hero standing in it', () => {
+    const pw = floor(furnished());
+    const c = mid(pw, 27, 31);
+    const [cx, cy] = [c % pw.width, Math.floor(c / pw.width)];
+    const near = (alpha: (i: number) => number) => {
+      let sum = 0;
+      for (let y = cy - 5; y <= cy + 5; y++)
+        for (let x = cx - 5; x <= cx + 5; x++) sum += alpha(y * pw.width + x);
+      return sum;
+    };
+    const shut = near(canopy(pw));
+    pw.seeThrough = { x: cx, y: cy, r: 12.5 };
+    expect(near(canopy(pw))).toBeLessThan(shut * 0.4);
+  });
+
+  it('opens round the hero in foliage, out to its sight there; the canopy rides under the picture', () => {
+    const engine = new FloorEngine({ ...floorInit(onMap(furnished())), foliageSight: 2.5 });
+    const pic = engine.frame(frame({ hero: { x: 27.5, y: 31.5, element: null } }))!;
+    expect(pic.layers).toBe(2);
+    expect(pic.pixels.length).toBe(pic.width * pic.height * 4 * 2);
+    expect(engine.world.seeThrough).toMatchObject({ r: 12.5 });
+    engine.frame(frame({ dt: 0.1 }));
+    expect(engine.world.seeThrough).toBeNull();
+    expect(new FloorEngine(floorInit(onMap(ringMap()))).frame(frame())!.layers).toBe(1);
+  });
+
+  it('shows the canopy as a sprite of its own, over the same window as the floor', () => {
+    const world = onMap(furnished());
+    const floor = new PixelFloor(floorInit(world));
+    floor.update(0.1, world, { left: 20, top: 20, right: 40, bottom: 34 });
+    expect(floor.canopy.texture).not.toBe(Texture.EMPTY);
+    expect(floor.canopy.texture.frame.height).toBe(floor.sprite.texture.frame.height);
+    expect([floor.canopy.x, floor.canopy.y]).toEqual([floor.sprite.x, floor.sprite.y]);
+    floor.destroy();
+  });
+
+  it('lets no hidden ambusher part the leaves', () => {
+    const world = onMap(furnished());
+    expect(world.monsters.length).toBeGreaterThan(0);
+    world.monsters[0].ambush = true;
+    const snap = snapshotArena(world, 0.1, [], frame().view);
+    expect(snap.bodies.map(([key]) => key)).not.toContain(`m${world.monsters[0].id}`);
+    expect(snap.bodies).toHaveLength(world.monsters.length);
   });
 });

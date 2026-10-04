@@ -1,5 +1,5 @@
 import type { ArpgEvent, ArpgWorld, ManaType, Rarity } from '@alloy/engine';
-import { PixelWorld, type MapPlan, type PixelLight } from './world';
+import { FLOOR_CELL, PixelWorld, type MapPlan, type PixelLight } from './world';
 import { renderPixelWorld, type RenderView } from './render';
 import { themeForBiome, type RGB } from './themes';
 import { applyArenaEvent, arenaToCell } from './arena-effects';
@@ -30,6 +30,8 @@ export interface FloorInit {
   /** A generated floor's map (without one, the open arena), and the floor's own seed. */
   plan?: MapPlan;
   seed?: number;
+  /** How far round the hero standing in foliage the leaves turn see-through (units): `terrain.foliageSight`. */
+  foliageSight?: number;
 }
 
 /** Everything the floor needs from one game frame, as plain data (it crosses to a worker). */
@@ -73,6 +75,8 @@ export interface FloorPicture {
   /** Top-left of the picture, in arena units. */
   x: number;
   y: number;
+  /** 2: `pixels` holds the foliage's canopy, `height` more rows under the floor's picture. */
+  layers: number;
 }
 
 const ELEMENT_LIGHT: Record<ManaType, RGB> = {
@@ -156,7 +160,8 @@ export function snapshotArena(
   view: FloorFrame['view'],
 ): FloorFrame {
   const bodies: FloorFrame['bodies'] = [['hero', w.hero.x, w.hero.y, w.hero.radius]];
-  for (const m of w.monsters) bodies.push([`m${m.id}`, m.x, m.y, m.radius]);
+  // A pack hidden in foliage (an ambush) parts no leaves until it wakes.
+  for (const m of w.monsters) if (!m.ambush) bodies.push([`m${m.id}`, m.x, m.y, m.radius]);
   const drops: FloorFrame['drops'] = [];
   for (const d of w.drops)
     if (d.item && RARITY_LIGHT[d.item.rarity])
@@ -202,6 +207,9 @@ export class FloorEngine {
   private cost = 0;
   private painted = false;
   private readonly lastPos = new Map<string, number>();
+  /** 2 when the floor has foliage: its canopy rides under the picture. */
+  private readonly layers: number;
+  private readonly foliageSight: number;
 
   constructor(init: FloorInit) {
     this.world = new PixelWorld({
@@ -215,6 +223,8 @@ export class FloorEngine {
       burnRate: 3,
       plan: init.plan,
     });
+    this.layers = this.world.hasFoliage ? 2 : 1;
+    this.foliageSight = init.foliageSight ?? 0;
   }
 
   /** Average milliseconds per repaint. */
@@ -226,6 +236,9 @@ export class FloorEngine {
   frame(f: FloorFrame, reuse?: Uint8ClampedArray): FloorPicture | null {
     if (f.cells) this.world.setCells(f.cells);
     if (f.cracks) this.world.setCracks(f.cracks);
+    this.world.seeThrough = this.inFoliage(f.hero)
+      ? { ...this.cell(f.hero.x, f.hero.y), r: this.foliageSight * FLOOR_PPU }
+      : null;
     for (const e of f.events) applyArenaEvent(this.world, e, FLOOR_PPU, FLOOR_MARGIN);
     // A generated floor simulates the chunks under the view, and the rooms they reach, only.
     if (this.world.plan) {
@@ -251,7 +264,7 @@ export class FloorEngine {
     if (
       !this.pixels &&
       reuse &&
-      reuse.length === this.viewW * FLOOR_SCALE * this.viewH * FLOOR_SCALE * 4
+      reuse.length === this.viewW * FLOOR_SCALE * this.viewH * FLOOR_SCALE * 4 * this.layers
     )
       this.pixels = reuse;
     const t0 = performance.now();
@@ -264,6 +277,14 @@ export class FloorEngine {
 
   private cell(x: number, y: number) {
     return arenaToCell(x, y, FLOOR_PPU, FLOOR_MARGIN);
+  }
+
+  /** Whether the hero stands on a foliage cell of the map. */
+  private inFoliage({ x, y }: { x: number; y: number }): boolean {
+    const plan = this.world.plan;
+    const [mx, my] = [Math.floor(x), Math.floor(y)];
+    if (!plan || mx < 0 || my < 0 || mx >= plan.width || my >= plan.height) return false;
+    return plan.cells[my * plan.width + mx] === FLOOR_CELL.foliage;
   }
 
   private step(f: FloorFrame): void {
@@ -358,7 +379,9 @@ export class FloorEngine {
     if (needW > this.viewW || needH > this.viewH || !this.pixels) {
       this.viewW = Math.max(needW, this.viewW);
       this.viewH = Math.max(needH, this.viewH);
-      this.pixels = new Uint8ClampedArray(this.viewW * FLOOR_SCALE * this.viewH * FLOOR_SCALE * 4);
+      this.pixels = new Uint8ClampedArray(
+        this.viewW * FLOOR_SCALE * this.viewH * FLOOR_SCALE * 4 * this.layers,
+      );
     }
     const cx = ((left + right) / 2 + FLOOR_MARGIN) * FLOOR_PPU;
     const cy = ((top + bottom) / 2 + FLOOR_MARGIN) * FLOOR_PPU;
@@ -368,6 +391,7 @@ export class FloorEngine {
       w: this.viewW,
       h: this.viewH,
       scale: FLOOR_SCALE,
+      canopy: this.layers === 2,
     };
     pw.lights = this.lights(f);
     renderPixelWorld(pw, this.pixels, this.time, view);
@@ -377,6 +401,7 @@ export class FloorEngine {
       height: this.viewH * FLOOR_SCALE,
       x: view.x0 / FLOOR_PPU - FLOOR_MARGIN,
       y: view.y0 / FLOOR_PPU - FLOOR_MARGIN,
+      layers: this.layers,
     };
   }
 
