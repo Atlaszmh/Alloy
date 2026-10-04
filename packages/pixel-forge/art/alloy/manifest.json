@@ -140,6 +140,62 @@
       "file": "sprites/fire-vent.ts"
     },
     {
+      "id": "statue",
+      "size": 16,
+      "units": 1,
+      "subject": "a hooded grey stone statue on a plinth",
+      "source": "code",
+      "file": "sprites/statue.ts"
+    },
+    {
+      "id": "boulder",
+      "size": 16,
+      "units": 1,
+      "subject": "a grey boulder with moss on its crown",
+      "source": "code",
+      "file": "sprites/boulder.ts"
+    },
+    {
+      "id": "spire",
+      "size": 16,
+      "units": 1,
+      "subject": "a jagged black obsidian spire with a molten orange seam",
+      "source": "code",
+      "file": "sprites/spire.ts"
+    },
+    {
+      "id": "ice_pillar",
+      "size": 16,
+      "units": 1,
+      "subject": "a frozen ice column with a snowy capital and base",
+      "source": "code",
+      "file": "sprites/ice-pillar.ts"
+    },
+    {
+      "id": "minecart",
+      "size": 16,
+      "units": 1,
+      "subject": "a toppled iron minecart spilling coal",
+      "source": "code",
+      "file": "sprites/minecart.ts"
+    },
+    {
+      "id": "tomb",
+      "size": 16,
+      "units": 1,
+      "subject": "a carved stone crypt headstone with a cross",
+      "source": "code",
+      "file": "sprites/tomb.ts"
+    },
+    {
+      "id": "machinery",
+      "size": 16,
+      "units": 1,
+      "subject": "a riveted steel boiler with a brass gauge and pipe",
+      "source": "code",
+      "file": "sprites/machinery.ts"
+    },
+    {
       "id": "mine_rat",
       "size": 10,
       "subject": "a mangy grey mine rat with glowing orange ember eyes and a soot-black tail",

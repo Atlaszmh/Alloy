@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getDelveRegistry } from '../registry';
+import { SPRITE_LOOKS } from '../arena/sprite-looks';
 
 const atlas = JSON.parse(
   readFileSync(resolve(__dirname, '../../../../public/sprites/delve/atlas.json'), 'utf8'),
@@ -29,6 +30,7 @@ describe('delve sprite atlas', () => {
     ...monsterIds,
     ...Object.keys(props),
     ...objects.map((o) => o.id),
+    ...SPRITE_LOOKS,
   ]);
 
   it('only holds sprites the game can use', () => {
@@ -55,6 +57,11 @@ describe('delve sprite atlas', () => {
     for (const { id } of hazards) expect(atlas.animations[id]?.length, id).toBe(3);
   });
 
+  it('holds every sprite-drawn cover look, the statue whole, cracked and badly cracked', () => {
+    for (const id of SPRITE_LOOKS) expect(atlas.animations[id]?.length, id).toBeGreaterThan(0);
+    expect(atlas.animations.statue).toHaveLength(3);
+  });
+
   it('keeps one pixel density: every canvas is 16 px per unit of monster or prop size', () => {
     // A size-1 monster is 16 px, a size-3 giant 48 px, and every sprite pixel is the same
     // SPRITE_PIXEL in the world. Canvases follow size, so art and hitboxes stay in proportion.
@@ -69,6 +76,7 @@ describe('delve sprite atlas', () => {
     sizes.set('hesta', 1.6);
     for (const [id, size] of Object.entries(props)) sizes.set(id, size);
     for (const o of objects) sizes.set(o.id, o.radius * 2);
+    for (const look of SPRITE_LOOKS) sizes.set(look, 1);
     for (const [id, names] of Object.entries(atlas.animations)) {
       const want = Math.round(16 * sizes.get(id)!);
       for (const n of names) {
