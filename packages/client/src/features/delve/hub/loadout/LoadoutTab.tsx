@@ -44,8 +44,10 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
   const has = (uid: string | null): uid is string => !!uid && !!findItem(profile, uid);
   // Under the pad only the focus (the selection) counts: a mouse hover left behind never does.
   const target = !pad && has(hovered) ? hovered : has(selected) ? selected : null;
-  // How to delve is for Jump in: a guided save has Hesta (see the tutorial spec).
-  const howTo = !target && profile.stats.dives === 0 && !profile.tutorial;
+  // How to delve is for Jump in (and a skipped guided start) until its first lessons are behind it
+  // (Strike the Anvil claimed): a guided save has Hesta (see the tutorial spec).
+  const howTo =
+    !target && !profile.tutorial && !profile.quests.claimed.includes('strike_the_anvil');
 
   const select = (uid: string) => {
     setSelected(uid);

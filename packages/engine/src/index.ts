@@ -131,6 +131,7 @@ export {
   baseSlots,
   carriedSkills,
   carriedByText,
+  carriedFrom,
   movesetTransfer,
 } from './loot/moveset.js';
 export type { MovesetTransfer } from './loot/moveset.js';

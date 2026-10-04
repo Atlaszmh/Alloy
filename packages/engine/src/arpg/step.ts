@@ -48,7 +48,7 @@ import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
 import { tutorialTick } from './tutorial.js';
-import { scriptTick } from './tutorial-floor.js';
+import { scriptTick, spawnMults } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
@@ -633,6 +633,8 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
           ),
           packId: m.packId,
           roomId: m.roomId,
+          // A hand-built floor's boss (Grask) passes its spawn's tuning on to what it summons.
+          ...spawnMults(ctx, m),
         },
         world.rng,
       );

@@ -4,6 +4,7 @@ import type { MonsterKind } from '../types/arpg.js';
 import type { GearItem } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { RUNE_TIERS, type RuneRef, type RuneTier } from '../types/rune.js';
+import { essenceAllowed } from '../arpg/material-drops.js';
 import { generateItem, rollRarity } from './item-generator.js';
 
 export interface DropContext {
@@ -52,7 +53,11 @@ export function dropLuck(registry: DataRegistry, ctx: Pick<DropContext, 'depth' 
   return depthLuck + kindLuck;
 }
 
-/** A slain foe's gear: an elite's at its chance, a boss's at least `loot.bossMinRarity` (no `legendaryBoost`). */
+/**
+ * A slain foe's gear: an elite's at its chance, a boss's at least `loot.bossMinRarity` (no
+ * `legendaryBoost`); epic at most where no essence may drop (`essenceAllowed`: legendaries are
+ * mid to late game, see the tutorial spec), the roll's draws as before.
+ */
 export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng: SeededRNG): DropResult {
   const loot = registry.getDelveBalance().loot;
   const count = gearCount(registry, ctx, rng);
@@ -63,7 +68,8 @@ export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng
   let nextUid = ctx.nextUid;
   const items: GearItem[] = [];
   for (let i = 0; i < count; i++) {
-    const rarity = rollRarity(registry, { luck, minRarity }, rng);
+    const rolled = rollRarity(registry, { luck, minRarity }, rng);
+    const rarity = rolled === 'legendary' && !essenceAllowed(registry, ctx.depth) ? 'epic' : rolled;
     items.push(generateItem(registry, { uid: `g${nextUid++}`, ilvl, rarity, biomeMana: ctx.biomeMana, pair: ctx.pair }, rng));
   }
   return { items, nextUid };

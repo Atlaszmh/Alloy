@@ -3,7 +3,7 @@ import type { FloorOptions } from '../arpg/world.js';
 import { nextMove } from '../arpg/abilities/cast.js';
 import { honeCost, previewForge } from '../loot/forge.js';
 import { materialCount, refineCost } from '../loot/materials.js';
-import { movesetOf, movesetTransfer } from '../loot/moveset.js';
+import { baseSlots, movesetOf, movesetTransfer } from '../loot/moveset.js';
 import { socketsOf } from '../loot/runes.js';
 import type { Move } from '../types/ability.js';
 import type { ArpgWorld } from '../types/arpg.js';
@@ -203,7 +203,8 @@ function primaryMoves(registry: DataRegistry, profile: DelveProfile): Move[] {
  * `bind` a secondary bound; `setChains` the Primary at `moves` moves, its last
  * in the secondary and a rune in its first; `salvage` no item of `slot` and
  * exactly `rarity` left; `refine` a bar of `metal`; `transfer` a weapon of
- * `rarity` or better equipped; `hone` an item honed. Any other step has no
+ * `rarity` or better equipped, its Primary past its base slots (the moveset
+ * moved onto it); `hone` an item honed. Any other step has no
  * state: false (it waits for its event, or a floor's tallies).
  */
 export function tutorialHolds(
@@ -236,8 +237,14 @@ export function tutorialHolds(
       return !items.some((i) => i.slot === f.slot && i.rarity === f.rarity);
     case 'refine':
       return materialCount(profile.materials, { kind: 'metal', metal: f.metal as MetalId }) > 0;
-    case 'transfer':
-      return atLeast(profile.equipped.weapon, f.rarity);
+    case 'transfer': {
+      // The moveset moved with it: a plain Equip leaves the Primary at its base slots.
+      const weapon = profile.equipped.weapon;
+      return (
+        atLeast(weapon, f.rarity) &&
+        primaryMoves(registry, profile).length > baseSlots(registry, weapon!.baseId, 'primary')
+      );
+    }
     case 'hone':
       return items.some((i) => i.hones > 0);
     default:
@@ -246,18 +253,22 @@ export function tutorialHolds(
 }
 
 /**
- * Whether the hero can't pay for an Anvil step's op as the lesson asks
- * (`tutorialSkippable`): a forge of the cheapest bar at the step's rarity; the
- * Skills step's slot, socket, elements and a pouch rune for what is left of
- * it; the refine into `metal`; the transfer onto a bag weapon of `rarity`; any
- * hone. Generous by design: it only offers "Skip this step".
+ * Whether the hero can't do an Anvil step's op as the lesson asks
+ * (`tutorialSkippable`): a forge of the cheapest bar at the step's rarity (an
+ * equip too, with nothing of the slot and rarity to wear); the Skills step on
+ * a weapon that can't hold its moves, or its slot, socket, elements and a
+ * pouch rune for what is left of it; the refine into `metal`; the transfer
+ * onto a bag weapon of `rarity`; any hone. Generous by design: it only offers
+ * "Skip this step".
  */
 function unaffordable(registry: DataRegistry, profile: DelveProfile, step: TutorialStep): boolean {
   const f = step.trigger.filter ?? {};
   const bal = registry.getDelveBalance();
   const { primary, secondary } = profile.pair;
   const weapon = profile.equipped.weapon;
-  switch (step.trigger.type) {
+  // With nothing to wear, an equip is as unaffordable as the forge that would make it.
+  const owned = itemsOf(profile).some((i) => i.slot === f.slot && atLeast(i, f.rarity));
+  switch (step.trigger.type === 'equip' && !owned ? 'forge' : step.trigger.type) {
     case 'forge': {
       const base = profile.patterns.find((id) => registry.getGearBase(id).slot === f.slot);
       if (!base || !primary) return true;
@@ -273,9 +284,12 @@ function unaffordable(registry: DataRegistry, profile: DelveProfile, step: Tutor
       return !!refused && refused.code !== 'bagFull';
     }
     case 'setChains': {
-      if (!weapon || !secondary) return false;
+      if (!secondary) return false;
+      // A weapon that can't hold the moves (unarmed, no Primary, every slot bought) can't do it.
       const moves = primaryMoves(registry, profile);
-      const slot = moves.length < Number(f.moves) ? slotPrice(registry, weapon, 'primary') : null;
+      const short = moves.length < Number(f.moves);
+      const slot = weapon && short ? slotPrice(registry, weapon, 'primary') : null;
+      if (!weapon || moves.length === 0 || (short && !slot)) return true;
       const socket = moves.length > 0 && socketsOf(moves[0]).length === 0;
       const links = (slot?.links ?? 0) + (socket ? bal.runes.socketLinks[0] : 0);
       const scrap = (slot?.scrap ?? 0) + (socket ? bal.runes.socketScrap[0] : 0);
@@ -307,20 +321,41 @@ function unaffordable(registry: DataRegistry, profile: DelveProfile, step: Tutor
   }
 }
 
+/** The floor triggers a foe must be alive for: with every foe dead, their step can't complete. */
+const NEEDS_FOES: ReadonlySet<string> = new Set(['kill', 'boss', 'reaction', 'perfectDodge']);
+
 /**
  * Whether "Skip this step" is offered for `state` (the profile's, or a floor's
- * `world.tutorial`): its misses at the step's `skipAfter`, or an Anvil step
- * whose op the hero can't pay. False with no tutorial.
+ * `world.tutorial`): its misses at the step's `skipAfter`, a floor step that
+ * needs foes with every foe on `world`'s floor dead, or an Anvil step whose op
+ * the hero can't do. False with no tutorial.
  */
 export function tutorialSkippable(
   registry: DataRegistry,
   profile: DelveProfile,
   state: TutorialState,
+  world?: ArpgWorld | null,
+): boolean {
+  const step = tutorialStep(registry, state);
+  if (!step) return false;
+  if (step.where === 'floor') return floorSkippable(registry, state, world);
+  if (step.skipAfter !== undefined && state.misses >= step.skipAfter) return true;
+  return step.where === 'anvil' && unaffordable(registry, profile, step);
+}
+
+/**
+ * `tutorialSkippable` for a floor step (`worldTutorialEvents`' too): its misses
+ * at its `skipAfter`, or its trigger needing foes and none left alive on `world`.
+ */
+export function floorSkippable(
+  registry: DataRegistry,
+  state: TutorialState,
+  world?: ArpgWorld | null,
 ): boolean {
   const step = tutorialStep(registry, state);
   if (!step) return false;
   if (step.skipAfter !== undefined && state.misses >= step.skipAfter) return true;
-  return step.where === 'anvil' && unaffordable(registry, profile, step);
+  return !!world && NEEDS_FOES.has(step.trigger.type) && !world.monsters.some((m) => !m.dead);
 }
 
 /**

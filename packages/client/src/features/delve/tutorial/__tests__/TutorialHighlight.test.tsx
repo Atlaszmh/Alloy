@@ -44,7 +44,12 @@ describe('TutorialHighlight', () => {
     useDelveStore.getState().resetProfile(1234, 'fire');
     vi.spyOn(registry, 'getTutorialData').mockReturnValue({
       ...registry.getTutorialData(),
-      steps: [step('look', 'hub.delve'), step('read'), step('hud', 'hud.potion')],
+      steps: [
+        step('look', 'hub.delve'),
+        step('read'),
+        step('hud', 'hud.potion'),
+        step('bind', 'mana.bind'),
+      ],
     });
     boxes = { 'hub.delve': DOMRect.fromRect({ x: 100, y: 50, width: 200, height: 40 }) };
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
@@ -133,6 +138,53 @@ describe('TutorialHighlight', () => {
     act(() => screen.getByTestId('other').focus());
     nextFrame();
     expect(screen.getByTestId('other')).toHaveFocus();
+  });
+
+  it("points at the way to a target behind a tab or a view: the view's control, else the hub tab", () => {
+    boxes['hub.tab.skills'] = DOMRect.fromRect({ x: 400, y: 10, width: 100, height: 40 });
+    boxes['skills.mana'] = DOMRect.fromRect({ x: 40, y: 500, width: 200, height: 60 });
+    boxes['mana.bind'] = DOMRect.fromRect({ x: 600, y: 300, width: 300, height: 100 });
+    const hub = (tab: string, view?: 'mana' | 'bind') => (
+      <div data-pad-scope>
+        <button role="tab" aria-selected={tab === 'loadout'} data-tutorial="hub.tab.loadout">
+          Loadout
+        </button>
+        <button role="tab" aria-selected={tab === 'skills'} data-tutorial="hub.tab.skills">
+          Skills
+        </button>
+        {tab === 'skills' && <button data-tutorial="skills.mana">Mana</button>}
+        {view === 'bind' && <div data-tutorial="mana.bind">Bind</div>}
+      </div>
+    );
+    const { rerender } = render(hub('loadout'));
+    render(<TutorialHighlight />);
+    at('bind');
+    expect(ring()).toHaveAttribute('data-target', 'mana.bind');
+    expect(placed()).toEqual(['block', '391px', '1px', '118px', '58px']);
+    rerender(hub('skills'));
+    nextFrame();
+    expect(placed()).toEqual(['block', '31px', '491px', '218px', '78px']);
+    rerender(hub('skills', 'bind'));
+    nextFrame();
+    expect(placed()).toEqual(['block', '591px', '291px', '318px', '118px']);
+  });
+
+  it('passes over a way already open: its tab selected, nothing to point at', () => {
+    boxes['hub.tab.quests'] = DOMRect.fromRect({ x: 400, y: 10, width: 100, height: 40 });
+    vi.mocked(registry.getTutorialData).mockReturnValue({
+      ...registry.getTutorialData(),
+      steps: [step('claim', 'quests.claim')],
+    });
+    render(
+      <div data-pad-scope>
+        <button role="tab" aria-selected data-tutorial="hub.tab.quests">
+          Quests
+        </button>
+      </div>,
+    );
+    render(<TutorialHighlight />);
+    at('claim');
+    expect(ring()!.style.display).toBe('none');
   });
 
   it("never moves the pad's focus onto the HUD", () => {

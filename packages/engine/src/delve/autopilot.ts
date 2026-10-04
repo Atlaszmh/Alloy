@@ -206,7 +206,7 @@ function guideWorld(
 ): void {
   const state = world.tutorial!;
   if (tutorialStep(registry, state)?.beat) worldTutorialEvents(registry, world, [{ type: 'ack' }]);
-  else if (tutorialSkippable(registry, profile, state)) {
+  else if (tutorialSkippable(registry, profile, state, world)) {
     run.skippedSteps.push(state.step);
     worldTutorialEvents(registry, world, [{ type: 'skipStep' }]);
   }

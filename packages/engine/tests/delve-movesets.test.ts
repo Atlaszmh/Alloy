@@ -305,8 +305,9 @@ describe('determinism', () => {
     const strip = items.map(({ moveset: _m, hones: _h, ...rest }) => rest);
     let h = 0x811c9dc5;
     for (const c of JSON.stringify(strip)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
-    // v0.48.0's 180 generated items, then stage 4c's drop-table gear (B1), hashed the same way.
-    expect([items.length, h.toString(16)]).toEqual([204, 'f19d30c9']);
+    // v0.48.0's 180 generated items, then stage 4c's drop-table gear (B1), hashed the same way;
+    // since the guided start, a depth-5 legendary rolls as an epic (`essenceAllowed`).
+    expect([items.length, h.toString(16)]).toEqual([204, '3b6bac46']);
   });
 });
 

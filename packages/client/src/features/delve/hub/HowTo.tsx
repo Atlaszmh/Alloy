@@ -1,4 +1,4 @@
-import { CHAIN_SKILLS, carriedByText, carriedSkills } from '@alloy/engine';
+import { CHAIN_SKILLS, carriedByText, carriedFrom, carriedSkills } from '@alloy/engine';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import type { KeyAction } from '@/features/controls/controls';
@@ -26,6 +26,8 @@ export function HowTo() {
   };
   // What every weapon carries; the rest come with its rarity.
   const always = carriedSkills(registry, { rarity: 'common' });
+  // The rarity (its flux grade) the Primary comes with: a Jump in save's first forge.
+  const firstFlux = carriedFrom(registry, 'primary');
   const loss = pct(registry.getDelveBalance().crafting.deathLoss);
   return (
     <Panel
@@ -70,6 +72,10 @@ export function HowTo() {
             ))}
           </ul>
           <p>Awaken a rare weapon on the Forge's Temper bench and it carries the Ultimate too.</p>
+          <p>
+            Forge your first weapon from your starting kit on the Forge tab: with {firstFlux} flux
+            it carries your Primary {g('primary')}.
+          </p>
         </div>
         <p>
           Each skill is a chain of moves: build them on the{' '}

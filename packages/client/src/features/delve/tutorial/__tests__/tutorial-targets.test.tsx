@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
-import { TUTORIAL_TARGETS } from '@alloy/engine';
+import { TUTORIAL_TARGETS, type TutorialTarget } from '@alloy/engine';
+import { getDelveRegistry } from '../../registry';
+import { WAY_TO } from '../TutorialHighlight';
 import { HubHeader } from '../../hub/HubHeader';
 import { Tabs } from '../../kit';
 
@@ -19,6 +21,21 @@ describe("the guided start's targets", () => {
   it("every target is placed by name (the hub's tabs by HubHeader, Temper's Hone by its bench)", () => {
     const named = TUTORIAL_TARGETS.filter((t) => !t.startsWith('hub.tab.') && t !== 'temper.hone');
     expect(named.filter((t) => !placed(t))).toEqual([]);
+  });
+
+  it("every step's target is on the screen its step shows on, or a way there is (a hub tab, a view)", () => {
+    const screenOf = { floor: 'hud.', stop: 'stop.', anvil: 'hub.', training: 'hub.' } as const;
+    /** The target, then each way to it (`WAY_TO`), to the one on the screen itself. */
+    const ways = (t: TutorialTarget): string[] => [t, ...(WAY_TO[t] ? ways(WAY_TO[t]!) : [])];
+    const bad = getDelveRegistry()
+      .getTutorialData()
+      .steps.filter((s) => s.highlight)
+      .filter((s) => !ways(s.highlight!).at(-1)!.startsWith(screenOf[s.where]))
+      .map((s) => `${s.id}: ${ways(s.highlight!).join(' < ')}`);
+    expect(bad).toEqual([]);
+    // Every target behind the hub's tabs has its way to one.
+    const behind = TUTORIAL_TARGETS.filter((t) => !/^(hud|stop|hub)\./.test(t));
+    expect(behind.filter((t) => !ways(t).at(-1)!.startsWith('hub.tab.'))).toEqual([]);
   });
 
   it("the hub's tabs carry hub.tab.<id>", () => {

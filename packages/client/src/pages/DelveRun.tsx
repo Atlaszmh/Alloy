@@ -324,7 +324,8 @@ export function DelveRun() {
 
   const biome = registry.getBiomeForDepth(dive.depth);
   const starts = startDepthOptions(registry, profile);
-  const skippable = !!tutorial && !!tutorialStep && tutorialSkippable(registry, profile, tutorial);
+  const skippable =
+    !!tutorial && !!tutorialStep && tutorialSkippable(registry, profile, tutorial, world);
 
   const onAgain = () => {
     const s = useDelveStore.getState();
