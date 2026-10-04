@@ -1,5 +1,0 @@
-{
-  "imports": {
-    "@alloy/engine": "../engine/src/index.ts"
-  }
-}

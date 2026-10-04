@@ -1,10 +1,13 @@
 import type { Chains, ChainSkill } from './ability.js';
-import type { GemRarity } from './gem.js';
 import type { ManaType } from './mana.js';
 
-// Delve gear reuses the gem rarity ladder so the whole game speaks one
-// rarity language (common → legendary).
-export type Rarity = GemRarity;
+export type Rarity = 'common' | 'uncommon' | 'magic' | 'rare' | 'epic' | 'legendary';
+
+export const RARITY_ORDER: Rarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary'];
+
+export function rarityIndex(rarity: Rarity): number {
+  return RARITY_ORDER.indexOf(rarity);
+}
 
 export type GearSlot = 'weapon' | 'helm' | 'chest' | 'gloves' | 'boots' | 'amulet' | 'ring';
 

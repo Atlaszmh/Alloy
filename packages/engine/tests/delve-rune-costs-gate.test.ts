@@ -37,20 +37,9 @@ const BAND = [2.0, 3.0];
 describe.skipIf(!process.env.RUNE_COST_GATE)('the rune costs gate (depth 10, eight seeds)', () => {
   const registry = createDefaultRegistry();
   const d = loadAndValidateData();
-  d.balance.delve!.runes.load.bySlot = { primary: 0, defensive: 0, ultimate: 0 };
+  d.balance.delve.runes.load.bySlot = { primary: 0, defensive: 0, ultimate: 0 };
   /** The runes without their price. */
-  const unloaded = new DataRegistry(
-    d.affixes,
-    d.combinations,
-    d.synergies,
-    d.baseItems,
-    d.balance,
-    d.recipes,
-    d.delve,
-    d.arpg,
-    d.crafting,
-    d.quests,
-  );
+  const unloaded = new DataRegistry(d);
   const byKey = new Map(dpsCombos(registry).map((s) => [dpsKey(s), s]));
   const baseOf = (s: DpsSetup) => byKey.get(s.base!)!;
   /** Each run once: a baseline serves every set on its form. */

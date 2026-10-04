@@ -2,7 +2,7 @@ import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { MetalId } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
-import { rarityIndex } from '../types/gem.js';
+import { rarityIndex } from '../types/gear.js';
 import {
   OBJECTIVE_RULES,
   type Objective,

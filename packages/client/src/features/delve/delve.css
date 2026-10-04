@@ -397,3 +397,32 @@
     transform: translate(-50%, -50%) rotate(360deg);
   }
 }
+
+/* ── The title screen (pages/TitleScreen.tsx) ── */
+
+.k-title-logo {
+  margin: 0;
+  font-family: var(--k-font-display);
+  font-weight: 400;
+  font-size: 240px;
+  line-height: 0.8;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--k-hot-hi);
+  /* Gold over a hot rim, then the wood in two pixel steps, and the forge's glow. */
+  text-shadow:
+    0 6px 0 var(--k-hot-lo),
+    6px 12px 0 var(--k-wood-1),
+    12px 18px 0 var(--k-wood-0),
+    0 0 64px rgba(247, 118, 34, 0.45);
+}
+
+.k-title-line {
+  margin: 28px 0 0;
+  font-family: var(--k-font-label);
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--k-wood-text);
+  text-shadow: 2px 2px 0 var(--k-well);
+}

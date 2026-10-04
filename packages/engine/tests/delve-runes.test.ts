@@ -37,7 +37,7 @@ import {
 import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
 import type { ArpgWorld, Drop, DropKind, MonsterKind } from '../src/types/arpg.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
-import { RARITY_ORDER } from '../src/types/gem.js';
+import { RARITY_ORDER } from '../src/types/gear.js';
 import type { DelveProfile, StopKind } from '../src/types/delve.js';
 import type { RunePouch, RuneRef } from '../src/types/rune.js';
 import { arena, bal, chainsOf, dummy, registry, run } from './fixtures/arena.js';

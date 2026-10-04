@@ -13,7 +13,7 @@ import {
 } from '../types/ability.js';
 import type { ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, Moveset, Rarity } from '../types/gear.js';
-import { RARITY_ORDER } from '../types/gem.js';
+import { RARITY_ORDER } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import type { RuneRef } from '../types/rune.js';
 import { runeFits, socketCap, socketsOf } from './runes.js';

@@ -66,7 +66,7 @@ import type { ArpgEvent } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
-import { RARITY_ORDER } from '../src/types/gem.js';
+import { RARITY_ORDER } from '../src/types/gear.js';
 import {
   DEFAULT_CHAINS,
   STEP,

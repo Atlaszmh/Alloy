@@ -55,18 +55,7 @@ const ok = (d: QuestsData) => QuestsDataSchema.safeParse(d).success;
 /** The registry's checks on `d` in place of quests.json. */
 function problems(d: QuestsData): string[] {
   const x = loadAndValidateData();
-  const r = new DataRegistry(
-    x.affixes,
-    x.combinations,
-    x.synergies,
-    x.baseItems,
-    x.balance,
-    x.recipes,
-    x.delve,
-    x.arpg,
-    x.crafting,
-    d,
-  );
+  const r = new DataRegistry({ ...x, quests: d });
   return questsDataProblems(r);
 }
 

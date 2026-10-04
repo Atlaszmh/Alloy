@@ -24,13 +24,14 @@ describe('SystemMenu', () => {
     useDelveStore.getState().resetProfile(1234, 'fire');
   });
 
-  it('is a kit dialog: Resume closes it, Main menu leaves for the main menu', () => {
+  it('is a kit dialog: Resume closes it, Title screen leaves for the title screen', () => {
     const onClose = vi.fn();
     renderMenu({ onClose });
     const menu = screen.getByRole('dialog', { name: 'Menu' });
     expect(menu.closest('#delve-ui-layer')).not.toBeNull();
     fireEvent.click(screen.getByTestId('menu-resume'));
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('menu-main')).toHaveTextContent('Title screen');
     fireEvent.click(screen.getByTestId('menu-main'));
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });

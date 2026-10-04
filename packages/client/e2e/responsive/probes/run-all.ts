@@ -1,11 +1,9 @@
 import type { Page } from '@playwright/test';
 import type { Finding, ProbeCtx } from './types';
 import { overflowX, overflowY, pageScroll } from './overflow';
-import { tabBarVisibility } from './tabbar';
 import { primaryActionReachable } from './reachability';
 import { deadSpace, type DeadSpaceOptions } from './dead-space';
 import { minSize } from './min-size';
-import { forgeDesktopAllVisible } from './forge-desktop-all-visible';
 
 export interface ProbeOverrides {
   deadSpace?: DeadSpaceOptions;
@@ -34,14 +32,11 @@ export async function runAllProbes(
   const probes = [
     { name: 'overflow-x', fn: overflowX },
     { name: 'overflow-y', fn: overflowY },
-    { name: 'tabbar-visibility', fn: tabBarVisibility },
     { name: 'primary-action-reachable', fn: primaryActionReachable },
     // Over the Delve's arena the canvas is the content: no sections to measure.
     ...(ctx.delve?.arena ? [] : [{ name: 'dead-space', fn: deadSpace(overrides?.deadSpace ?? {}) }]),
     { name: 'min-size', fn: minSize },
-    ...(ctx.delve
-      ? [{ name: 'page-scroll', fn: pageScroll }]
-      : [{ name: 'forge-desktop-all-visible', fn: forgeDesktopAllVisible }]),
+    { name: 'page-scroll', fn: pageScroll },
   ];
 
   const all: Finding[] = [];

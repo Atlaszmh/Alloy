@@ -9,8 +9,7 @@ import {
   baseDisplayName,
 } from '../src/loot/item-generator.js';
 import { dropLuck, rollEncounterDrops } from '../src/loot/drops.js';
-import { RARITY_ORDER } from '../src/types/gem.js';
-import { GEAR_SLOTS } from '../src/types/gear.js';
+import { GEAR_SLOTS, RARITY_ORDER } from '../src/types/gear.js';
 import type { Rarity } from '../src/types/gear.js';
 import { MANA_TYPES } from '../src/types/mana.js';
 
@@ -18,7 +17,6 @@ const registry = createDefaultRegistry();
 
 describe('Delve data', () => {
   it('loads delve data and balance', () => {
-    expect(registry.hasDelve()).toBe(true);
     expect(registry.getDelveData().legendaries).toHaveLength(12);
     for (const slot of GEAR_SLOTS) {
       expect(registry.getGearBasesForSlot(slot).length).toBeGreaterThan(0);
