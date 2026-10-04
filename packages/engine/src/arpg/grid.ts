@@ -46,6 +46,16 @@ export function doorShut(d: Door): boolean {
 }
 
 /**
+ * Set a door's `closed` (the seal's) or `held` (the guided start's), bumping
+ * the map's `version` when that opens or shuts it (see the room objects spec).
+ */
+export function setDoor(map: FloorMap, d: Door, by: 'closed' | 'held', on: boolean): void {
+  const was = doorShut(d);
+  d[by] = on;
+  if (doorShut(d) !== was) map.version++;
+}
+
+/**
  * Whether a cell code is solid by itself: a wall, cover or crumbling cover. A
  * door's cell is solid only while its door is shut (`solid` reads the doors);
  * foliage and slow ground never are.

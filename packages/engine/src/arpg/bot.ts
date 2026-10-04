@@ -224,11 +224,12 @@ function shutIn(world: ArpgWorld): Room | undefined {
 
 /**
  * Each world's map as the hero walks it (`heroMap`) and the bot's flow fields
- * on it toward the cells it walks to, kept until a door opens or shuts.
+ * on it toward the cells it walks to, kept until the map's `version` moves or
+ * a door opens or shuts (`key`).
  */
 const paths = new WeakMap<
   ArpgWorld,
-  { map: FloorMap; doors: string; byCell: Map<number, Uint16Array> }
+  { map: FloorMap; key: string; byCell: Map<number, Uint16Array> }
 >();
 
 /**
@@ -259,12 +260,13 @@ function cellOf(world: ArpgWorld, p: Vec): number {
   return cy * w + cx;
 }
 
-/** A flow field over the hero's map toward `p`'s cell, as the doors stand now. */
+/** A flow field over the hero's map toward `p`'s cell, as the cells and doors stand now. */
 function fieldTo(world: ArpgWorld, p: Vec): Uint16Array {
   const doors = world.map.doors.map((d) => (doorShut(d) ? 1 : 0)).join('');
+  const key = `${world.map.version}:${doors}`;
   let kept = paths.get(world);
-  if (!kept || kept.doors !== doors)
-    paths.set(world, (kept = { map: kept?.map ?? heroMap(world.map), doors, byCell: new Map() }));
+  if (!kept || kept.key !== key)
+    paths.set(world, (kept = { map: heroMap(world.map), key, byCell: new Map() }));
   const cell = cellOf(world, p);
   let field = kept.byCell.get(cell);
   if (!field) {
