@@ -9,7 +9,7 @@ import { DataRegistry } from '../src/data/registry.js';
 import { beginFloor, startDive } from '../src/delve/dive.js';
 import { addSlot, transferMoveset } from '../src/delve/moveset.js';
 import { addLootToBag, createDelveProfile, equipItem } from '../src/delve/profile.js';
-import { startTutorial, tutorialSkippable } from '../src/delve/tutorial.js';
+import { startTutorial, tutorialSkippable, tutorialText } from '../src/delve/tutorial.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { defaultMoveset } from '../src/loot/moveset.js';
@@ -17,7 +17,8 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
-import type { ManaType } from '../src/types/mana.js';
+import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
+import { TUTORIAL_INPUTS } from '../src/types/tutorial.js';
 
 // The guided start's whole-feature review: each finding's fix.
 
@@ -214,5 +215,46 @@ describe("a scripted boss's summons", () => {
       const scaled = plain(spawn.hpMult, spawn.damageMult);
       expect([add.maxHp, add.damage]).toEqual([scaled.maxHp, scaled.damage]);
     }
+  });
+});
+
+describe("every step's text, for every pair", () => {
+  const steps = registry.getTutorialData().steps;
+  const pairs = MANA_TYPES.flatMap((p) => [
+    [p, null] as const,
+    ...MANA_TYPES.filter((s) => s !== p).map((s) => [p, s] as const),
+  ]);
+
+  it.each(pairs)('%s with %s: every token filled, every input one the client draws', (p, s) => {
+    const armed = {
+      ...fresh(p),
+      pair: { primary: p, secondary: s },
+      equipped: { ...fresh(p).equipped, weapon: blade([[p], [p]]) },
+    };
+    const bad: string[] = [];
+    for (const step of steps) {
+      const text = tutorialText(registry, armed, step.id);
+      for (const part of [...text.line, ...text.objective]) {
+        if ('input' in part) {
+          if (!(TUTORIAL_INPUTS as readonly string[]).includes(part.input))
+            bad.push(`${step.id}: input ${part.input}`);
+        } else if (/[{}]|undefined|null|NaN| {2}/.test(part.text))
+          bad.push(`${step.id}: "${part.text}"`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it.each(MANA_TYPES)("%s: on the floor, {primarySkill} names the Primary's next move", (p) => {
+    const start = startDive(registry, startTutorial(registry, fresh(p)), 1);
+    const armed = {
+      ...start,
+      equipped: { ...start.equipped, weapon: blade([[p], [p]]) },
+      tutorial: { step: 'd1-cast', count: 0, misses: 0 },
+      dive: { ...start.dive!, depth: 2 },
+    };
+    const w = beginFloor(registry, armed);
+    const [part] = tutorialText(registry, armed, 'd1-cast', w).line;
+    expect(part).toEqual({ text: expect.stringMatching(/carries \S+ \S+\. /) });
   });
 });
