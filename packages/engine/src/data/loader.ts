@@ -5,6 +5,7 @@ import type { RuneDef } from '../types/rune.js';
 import type { CraftingData } from '../types/crafting.js';
 import type { QuestsData } from '../types/quests.js';
 import type { TutorialData } from '../types/tutorial.js';
+import type { SetPiecesData } from '../types/floor-map.js';
 import {
   BalanceConfigSchema,
   ArpgDataSchema,
@@ -16,6 +17,7 @@ import {
   ShrinesDataSchema,
 } from './schemas.js';
 import { TutorialDataSchema } from './tutorial-schema.js';
+import { SetPiecesDataSchema } from './setpieces-schema.js';
 
 import rawBalance from './balance.json';
 import rawDelve from './delve.json';
@@ -26,6 +28,7 @@ import rawQuests from './quests.json';
 import rawLayouts from './layouts.json';
 import rawShrines from './shrines.json';
 import rawTutorial from './tutorial.json';
+import rawSetPieces from './setpieces.json';
 
 export interface LoadedData {
   balance: BalanceConfig;
@@ -35,6 +38,8 @@ export interface LoadedData {
   quests: QuestsData;
   /** `tutorial.json`: the guided start's script and floors (see the tutorial spec). */
   tutorial: TutorialData;
+  /** `setpieces.json`: the props, hazards, set pieces and palettes (see the room objects spec). */
+  setPieces: SetPiecesData;
 }
 
 export function loadAndValidateData(): LoadedData {
@@ -52,6 +57,7 @@ export function loadAndValidateData(): LoadedData {
   const crafting = CraftingDataSchema.parse(rawCrafting) as CraftingData;
   const quests = QuestsDataSchema.parse(rawQuests) as QuestsData;
   const tutorial = TutorialDataSchema.parse(rawTutorial) as TutorialData;
+  const setPieces = SetPiecesDataSchema.parse(rawSetPieces) as SetPiecesData;
 
-  return { balance, delve, arpg, crafting, quests, tutorial };
+  return { balance, delve, arpg, crafting, quests, tutorial, setPieces };
 }

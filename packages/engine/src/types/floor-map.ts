@@ -1,4 +1,5 @@
 import type { DropKind, MonsterKind, Vec } from './arpg.js';
+import type { ManaType } from './mana.js';
 
 // Delve floor maps (see the floor maps spec): the grid, its rooms and doors,
 // what can be used in them, the shrines' blessings, the data and the HUD's map.
@@ -210,6 +211,63 @@ export interface LayoutsData {
   boss: RoomTemplate;
   /** Each prop's size in units (its sprite is 16 px a unit). */
   props: Record<PropId, number>;
+}
+
+// ── Set pieces (setpieces.json; see the room objects spec) ─────────────────
+
+/** Where a set piece may stand in a room: against a wall, in a corner, or in the middle. */
+export const PIECE_TAGS = ['edge', 'corner', 'centre'] as const;
+export type PieceTag = (typeof PIECE_TAGS)[number];
+
+/** The legend's cells that take a look: cover, crumbling cover, foliage and slow ground. */
+export type PieceLookChar = '#' | 'c' | 'f' | '~';
+
+/**
+ * A hand-drawn piece of furnishing: rows over the legend ('#' cover, 'c'
+ * crumbling cover, 'f' foliage, '~' slow ground, 'u' a prop's spot, 'h' a
+ * hazard's spot, '.' open floor, '?' don't care); its size is its rows'.
+ */
+export interface SetPiece {
+  id: string;
+  rows: string[];
+  tags: PieceTag[];
+  /** The biomes it may furnish (by id); absent: every biome. */
+  biomes?: string[];
+  weight: number;
+  /** It may be mirrored and turned. */
+  turns: boolean;
+  /** A legend cell's look in place of the palette's (a statue ring's statues). */
+  looks?: Partial<Record<PieceLookChar, LookId>>;
+}
+
+/** A breakable prop (an urn, a crate…): its body's radius. */
+export interface PropDef {
+  id: string;
+  radius: number;
+}
+
+/** An elemental hazard (a brazier, a storm coil…): its element, its body's radius and its burst's. */
+export interface HazardDef {
+  id: string;
+  element: ManaType;
+  radius: number;
+  burst: number;
+}
+
+/** A biome's furnishing: the looks its cells take, and the props and hazards it places (by id). */
+export interface BiomePalette {
+  looks: Record<'cover' | 'crumbling' | 'foliage' | 'slow', LookId[]>;
+  props: string[];
+  hazards: string[];
+}
+
+/** `setpieces.json` (`registry.getSetPieces()`). */
+export interface SetPiecesData {
+  props: PropDef[];
+  hazards: HazardDef[];
+  pieces: SetPiece[];
+  /** By biome id: every biome has one. */
+  palettes: Record<string, BiomePalette>;
 }
 
 // ── Balance (balance.json → delve.layout, delve.ai) ────────────────────────

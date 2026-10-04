@@ -1,6 +1,7 @@
 import { loadAndValidateData } from './loader.js';
 import { questsDataProblems } from './quests-check.js';
 import { DataRegistry } from './registry.js';
+import { setPiecesProblems } from './setpieces-schema.js';
 import { tutorialDataProblems } from './tutorial-check.js';
 import { tutorialFloorProblems } from './tutorial-floor-schema.js';
 
@@ -13,5 +14,8 @@ export function createDefaultRegistry(): DataRegistry {
   // tutorial.json's references into its floors and the other files (see the tutorial spec).
   const tutorial = [...tutorialDataProblems(registry), ...tutorialFloorProblems(registry)];
   if (tutorial.length > 0) throw new Error(`tutorial.json: ${tutorial.join('; ')}`);
+  // setpieces.json's references into the biomes, its props and its hazards (see the room objects spec).
+  const pieces = setPiecesProblems(registry);
+  if (pieces.length > 0) throw new Error(`setpieces.json: ${pieces.join('; ')}`);
   return registry;
 }

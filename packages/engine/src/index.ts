@@ -257,3 +257,6 @@ export * from './arpg/tutorial-floor.js';
 export * from './data/tutorial-schema.js';
 export * from './data/tutorial-floor-schema.js';
 export * from './data/tutorial-check.js';
+
+// Room objects (see the room objects spec): every module whole, so the areas that build them never edit this file.
+export * from './data/setpieces-schema.js';
