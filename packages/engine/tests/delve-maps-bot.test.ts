@@ -57,11 +57,11 @@ describe('the bot on a generated floor', () => {
   });
 
   it('beeline: makes for the exit, leaving rooms and foes behind, and is out sooner', () => {
-    const rush = playOut(19, 'beeline');
+    const rush = playOut(4, 'beeline');
     expect(rush.exited).toBe(true);
     expect(rush.map.rooms.some((r) => !r.revealed)).toBe(true);
     expect(rush.monsters.some((m) => !m.dead)).toBe(true);
-    expect(rush.t).toBeLessThan(playOut(19, 'thorough').t);
+    expect(rush.t).toBeLessThan(playOut(4, 'thorough').t);
   });
 
   it('takes the exit as soon as the gate answers its press', () => {

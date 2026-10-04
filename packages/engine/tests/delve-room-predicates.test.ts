@@ -50,19 +50,18 @@ describe('solidCode and solid', () => {
     expect([solid(map, -1, 0), solid(map, 0, map.height)]).toEqual([true, true]);
   });
 
-  it("is today's rule on every cell of generated floors: no new cell exists yet", () => {
+  it('is the rule on every cell of generated, furnished floors: the code alone, but a shut door', () => {
     for (const depth of [1, 3, 5, 7]) {
       const biome = registry.getBiomeForDepth(depth);
       const map = generateFloor(registry, 11 + depth, depth, biome, null);
       map.doors[0].closed = true;
-      expect(map.cells.every((c) => c <= 2)).toBe(true);
-      expect(map.look.every((l) => l === 0)).toBe(true);
-      expect([map.structures, map.version]).toEqual([[], 0]);
+      expect(map.cells.some((c) => c > 2)).toBe(true);
+      expect(map.version).toBe(0);
       for (let y = 0; y < map.height; y++)
         for (let x = 0; x < map.width; x++) {
           const c = map.cells[y * map.width + x];
           const shut = map.doors[0].cells.some((v) => v.x === x && v.y === y);
-          expect(solid(map, x, y)).toBe(c === 1 || (c === 2 && shut));
+          expect(solid(map, x, y)).toBe(solidCode(c) || (c === 2 && shut));
         }
     }
   });

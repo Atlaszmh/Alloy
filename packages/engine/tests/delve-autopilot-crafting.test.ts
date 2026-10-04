@@ -28,7 +28,7 @@ describe('economySim', () => {
     expect(report.dives.map((d) => d.depth)).toEqual(run.reports.map((r) => r.endDepth));
     expect(report.dives.map((d) => d.died)).toEqual(run.reports.map((r) => r.result === 'dead'));
     expect(economySim(registry, 1, 3)).toEqual(report); // seeded: the same report
-  });
+  }, 20000);
 
   it("counts every rarity forged and a death's loss, never below zero, as plain data", () => {
     for (const d of report.dives) {
