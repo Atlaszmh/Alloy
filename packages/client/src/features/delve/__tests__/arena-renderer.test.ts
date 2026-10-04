@@ -41,6 +41,7 @@ import { attachKeyboard, createArenaInput } from '../arena/input';
 import { RARITY_TEXT } from '../format';
 import { DUST_COLOR, METAL_COLOR, PATTERN_COLOR } from '../materials/material-style';
 import { runeHex } from '../arena/fx/runes';
+import type { ManaFx } from '../arena/fx/mana-fx';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
 import { useUIStore } from '@/stores/uiStore';
@@ -742,5 +743,42 @@ describe('the guided start on the floor', { timeout: 20000 }, () => {
     w.tutorial = null;
     r.update(0.1);
     expect([drawn(gfx.markerGfx), drawn(gfx.arrowGfx)]).toEqual([false, false]);
+  });
+});
+
+describe("the room objects' moments on the floor", { timeout: 20000 }, () => {
+  it('play only where the hero sees them (a crumble at any of its cells), and shake the screen', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const view = r as unknown as { fx: ManaFx; shake: number };
+    const infuse = vi.spyOn(view.fx, 'infuse');
+    const disperse = vi.spyOn(view.fx, 'disperse');
+    const burst: ArpgEvent = {
+      kind: 'hazardBurst',
+      id: 9,
+      hazard: 'brazier',
+      element: 'fire',
+      x: 10.5,
+      y: 8.5,
+      radius: 2.5,
+    };
+    w.fog[8 * 64 + 10] = 1; // seen once, out of sight now
+    r.handleEvents([burst]);
+    expect([infuse.mock.calls.length, view.shake]).toEqual([0, 0]);
+    w.fog[8 * 64 + 10] = 2;
+    r.handleEvents([burst]);
+    expect(infuse).toHaveBeenCalledTimes(1);
+    expect(view.shake).toBeGreaterThan(0);
+    const cells = [
+      { x: 10, y: 8 },
+      { x: 50, y: 50 },
+    ];
+    w.fog.fill(0);
+    r.handleEvents([{ kind: 'crumble', structure: 0, cells }]);
+    expect(disperse).not.toHaveBeenCalled();
+    w.fog[8 * 64 + 10] = 2;
+    r.handleEvents([{ kind: 'crumble', structure: 0, cells }]);
+    expect(disperse).toHaveBeenCalledTimes(2);
   });
 });

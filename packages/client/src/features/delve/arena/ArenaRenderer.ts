@@ -35,6 +35,7 @@ import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import { barrierBreakFx, reactionFx, reactionLabel } from './fx/reactions';
 import { runeFx, runeHex } from './fx/runes';
+import { roomObjectFx, roomObjectPoints } from './fx/room-objects';
 import { TIER_NUMERAL } from '../runes/rune-style';
 import {
   drawAim,
@@ -577,6 +578,16 @@ export class ArenaRenderer {
           break;
         case 'runeFx':
           runeFx(this.fx, e);
+          break;
+        case 'propBreak':
+        case 'hazardPrime':
+        case 'hazardBurst':
+        case 'crumble':
+        case 'wallSlam':
+        case 'chargeStun':
+          // The room objects' moments (fx/room-objects.ts), only where the hero sees them.
+          if (roomObjectPoints(e).some((p) => inSight(w, p.x, p.y)))
+            this.addShake(roomObjectFx(this.fx, e));
           break;
         case 'chain':
           this.fx.bolt(e.points, MANA_HEX[e.element], 0.2, true);
