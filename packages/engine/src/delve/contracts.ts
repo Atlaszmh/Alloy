@@ -13,6 +13,7 @@ import {
   type Reward,
 } from '../types/quests.js';
 import type { ReactionId } from '../types/arpg.js';
+import { essenceAllowed } from '../arpg/material-drops.js';
 import { isDiveActive } from './dive.js';
 import { profileStats } from './pair.js';
 import { DIVE_OPEN } from './quests.js';
@@ -91,7 +92,8 @@ function offered(t: ContractTemplate, can: Possible): boolean {
  * from the tier's range (× (1 + countScale[type] × bestDepth) for the types
  * `countScale` names) and its rewards × (1 + depthScale × bestDepth); a
  * hard one may add an essence (`essence: 'fit'`) at `essenceChance` × Lucky
- * Charm's boost. A template already on the board is passed over while another
+ * Charm's boost, from a best depth of `drops.essenceMinDepth` (drawn at any
+ * depth, so the stream is the same). A template already on the board is passed over while another
  * can be offered. Its text's `{count}`, `{biome}`, `{element}`, `{reaction}`,
  * `{depth}`, `{rooms}` and `{rarity}` are filled from the data's names, and `{s}`
  * is "s" unless the count is 1. The caller moves `boardCount` on.
@@ -133,7 +135,8 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
   const rewards = t.rewards[tier].map(scaled);
   if (tier === 'hard') {
     const boost = profileStats(registry, profile).legendaries.lucky_charm ? 2 : 1;
-    if (rng.next() < Math.min(1, essenceChance * boost))
+    const essence = rng.next() < Math.min(1, essenceChance * boost);
+    if (essence && essenceAllowed(registry, profile.bestDepth))
       rewards.push({ kind: 'essence', id: 'fit', count: 1 });
   }
 

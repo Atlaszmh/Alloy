@@ -273,52 +273,15 @@ describe('a settled dive', () => {
 });
 
 describe('the first boss, and when pickups bank', () => {
-  it("the first boss's essence and epic flux bank with its floor, and count as given then", () => {
+  it("the first boss's floor banks no essence: none drops below drops.essenceMinDepth", () => {
     const start = diving(3);
     const p = { ...start, dive: { ...start.dive!, depth: 5 } };
     const world = beginFloor(registry, p);
-    expect(world.loot.firstEssence).toBe(true);
     clearFloor(world);
     const res = completeFloor(registry, p, world);
-    const { banked } = res.profile.dive!;
-    const [essence] = Object.keys(banked.essences);
-    const slots = p.patterns.map((id) => registry.getGearBase(id).slot);
-    expect(registry.getLegendary(essence).slots.some((s) => slots.includes(s))).toBe(true);
-    expect(banked.flux.epic).toBe(1);
-    expect(res.profile.essencesSeen).toEqual([essence]);
-    expect(res.profile.firstEssenceGiven).toBe(true);
-    const next = chooseDoor(registry, res.profile, res.profile.dive!.doorChoices[0]);
-    expect(beginFloor(registry, next).loot.firstEssence).toBe(false);
-  });
-
-  it("only the guaranteed essence itself counts as given: another essence in the floor's haul doesn't", () => {
-    const start = diving(3);
-    const p = { ...start, dive: { ...start.dive!, depth: 5 } };
-    const world = beginFloor(registry, p);
-    const ctx = makeCtx(registry, world, []);
-    for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
-    // The guaranteed essence is left lying; a salvaged legendary's essence rides the haul instead.
-    const before = world.drops.length;
-    world.drops = world.drops.filter((d) => d.material?.kind !== 'essence');
-    expect(world.drops.length).toBe(before - 1);
-    world.pending.haul = addMaterial(world.pending.haul, EMBER);
-    clearFloor(world);
-    const res = completeFloor(registry, p, world);
-    expect(res.profile.dive!.banked.essences).toEqual({ pyroclasm: 1 });
-    expect(res.profile.firstEssenceGiven).toBe(false);
-  });
-
-  it("a death before the first boss's floor banks grants its essence again", () => {
-    const start = diving(3);
-    const p = { ...start, dive: { ...start.dive!, depth: 5 } };
-    const world = beginFloor(registry, p);
-    clearFloor(world);
-    world.heroDead = true;
-    const dead = failFloor(registry, p, world).profile;
-    expect(dead.dive!.lost!.flux.epic).toBe(1);
-    expect(dead.firstEssenceGiven).toBe(false);
-    const again = startDive(registry, closeDive(registry, dead), 1);
-    expect(beginFloor(registry, again).loot.firstEssence).toBe(true);
+    expect(res.bossKilled).toBe(true);
+    expect(res.profile.dive!.banked.essences).toEqual({});
+    expect(res.profile.essencesSeen).toEqual([]);
   });
 
   /**

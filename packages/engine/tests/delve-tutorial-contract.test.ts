@@ -75,7 +75,7 @@ describe('the stubs', () => {
     expect(engine.TUTORIAL_TRIGGERS).toContain('ack');
   });
 
-  it('the hooks are inert: no tutorial, no gate held, no set drop, every essence allowed', () => {
+  it('the hooks are inert: no tutorial, no gate held, no set drop', () => {
     const p = createDelveProfile(registry, 5, { primary: 'fire' });
     const w = arena();
     expect(engine.applyTutorialEvents(registry, p, [{ type: 'ack' }])).toBe(p);
@@ -85,7 +85,6 @@ describe('the stubs', () => {
       false,
     );
     expect(engine.tutorialExitHeld(w)).toBe(false);
-    expect(engine.essenceAllowed(registry, 1)).toBe(true);
   });
 
   it('the ops left to fill throw', () => {

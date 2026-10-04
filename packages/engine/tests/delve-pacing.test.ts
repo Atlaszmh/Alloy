@@ -105,7 +105,8 @@ describe('Delve crafting pacing targets (economySim)', () => {
       expect(first, `seed ${SEEDS[i]}`).toEqual({ opened: true, kitAlone: false, withDive1: true, forged: true });
   });
 
-  it('a first epic (or a legendary) is forged by about dive 5', () => {
+  // Fails since B3 (no essence below depth 20); B3's plan records what it measured. B4 re-bands.
+  it.fails('a first epic (or a legendary) is forged by about dive 5', () => {
     const first = economies.map(firstEpicDive);
     for (const [i, dive] of first.entries()) {
       expect(dive, `seed ${SEEDS[i]}`).toBeGreaterThan(0);
@@ -114,7 +115,9 @@ describe('Delve crafting pacing targets (economySim)', () => {
     expect(avg(first)).toBeLessThanOrEqual(5);
   });
 
-  it("the first boss's essence becomes a forged legendary on the Anvil visit after its dive", () => {
+  // Fails since B3: the first boss drops no essence (none below depth 20). B4 replaces this target
+  // with the spec's "the first legendary within two Anvil visits of the first essence banking".
+  it.fails("the first boss's essence becomes a forged legendary on the Anvil visit after its dive", () => {
     for (const e of economies) expect(essenceForgedAtOnce(e), `seed ${e.seed}`).toBe(true);
   });
 });

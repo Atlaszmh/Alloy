@@ -127,7 +127,7 @@ describe('the vault', () => {
     expect(w.drops).toHaveLength(drops.length);
   });
 
-  it('rolls drops.vault: its flux and shards, the shards a tier up, an essence sometimes, the same from the same seed', () => {
+  it('rolls drops.vault: its flux and shards, the shards a tier up, no essence at depth 2, the same from the same seed', () => {
     const w = beside('chest');
     const roll = (seed: number) => rollVault(registry, w, new SeededRNG(seed));
     expect(roll(5)).toEqual(roll(5));
@@ -147,8 +147,8 @@ describe('the vault', () => {
       expect(haul.every((h) => ['flux', 'shard', 'essence'].includes(h.material.kind))).toBe(true);
       essences += count('essence');
     }
-    expect(essences).toBeGreaterThan(0);
-    expect(essences).toBeLessThan(200 * vault.essenceChance * 2);
+    // Essences come from drops.essenceMinDepth (see the tutorial spec).
+    expect(essences).toBe(0);
   });
 });
 

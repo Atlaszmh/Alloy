@@ -141,13 +141,16 @@ describe('generateContract', () => {
     }
   });
 
-  it('rolls the hard essence at generation, at its chance', () => {
-    const hard = offers(fresh()).filter((c) => c.tier === 'hard');
-    const share =
-      hard.filter((c) => c.rewards.some((r) => r.kind === 'essence')).length / hard.length;
-    expect(hard.length).toBeGreaterThan(20);
-    expect(share).toBeGreaterThan(0);
-    expect(share).toBeLessThan(0.4);
+  it('rolls the hard essence at generation, at its chance, from a best depth of 20', () => {
+    const hard = (bestDepth: number) =>
+      offers({ ...fresh(), bestDepth }).filter((c) => c.tier === 'hard');
+    const share = (cs: Contract[]) =>
+      cs.filter((c) => c.rewards.some((r) => r.kind === 'essence')).length / cs.length;
+    const deep = hard(registry.getDelveBalance().drops.essenceMinDepth);
+    expect(deep.length).toBeGreaterThan(20);
+    expect(share(deep)).toBeGreaterThan(0);
+    expect(share(deep)).toBeLessThan(0.4);
+    expect(share(hard(registry.getDelveBalance().drops.essenceMinDepth - 1))).toBe(0);
   });
 });
 
