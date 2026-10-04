@@ -20,6 +20,7 @@ import {
   skipTutorial as engineSkipTutorial,
   applyTutorialEvents,
   retryTutorialDepth as engineRetryTutorialDepth,
+  tutorialBlocksDive,
   claimQuest as engineClaimQuest,
   rerollContract as engineRerollContract,
   trackQuest as engineTrackQuest,
@@ -410,7 +411,10 @@ interface DelveStore {
   setProfile: (profile: DelveProfile) => void;
   /** A new save; with `primary` its mana is already chosen (tests, E2E). */
   resetProfile: (seed?: number, primary?: ManaType) => void;
-  /** Start a dive; refused (false) while the chain builder holds unapplied changes. */
+  /**
+   * Start a dive; refused (false) while the chain builder holds unapplied changes, or while
+   * Hesta's lesson holds the Delve (`tutorialBlocksDive`).
+   */
   startDive: (depth: number) => boolean;
   /**
    * Close the finished (or abandoned) dive (the engine settles an abandoned one); a secondary that
@@ -594,6 +598,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       const { profile, chainDraft } = get();
       // A dive locks the chains: a pending draft is applied or discarded first, never dropped.
       if (Object.keys(draftChanges(registry(), profile, chainDraft)).length > 0) return false;
+      if (tutorialBlocksDive(registry(), profile)) return false;
       commit(engineStartDive(registry(), profile, depth));
       set({
         diveDrops: [],

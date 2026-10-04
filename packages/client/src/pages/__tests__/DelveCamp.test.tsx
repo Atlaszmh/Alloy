@@ -158,6 +158,8 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
+    // Guided start or Jump in comes first (see the tutorial spec).
+    fireEvent.click(screen.getByTestId('guided-jump'));
     const choice = screen.getByTestId('mana-choice');
     expect(choice.closest('[data-pad-scope]')).not.toBeNull();
     // A second element is bound between dives; the chains keep their blows.
@@ -195,7 +197,7 @@ describe('DelveCamp', () => {
     expect(screen.getByTestId('links-count')).toHaveTextContent(/^1 Link$/);
   });
 
-  it('Restart Delve (dev), from the system menu, wipes the save back to the mana choice', () => {
+  it('Restart Delve (dev), from the system menu, wipes the save back to the first question', () => {
     const s = useDelveStore.getState();
     s.startDive(1);
     s.setProfile({ ...useDelveStore.getState().profile, scrap: 500 });
@@ -214,7 +216,7 @@ describe('DelveCamp', () => {
     const p = useDelveStore.getState().profile;
     expect(p).toMatchObject({ scrap: 50, dive: null, pair: { primary: null } }); // the starter kit's scrap
     expect(p.stats.dives).toBe(0);
-    expect(screen.getByTestId('mana-choice')).toBeInTheDocument();
+    expect(screen.getByTestId('guided-choice')).toBeInTheDocument();
     expect(screen.queryByTestId('system-menu')).toBeNull();
   });
 
@@ -235,6 +237,7 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
+    fireEvent.click(screen.getByTestId('guided-jump'));
     const dialog = screen.getByRole('dialog', { name: 'Choose your mana' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     // A kit dialog: in the zoomed UI layer, over the hub.

@@ -15,6 +15,8 @@ import { ForgeTab } from './forge/ForgeTab';
 import { CodexTab } from './codex/CodexTab';
 import { QuestsTab } from './quests/QuestsTab';
 import { useQuests } from '../quests/useQuests';
+import { TutorialPanel } from '../tutorial/TutorialPanel';
+import { SHOWN_AT, stepIn } from '../tutorial/tutorial-view';
 import type { HubLink, HubMode, HubTab, HubTabProps } from './types';
 
 const TABS: { id: HubTab; label: string }[] = [
@@ -181,8 +183,24 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
           />
         }
       >
-        <div ref={mainRef} className="h-full min-h-0">
-          {hub.view}
+        <div ref={mainRef} className="flex h-full min-h-0 flex-col">
+          <div className="min-h-0 flex-1">{hub.view}</div>
+          {/* Hesta's lesson, docked bottom right under the tab, so it covers none of it; she
+              speaks once the mana is chosen. */}
+          {profile.tutorial &&
+            profile.pair.primary !== null &&
+            stepIn(getDelveRegistry(), profile.tutorial, SHOWN_AT.anvil) && (
+              <div className="flex justify-end px-8 pb-4">
+                <div className="w-[640px]">
+                  <TutorialPanel
+                    state={profile.tutorial}
+                    where={SHOWN_AT.anvil}
+                    context="ui"
+                    onEvent={(e) => useDelveStore.getState().tutorialEvents([e])}
+                  />
+                </div>
+              </div>
+            )}
         </div>
       </Screen>
       {menuOpen && <SystemMenu onClose={() => setMenuOpen(false)} />}
