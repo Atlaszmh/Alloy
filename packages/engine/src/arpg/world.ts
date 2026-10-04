@@ -28,6 +28,7 @@ import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
 import { openRoom, snapToWalkable } from './grid.js';
 import { floorPacks, planFloor } from './layout/generate.js';
+import { seedSetDrops, tutorialFloorMap } from './tutorial-floor.js';
 import { emptyHaul } from '../loot/materials.js';
 
 export interface FloorOptions {
@@ -110,6 +111,11 @@ interface MonsterSpawn {
   packId: number;
   /** Its room on a generated floor (default none). */
   roomId?: number | null;
+  /** An elite's traits in place of its random ones (a hand-built floor's; see the tutorial spec). */
+  traits?: MonsterTrait[];
+  /** Its life and damage × these (a hand-built floor's; default 1). */
+  hpMult?: number;
+  damageMult?: number;
 }
 
 export function createMonsterEntity(
@@ -139,8 +145,8 @@ export function createMonsterEntity(
     damage *= m.boss.dmg;
   }
 
-  const traits: MonsterTrait[] = [...(def.traits ?? [])];
-  if (spawn.kind === 'elite') {
+  const traits: MonsterTrait[] = [...(def.traits ?? []), ...(spawn.traits ?? [])];
+  if (spawn.kind === 'elite' && !spawn.traits) {
     const extra = rng.nextInt(m.elite.minTraits, m.elite.maxTraits);
     const pool = registry
       .getDelveData()
@@ -162,6 +168,8 @@ export function createMonsterEntity(
   const mods = spawn.door?.mods ?? {};
   hp *= 1 + (mods.monsterHp ?? 0);
   damage *= 1 + (mods.monsterDmg ?? 0);
+  hp *= spawn.hpMult ?? 1;
+  damage *= spawn.damageMult ?? 1;
 
   const ai = def.ai ?? 'melee';
   const cycle = biomeCycle(registry, spawn.depth);
@@ -399,18 +407,22 @@ export function emptyPending(newFloor = false): WorldPending {
 
 /**
  * Build the arena for one depth: the open room (the hero at the bottom, packs spread
- * above) or a generated floor (`planFloor`: the hero at its start, packs room by room).
+ * above), a generated floor (`planFloor`: the hero at its start, packs room by room),
+ * or a guided start's hand-built floor (`opts.tutorial`: its map and foes as its data has them).
  */
 export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): ArpgWorld {
   const bal = registry.getDelveBalance();
   const rng = new SeededRNG(opts.seed);
   const spawnRng = rng.fork('spawn');
   const biome = registry.getBiomeForDepth(opts.depth);
+  const built = registry.getTutorialData().floors.find((f) => f.id === opts.tutorial?.floor);
   const plan =
-    opts.layout === 'generated' && bal.layout.generatedDives
+    !built && opts.layout === 'generated' && bal.layout.generatedDives
       ? planFloor(registry, opts.seed, opts.depth, biome, opts.door)
       : null;
-  const map = plan?.map ?? openRoom(bal.arena.width, bal.arena.height);
+  const map = built
+    ? tutorialFloorMap(registry, built, opts.depth)
+    : (plan?.map ?? openRoom(bal.arena.width, bal.arena.height));
   for (const room of map.rooms)
     if (room.interactable && opts.used?.includes(room.interactable.id))
       room.interactable.used = true;
@@ -480,7 +492,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     potionDrunk: false,
     hurt: false,
     sandbox: null,
-    tutorialFloor: opts.tutorial?.floor ?? null,
+    tutorialFloor: built?.id ?? null,
     tutorial: opts.tutorial ? { ...opts.tutorial.state, tally: {} } : null,
   };
 
@@ -545,6 +557,41 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
       spawn(def, i === 0 && elitePack ? 'elite' : 'normal', at.x, at.y, packId, roomId);
     }
   };
+
+  // A hand-built floor: each foe where its data puts it (`spawnId`, `script`), a room's foes
+  // one pack, the boss the floor's.
+  if (built) {
+    const defs = registry.getDelveData().biomes.flatMap((b) => [...b.monsters, b.boss]);
+    for (const s of built.spawns) {
+      const def = defs.find((d) => d.id === s.monster)!;
+      const m = createMonsterEntity(
+        registry,
+        {
+          id: world.nextId++,
+          def,
+          kind: s.boss ? 'boss' : s.elite ? 'elite' : 'normal',
+          depth: opts.depth,
+          door: opts.door,
+          element: biome.mana,
+          x: s.at.x,
+          y: s.at.y,
+          packId: s.room + 1,
+          roomId: s.room,
+          traits: s.elite?.traits,
+          hpMult: s.hpMult,
+          damageMult: s.damageMult,
+        },
+        spawnRng,
+      );
+      m.spawnId = s.id;
+      if (s.script) m.script = s.script;
+      world.monsters.push(m);
+      if (s.boss) world.bossId = m.id;
+    }
+    seedSetDrops(world, rng);
+    world.totalMonsters = world.monsters.length;
+    return world;
+  }
 
   // A generated floor: the boss at its room's centre, each room's packs in it (a den's
   // elite-led), every foe knowing its room.

@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import type { Vec } from '../types/arpg.js';
-import { TUTORIAL_CELLS, type TutorialFloorDef } from '../types/tutorial-floor.js';
+import type { Rect } from '../types/floor-map.js';
+import {
+  TUTORIAL_CELLS,
+  TUTORIAL_INTERACTABLES,
+  type TutorialFloorDef,
+} from '../types/tutorial-floor.js';
 import type { DataRegistry } from './registry.js';
 import { HeroStatKeySchema, MonsterTraitSchema, RaritySchema } from './schemas.js';
 
@@ -108,14 +113,45 @@ function cellAt(floor: TutorialFloorDef, p: Vec): string {
 
 const distinct = (ids: readonly string[]) => new Set(ids).size === ids.length;
 
+/** Whether cell `c` is on the wall round `rect`: just outside it, beside one of its edges. */
+export function onRoomWall(rect: Rect, c: Vec): boolean {
+  const alongX = c.x >= rect.x && c.x < rect.x + rect.w;
+  const alongY = c.y >= rect.y && c.y < rect.y + rect.h;
+  return (
+    (alongY && (c.x === rect.x - 1 || c.x === rect.x + rect.w)) ||
+    (alongX && (c.y === rect.y - 1 || c.y === rect.y + rect.h))
+  );
+}
+
+/** The cells (indices into the joined rows) the hero walks to from the start, every door open. */
+function reachable(floor: TutorialFloorDef): Set<number> {
+  const w = floor.rows[0].length;
+  const cells = floor.rows.join('');
+  const start = cells.indexOf('S');
+  const seen = new Set(start < 0 ? [] : [start]);
+  for (const queue = [...seen]; queue.length > 0; ) {
+    const i = queue.shift()!;
+    for (const n of [i - w, i + w, i % w > 0 ? i - 1 : -1, i % w < w - 1 ? i + 1 : -1])
+      if (n >= 0 && n < cells.length && cells[n] !== '#' && !seen.has(n)) {
+        seen.add(n);
+        queue.push(n);
+      }
+  }
+  return seen;
+}
+
 /**
  * The hand-built floors' problems the schema can't see (see the tutorial
  * spec): ids and (dive, depth) unique; one start and one exit gate; doors
- * numbered from 0 with none missing; rooms by index, inside the rows;
- * markers, and spawns inside their rooms, on walkable cells; spawns of known
- * monsters; set drops on a known spawn, the floor's chest or its boss, gear of
- * a known base, and dive 1's in the primary only. One line a problem;
- * `createDefaultRegistry` refuses data with any.
+ * numbered from 0 with none missing, each on a room's wall and on at most
+ * one that seals (a den's or the boss room's: `Door.rooms[0]`); rooms by index,
+ * inside the rows; the start in a room, and each interactable (`C`, `H`,
+ * `A`, `X`) in one, at most one a room; markers in a room and spawns inside
+ * their rooms, on walkable cells; the exit, the interactables, the markers and
+ * the spawns within reach of the start; spawns of known monsters; set drops on
+ * a known spawn, the floor's chest or its boss, gear of a known base, and dive
+ * 1's in the primary only. One line a problem; `createDefaultRegistry`
+ * refuses data with any.
  */
 export function tutorialFloorProblems(registry: DataRegistry): string[] {
   const { floors } = registry.getTutorialData();
@@ -138,9 +174,38 @@ export function tutorialFloorProblems(registry: DataRegistry): string[] {
       if (r.rect.x + r.rect.w > f.rows[0].length || r.rect.y + r.rect.h > f.rows.length)
         problems.push(at(`room ${i} inside the rows`));
     });
+    const w = f.rows[0].length;
+    const cellOf = (i: number) => ({ x: i % w, y: Math.floor(i / w) });
+    for (let d = 0; d < doors; d++) {
+      const door = [...cells].flatMap((c, i) => (c === String(d) ? [cellOf(i)] : []));
+      const on = f.rooms.filter((r) => door.some((c) => onRoomWall(r.rect, c)));
+      if (!door.every((c) => on.some((r) => onRoomWall(r.rect, c))))
+        problems.push(at(`door ${d} on a room's wall`));
+      if (on.filter((r) => r.kind === 'den' || r.kind === 'boss').length > 1)
+        problems.push(at(`door ${d} on one sealing room's wall`));
+    }
+    const roomAt = (p: Vec) =>
+      f.rooms.find(({ rect: r }) => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h);
+    const reached = reachable(f);
+    const near = (p: Vec) => reached.has(Math.floor(p.y) * w + Math.floor(p.x));
+    const held = new Set<number>();
+    [...cells].forEach((c, i) => {
+      const p = cellOf(i);
+      const room = roomAt(p);
+      if (c === 'S' && !room) problems.push(at('S in a room'));
+      if (!(c in TUTORIAL_INTERACTABLES)) return;
+      const where = `${c} at (${p.x}, ${p.y})`;
+      if (!room) problems.push(at(`${where} in a room`));
+      else if (held.has(room.id)) problems.push(at(`room ${room.id} holds one interactable`));
+      else held.add(room.id);
+      if (!reached.has(i)) problems.push(at(`${where} out of reach`));
+    });
     const walkable = (p: Vec) => cellAt(f, p) !== '#';
     if (!distinct(f.markers.map((m) => m.id))) problems.push(at('marker ids differ'));
-    for (const m of f.markers) if (!walkable(m.at)) problems.push(at(`marker ${m.id} on a wall`));
+    for (const m of f.markers)
+      if (!walkable(m.at)) problems.push(at(`marker ${m.id} on a wall`));
+      else if (!roomAt(m.at)) problems.push(at(`marker ${m.id} in a room`));
+      else if (!near(m.at)) problems.push(at(`marker ${m.id} out of reach`));
     if (!distinct(f.spawns.map((s) => s.id))) problems.push(at('spawn ids differ'));
     for (const s of f.spawns) {
       if (!monsters.has(s.monster)) problems.push(at(`no monster ${s.monster}`));
@@ -152,6 +217,7 @@ export function tutorialFloorProblems(registry: DataRegistry): string[] {
         s.at.y >= rect.y &&
         s.at.y <= rect.y + rect.h;
       if (!inside || !walkable(s.at)) problems.push(at(`spawn ${s.id} on its room's floor`));
+      else if (!near(s.at)) problems.push(at(`spawn ${s.id} out of reach`));
     }
     if (!distinct(f.drops.map((d) => d.id))) problems.push(at('drop ids differ'));
     for (const d of f.drops) {
