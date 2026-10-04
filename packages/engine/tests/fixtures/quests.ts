@@ -11,18 +11,7 @@ const data = loadAndValidateData();
 /** The default data, its quests `quests` and no contract templates. */
 export function questRegistry(quests: QuestDef[]): DataRegistry {
   const d = data;
-  return new DataRegistry(
-    d.affixes,
-    d.combinations,
-    d.synergies,
-    d.baseItems,
-    d.balance,
-    d.recipes,
-    d.delve,
-    d.arpg,
-    d.crafting,
-    { ...d.quests, quests, contractTemplates: [] },
-  );
+  return new DataRegistry({ ...d, quests: { ...d.quests, quests, contractTemplates: [] } });
 }
 
 /** An objective: `count` of `type`, scoped `total` unless `more` says otherwise. */

@@ -17,18 +17,7 @@ const diving = () => startDive(registry, createDelveProfile(registry, 4, { prima
 /** The default data with no contract templates: nothing ever calls `refillBoard`. */
 function withoutTemplates(): DataRegistry {
   const d = loadAndValidateData();
-  return new DataRegistry(
-    d.affixes,
-    d.combinations,
-    d.synergies,
-    d.baseItems,
-    d.balance,
-    d.recipes,
-    d.delve,
-    d.arpg,
-    d.crafting,
-    { ...d.quests, contractTemplates: [] },
-  );
+  return new DataRegistry({ ...d, quests: { ...d.quests, contractTemplates: [] } });
 }
 
 describe('quest events in the arena', () => {

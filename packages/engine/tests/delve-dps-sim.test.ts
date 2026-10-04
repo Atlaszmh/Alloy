@@ -30,19 +30,8 @@ type Hit = Extract<ArpgEvent, { kind: 'hit' }>;
 /** The default data with its Delve balance changed by `change`. */
 function registryWith(change: (bal: DelveBalance) => void): DataRegistry {
   const d = loadAndValidateData();
-  change(d.balance.delve!);
-  return new DataRegistry(
-    d.affixes,
-    d.combinations,
-    d.synergies,
-    d.baseItems,
-    d.balance,
-    d.recipes,
-    d.delve,
-    d.arpg,
-    d.crafting,
-    d.quests,
-  );
+  change(d.balance.delve);
+  return new DataRegistry(d);
 }
 /** The runes without their price: every load zeroed (see the rune costs spec). */
 const unloaded = registryWith((b) => {
