@@ -1,5 +1,6 @@
 import type { Rect, RoomKind, Vec } from '@alloy/engine';
 import type { PixelTheme, RGB } from './themes';
+import { SPRITE_LOOKS } from '../sprite-looks';
 
 /**
  * A cosmetic pixel simulation of the arena floor: terrain, lush foliage,
@@ -675,8 +676,12 @@ export class PixelWorld {
         fuel = 255;
         this.detail[i] |= DETAIL.OVERHANG;
       }
-    } else if (code === FLOOR_CELL.cover || code === FLOOR_CELL.crumbling) {
+    } else if (
+      (code === FLOOR_CELL.cover || code === FLOOR_CELL.crumbling) &&
+      !SPRITE_LOOKS.includes(FLOOR_LOOKS[look])
+    ) {
       // A low ruin of blocks: a step above the ground, well under the cliffs.
+      // (A sprite-drawn look — statue, boulder, spire… — stands on bare ground instead, below.)
       m = MAT.RUIN;
       hh = base + 0.16;
       const row = Math.floor(y / 3);

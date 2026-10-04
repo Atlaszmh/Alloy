@@ -133,6 +133,16 @@ describe("a floor painted from its map's cells", { timeout: 20000 }, () => {
     expect(pw.lookAt(mid(pw, 34, 24))).toBe(LOOK.cracked_wall);
   });
 
+  it('stands a sprite-drawn cover look on bare ground, not a ruin, so the sprite stands on it', () => {
+    const map = furnished();
+    map.cells[at(26, 26)] = CELL.cover;
+    map.look[at(26, 26)] = LOOK_IDS.indexOf('statue');
+    const pw = floor(map);
+    const ground = pw.mat[mid(pw, 27, 26)]; // a plain ground cell, same room
+    expect(pw.mat[mid(pw, 26, 26)]).toBe(ground);
+    expect(pw.mat[mid(pw, 26, 26)]).not.toBe(MAT.RUIN);
+  });
+
   it('grows shrubs only on foliage, and they never burn away; slow ground takes its look', () => {
     const pw = floor(furnished());
     for (const i of cellsOf(pw, 27, 31)) {
