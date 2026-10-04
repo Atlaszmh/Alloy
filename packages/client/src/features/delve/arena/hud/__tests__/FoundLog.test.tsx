@@ -4,6 +4,7 @@ import { addMaterial, emptyHaul, generateItem, SeededRNG } from '@alloy/engine';
 import { FoundLog } from '../FoundLog';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -127,11 +128,11 @@ describe('FoundLog: what this floor found', () => {
   });
 
   /**
-   * Slots bought on the worn sword make an uncommon dagger better only with
-   * that moveset moved onto it: a potential upgrade.
+   * Slots bought on the worn (uncommon) sword make an uncommon dagger better
+   * only with that moveset moved onto it: a potential upgrade.
    */
   it('counts a weapon better only as a home for your moveset apart, as a potential upgrade', () => {
-    store().setProfile({ ...store().profile, links: 99, scrap: 9999 });
+    store().setProfile({ ...armed(store().profile), links: 99, scrap: 9999 });
     for (const skill of ['basic', 'basic', 'primary', 'primary', 'primary'] as const)
       expect(store().addSlot(skill).ok).toBe(true);
     const dagger = generateItem(

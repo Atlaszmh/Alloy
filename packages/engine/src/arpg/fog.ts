@@ -1,7 +1,7 @@
 import type { ArpgWorld } from '../types/arpg.js';
 import type { FloorMap, HudIcon, HudMap, InteractableKind, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
-import { blocked, lineOfSight } from './grid.js';
+import { blocked, doorShut, lineOfSight } from './grid.js';
 
 /**
  * The fog of war and the minimap (see the floor maps spec).
@@ -33,7 +33,7 @@ export function fogTick(ctx: SimCtx): void {
   // that cell or a door does: only then is it worked out again.
   const cx = Math.floor(h.x);
   const cy = Math.floor(h.y);
-  const key = `${cy * w + cx}:${map.doors.map((d) => +d.closed).join('')}`;
+  const key = `${cy * w + cx}:${map.doors.map((d) => +doorShut(d)).join('')}`;
   let changed = false;
   if (sightKeys.get(world) !== key) {
     sightKeys.set(world, key);

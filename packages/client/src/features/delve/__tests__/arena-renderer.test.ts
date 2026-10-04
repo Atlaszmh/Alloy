@@ -25,13 +25,16 @@ import {
   drawDrop,
   dropPlaque,
   drawDoor,
+  drawHeldGate,
   dropPop,
+  edgeArrow,
   holdPing,
   paintFog,
   pickupColor,
   propFrame,
   pruneViews,
   stackPlaques,
+  tutorialMarker,
 } from '../arena/ArenaRenderer';
 import { MANA_HEX, cssToHex } from '../arena/palette';
 import { attachKeyboard, createArenaInput } from '../arena/input';
@@ -52,6 +55,13 @@ vi.mock('../arena/sprites', async (importOriginal) => {
     spriteFrames: (id: string) => (props.includes(id) ? [Texture.WHITE, Texture.EMPTY] : null),
   };
 });
+
+// The guided start's exit gate (B1's `tutorialExitHeld`), held by the test that asks.
+const exit = vi.hoisted(() => ({ held: false }));
+vi.mock('@alloy/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@alloy/engine')>()),
+  tutorialExitHeld: () => exit.held,
+}));
 
 /** A Graphics stand-in that records the colours it fills. */
 function recorder() {
@@ -618,5 +628,119 @@ describe("a generated floor's fog", { timeout: 20000 }, () => {
     show(r, far);
     expect(r.viewRect().right).toBeCloseTo(65);
     expect(r.viewRect().bottom).toBeCloseTo(65.5);
+  });
+});
+
+describe('the guided start on the floor', { timeout: 20000 }, () => {
+  afterEach(() => {
+    exit.held = false;
+    vi.restoreAllMocks();
+  });
+
+  const real = getDelveRegistry().getTutorialData();
+  const step = (id: string, marker?: string) => ({
+    id,
+    where: 'floor' as const,
+    floor: 'd1-1',
+    line: 'Hesta.',
+    objective: 'Go',
+    marker,
+    trigger: { type: 'marker' as const, count: 1 },
+  });
+
+  it('a held door glows forge gold where a sealed one glows red', () => {
+    const door: Door = {
+      id: 0,
+      cells: [16, 17, 18].map((x) => ({ x, y: 9 })),
+      rooms: [0, 1],
+      closed: false,
+      held: true,
+    };
+    const held = recorder();
+    drawDoor(held.g, door, 1, 1, true);
+    expect(held.fills.slice(0, 3)).toEqual([0x5a6988, 0x5a6988, 0xfeae34]);
+    expect(held.fills.filter((c) => c === 0x8b9bb4)).toHaveLength(10);
+  });
+
+  it('a held door slides shut as a sealed one does, and its bars slide away gold when let go', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const view = r as unknown as { doorShut: Map<number, number>; doorHeld: Map<number, boolean> };
+    w.map.doors[0].held = true;
+    r.update(0.3);
+    expect([view.doorShut.get(0), view.doorHeld.get(0)]).toEqual([1, true]);
+    w.map.doors[0].held = false;
+    r.update(0.05);
+    expect(view.doorShut.get(0)).toBeCloseTo(0.8);
+    expect(view.doorHeld.get(0)).toBe(true);
+  });
+
+  it('a held exit stays shut, barred in gold, until the floor lets it go', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const props = (r as unknown as { props: Map<string, { sprite: Sprite }> }).props;
+    const gate = props.get('1:3')!.sprite;
+    expect(gate.texture).toBe(Texture.EMPTY); // no boss: open
+    exit.held = true;
+    r.update(0.1);
+    expect(gate.texture).toBe(Texture.WHITE);
+    exit.held = false;
+    r.update(0.1);
+    expect(gate.texture).toBe(Texture.EMPTY);
+    const bars = recorder();
+    drawHeldGate(bars.g, { x: 0, y: 0, w: 0.9, h: 1.2 }, 0);
+    expect(bars.fills.length).toBeGreaterThan(0);
+    expect(new Set(bars.fills)).toEqual(new Set([0xfeae34]));
+  });
+
+  it("finds the step's marker on its hand-built floor, and none without one", () => {
+    const data = { ...real, steps: [step('walk', 'walk'), step('fight')] };
+    const on = (s: string | null, floor = 'd1-1') =>
+      ({
+        tutorial: s && { step: s, count: 0, misses: 0, tally: {} },
+        tutorialFloor: floor,
+      }) as unknown as ArpgWorld;
+    const walk = real.floors.find((f) => f.id === 'd1-1')!.markers.find((m) => m.id === 'walk')!;
+    expect(tutorialMarker(data, on('walk'))).toEqual(walk.at);
+    expect(tutorialMarker(data, on('fight'))).toBeNull();
+    expect(tutorialMarker(data, on(null))).toBeNull();
+    expect(tutorialMarker(data, on('walk', 'd1-2'))).toBeNull();
+  });
+
+  it("puts the edge arrow on the clear view's border toward the marker, none while it shows", () => {
+    const view = { left: 100, top: 50, right: 900, bottom: 550 };
+    expect(edgeArrow({ x: 400, y: 300 }, view)).toBeNull();
+    expect(edgeArrow({ x: 2000, y: 300 }, view)).toEqual({ x: 900, y: 300, angle: 0 });
+    const up = edgeArrow({ x: 500, y: -1000 }, view)!;
+    expect([up.x, up.y]).toEqual([500, 50]);
+    expect(up.angle).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it("draws the marker's beacon, and its arrow only while the spot is off the view", () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    const at = { x: w.hero.x, y: w.hero.y };
+    const floor = { ...real.floors[0], id: 'ring', markers: [{ id: 'walk', at }] };
+    vi.spyOn(getDelveRegistry(), 'getTutorialData').mockReturnValue({
+      ...real,
+      steps: [step('walk', 'walk')],
+      floors: [floor],
+    });
+    Object.assign(w, {
+      tutorialFloor: 'ring',
+      tutorial: { step: 'walk', count: 0, misses: 0, tally: {} },
+    });
+    show(r, w);
+    const gfx = r as unknown as { markerGfx: Graphics; arrowGfx: Graphics };
+    const drawn = (g: Graphics) => g.context.instructions.length > 0;
+    expect([drawn(gfx.markerGfx), drawn(gfx.arrowGfx)]).toEqual([true, false]);
+    Object.assign(at, { x: 62, y: 62 });
+    r.update(0.1);
+    expect([drawn(gfx.markerGfx), drawn(gfx.arrowGfx)]).toEqual([true, true]);
+    w.tutorial = null;
+    r.update(0.1);
+    expect([drawn(gfx.markerGfx), drawn(gfx.arrowGfx)]).toEqual([false, false]);
   });
 });

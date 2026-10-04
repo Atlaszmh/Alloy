@@ -26,6 +26,7 @@ import { notePerfect, refundDodgeCharge } from './dodge.js';
 import { dropRune } from './rune-drops.js';
 import { dropMaterials } from './material-drops.js';
 import { onMonsterKilled } from './interact.js';
+import { tutorialDrops } from './tutorial-floor.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -763,9 +764,12 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
       });
     // A replayed floor's foe that already gave gear or a pattern this dive gives neither again.
     const given = world.loot.dropsGiven.includes(m.id);
-    dropLoot(ctx, m, given);
-    dropRune(ctx, m);
-    dropMaterials(ctx, m, scrap, given);
+    // A hand-built floor (see the tutorial spec): its set drops, and no gear, rune or pattern at random.
+    const built = world.tutorialFloor !== null;
+    if (built) tutorialDrops(ctx, m);
+    dropLoot(ctx, m, given || built);
+    if (!built) dropRune(ctx, m);
+    dropMaterials(ctx, m, scrap, given || built);
   }
 
   // Hellfire Brand: branded corpses explode and brand the neighbours they see.

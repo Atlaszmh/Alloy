@@ -8,7 +8,7 @@ import {
   startDive,
   type WorldPending,
 } from '@alloy/engine';
-import { BANK_EVERY, banksNow, clearFloor, diveWorldKey } from '../arena/useArena';
+import { BANK_EVERY, banksNow, clearFloor, diveWorldKey, stepMoved } from '../arena/useArena';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
@@ -116,5 +116,24 @@ describe("the dive's arena key", () => {
     // Abandoned mid-floor: a dive again at depth 1 is a new key, so a fresh floor.
     expect(diveWorldKey({ ...dive, settled: true })).toBeNull();
     expect(diveWorldKey(null)).toBeNull();
+  });
+
+  it('names each tutorial retry of the depth afresh, so it starts a new floor', () => {
+    const registry = getDelveRegistry();
+    const dive = startDive(registry, createDelveProfile(registry, 7), 1).dive!;
+    // A retry keeps its depth: each attempt is a new key.
+    expect(diveWorldKey(dive, 0)).toBe('fighting:1');
+    expect(diveWorldKey(dive, 1)).toBe('fighting:1:1');
+    expect(diveWorldKey({ ...dive, phase: 'choosing' }, 1)).toBeNull();
+  });
+
+  it("banks as soon as the floor's tutorial step moves, so the save's step never lags it", () => {
+    const registry = getDelveRegistry();
+    const world = beginFloor(registry, startDive(registry, createDelveProfile(registry, 7), 1));
+    expect(stepMoved(world, null)).toBe(false);
+    const guided = { ...world, tutorial: { step: 'cast', count: 0, misses: 0, tally: {} } };
+    expect(stepMoved(guided, 'walk')).toBe(true);
+    expect(stepMoved(guided, 'cast')).toBe(false);
+    expect(stepMoved(world, 'cast')).toBe(true);
   });
 });

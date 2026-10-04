@@ -38,15 +38,19 @@ const reg = questRegistry([
   quest('teach', [obj('refine', 1)], { rewards: [{ kind: 'pattern', id: 'axe', count: 1 }] }),
   quest('collector', [obj('knowPatterns', 4)], { unlock: { after: 'teach' } }),
 ]);
-/** At the Anvil: m1 and side tracked, every refine quest done. */
+/** At the Anvil: side tracked, every refine quest done (m2 and collector unlocked, m2 in m1's slot). */
 function done(): DelveProfile {
   const p = createDelveProfile(reg, 1, { primary: 'fire' });
   return applyQuestEvents(reg, trackQuest(reg, p, 'side', true).profile, [REFINE]);
 }
 
 describe('claiming', () => {
-  it("grants the rewards and claims; the next main quest unlocks into the claimed one's tracked slot", () => {
+  it('grants the rewards and claims; the next main quest unlocked as the claimed one completed', () => {
     const p = done();
+    expect(p.quests).toMatchObject({
+      unlocked: ['m1', 'side', 'teach', 'm2', 'collector'],
+      tracked: ['m2', 'side'],
+    });
     const r = claimQuest(reg, p, 'm1');
     expect(r.ok).toBe(true);
     expect(r.rewards).toEqual([
@@ -56,7 +60,7 @@ describe('claiming', () => {
     expect(r.profile.scrap).toBe(p.scrap + 42);
     expect(r.profile.quests).toMatchObject({
       claimed: ['m1'],
-      unlocked: ['m1', 'side', 'teach', 'm2'],
+      unlocked: ['m1', 'side', 'teach', 'm2', 'collector'],
       tracked: ['m2', 'side'],
       claimCount: 1,
     });
@@ -65,12 +69,14 @@ describe('claiming', () => {
       ['m2', 'active'],
       ['side', 'complete'],
       ['teach', 'complete'],
+      ['collector', 'active'],
     ]);
   });
 
-  it('the next main quest takes the first free slot when the claimed one was not tracked', () => {
-    const p = trackQuest(reg, done(), 'm1', false).profile;
-    expect(claimQuest(reg, p, 'm1').profile.quests.tracked).toEqual(['side', 'm2']);
+  it('the next main quest takes the first free slot when the one it follows was not tracked', () => {
+    const p0 = createDelveProfile(reg, 1, { primary: 'fire' });
+    const p = trackQuest(reg, trackQuest(reg, p0, 'm1', false).profile, 'side', true).profile;
+    expect(applyQuestEvents(reg, p, [REFINE]).quests.tracked).toEqual(['side', 'm2']);
   });
 
   it('an early bind completes the main quest that asks for one when it unlocks', () => {
@@ -126,9 +132,10 @@ describe('claiming', () => {
     const r = claimQuest(reg, p, 'contract:4');
     expect(r.rewards).toEqual([{ ref: { kind: 'scrap' }, count: 25 }]);
     expect(r.profile.scrap).toBe(p.scrap + 25);
+    // The refine completed m1: m2 took its slot.
     expect(r.profile.quests).toMatchObject({
       board: [null, null, null],
-      tracked: ['m1'],
+      tracked: ['m2'],
       seen: [],
       contractsClaimed: 1,
       claimCount: 1,

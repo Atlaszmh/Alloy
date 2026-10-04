@@ -8,6 +8,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { moveFocus } from '@/features/gamepad/use-gamepad-nav';
 import { uiLayer } from '@/features/delve/kit';
+import { armed } from '@/features/delve/__tests__/armed';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -20,6 +21,8 @@ describe('DelveCamp', () => {
     localStorage.clear();
     mockNavigate.mockReset();
     useDelveStore.getState().resetProfile(1234, 'fire');
+    // An uncommon sword: it carries the Primary.
+    useDelveStore.getState().setProfile(armed(useDelveStore.getState().profile));
   });
 
   it('the Training Grounds button opens the sandbox, even with a dive under way', () => {
@@ -158,6 +161,8 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
+    // Guided start or Jump in comes first (see the tutorial spec).
+    fireEvent.click(screen.getByTestId('guided-jump'));
     const choice = screen.getByTestId('mana-choice');
     expect(choice.closest('[data-pad-scope]')).not.toBeNull();
     // A second element is bound between dives; the chains keep their blows.
@@ -172,11 +177,10 @@ describe('DelveCamp', () => {
     const p = useDelveStore.getState().profile;
     expect(p.pair).toEqual({ primary: 'frost', secondary: null });
     expect(p.equipped.weapon!.mana).toBe('frost');
-    // Its weapon carries a Basic and a Primary, both in Frost.
+    // Its common sword carries the basic chain alone, in Frost.
     const chains = p.equipped.weapon!.moveset!.chains;
-    expect(chains.primary!.moves[0].elements).toEqual(['frost']);
     expect(chains.basic!.map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
-    expect(chains.defensive).toBeUndefined();
+    expect(Object.keys(chains)).toEqual(['basic']);
   });
 
   it('shows the Links beside the scrap', () => {
@@ -195,7 +199,7 @@ describe('DelveCamp', () => {
     expect(screen.getByTestId('links-count')).toHaveTextContent(/^1 Link$/);
   });
 
-  it('Restart Delve (dev), from the system menu, wipes the save back to the mana choice', () => {
+  it('Restart Delve (dev), from the system menu, wipes the save back to the first question', () => {
     const s = useDelveStore.getState();
     s.startDive(1);
     s.setProfile({ ...useDelveStore.getState().profile, scrap: 500 });
@@ -214,7 +218,7 @@ describe('DelveCamp', () => {
     const p = useDelveStore.getState().profile;
     expect(p).toMatchObject({ scrap: 50, dive: null, pair: { primary: null } }); // the starter kit's scrap
     expect(p.stats.dives).toBe(0);
-    expect(screen.getByTestId('mana-choice')).toBeInTheDocument();
+    expect(screen.getByTestId('guided-choice')).toBeInTheDocument();
     expect(screen.queryByTestId('system-menu')).toBeNull();
   });
 
@@ -235,6 +239,7 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
+    fireEvent.click(screen.getByTestId('guided-jump'));
     const dialog = screen.getByRole('dialog', { name: 'Choose your mana' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     // A kit dialog: in the zoomed UI layer, over the hub.

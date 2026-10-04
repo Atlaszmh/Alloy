@@ -13,14 +13,17 @@ const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 describe('save v8', () => {
   it('starts with the starter kit: three patterns, 5 Rusty bars, 5 uncommon flux and 50 scrap', () => {
     const p = createDelveProfile(registry, 7, { primary: 'fire' });
-    expect(p.version).toBe(10);
+    expect(p.version).toBe(11);
     expect(p.patterns).toEqual(['sword', 'cuirass', 'dagger']);
     expect(p.materials.metals).toMatchObject({ rusty: 5, iron: 0 });
     expect(p.materials.flux).toEqual({ uncommon: 5, magic: 0, rare: 0, epic: 0 });
     expect(p.scrap).toBe(50);
     expect([p.materials.shards, p.materials.essences, p.essencesSeen]).toEqual([{}, {}, []]);
-    expect(p.firstEssenceGiven).toBe(false);
-    expect('pity' in p || 'firstBossLegendaryGiven' in p).toBe(false);
+    const gone = ['pity', 'firstBossLegendaryGiven', 'firstEssenceGiven'];
+    expect(gone.filter((k) => k in p)).toEqual([]);
+    // A v11 save from before the first boss's guarantee went still loads, without it.
+    const old = parseDelveProfile(registry, json({ ...p, firstEssenceGiven: true }));
+    expect(old && 'profile' in old ? 'firstEssenceGiven' in old.profile : 'refused').toBe(false);
     // The kit is the data's: a new save never shares its records.
     expect(registry.getCraftingData().startingMaterials.metals).toEqual({ rusty: 5 });
   });
@@ -49,9 +52,9 @@ describe('save v8', () => {
     expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p });
   });
 
-  it('resets a save of any other version; a version 10 save that does not fit is refused', () => {
+  it('resets a save of any other version; a version 11 save that does not fit is refused', () => {
     const p = createDelveProfile(registry, 7, { primary: 'fire' });
-    for (const version of [2, 6, 7, 8, 9, undefined])
+    for (const version of [2, 6, 7, 8, 9, 10, undefined])
       expect(parseDelveProfile(registry, json({ ...p, version }))).toEqual({ reset: true });
     expect(parseDelveProfile(registry, json({ ...p, patterns: 'sword' }))).toBeNull();
     const { materials: _m, ...noPouch } = p;

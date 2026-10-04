@@ -20,7 +20,6 @@ const BASE: MaterialDropContext = {
   door: null,
   find: 0,
   legendaryBoost: 1,
-  firstEssence: false,
   patterns: ['sword', 'cuirass', 'dagger'],
 };
 const N = 4000;
@@ -70,16 +69,17 @@ describe('material drop tables', () => {
     expect(rate(rolls, 'flux')).toBeCloseTo(drops.elite.flux.chance, 1);
   });
 
-  it('a boss always drops flux and shards, and an essence at its chance × Lucky Charm × the door', () => {
-    const rolls = roll({ kind: 'boss' });
+  it('a boss always drops flux and shards, and from depth 20 an essence at its chance × Lucky Charm × the door', () => {
+    const deep = { kind: 'boss', depth: bal.drops.essenceMinDepth } as const;
+    const rolls = roll(deep);
     expect(rate(rolls, 'flux')).toBe(1);
     expect(rate(rolls, 'shard')).toBe(1);
     expect(rate(rolls, 'essence')).toBeCloseTo(drops.boss.essenceChance, 1);
-    expect(rate(roll({ kind: 'boss', legendaryBoost: 2 }), 'essence')).toBeCloseTo(
+    expect(rate(roll({ ...deep, legendaryBoost: 2 }), 'essence')).toBeCloseTo(
       drops.boss.essenceChance * 2,
       1,
     );
-    expect(rate(roll({ kind: 'boss', door: door({ essence: 1.5 }) }), 'essence')).toBeCloseTo(
+    expect(rate(roll({ ...deep, door: door({ essence: 1.5 }) }), 'essence')).toBeCloseTo(
       drops.boss.essenceChance * 1.5,
       1,
     );
@@ -88,13 +88,14 @@ describe('material drop tables', () => {
     for (const id of ids) expect(registry.getLegendary(id)).toBeDefined();
   });
 
-  it("the first boss's guarantee: an essence whose legendary fits a known pattern's slot, and an epic flux", () => {
-    const known = ['ring'];
-    for (const r of roll({ kind: 'boss', firstEssence: true, patterns: known }, 50)) {
-      const [essence] = of([r], 'essence');
-      expect(registry.getLegendary(essence.material.essence).slots).toContain('ring');
-      expect(of([r], 'flux').some((m) => m.material.grade === 'epic')).toBe(true);
-    }
+  it('below drops.essenceMinDepth a boss drops no essence, whatever its chance: the first boss guarantees none', () => {
+    const shallow = {
+      kind: 'boss',
+      depth: bal.drops.essenceMinDepth - 1,
+      legendaryBoost: 1e6,
+    } as const;
+    expect(of(roll(shallow, 200), 'essence')).toEqual([]);
+    expect(rate(roll({ ...shallow, depth: 5 }, 200), 'essence')).toBe(0);
   });
 
   it('elites and bosses drop a pattern the hero does not know, at their chance; none once every one is known', () => {
@@ -280,16 +281,14 @@ describe('material drops in the world', () => {
     expect(w.pending.scrap).toBe(3);
   });
 
-  it("the first boss's essence and epic flux drop once a floor", () => {
-    const w = arena([{ kind: 'boss' }, { kind: 'boss' }], { noBasic: true });
-    w.loot = { ...w.loot, firstEssence: true, patterns: ['sword'] };
-    kill(w);
-    const epic = w.drops.filter((d) => d.material?.kind === 'flux' && d.material.grade === 'epic');
-    expect(epic).toHaveLength(1);
-    const essences = w.drops.flatMap((d) =>
-      d.material?.kind === 'essence' ? [d.material.essence] : [],
-    );
-    expect(registry.getLegendary(essences[0]).slots).toContain('weapon');
-    expect(w.loot.firstEssence).toBe(false);
+  it('a slain boss drops an essence only from drops.essenceMinDepth', () => {
+    const essences = (depth: number) => {
+      const w = arena([{ kind: 'boss' }], { noBasic: true, depth });
+      w.loot = { ...w.loot, legendaryBoost: 1e6 };
+      kill(w);
+      return w.drops.filter((d) => d.material?.kind === 'essence').length;
+    };
+    expect(essences(bal.drops.essenceMinDepth - 1)).toBe(0);
+    expect(essences(bal.drops.essenceMinDepth)).toBe(1);
   });
 });

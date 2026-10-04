@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { armed } from './fixtures/delve';
 import {
   baseCost,
   beginFloor,
@@ -48,13 +49,13 @@ function socketed(registry: DataRegistry, weapon: GearItem, runes: (RuneRef | nu
   };
 }
 
-/** A fire hero (seed 4242), its starting sword's Primary move holding `runes`, `over` on top. */
+/** A fire hero (seed 4242) armed (`armed`), its sword's Primary move holding `runes`, `over` on top. */
 function heroWith(
   registry: DataRegistry,
   runes: (RuneRef | null)[],
   over: Partial<DelveProfile> = {},
 ): DelveProfile {
-  const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
+  const profile = armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' }));
   const weapon = socketed(registry, profile.equipped.weapon!, runes);
   return { ...profile, equipped: { ...profile.equipped, weapon }, ...over };
 }

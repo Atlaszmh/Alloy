@@ -106,9 +106,17 @@ export function holdCharge(
 /**
  * Fire move `step` of the slot's chain (a hold at `stage`) now, then its
  * recoil and recovery. Its slot's beat starts: the chain's next move waits for
- * its end, and the restart window counts from there.
+ * its end, and the restart window counts from there. Its `cast` event says
+ * whether the press `aimed` it (a manual aim; see the tutorial spec's tallies).
  */
-function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 0): boolean {
+function fire(
+  ctx: SimCtx,
+  slot: number,
+  aim: Vec | null,
+  step: number,
+  stage: number,
+  aimed: boolean,
+): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
   // Only a slot with a chain winds up or holds.
@@ -128,6 +136,8 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
   ctx.events.push({
     kind: 'cast',
     slot,
+    step,
+    aimed,
     name: ab.name,
     form: ab.form.id,
     element: ab.element,
@@ -297,8 +307,8 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   pay(ctx, hold.slot, hold.step, ab, t + left);
   if (left < 1e-9) {
     const along = alongAim(h, { slot: hold.slot, step: hold.step, stage: s, from, at });
-    if (!fire(ctx, hold.slot, aim && (along ?? aim), hold.step, s))
-      fire(ctx, hold.slot, along ?? at, hold.step, s);
+    if (!fire(ctx, hold.slot, aim && (along ?? aim), hold.step, s, aim !== null))
+      fire(ctx, hold.slot, along ?? at, hold.step, s, aim !== null);
     return;
   }
   h.windup = {
@@ -411,6 +421,6 @@ export function castTick(ctx: SimCtx): void {
   // A step-in finishes before the blow lands, so it hits from where the step took the hero.
   finishPushes(ctx, 'stepIn');
   const along = alongAim(h, w);
-  if (!fire(ctx, slot, aim && (along ?? aim), step, stage))
-    fire(ctx, slot, along ?? at, step, stage);
+  if (!fire(ctx, slot, aim && (along ?? aim), step, stage, aim !== null))
+    fire(ctx, slot, along ?? at, step, stage, aim !== null);
 }

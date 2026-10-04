@@ -96,12 +96,16 @@ export const firstEpicDive = (e: EconomyReport) =>
   e.dives.findIndex((d) => forgedAtLeast(d, 'epic')) + 1;
 
 /**
- * Whether the first boss's essence forged a legendary on the visit after the dive that brought it
- * home (false: none came). It comes with an epic flux, which tells it from a vault's essence.
+ * Whether the first legendary was forged within two Anvil visits of the first essence banking
+ * (the visit after the dive that brought it home or a claim gave it, or the next; see the
+ * tutorial spec). True when no essence banked, or one banked on the last dive and its
+ * legendary is still to come.
  */
-export function essenceForgedAtOnce(e: EconomyReport): boolean {
-  const first = e.dives.find(
-    (d) => d.income.flux.epic > 0 && Object.values(d.income.essences).some((n) => n > 0),
+export function legendaryFollowsEssence(e: EconomyReport): boolean {
+  const essence = e.dives.findIndex((d) =>
+    [d.income, d.quests].some((h) => Object.values(h.essences).some((n) => n > 0)),
   );
-  return first !== undefined && first.forged.legendary > 0;
+  const legendary = e.dives.findIndex((d) => d.forged.legendary > 0);
+  if (essence < 0 || legendary === essence || legendary === essence + 1) return true;
+  return legendary < 0 && essence === e.dives.length - 1;
 }

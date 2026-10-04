@@ -8,6 +8,7 @@ import {
   type Blow,
 } from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
+import { armed } from '@/features/delve/__tests__/armed';
 import {
   MAX_DUMMY_GROUPS,
   SANDBOX_DEFAULTS,
@@ -157,11 +158,11 @@ describe('sandboxStore', () => {
   it("Load my build keeps the sandbox's chains for the skills the weapon doesn't carry", () => {
     const profile = createDelveProfile(registry, 7, { primary: 'frost' });
     const before = store().chains;
-    store().loadMyBuild(profile); // a common sword: Basic and Primary
+    store().loadMyBuild(profile); // a common sword: the basic chain alone
     const sword = profile.equipped.weapon!.moveset!.chains;
     expect(store().chains).toEqual({
       basic: sword.basic,
-      primary: sword.primary,
+      primary: before.primary,
       defensive: before.defensive,
       ultimate: before.ultimate,
     });
@@ -260,7 +261,7 @@ describe('sandboxStore', () => {
     });
     const saved = parseSandbox(JSON.parse(localStorage.getItem(SANDBOX_KEY)!));
     expect(saved.chains.primary.moves[0].runes).toEqual([split, null]);
-    const profile = createDelveProfile(registry, 7, { primary: 'fire' });
+    const profile = armed(createDelveProfile(registry, 7, { primary: 'fire' }));
     const sword = profile.equipped.weapon!;
     const ms = sword.moveset!;
     const bolt = { ...ms.chains.primary!.moves[0], runes: [split] };

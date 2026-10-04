@@ -1,0 +1,1004 @@
+{
+  "steps": [
+    {
+      "id": "begin",
+      "where": "anvil",
+      "line": "So you're the new hand at my Anvil. The Cinder Mines won't clear themselves: take that old sword and head down.",
+      "objective": "Delve",
+      "highlight": "hub.delve",
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d1-walk",
+      "where": "floor",
+      "floor": "d1-1",
+      "line": "Mind your footing down here. Stretch your legs first: walk over to that beacon.",
+      "objective": "Walk to the beacon with {input:move}",
+      "marker": "walk",
+      "trigger": { "type": "marker", "filter": { "id": "walk" }, "count": 1 }
+    },
+    {
+      "id": "d1-rats",
+      "where": "floor",
+      "floor": "d1-1",
+      "line": "Rats! Don't bother swinging: your blade strikes on its own whenever a foe's in reach.",
+      "objective": "Clear out the rats",
+      "gate": { "exit": true },
+      "trigger": { "type": "kill", "filter": { "kind": "normal" }, "count": 3 }
+    },
+    {
+      "id": "d1-mana",
+      "where": "floor",
+      "floor": "d1-1",
+      "line": "See that blue bar filling up? Every hit you land feeds your mana, and your skills spend it.",
+      "objective": "Continue",
+      "highlight": "hud.vitals",
+      "beat": true,
+      "trigger": { "type": "ack", "count": 1 }
+    },
+    {
+      "id": "d1-weapon",
+      "where": "floor",
+      "floor": "d1-1",
+      "line": "Something dropped! Materials fly to you on their own, but gear you walk over. It's yours to keep.",
+      "objective": "Pick up the weapon",
+      "gate": { "exit": true },
+      "trigger": { "type": "pickup", "filter": { "dropKind": "item" }, "count": 1 }
+    },
+    {
+      "id": "d1-exit",
+      "where": "floor",
+      "floor": "d1-1",
+      "line": "That's the floor done. The gate's open: step through when you're ready.",
+      "objective": "Take the exit with {input:interact}",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s1-equip",
+      "where": "stop",
+      "floor": "d1-1",
+      "line": "Between depths you get one power-up. Better weapons carry more skills, and that blade carries a Primary. Put it on.",
+      "objective": "Take Equip",
+      "highlight": "stop.powerup",
+      "stop": { "kinds": ["equip"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "takeStop", "filter": { "kind": "equip" }, "count": 1 }
+    },
+    {
+      "id": "s1-door",
+      "where": "stop",
+      "floor": "d1-1",
+      "line": "Now pick a door. Only one road for now: the Winding Path.",
+      "objective": "Take the Winding Path",
+      "highlight": "stop.doors",
+      "stop": { "kinds": ["equip"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d1-cast",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "Your new blade carries {primarySkill}. Let's see it: cast it at a rat.",
+      "objective": "Cast with {input:primary}",
+      "highlight": "hud.primary",
+      "gate": { "door": 0 },
+      "trigger": { "type": "cast", "filter": { "slot": 0 }, "count": 1 }
+    },
+    {
+      "id": "d1-chain",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "Press again before the chain cools: each move of a chain lands harder than the last.",
+      "objective": "Cast the chain's second move with {input:primary}",
+      "highlight": "hud.primary",
+      "gate": { "door": 0 },
+      "trigger": { "type": "cast", "filter": { "slot": 0, "step": 1 }, "count": 1 }
+    },
+    {
+      "id": "d1-aim",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "That slinger's keeping its distance. Hold {input:primary}, line it up with {input:aim}, and let go.",
+      "objective": "Aim a cast at the slinger",
+      "highlight": "hud.primary",
+      "gate": { "door": 0 },
+      "trigger": { "type": "cast", "filter": { "slot": 0, "aimed": true }, "count": 1 }
+    },
+    {
+      "id": "d1-dodge",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "See that brute winding up? When the ground under its slam glows, get out of the way.",
+      "objective": "Dodge with {input:dodge}",
+      "highlight": "hud.dodge",
+      "gate": { "exit": true },
+      "trigger": { "type": "dodge", "count": 1 }
+    },
+    {
+      "id": "d1-perfect",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "Now cut it fine: dodge just as the slam lands. A perfect dodge gives the charge back, and your next hit crits.",
+      "objective": "Perfect-dodge the slam with {input:dodge}",
+      "highlight": "hud.dodge",
+      "gate": { "exit": true },
+      "skipAfter": 5,
+      "trigger": { "type": "perfectDodge", "count": 1 }
+    },
+    {
+      "id": "d1-fog",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "Rooms stay dark until you see into them. The map in the corner remembers every place you've been.",
+      "objective": "Continue",
+      "highlight": "hud.minimap",
+      "beat": true,
+      "trigger": { "type": "ack", "count": 1 }
+    },
+    {
+      "id": "d1-chest",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "A vault chest! Crack it open: chests are full of things for the forge.",
+      "objective": "Open the chest with {input:interact}",
+      "gate": { "exit": true },
+      "trigger": { "type": "interact", "filter": { "interactable": "chest" }, "count": 1 }
+    },
+    {
+      "id": "d1-shrine",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "A shrine. Stand still while you pray and it'll bless you, for this floor or the whole dive.",
+      "objective": "Pray at the shrine with {input:interact}",
+      "gate": { "exit": true },
+      "trigger": { "type": "interact", "filter": { "interactable": "shrine" }, "count": 1 }
+    },
+    {
+      "id": "d1-exit2",
+      "where": "floor",
+      "floor": "d1-2",
+      "line": "Good work. On to the exit.",
+      "objective": "Take the exit with {input:interact}",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s2-move",
+      "where": "stop",
+      "floor": "d1-2",
+      "line": "That chest gave you Mana Dust. Spend a little here: change one move of a chain however you like.",
+      "objective": "Take Adjust a move",
+      "highlight": "stop.powerup",
+      "stop": { "kinds": ["move"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "takeStop", "filter": { "kind": "move" }, "count": 1 }
+    },
+    {
+      "id": "s2-door",
+      "where": "stop",
+      "floor": "d1-2",
+      "line": "One more depth, then home.",
+      "objective": "Take the Winding Path",
+      "highlight": "stop.doors",
+      "stop": { "kinds": ["move"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d1-den",
+      "where": "floor",
+      "floor": "d1-3",
+      "line": "An elite den. Its doors seal once you're in, and elites hit hard. If your life runs low, drink a potion.",
+      "objective": "Drink a potion with {input:potion}",
+      "highlight": "hud.potion",
+      "gate": { "exit": true },
+      "trigger": { "type": "potion", "count": 1 }
+    },
+    {
+      "id": "d1-rune",
+      "where": "floor",
+      "floor": "d1-3",
+      "line": "A rune! Walk over it. We'll set it in your blade back at the Anvil.",
+      "objective": "Pick up the rune",
+      "gate": { "exit": true },
+      "trigger": { "type": "pickup", "filter": { "dropKind": "rune" }, "count": 1 }
+    },
+    {
+      "id": "d1-exit3",
+      "where": "floor",
+      "floor": "d1-3",
+      "line": "That den won't trouble anyone again. Head for the exit.",
+      "objective": "Take the exit with {input:interact}",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s3-home",
+      "where": "stop",
+      "floor": "d1-3",
+      "line": "Time to come home. Extract and everything the dive banked is yours. Die down there and you lose the floor's haul and a share of the rest.",
+      "objective": "Extract",
+      "highlight": "stop.risk",
+      "stop": { "kinds": [], "doors": [], "extract": true },
+      "trigger": { "type": "extract", "count": 1 }
+    },
+    {
+      "id": "l1-claim",
+      "where": "anvil",
+      "line": "Welcome back! Quests pay out here at the Anvil: claim what you finished.",
+      "objective": "Claim your completed quests",
+      "highlight": "quests.claim",
+      "trigger": { "type": "claim", "count": 1 }
+    },
+    {
+      "id": "l1-forge",
+      "where": "anvil",
+      "line": "Now the fun part. Forge a cuirass: its pattern, a Rusty bar, uncommon flux, and that shard from the chest.",
+      "objective": "Forge an uncommon cuirass",
+      "highlight": "hub.tab.forge",
+      "trigger": {
+        "type": "forge",
+        "filter": { "slot": "chest", "rarity": "uncommon" },
+        "count": 1
+      }
+    },
+    {
+      "id": "l1-equip",
+      "where": "anvil",
+      "line": "See the ▲ on it? It beats what you're wearing. Put it on.",
+      "objective": "Equip the cuirass",
+      "highlight": "loadout.equip",
+      "trigger": {
+        "type": "equip",
+        "filter": { "slot": "chest", "rarity": "uncommon" },
+        "count": 1
+      }
+    },
+    {
+      "id": "l1-bind",
+      "where": "anvil",
+      "line": "One element's a start. Bind a second: {partner} pairs nicely with {primary}, but pick whichever you like.",
+      "objective": "Bind a second element",
+      "highlight": "mana.bind",
+      "trigger": { "type": "bind", "count": 1 }
+    },
+    {
+      "id": "l1-skills",
+      "where": "anvil",
+      "line": "Let's build your Primary. Add a slot, set the new move to {secondary}, open a socket on the first move, set the rune in it, then Apply.",
+      "objective": "Add a slot, set {secondary}, socket the rune, Apply",
+      "highlight": "skills.addSlot",
+      "trigger": { "type": "setChains", "filter": { "moves": 3 }, "count": 1 }
+    },
+    {
+      "id": "l1-salvage",
+      "where": "anvil",
+      "line": "That old sword's done its job. Salvage it: it melts down into scrap and parts.",
+      "objective": "Salvage the old sword",
+      "highlight": "loadout.salvage",
+      "trigger": {
+        "type": "salvage",
+        "filter": { "slot": "weapon", "rarity": "common" },
+        "count": 1
+      }
+    },
+    {
+      "id": "l1-refine",
+      "where": "anvil",
+      "line": "Three Rusty bars make one Iron bar, and better bars forge deeper gear.",
+      "objective": "Refine an Iron bar",
+      "highlight": "forge.refine",
+      "trigger": { "type": "refine", "filter": { "metal": "iron" }, "count": 1 }
+    },
+    {
+      "id": "l1-claim2",
+      "where": "anvil",
+      "line": "More quests done. Claim them before you go.",
+      "objective": "Claim your completed quests",
+      "highlight": "quests.claim",
+      "trigger": { "type": "claim", "count": 1 }
+    },
+    {
+      "id": "delve-2",
+      "where": "anvil",
+      "line": "That's the Anvil. Back down you go, and watch how {primary} and {secondary} play together.",
+      "objective": "Delve",
+      "highlight": "hub.delve",
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d2-pips",
+      "where": "floor",
+      "floor": "d2-1",
+      "line": "Every hit leaves its element on a foe: the pips under it. Land {primary} and {secondary} on the same foe and they react.",
+      "objective": "Set off {reaction}",
+      "gate": { "exit": true },
+      "skipAfter": 120,
+      "trigger": { "type": "reaction", "filter": { "pair": true }, "count": 1 }
+    },
+    {
+      "id": "d2-reaction",
+      "where": "floor",
+      "floor": "d2-1",
+      "line": "That's {reaction}! Every pair of elements sets off its own, whichever lands first.",
+      "objective": "Continue",
+      "beat": true,
+      "trigger": { "type": "ack", "count": 1 }
+    },
+    {
+      "id": "d2-exit1",
+      "where": "floor",
+      "floor": "d2-1",
+      "line": "Off you go. The exit's open.",
+      "objective": "Take the exit with {input:interact}",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s4-upgrade",
+      "where": "stop",
+      "floor": "d2-1",
+      "line": "A power-up you'll see often: upgrade a piece of gear for scrap.",
+      "objective": "Take Upgrade",
+      "highlight": "stop.powerup",
+      "stop": { "kinds": ["upgrade"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "takeStop", "filter": { "kind": "upgrade" }, "count": 1 }
+    },
+    {
+      "id": "s4-door",
+      "where": "stop",
+      "floor": "d2-1",
+      "line": "Onward.",
+      "objective": "Take the Winding Path",
+      "highlight": "stop.doors",
+      "stop": { "kinds": ["upgrade"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d2-five",
+      "where": "floor",
+      "floor": "d2-2",
+      "line": "Let's make a habit of it: five more {reaction}s and this gate opens.",
+      "objective": "Set off {reaction} five times",
+      "gate": { "exit": true },
+      "skipAfter": 120,
+      "trigger": { "type": "reaction", "filter": { "pair": true }, "count": 5 }
+    },
+    {
+      "id": "d2-exit2",
+      "where": "floor",
+      "floor": "d2-2",
+      "line": "Now you're cooking. To the exit.",
+      "objective": "Take the exit with {input:interact}",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s5-power",
+      "where": "stop",
+      "floor": "d2-2",
+      "line": "Your pick this time: a new slot for a chain, or a move changed.",
+      "objective": "Take a power-up",
+      "highlight": "stop.powerup",
+      "stop": { "kinds": ["slot", "move"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "takeStop", "count": 1 }
+    },
+    {
+      "id": "s5-door",
+      "where": "stop",
+      "floor": "d2-2",
+      "line": "Onward.",
+      "objective": "Take the Winding Path",
+      "highlight": "stop.doors",
+      "stop": { "kinds": ["slot", "move"], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d2-alcove",
+      "where": "floor",
+      "floor": "d2-3",
+      "line": "An anvil alcove! My kin leave them down here: use it for one power-up mid-floor.",
+      "objective": "Use the anvil with {input:interact}",
+      "gate": { "exit": true },
+      "alcove": { "kinds": ["upgrade"] },
+      "trigger": { "type": "interact", "filter": { "interactable": "alcove" }, "count": 1 }
+    },
+    {
+      "id": "d2-exit3",
+      "where": "floor",
+      "floor": "d2-3",
+      "line": "Handy, aren't they? To the exit.",
+      "objective": "Take the exit with {input:interact}",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s6-doors",
+      "where": "stop",
+      "floor": "d2-3",
+      "line": "Two roads this time. A door changes the depth behind it: a calm shrine, or tunnels swarming with weaker foes. Neither skips a depth.",
+      "objective": "Choose a door",
+      "highlight": "stop.doors",
+      "stop": { "kinds": [], "doors": ["shrine", "swarm"], "extract": false },
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d2-push",
+      "where": "floor",
+      "floor": "d2-4",
+      "line": "A short one. Foreman Grask waits below, so keep a potion handy.",
+      "objective": "Reach the exit",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s7-door",
+      "where": "stop",
+      "floor": "d2-4",
+      "line": "Grask's hall is just below. Catch your breath, then go.",
+      "objective": "Face Foreman Grask",
+      "highlight": "stop.doors",
+      "stop": { "kinds": [], "doors": ["winding"], "extract": false },
+      "trigger": { "type": "reachDepth", "count": 1 }
+    },
+    {
+      "id": "d2-grask",
+      "where": "floor",
+      "floor": "d2-5",
+      "line": "Foreman Grask! Mind his slam, dodge what he throws, and keep your chain going.",
+      "objective": "Defeat Foreman Grask",
+      "trigger": { "type": "boss", "count": 1 }
+    },
+    {
+      "id": "d2-rare",
+      "where": "floor",
+      "floor": "d2-5",
+      "line": "He dropped a rare weapon. Rares carry the Defensive skill too: grab it.",
+      "objective": "Pick up the weapon",
+      "gate": { "exit": true },
+      "trigger": { "type": "pickup", "filter": { "dropKind": "item" }, "count": 1 }
+    },
+    {
+      "id": "d2-exit5",
+      "where": "floor",
+      "floor": "d2-5",
+      "line": "The Cinder Mines are yours. Head out.",
+      "objective": "Take the exit with {input:interact}",
+      "trigger": { "type": "clearFloor", "count": 1 }
+    },
+    {
+      "id": "s8-home",
+      "where": "stop",
+      "floor": "d2-5",
+      "line": "No power-up this time: that weapon rides home whole. Extract.",
+      "objective": "Extract",
+      "highlight": "stop.extract",
+      "stop": { "kinds": [], "doors": [], "extract": true },
+      "trigger": { "type": "extract", "count": 1 }
+    },
+    {
+      "id": "l2-compare",
+      "where": "anvil",
+      "line": "Look at Grask's weapon. As it comes it's no match for yours, but the ◇ says it's a better home for the moves you've built.",
+      "objective": "Continue",
+      "highlight": "loadout.compare",
+      "beat": true,
+      "trigger": { "type": "ack", "count": 1 }
+    },
+    {
+      "id": "l2-transfer",
+      "where": "anvil",
+      "line": "So move your moveset onto it. Your slots and your socket come along, for a little scrap.",
+      "objective": "Transfer your moveset",
+      "highlight": "loadout.transfer",
+      "trigger": { "type": "transfer", "filter": { "rarity": "rare" }, "count": 1 }
+    },
+    {
+      "id": "l2-hone",
+      "where": "anvil",
+      "line": "On the Temper bench you can hone a line: it rolls its value again within its band.",
+      "objective": "Hone a line",
+      "highlight": "temper.hone",
+      "trigger": { "type": "hone", "count": 1 }
+    },
+    {
+      "id": "l2-claim",
+      "where": "anvil",
+      "line": "Claim what you finished down there.",
+      "objective": "Claim your completed quests",
+      "highlight": "quests.claim",
+      "trigger": { "type": "claim", "count": 1 }
+    },
+    {
+      "id": "l2-board",
+      "where": "anvil",
+      "line": "And this is the Contract board: three jobs at a time, fresh ones after every dive that clears a depth.",
+      "objective": "Continue",
+      "highlight": "quests.board",
+      "beat": true,
+      "trigger": { "type": "ack", "count": 1 }
+    },
+    {
+      "id": "l2-train",
+      "where": "training",
+      "line": "Your rare carries a Defensive skill. Try it on my dummies in the Training Grounds.",
+      "objective": "Cast your Defensive with {input:defensive}",
+      "highlight": "hub.training",
+      "trigger": { "type": "cast", "filter": { "slot": 1 }, "count": 1 }
+    },
+    {
+      "id": "l2-bye",
+      "where": "anvil",
+      "line": "That's all I've got. Rares can be awakened to carry an Ultimate, and epics carry one already. Go find out. The Anvil's always here.",
+      "objective": "Continue",
+      "beat": true,
+      "trigger": { "type": "ack", "count": 1 }
+    }
+  ],
+  "partners": {
+    "fire": "frost",
+    "frost": "fire",
+    "storm": "fire",
+    "earth": "frost",
+    "shadow": "earth",
+    "nature": "fire"
+  },
+  "floors": [
+    {
+      "id": "d1-1",
+      "dive": 1,
+      "depth": 1,
+      "rows": [
+        "################################",
+        "#........#............#........#",
+        "#........#............#........#",
+        "#........0............1........#",
+        "#.S......0............1....X...#",
+        "#........0............1........#",
+        "#........#............#........#",
+        "#........#............#........#",
+        "################################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 1, "w": 8, "h": 7 } },
+        { "id": 1, "kind": "combat", "rect": { "x": 10, "y": 1, "w": 12, "h": 7 } },
+        { "id": 2, "kind": "exit", "rect": { "x": 23, "y": 1, "w": 8, "h": 7 } }
+      ],
+      "spawns": [
+        { "id": "rat1", "monster": "mine_rat", "at": { "x": 16.5, "y": 2.5 }, "room": 1 },
+        { "id": "rat2", "monster": "mine_rat", "at": { "x": 18.5, "y": 4.5 }, "room": 1 },
+        { "id": "rat3", "monster": "mine_rat", "at": { "x": 16.5, "y": 6.5 }, "room": 1 }
+      ],
+      "markers": [{ "id": "walk", "at": { "x": 6.5, "y": 4.5 } }],
+      "drops": [
+        {
+          "id": "ore",
+          "on": "spawn:rat1",
+          "drop": {
+            "kind": "material",
+            "material": { "kind": "metal", "metal": "rusty" },
+            "count": 2
+          }
+        },
+        { "id": "scraps", "on": "spawn:rat2", "drop": { "kind": "scrap", "count": 10 } },
+        {
+          "id": "blade",
+          "on": "spawn:rat3",
+          "drop": {
+            "kind": "gear",
+            "base": "sword",
+            "rarity": "uncommon",
+            "element": "primary",
+            "slots": { "primary": 2 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "d1-2",
+      "dive": 1,
+      "depth": 2,
+      "rows": [
+        "#################################",
+        "################.......##########",
+        "################.......##########",
+        "################...C...##########",
+        "#.............##.......##########",
+        "#.............##.......##########",
+        "#.............####111############",
+        "#.............#.........#########",
+        "#.............#.........#.......#",
+        "#.............#.........#.......#",
+        "#.............0.........3.......#",
+        "#..S..........0.........3...X...#",
+        "#.............0.........3.......#",
+        "#.............#.........#.......#",
+        "#.............#.........#.......#",
+        "#.............#.........#########",
+        "#.............####222############",
+        "#.............##.......##########",
+        "#.............##.......##########",
+        "################...H...##########",
+        "################.......##########",
+        "################.......##########",
+        "#################################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 4, "w": 13, "h": 15 } },
+        { "id": 1, "kind": "combat", "rect": { "x": 15, "y": 7, "w": 9, "h": 9 } },
+        { "id": 2, "kind": "vault", "rect": { "x": 16, "y": 1, "w": 7, "h": 5 } },
+        { "id": 3, "kind": "sanctum", "rect": { "x": 16, "y": 17, "w": 7, "h": 5 } },
+        { "id": 4, "kind": "exit", "rect": { "x": 25, "y": 8, "w": 7, "h": 7 } }
+      ],
+      "spawns": [
+        {
+          "id": "beetle1",
+          "monster": "slag_beetle",
+          "at": { "x": 9.5, "y": 9.5 },
+          "room": 0,
+          "hpMult": 2
+        },
+        {
+          "id": "beetle2",
+          "monster": "slag_beetle",
+          "at": { "x": 9.5, "y": 13.5 },
+          "room": 0,
+          "hpMult": 2
+        },
+        {
+          "id": "slinger",
+          "monster": "goblin_digger",
+          "at": { "x": 12.5, "y": 5.5 },
+          "room": 0,
+          "hpMult": 2
+        },
+        {
+          "id": "brute",
+          "monster": "slag_beetle",
+          "at": { "x": 20.5, "y": 11.5 },
+          "room": 1,
+          "script": "slamOnly",
+          "hpMult": 3
+        }
+      ],
+      "markers": [],
+      "drops": [
+        {
+          "id": "shard",
+          "on": "chest",
+          "drop": {
+            "kind": "material",
+            "material": { "kind": "shard", "stat": "maxHp", "tier": 1 },
+            "count": 1
+          }
+        },
+        {
+          "id": "dust",
+          "on": "chest",
+          "drop": { "kind": "material", "material": { "kind": "dust" }, "count": 30 }
+        },
+        { "id": "scraps", "on": "spawn:brute", "drop": { "kind": "scrap", "count": 20 } }
+      ]
+    },
+    {
+      "id": "d1-3",
+      "dive": 1,
+      "depth": 3,
+      "rows": [
+        "###############################",
+        "#########.............#########",
+        "#########.............#########",
+        "#########.............#########",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#.......0.............1.......#",
+        "#..S....0.............1...X...#",
+        "#.......0.............1.......#",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#########.............#########",
+        "#########.............#########",
+        "#########.............#########",
+        "###############################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 4, "w": 7, "h": 7 } },
+        { "id": 1, "kind": "den", "rect": { "x": 9, "y": 1, "w": 13, "h": 13 } },
+        { "id": 2, "kind": "exit", "rect": { "x": 23, "y": 4, "w": 7, "h": 7 } }
+      ],
+      "spawns": [
+        {
+          "id": "elite1",
+          "monster": "soot_bat",
+          "at": { "x": 16.5, "y": 4.5 },
+          "room": 1,
+          "elite": { "traits": ["swift"] },
+          "hpMult": 1.5,
+          "damageMult": 2
+        },
+        {
+          "id": "elite2",
+          "monster": "mine_rat",
+          "at": { "x": 16.5, "y": 9.5 },
+          "room": 1,
+          "elite": { "traits": ["brute"] },
+          "hpMult": 1.5,
+          "damageMult": 2
+        }
+      ],
+      "markers": [],
+      "drops": [
+        {
+          "id": "charm",
+          "on": "spawn:elite1",
+          "drop": { "kind": "rune", "rune": "fitsPrimary", "tier": 1 }
+        },
+        {
+          "id": "links",
+          "on": "spawn:elite2",
+          "drop": { "kind": "material", "material": { "kind": "links" }, "count": 3 }
+        },
+        { "id": "purse", "on": "spawn:elite2", "drop": { "kind": "scrap", "count": 60 } }
+      ]
+    },
+    {
+      "id": "d2-1",
+      "dive": 2,
+      "depth": 1,
+      "rows": [
+        "###############################",
+        "#########.............#########",
+        "#########.............#########",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#.......0.............1.......#",
+        "#..S....0.............1...X...#",
+        "#.......0.............1.......#",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#########.............#########",
+        "#########.............#########",
+        "###############################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 3, "w": 7, "h": 7 } },
+        { "id": 1, "kind": "combat", "rect": { "x": 9, "y": 1, "w": 13, "h": 11 } },
+        { "id": 2, "kind": "exit", "rect": { "x": 23, "y": 3, "w": 7, "h": 7 } }
+      ],
+      "spawns": [
+        {
+          "id": "beetle",
+          "monster": "slag_beetle",
+          "at": { "x": 16.5, "y": 6.5 },
+          "room": 1,
+          "hpMult": 2
+        },
+        {
+          "id": "rat1",
+          "monster": "mine_rat",
+          "at": { "x": 14.5, "y": 3.5 },
+          "room": 1,
+          "hpMult": 1.5
+        },
+        {
+          "id": "rat2",
+          "monster": "mine_rat",
+          "at": { "x": 14.5, "y": 9.5 },
+          "room": 1,
+          "hpMult": 1.5
+        },
+        {
+          "id": "rat3",
+          "monster": "mine_rat",
+          "at": { "x": 18.5, "y": 6.5 },
+          "room": 1,
+          "hpMult": 1.5
+        }
+      ],
+      "markers": [],
+      "drops": [
+        {
+          "id": "dust",
+          "on": "spawn:beetle",
+          "drop": { "kind": "material", "material": { "kind": "dust" }, "count": 15 }
+        }
+      ]
+    },
+    {
+      "id": "d2-2",
+      "dive": 2,
+      "depth": 2,
+      "rows": [
+        "#########################################",
+        "#########...........#...........#########",
+        "#########...........#...........#########",
+        "#.......#...........#...........#.......#",
+        "#.......#...........#...........#.......#",
+        "#.......0...........1...........2.......#",
+        "#..S....0...........1...........2...X...#",
+        "#.......0...........1...........2.......#",
+        "#.......#...........#...........#.......#",
+        "#.......#...........#...........#.......#",
+        "#########...........#...........#########",
+        "#########...........#...........#########",
+        "#########################################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 3, "w": 7, "h": 7 } },
+        { "id": 1, "kind": "combat", "rect": { "x": 9, "y": 1, "w": 11, "h": 11 } },
+        { "id": 2, "kind": "combat", "rect": { "x": 21, "y": 1, "w": 11, "h": 11 } },
+        { "id": 3, "kind": "exit", "rect": { "x": 33, "y": 3, "w": 7, "h": 7 } }
+      ],
+      "spawns": [
+        {
+          "id": "beetle1",
+          "monster": "slag_beetle",
+          "at": { "x": 14.5, "y": 6.5 },
+          "room": 1,
+          "hpMult": 2.5
+        },
+        {
+          "id": "rat1",
+          "monster": "mine_rat",
+          "at": { "x": 12.5, "y": 3.5 },
+          "room": 1,
+          "hpMult": 1.5
+        },
+        {
+          "id": "rat2",
+          "monster": "mine_rat",
+          "at": { "x": 12.5, "y": 9.5 },
+          "room": 1,
+          "hpMult": 1.5
+        },
+        {
+          "id": "beetle2",
+          "monster": "slag_beetle",
+          "at": { "x": 26.5, "y": 6.5 },
+          "room": 2,
+          "hpMult": 2.5
+        },
+        {
+          "id": "bat1",
+          "monster": "soot_bat",
+          "at": { "x": 24.5, "y": 3.5 },
+          "room": 2,
+          "hpMult": 1.5
+        },
+        {
+          "id": "bat2",
+          "monster": "soot_bat",
+          "at": { "x": 24.5, "y": 9.5 },
+          "room": 2,
+          "hpMult": 1.5
+        }
+      ],
+      "markers": [],
+      "drops": [
+        {
+          "id": "links",
+          "on": "spawn:beetle2",
+          "drop": { "kind": "material", "material": { "kind": "links" }, "count": 1 }
+        }
+      ]
+    },
+    {
+      "id": "d2-3",
+      "dive": 2,
+      "depth": 3,
+      "rows": [
+        "###############################",
+        "###########.........###########",
+        "###########....A....###########",
+        "###########.........###########",
+        "###########.........###########",
+        "##############111##############",
+        "#########.............#########",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#.......0.............2.......#",
+        "#..S....0.............2...X...#",
+        "#.......0.............2.......#",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#########.............#########",
+        "###############################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 7, "w": 7, "h": 7 } },
+        { "id": 1, "kind": "combat", "rect": { "x": 9, "y": 6, "w": 13, "h": 9 } },
+        { "id": 2, "kind": "alcove", "rect": { "x": 11, "y": 1, "w": 9, "h": 4 } },
+        { "id": 3, "kind": "exit", "rect": { "x": 23, "y": 7, "w": 7, "h": 7 } }
+      ],
+      "spawns": [
+        { "id": "slinger", "monster": "goblin_digger", "at": { "x": 19.5, "y": 7.5 }, "room": 1 },
+        { "id": "rat1", "monster": "mine_rat", "at": { "x": 15.5, "y": 9.5 }, "room": 1 },
+        { "id": "rat2", "monster": "mine_rat", "at": { "x": 15.5, "y": 11.5 }, "room": 1 },
+        { "id": "bat1", "monster": "soot_bat", "at": { "x": 18.5, "y": 12.5 }, "room": 1 }
+      ],
+      "markers": [],
+      "drops": [{ "id": "purse", "on": "spawn:slinger", "drop": { "kind": "scrap", "count": 40 } }]
+    },
+    {
+      "id": "d2-4",
+      "dive": 2,
+      "depth": 4,
+      "rows": [
+        "###############################",
+        "#########.............#########",
+        "#########.............#########",
+        "#########.............#########",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#.......0.............1.......#",
+        "#..S....0.............1...X...#",
+        "#.......0.............1.......#",
+        "#.......#.............#.......#",
+        "#.......#.............#.......#",
+        "#########.............#########",
+        "#########.............#########",
+        "#########.............#########",
+        "###############################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 4, "w": 7, "h": 7 } },
+        { "id": 1, "kind": "combat", "rect": { "x": 9, "y": 1, "w": 13, "h": 13 } },
+        { "id": 2, "kind": "exit", "rect": { "x": 23, "y": 4, "w": 7, "h": 7 } }
+      ],
+      "spawns": [
+        {
+          "id": "champion",
+          "monster": "slag_beetle",
+          "at": { "x": 16.5, "y": 7.5 },
+          "room": 1,
+          "elite": { "traits": ["brute"] }
+        },
+        { "id": "rat1", "monster": "mine_rat", "at": { "x": 14.5, "y": 4.5 }, "room": 1 },
+        { "id": "rat2", "monster": "mine_rat", "at": { "x": 14.5, "y": 10.5 }, "room": 1 }
+      ],
+      "markers": [],
+      "drops": [{ "id": "purse", "on": "spawn:champion", "drop": { "kind": "scrap", "count": 40 } }]
+    },
+    {
+      "id": "d2-5",
+      "dive": 2,
+      "depth": 5,
+      "rows": [
+        "##########################",
+        "#########................#",
+        "#########................#",
+        "#########................#",
+        "#########................#",
+        "#########................#",
+        "#.......#................#",
+        "#.......#................#",
+        "#.......0................#",
+        "#..S....0..............X.#",
+        "#.......0................#",
+        "#.......#................#",
+        "#.......#................#",
+        "#########................#",
+        "#########................#",
+        "#########................#",
+        "#########................#",
+        "#########................#",
+        "##########################"
+      ],
+      "rooms": [
+        { "id": 0, "kind": "start", "rect": { "x": 1, "y": 6, "w": 7, "h": 7 } },
+        { "id": 1, "kind": "boss", "rect": { "x": 9, "y": 1, "w": 16, "h": 17 } }
+      ],
+      "spawns": [
+        {
+          "id": "grask",
+          "monster": "foreman_grask",
+          "at": { "x": 17.5, "y": 9.5 },
+          "room": 1,
+          "boss": true,
+          "hpMult": 0.4,
+          "damageMult": 0.35
+        }
+      ],
+      "markers": [],
+      "drops": [
+        {
+          "id": "crown",
+          "on": "boss",
+          "drop": { "kind": "gear", "base": "sword", "rarity": "rare", "element": "primary" }
+        },
+        { "id": "hoard", "on": "boss", "drop": { "kind": "scrap", "count": 120 } }
+      ]
+    }
+  ]
+}

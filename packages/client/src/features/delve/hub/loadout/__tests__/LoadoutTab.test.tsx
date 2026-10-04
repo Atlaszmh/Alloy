@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { defaultMoveset, generateItem, SeededRNG, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { ToastContainer } from '@/components/Toast';
 import type { Prompt } from '../../../kit';
@@ -56,6 +57,7 @@ describe('LoadoutTab', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
     useDelveStore.setState({ bindDeclined: [] });
     useInputDeviceStore.getState().setDevice('keyboard');
   });
@@ -89,12 +91,25 @@ describe('LoadoutTab', () => {
     );
     act(() => {
       const p = store().profile;
-      store().setProfile({ ...p, bag: [], stats: { ...p.stats, dives: 1 } });
+      // Past the first lessons (Strike the Anvil claimed), how to delve gives way.
+      const quests = { ...p.quests, claimed: [...p.quests.claimed, 'strike_the_anvil' as const] };
+      store().setProfile({ ...p, bag: [], stats: { ...p.stats, dives: 1 }, quests });
     });
     expect(screen.getByTestId('item-sheet')).toHaveTextContent('Your weapon');
     fireEvent.click(screen.getByTestId('slot-weapon'));
     expect(screen.getByTestId('item-sheet')).toHaveTextContent('Equipped · your weapon');
     expect(screen.getByTestId('item-mana')).toHaveTextContent('Fire');
+  });
+
+  it('how to delve stays for a save that skipped the tutorial mid-dive, never for a guided one', () => {
+    act(() => {
+      const p = store().profile;
+      store().setProfile({ ...p, stats: { ...p.stats, dives: 1 } });
+    });
+    open();
+    expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
+    act(() => store().startTutorial());
+    expect(screen.queryByTestId('delve-howto')).toBeNull();
   });
 
   it('a right-click equips; gear outside the pair asks first, with the focus on Bind', () => {
@@ -210,7 +225,7 @@ describe('LoadoutTab', () => {
         chains: { ...worn.moveset!.chains, primary: { ...chain, moves: runed } },
       },
     };
-    expect(held.rarity).toBe('common');
+    expect(held.rarity).toBe('uncommon');
     store().setProfile({ ...p, bag: [held] });
     open({ link: { tab: 'loadout', uid: 'w2' } });
     fireEvent.click(screen.getByTestId('salvage-button'));

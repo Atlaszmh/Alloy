@@ -1,4 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
+import { essenceAllowed } from '../arpg/material-drops.js';
 import { weightedPick } from '../loot/item-generator.js';
 import { addMaterial, emptyHaul, metalAt, shardTiersOf, stockHaul } from '../loot/materials.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
@@ -41,7 +42,8 @@ function grant(
  * family (by the affixes' weights) at its tier (clamped to the affix's tiers),
  * `essence: 'fit'` a legendary whose slots fit a learned pattern, `pattern:
  * 'unknown'` a random unknown pattern (learned), else its `fallback`. A pattern
- * reward teaches one pattern.
+ * reward teaches one pattern. Below `drops.essenceMinDepth` (the best depth)
+ * an essence comes as that many epic flux (see the tutorial spec).
  */
 export function resolveReward(
   registry: DataRegistry,
@@ -73,6 +75,8 @@ export function resolveReward(
       return grant(profile, { kind: 'shard', stat, tier }, count);
     }
     case 'essence': {
+      if (!essenceAllowed(registry, profile.bestDepth))
+        return grant(profile, { kind: 'flux', grade: 'epic' }, count);
       if (reward.id !== 'fit')
         return grant(profile, { kind: 'essence', essence: reward.id! }, count);
       const { bases, legendaries } = registry.getDelveData();

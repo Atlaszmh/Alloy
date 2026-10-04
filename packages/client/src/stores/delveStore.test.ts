@@ -29,6 +29,7 @@ import {
   selectDraftApply,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
+import { armed } from '@/features/delve/__tests__/armed';
 
 const registry = getDelveRegistry();
 /** The hero's chains, as its equipped weapon carries them. */
@@ -55,6 +56,8 @@ describe('delveStore', () => {
   beforeEach(() => {
     localStorage.clear();
     useDelveStore.getState().resetProfile(1234, 'fire');
+    // An uncommon sword: it carries the Primary.
+    useDelveStore.getState().setProfile(armed(useDelveStore.getState().profile));
   });
 
   it('starts a fresh profile with starter gear', () => {
@@ -71,9 +74,9 @@ describe('delveStore', () => {
   });
 
   it('resets a save of another version, and falls back to a new profile when the save is corrupt', () => {
-    localStorage.setItem(DELVE_SAVE_KEY, '{"version":9,"broken":true}');
-    expect(loadDelveProfile()).toEqual({ reset: true });
     localStorage.setItem(DELVE_SAVE_KEY, '{"version":10,"broken":true}');
+    expect(loadDelveProfile()).toEqual({ reset: true });
+    localStorage.setItem(DELVE_SAVE_KEY, '{"version":11,"broken":true}');
     expect(loadDelveProfile()).toBeNull();
     localStorage.setItem(DELVE_SAVE_KEY, 'not json');
     expect(loadDelveProfile()).toBeNull();
@@ -175,7 +178,7 @@ describe('delveStore', () => {
     expect(chains().primary.moves).toHaveLength(2);
     expect(s().addSlot('defensive')).toMatchObject({
       ok: false,
-      reason: 'Carried by magic weapons and better',
+      reason: 'Carried by rare weapons and better',
     });
   });
 
@@ -209,7 +212,7 @@ describe('delveStore', () => {
   });
 
   it('a save of another version starts afresh: written back at once, with one notice', async () => {
-    const old = { ...useDelveStore.getState().profile, version: 9, scrap: 999 };
+    const old = { ...useDelveStore.getState().profile, version: 10, scrap: 999 };
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(old));
     // A fresh module and no cached store, as on a page load.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
@@ -218,9 +221,9 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
-    expect(fresh.getState().profile).toMatchObject({ version: 10, scrap: 50 }); // the kit's
+    expect(fresh.getState().profile).toMatchObject({ version: 11, scrap: 50 }); // the kit's
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
-      version: 10,
+      version: 11,
       scrap: 50,
     });
     // The written-back save loads as it is: no second notice.
@@ -237,6 +240,16 @@ describe('delveStore', () => {
     for (const op of [s.forge, s.hone, s.imprint, s.refine, s.buyShard])
       expect(op).toBeTypeOf('function');
     expect('fuse' in s).toBe(false);
+  });
+
+  it("wraps the guided start's ops and Awaken (the tutorial's B1 and B3 fill them)", () => {
+    const s = useDelveStore.getState();
+    for (const op of [s.awaken, s.startTutorial, s.skipTutorial, s.retryTutorialDepth])
+      expect(op).toBeTypeOf('function');
+    // No tutorial running: its events leave the save as it is.
+    const before = s.profile;
+    s.tutorialEvents([{ type: 'ack' }]);
+    expect(useDelveStore.getState().profile).toBe(before);
   });
 
   it('wraps every quest op of the engine (B1 and B2 fill them); a claim waits for the Anvil', () => {
@@ -407,6 +420,7 @@ describe('delveStore: runes in the draft', () => {
   beforeEach(() => {
     localStorage.clear();
     s().resetProfile(1234, 'fire');
+    s().setProfile(armed(s().profile)); // an uncommon sword: it carries the Primary
     useDelveStore.setState({ unsocket: null });
   });
 
@@ -558,6 +572,7 @@ describe('delveStore: runes outside the draft', () => {
   beforeEach(() => {
     localStorage.clear();
     s().resetProfile(1234, 'fire');
+    s().setProfile(armed(s().profile)); // an uncommon sword: it carries the Primary
     useDelveStore.setState({ unsocket: null });
   });
 
@@ -598,6 +613,7 @@ describe('delveStore: runes outside the draft', () => {
 
   it("choosing the mana gives the weapon's runes back by the pull rule", () => {
     s().resetProfile(5);
+    s().setProfile(armed(s().profile));
     const p = s().profile;
     const weapon = swordWith([split]);
     s().setProfile({ ...p, equipped: { ...p.equipped, weapon } });

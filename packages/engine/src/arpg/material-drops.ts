@@ -34,8 +34,6 @@ export interface MaterialDropContext {
   find: number;
   /** Lucky Charm's: multiplies the essence chance. */
   legendaryBoost: number;
-  /** The first boss's guarantee holds: a boss drops a fitting essence and an epic flux. */
-  firstEssence: boolean;
   /** The patterns the hero knows: a pattern drop is one it doesn't. */
   patterns: string[];
 }
@@ -45,6 +43,16 @@ export interface MaterialDrops {
   materials: { material: MaterialRef; amount: number }[];
   /** A pattern the hero doesn't know, or null. */
   pattern: string | null;
+}
+
+/**
+ * Whether anything at `depth` may yield an essence: from `drops.essenceMinDepth`
+ * on (see the tutorial spec). A boss's and a vault's rolls ask it after drawing
+ * (so their streams are as before); contracts and rewards ask it at the hero's
+ * best depth.
+ */
+export function essenceAllowed(registry: DataRegistry, depth: number): boolean {
+  return depth >= registry.getDelveBalance().drops.essenceMinDepth;
 }
 
 /** The bar a floor at `depth` drops: its item level's metal, the next one up at `drops.metalUpChance`. */
@@ -107,9 +115,8 @@ function rollShard(
  * grades and shard tiers come by depth (`fluxGradeDepths`, `shardTierDepths`),
  * one up at Find's chance (`drops.find`) or the door's `shardTier`. A boss
  * drops an essence at `essenceChance` × the door's `essence` × Lucky Charm's
- * boost, or, while the first boss's guarantee holds, one whose legendary fits a
- * known pattern's slot and an epic flux. Elites and bosses may drop a pattern
- * the hero doesn't know (`patternChance`).
+ * boost, from `drops.essenceMinDepth` on (`essenceAllowed`). Elites and bosses
+ * may drop a pattern the hero doesn't know (`patternChance`).
  */
 export function rollMaterialDrops(
   registry: DataRegistry,
@@ -143,20 +150,9 @@ export function rollMaterialDrops(
 
   if (ctx.kind === 'boss') {
     const legendaries = registry.getDelveData().legendaries;
-    if (ctx.firstEssence) {
-      const slots = registry
-        .getDelveData()
-        .bases.filter((b) => ctx.patterns.includes(b.id))
-        .map((b) => b.slot);
-      const fits = legendaries.filter((l) => l.slots.some((s) => slots.includes(s)));
-      const pool = fits.length > 0 ? fits : legendaries;
-      one({ kind: 'essence', essence: pool[rng.nextInt(0, pool.length - 1)].id });
-      one({ kind: 'flux', grade: 'epic' });
-    } else {
-      const chance = (table.essenceChance ?? 0) * (mods.essence ?? 1) * ctx.legendaryBoost;
-      if (rng.next() < Math.min(1, chance))
-        one({ kind: 'essence', essence: legendaries[rng.nextInt(0, legendaries.length - 1)].id });
-    }
+    const chance = (table.essenceChance ?? 0) * (mods.essence ?? 1) * ctx.legendaryBoost;
+    if (rng.next() < Math.min(1, chance) && essenceAllowed(registry, ctx.depth))
+      one({ kind: 'essence', essence: legendaries[rng.nextInt(0, legendaries.length - 1)].id });
   }
 
   let pattern: string | null = null;
@@ -171,8 +167,7 @@ export function rollMaterialDrops(
  * A slain foe's materials, scrap and pattern burst onto the floor on
  * `world.materialRng` (so gear, rune, orb and mote rolls are untouched): its
  * kill scrap split into `drops.scrapPickups[kind]` pickups (each at least 1),
- * every material and the pattern their own. A boss that takes the first
- * essence's guarantee clears it for the floor; a dropped pattern won't drop
+ * every material and the pattern their own. A dropped pattern won't drop
  * again this floor, nor any from a foe that already gave gear or a pattern
  * this dive (`given`: a replayed floor; see `LootContext.dropsGiven`).
  * `killMonster` calls it inside its `!world.sandbox` guard.
@@ -181,7 +176,6 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
   const { world, registry } = ctx;
   const rng = world.materialRng;
   const loot = world.loot;
-  const firstEssence = m.kind === 'boss' && loot.firstEssence;
   const rolled = rollMaterialDrops(
     registry,
     {
@@ -192,16 +186,12 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
       door: world.door,
       find: loot.find,
       legendaryBoost: loot.legendaryBoost,
-      firstEssence,
       patterns: loot.patterns,
     },
     rng,
   );
-  if (firstEssence) loot.firstEssence = false;
 
-  const spawn = (
-    extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern' | 'firstEssence'>,
-  ) => {
+  const spawn = (extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern'>) => {
     const angle = rng.next() * Math.PI * 2;
     const r = 0.6 + rng.next() * 0.9;
     // Short of any wall between it and its foe, in the foe's room (see the floor maps spec).
@@ -227,12 +217,7 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
     spawn({ kind: 'scrap', amount });
   }
   for (const { material, amount } of rolled.materials)
-    spawn({
-      kind: 'material',
-      amount,
-      material,
-      ...(firstEssence && material.kind === 'essence' && { firstEssence: true }),
-    });
+    spawn({ kind: 'material', amount, material });
   if (rolled.pattern && !given) {
     if (!loot.dropsGiven.includes(m.id)) loot.dropsGiven.push(m.id);
     loot.patterns = [...loot.patterns, rolled.pattern];

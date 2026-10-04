@@ -2,6 +2,7 @@ import { memo, useRef, useState } from 'react';
 import type { BiomeDef, DiveState } from '@alloy/engine';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { Button, Footer, Glyph, Header, Screen, usePrompts, type Prompt } from '../kit';
+import { SkipTutorialConfirm } from '../tutorial/SkipTutorial';
 import { useHubTabs } from './AnvilHub';
 import { SettingsPanel } from './SettingsPanel';
 import type { HubLink } from './types';
@@ -17,6 +18,13 @@ export interface PauseScreenProps {
   onResume: () => void;
   onAnvil: () => void; // floor restarts (its unbanked haul lost), or back to the stop
   onAbandon: () => void; // counts as a death: the bounty, the floor's haul and a share of the banked
+  /**
+   * While the guided start runs (see the tutorial spec): Skip tutorial, confirmed, drops it.
+   * Mid-floor the Anvil and Abandon restart the depth as it was entered; at a stop Abandon waits.
+   */
+  onSkipTutorial?: () => void;
+  /** "Skip this step", while the engine allows it (the pad's way to it from the fight). */
+  onSkipStep?: () => void;
 }
 
 /** A caption inside a kit button: body text, as the hub writes it, not the button's display caps. */
@@ -44,8 +52,11 @@ export const PauseScreen = memo(function PauseScreen({
   onResume,
   onAnvil,
   onAbandon,
+  onSkipTutorial,
+  onSkipStep,
 }: PauseScreenProps) {
-  const [dialog, setDialog] = useState<'controls' | 'settings' | null>(null);
+  const [dialog, setDialog] = useState<'controls' | 'settings' | 'skip' | null>(null);
+  const guided = !!onSkipTutorial;
   const mainRef = useRef<HTMLDivElement>(null);
   const hub = useHubTabs('pause', onResume, link);
   const prompts = [...hub.tabPrompts, TABS_PROMPT];
@@ -85,6 +96,16 @@ export const PauseScreen = memo(function PauseScreen({
             <Button onClick={() => setDialog('settings')} testId="open-settings">
               <Glyph id="settings" size={20} /> Settings
             </Button>
+            {onSkipStep && (
+              <Button onClick={onSkipStep} testId="pause-skip-step">
+                Skip this step
+              </Button>
+            )}
+            {guided && (
+              <Button onClick={() => setDialog('skip')} testId="pause-skip-tutorial">
+                Skip tutorial
+              </Button>
+            )}
             <Button onClick={onAnvil} testId="pause-anvil">
               {atStop ? (
                 'Anvil · back to this stop'
@@ -92,13 +113,21 @@ export const PauseScreen = memo(function PauseScreen({
                 <span className="flex flex-col items-start">
                   Anvil · floor restarts
                   <span className="k-caption" style={CAPTION}>
-                    This floor's unbanked haul is lost
+                    {guided
+                      ? 'The depth restarts as you entered it'
+                      : "This floor's unbanked haul is lost"}
                   </span>
                 </span>
               )}
             </Button>
-            <Button variant="danger" onClick={onAbandon} testId="pause-abandon">
-              Abandon · counts as a death
+            <Button
+              variant="danger"
+              onClick={onAbandon}
+              disabled={guided && atStop}
+              title={guided && atStop ? 'Not while the guided start runs' : undefined}
+              testId="pause-abandon"
+            >
+              {guided ? 'Abandon · the depth restarts' : 'Abandon · counts as a death'}
             </Button>
             <Button
               variant="primary"
@@ -122,6 +151,15 @@ export const PauseScreen = memo(function PauseScreen({
       </Screen>
       {dialog === 'controls' && <ControlsPanel onClose={() => setDialog(null)} />}
       {dialog === 'settings' && <SettingsPanel onClose={() => setDialog(null)} />}
+      {dialog === 'skip' && onSkipTutorial && (
+        <SkipTutorialConfirm
+          onConfirm={() => {
+            setDialog(null);
+            onSkipTutorial();
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 });

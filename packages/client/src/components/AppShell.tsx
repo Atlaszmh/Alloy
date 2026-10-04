@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect } from 'react';
 import { Outlet } from 'react-router';
 import { useGamepadNav } from '@/features/gamepad/use-gamepad-nav';
 import { attachPromptKeys, hudScaleFor, uiScaleFor } from '@/features/delve/kit/prompts';
+import { TutorialHighlight } from '@/features/delve/tutorial/TutorialHighlight';
 import { useUIStore } from '@/stores/uiStore';
 
 /** The app's frame: every screen is a Delve screen, taking the whole window, with the prompt
- *  runtime's keys (Esc / Enter) bound and the Delve UI's zooms set on :root. */
+ *  runtime's keys (Esc / Enter) bound, the Delve UI's zooms set on :root, and the guided
+ *  start's highlight over whatever screen is open. */
 export function AppShell() {
   useGamepadNav();
   useEffect(() => attachPromptKeys(), []);
@@ -33,6 +35,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <TutorialHighlight />
     </div>
   );
 }

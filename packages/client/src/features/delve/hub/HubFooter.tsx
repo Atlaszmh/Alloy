@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import { isDiveActive, startDepthOptions } from '@alloy/engine';
+import { isDiveActive, startDepthOptions, tutorialBlocksDive } from '@alloy/engine';
 import { applyLabel, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Chip, Footer, Glyph, type Binding, type Prompt } from '@/features/delve/kit';
@@ -12,7 +12,8 @@ export const TRAINING_BINDING: Binding = { key: 'KeyT', pad: 'view' };
  * The hub's planks: the prompts, then Training, the start depths and the hot
  * metal Delve button (Enter with nothing focused, or Start). An unapplied chain
  * draft blocks the dive, and its block (apply, or discard and delve) sits
- * before the button. While a tab sets `action` (Skills: its Apply bar, with a
+ * before the button; so does a guided start's Anvil lesson, its reason
+ * (`tutorialBlocksDive`) beside it. While a tab sets `action` (Skills: its Apply bar, with a
  * compact Delve), that node replaces the whole right-hand group. Between dives, the
  * quests waiting to be claimed sit beside Delve ("2 to claim"), opening Quests.
  */
@@ -49,6 +50,8 @@ export function HubFooter({
   const blocked = Object.keys(view.changes).length > 0 && !active;
   const applying = blocked ? view.dry : null;
   const applyWhy = applying && !applying.ok ? applying.reason : null;
+  // A guided start's Anvil lesson holds a new dive until it ends or is skipped (never a Resume).
+  const lesson = active ? null : tutorialBlocksDive(registry, profile);
 
   const onApply = () => {
     const res = useDelveStore.getState().applyDraft();
@@ -89,12 +92,29 @@ export function HubFooter({
           >
             {applyLabel(registry, view.price)}
           </Button>
-          <Button size="sm" onClick={onDiscardAndDelve} testId="draft-discard-delve">
-            Discard changes &amp; delve
-          </Button>
+          {/* A lesson holds the dive: discarding would only drop the lesson's draft. */}
+          {!lesson && (
+            <Button size="sm" onClick={onDiscardAndDelve} testId="draft-discard-delve">
+              Discard changes &amp; delve
+            </Button>
+          )}
         </div>
       )}
-      <Button onClick={onTraining} binding={TRAINING_BINDING} testId="training-button">
+      {lesson && (
+        <span
+          id={`${id}-lesson`}
+          className="max-w-[280px] text-[14px] leading-tight text-[var(--k-hot)]"
+          data-testid="lesson-block"
+        >
+          {lesson}
+        </span>
+      )}
+      <Button
+        onClick={onTraining}
+        binding={TRAINING_BINDING}
+        data-tutorial="hub.training"
+        testId="training-button"
+      >
         <Glyph id="training" size={20} /> Training
       </Button>
       {!active && starts.length > 1 && (
@@ -116,12 +136,13 @@ export function HubFooter({
         variant="primary"
         size="lg"
         onClick={onDelve}
-        disabled={blocked}
-        aria-describedby={blocked ? `${id}-draft` : undefined}
+        disabled={blocked || !!lesson}
+        aria-describedby={blocked ? `${id}-draft` : lesson ? `${id}-lesson` : undefined}
         binding={{ key: 'Enter', pad: 'menu' }}
         data-pad-menu
         data-pad-first
         data-primary-action="delve"
+        data-tutorial="hub.delve"
         testId="delve-button"
       >
         {active ? `Resume dive · depth ${profile.dive!.depth}` : `Delve ▸ depth ${start}`}

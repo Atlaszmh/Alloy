@@ -229,7 +229,7 @@ describe('quest events at the Anvil', () => {
     const opened = setChains(reg, p, { basic: basic.map((b) => ({ ...b, runes: [null] })) });
     expect(opened.ok).toBe(true);
     expect(value(opened.profile, 'sockets')).toBe(basic.length);
-    expect(value(openSocket(reg, p, 'primary', 0).profile, 'sockets')).toBe(1);
+    expect(value(openSocket(reg, p, 'basic', 0).profile, 'sockets')).toBe(1);
   });
 
   it('a pattern learned by salvage counts at once', () => {

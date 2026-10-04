@@ -129,6 +129,8 @@ export interface GearItem {
   locked: boolean;
   /** Weapons: the chains the weapon carries and their slots (see the weapon movesets spec). */
   moveset?: Moveset;
+  /** A rare weapon awakened to carry the Ultimate too (see the tutorial spec's Awaken). */
+  awakened?: boolean;
 }
 
 /**

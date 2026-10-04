@@ -127,10 +127,11 @@ describe('AnvilHub', () => {
     expect(screen.getByTestId('quest-journal')).toBeInTheDocument();
   });
 
-  it("the Loadout's attunement line opens Skills, and the how-to goes after the first dive", () => {
+  it("the Loadout's attunement line opens Skills, and the how-to goes after the first lessons", () => {
     act(() => {
       const p = useDelveStore.getState().profile;
-      useDelveStore.getState().setProfile({ ...p, stats: { ...p.stats, dives: 1 } });
+      const quests = { ...p.quests, claimed: [...p.quests.claimed, 'strike_the_anvil' as const] };
+      useDelveStore.getState().setProfile({ ...p, stats: { ...p.stats, dives: 1 }, quests });
     });
     renderHub();
     expect(screen.queryByTestId('delve-howto')).toBeNull();

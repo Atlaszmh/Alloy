@@ -1,5 +1,5 @@
 import { Fragment, useId } from 'react';
-import { isDiveActive } from '@alloy/engine';
+import { isDiveActive, tutorialBlocksDive } from '@alloy/engine';
 import { applyLabel, runeNames, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Price, type Binding } from '@/features/delve/kit';
@@ -30,6 +30,8 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
   const id = useId();
   const n = Object.keys(view.changes).length;
   const active = isDiveActive(profile);
+  // A guided start's Anvil lesson holds a new dive (its reason on the button's tooltip).
+  const lesson = active ? null : tutorialBlocksDive(registry, profile);
   const { price, refused, dry } = view;
   const applyWhy = dry && !dry.ok ? dry.reason : null;
   // Unpriced, the price says why; Apply's own reason shows only when it says something else.
@@ -104,6 +106,7 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
         binding={APPLY_BINDING}
         aria-label={applyLabel(registry, price)}
         aria-describedby={applyNote ? `${id}-apply` : applyWhy ? `${id}-price` : undefined}
+        data-tutorial="skills.apply"
         testId="chain-apply"
       >
         Apply
@@ -112,11 +115,13 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
       <Button
         size="sm"
         onClick={onDelve}
-        disabled={n > 0 && !active}
+        disabled={(n > 0 && !active) || !!lesson}
         aria-describedby={n > 0 && !active ? `${id}-price` : undefined}
+        title={lesson ?? undefined}
         binding={{ key: 'Enter', pad: 'menu' }}
         data-pad-menu
         data-primary-action="delve"
+        data-tutorial="hub.delve"
         testId="delve-button"
       >
         {active ? 'Resume' : 'Delve'}

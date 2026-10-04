@@ -65,7 +65,13 @@ export interface Door {
   /** Its cells (`Cell` 2), where a hall meets a room's wall. */
   cells: Vec[];
   rooms: [number, number];
+  /** Closed by a seal (`seal.ts` opens it again). */
   closed: boolean;
+  /**
+   * Held shut by the guided start's gate (see the tutorial spec), whatever the
+   * seal does: only the tutorial lets it go. `doorShut` reads both.
+   */
+  held?: boolean;
 }
 
 export interface FloorMap {

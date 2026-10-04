@@ -24,6 +24,7 @@ import { isDiveActive } from './dive.js';
 import { inPair } from './pair.js';
 import { withMoveset, type ProfileActionResult } from './profile.js';
 import { applyQuestEvents } from './quests.js';
+import { applyTutorialEvents } from './tutorial.js';
 import { runeChange, settleParts, type SetChainsOptions } from './runes.js';
 import { socketsOf, takeFromPouch } from '../loot/runes.js';
 
@@ -343,11 +344,12 @@ export function setChains(
   };
   // Each socket the Apply opens is a quest event (see the quests spec).
   const opened = Array.from({ length: change.opened }, () => ({ type: 'openSocket' }) as const);
+  const applied = applyQuestEvents(registry, paid, opened);
   return {
     ok: true,
     runes: settled.runes,
     destroyed: settled.destroyed,
-    profile: applyQuestEvents(registry, paid, opened),
+    profile: applyTutorialEvents(registry, applied, [...opened, { type: 'setChains' }]),
   };
 }
 
@@ -417,10 +419,16 @@ export function addSlot(
   }
   const slots = { ...moveset.slots, [skill]: moveset.slots[skill]! + 1 };
   const edited = withMoveset(profile, { chains: { ...moveset.chains, [skill]: next }, slots });
+  const paid = {
+    ...edited,
+    links: profile.links - price.links,
+    scrap: profile.scrap - price.scrap,
+  };
   return {
     ok: true,
     item: edited.equipped.weapon,
-    profile: { ...edited, links: profile.links - price.links, scrap: profile.scrap - price.scrap },
+    // The guided start's Skills step reads the chain (as `setChains`'s Apply does).
+    profile: applyTutorialEvents(registry, paid, [{ type: 'setChains' }]),
   };
 }
 
@@ -448,19 +456,20 @@ export function transferMoveset(
   const item = { ...target, moveset: t.moveset };
   const old = { ...source, moveset: defaultMoveset(registry, source, source.mana) };
   const settled = settleParts(registry, profile.runes, t.runes, opts.unsocket);
+  const moved: DelveProfile = {
+    ...profile,
+    equipped: { ...profile.equipped, weapon: item },
+    bag: [...profile.bag.filter((i) => i.uid !== uid), old],
+    scrap: profile.scrap - t.scrap,
+    links: profile.links + t.links,
+    runes: settled.pouch,
+  };
   return {
     ok: true,
     item,
     links: t.links,
     runes: settled.runes,
     destroyed: settled.destroyed,
-    profile: {
-      ...profile,
-      equipped: { ...profile.equipped, weapon: item },
-      bag: [...profile.bag.filter((i) => i.uid !== uid), old],
-      scrap: profile.scrap - t.scrap,
-      links: profile.links + t.links,
-      runes: settled.pouch,
-    },
+    profile: applyTutorialEvents(registry, moved, [{ type: 'transfer' }]),
   };
 }

@@ -20,6 +20,7 @@ import {
   type MaterialRef,
   type MetalId,
   type ShardRef,
+  type TutorialTarget,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
@@ -51,9 +52,17 @@ export function ForgeLocked() {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  tutorial,
+  children,
+}: {
+  label: string;
+  tutorial?: TutorialTarget;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" data-tutorial={tutorial}>
       <span className="k-label">{label}</span>
       {children}
     </div>
@@ -295,7 +304,7 @@ export function ForgeBench({
             <div className="k-caption flex items-center gap-2" data-testid="forge-purse">
               In hand: <Price scrap={profile.scrap} dust={profile.manaDust} />
             </div>
-            <Field label="Metal">
+            <Field label="Metal" tutorial="forge.bar">
               <Segmented
                 aria-label="Metal"
                 columns={4}
@@ -312,7 +321,7 @@ export function ForgeBench({
                 }))}
               />
             </Field>
-            <Field label="Flux">
+            <Field label="Flux" tutorial="forge.flux">
               <Segmented
                 aria-label="Flux"
                 columns={5}
@@ -375,7 +384,7 @@ export function ForgeBench({
                 })}
               />
             </Field>
-            <Field label="Lines">
+            <Field label="Lines" tutorial="forge.shard">
               {preview.lines.length === 0 && (
                 <p className="k-caption">A common item rolls no lines: add flux for some.</p>
               )}
@@ -440,6 +449,7 @@ export function ForgeBench({
               disabled={!!preview.refused}
               aria-describedby={preview.refused ? `${id}-why` : undefined}
               onClick={onForge}
+              data-tutorial="forge.go"
               testId="forge-button"
             >
               Forge · <Price scrap={preview.price.scrap} dust={preview.price.dust || undefined} />

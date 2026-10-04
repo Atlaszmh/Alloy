@@ -1,7 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { DelveProfile } from '../types/delve.js';
+import type { DelveProfile, StopKind } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../types/gear.js';
-import { GEAR_SLOTS, RARITY_ORDER } from '../types/gear.js';
+import { GEAR_SLOTS, RARITY_ORDER, rarityIndex } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import {
   FLUX_GRADES,
@@ -25,6 +25,7 @@ import {
   completeFloor,
   extractDive,
   failFloor,
+  isBossDepth,
   startDepthOptions,
   startDive,
 } from './dive.js';
@@ -34,21 +35,31 @@ import { bindSecondary, resolveOvertake } from './pair.js';
 import {
   createDelveProfile,
   equipBest,
+  equipItem,
   profilePower,
   referenceDepth,
   salvageCandidates,
   salvageItems,
   upgradeGear,
 } from './profile.js';
-import { buyShard, forge, hone, refine } from './crafting.js';
-import { addSlot, movesOf, setChain, transferMoveset, withMove } from './moveset.js';
+import { awaken, buyShard, forge, hone, refine } from './crafting.js';
+import { addSlot, movesOf, setChain, setChains, transferMoveset, withMove } from './moveset.js';
 import { fuseRunes, openSocket } from './runes.js';
 import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
 import { alcoveOffers, takeAlcove, takeStop, type StopAction } from './stops.js';
 import { claimQuest, questStates } from './quests.js';
-import { MAX_CHAIN, type Blow, type ChainSkill, type Move } from '../types/ability.js';
+import { MAX_CHAIN, MOVE_KINDS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import { RUNE_TIERS, type RuneRef, type RuneTarget, type RuneTier } from '../types/rune.js';
 import type { EconomyDive } from './economy.js';
+import {
+  applyTutorialEvents,
+  skipTutorial,
+  startTutorial,
+  tutorialSkippable,
+  tutorialStep,
+} from './tutorial.js';
+import { worldTutorialEvents } from '../arpg/tutorial.js';
+import type { TutorialStep } from '../types/tutorial.js';
 
 /**
  * Plays whole dives with the arena bot, like a sensible player: fights every
@@ -57,7 +68,8 @@ import type { EconomyDive } from './economy.js';
  * visits the Anvil: forges its gear from materials, moves its moveset to a
  * better weapon, salvages what it doesn't wear, adds slots and sockets runes,
  * hones and upgrades (claiming its completed quests and contracts first, never
- * rerolling). Used by the pacing test, `economySim` and for balance sweeps.
+ * rerolling). With `tutorial` it plays a new save's guided start first. Used by
+ * the pacing test, `economySim` and for balance sweeps.
  */
 
 export interface AutopilotOptions {
@@ -75,7 +87,30 @@ export interface AutopilotOptions {
   primary?: ManaType;
   /** Bind this second element before the first dive (the Primary built from both), forcing the pair. */
   secondary?: ManaType;
+  /**
+   * A fresh profile plays the guided start (see the tutorial spec's "The bot"): no opening
+   * visit; its dives and Anvil lessons follow the script (`secondary`, else Hesta's partner, at
+   * the bind), and the dives after it as usual.
+   */
+  tutorial?: boolean;
 }
+
+/** How the guided start went (`runAutopilot`'s `tutorial`; null when it didn't run). */
+export interface TutorialRun {
+  /** Each guided floor built, as `<floor>@<the dive's depth>` (a retry builds it again). */
+  floors: string[];
+  /** Each guided stop's power-ups, as offered ([] for none). */
+  stops: StopKind[][];
+  /** Deaths on guided depths, each retried (`retryTutorialDepth`). */
+  retries: number;
+  /** The steps it took "Skip this step" on. */
+  skippedSteps: string[];
+  /** The step it skipped the tutorial on (a fourth death on a depth, or an op it couldn't do). */
+  skipped: string | null;
+}
+
+/** How many times the bot retries a guided depth before it skips the tutorial. */
+const TUTORIAL_RETRIES = 3;
 
 export interface AutopilotDiveReport {
   dive: number;
@@ -116,40 +151,78 @@ export function botStep(
   return p;
 }
 
+/**
+ * The dive's floor, played to its end; its seconds and its timeouts. A guided
+ * depth's death or timeout retries it (`failFloor` returns its entry) up to
+ * `TUTORIAL_RETRIES` times, then the bot skips the tutorial and plays the depth
+ * as an ordinary one; `run` keeps count. A hand-built floor ends at its gate.
+ */
 function playFloor(
   registry: DataRegistry,
   profile: DelveProfile,
   maxSeconds: number,
   policy: BotPolicy,
-): { profile: DelveProfile; seconds: number; died: boolean; timedOut: boolean } {
+  run: TutorialRun | null,
+): { profile: DelveProfile; seconds: number; timedOut: number } {
   let p = profile;
-  const world = beginFloor(registry, p);
-  while (!world.heroDead && world.t < maxSeconds) {
-    p = botStep(registry, p, world, STEP, policy);
-    if (world.pending.items.length > 0) p = bankWorld(registry, p, world).profile;
-    if (world.exited) break;
-    if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;
+  let seconds = 0;
+  let timedOut = 0;
+  for (let deaths = 0; ; deaths++) {
+    const world = beginFloor(registry, p);
+    if (run && world.tutorialFloor) run.floors.push(`${world.tutorialFloor}@${p.dive!.depth}`);
+    while (!world.heroDead && world.t < maxSeconds) {
+      if (run && world.tutorial) guideWorld(registry, p, world, run);
+      p = botStep(registry, p, world, STEP, policy);
+      if (world.pending.items.length > 0) p = bankWorld(registry, p, world).profile;
+      if (world.exited) break;
+      const done = world.drops.length === 0 || world.t - world.clearedAt > 3;
+      if (world.cleared && !world.tutorialFloor && done) break;
+    }
+    seconds += world.t;
+    if (!world.heroDead && (world.cleared || world.exited))
+      return { profile: completeFloor(registry, p, world).profile, seconds, timedOut };
+    if (!world.heroDead) timedOut++;
+    const guided = !!(p.tutorial && p.dive?.tutorialEntry);
+    p = failFloor(registry, p, world).profile;
+    if (!guided || !run) return { profile: p, seconds, timedOut };
+    run.retries++;
+    if (deaths >= TUTORIAL_RETRIES) {
+      run.skipped = p.tutorial!.step;
+      p = skipTutorial(p);
+    }
   }
-  if (world.heroDead || !(world.cleared || world.exited)) {
-    const { profile: failed } = failFloor(registry, p, world);
-    return { profile: failed, seconds: world.t, died: true, timedOut: !world.heroDead };
+}
+
+/**
+ * The guided start's beats and skips on a floor, before the bot's step: a
+ * beat's Continue (`ack`), and "Skip this step" once it is offered
+ * (`tutorialSkippable`).
+ */
+function guideWorld(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  run: TutorialRun,
+): void {
+  const state = world.tutorial!;
+  if (tutorialStep(registry, state)?.beat) worldTutorialEvents(registry, world, [{ type: 'ack' }]);
+  else if (tutorialSkippable(registry, profile, state, world)) {
+    run.skippedSteps.push(state.step);
+    worldTutorialEvents(registry, world, [{ type: 'skipStep' }]);
   }
-  return {
-    profile: completeFloor(registry, p, world).profile,
-    seconds: world.t,
-    died: false,
-    timedOut: false,
-  };
 }
 
 /**
  * The next door, or null to extract: when spent (low on life, no potions, no
  * shrine), or to bring home the epic flux it has banked, or an essence it has
  * the epic flux to forge (a banked essence is never lost, but a vault's alone
- * isn't worth ending the dive for).
+ * isn't worth ending the dive for), or its first boss's haul: a save's first
+ * extract (Bring It Home, which the main quests wait on; the first boss's
+ * essence and epic flux, which used to bring it home, are gone).
  */
-function pickDoor(profile: DelveProfile): string | null {
+function pickDoor(registry: DataRegistry, profile: DelveProfile): string | null {
   const dive = profile.dive!;
+  if (profile.stats.extracts === 0 && isBossDepth(registry, dive.depth)) return null;
   const essence = Object.values(dive.banked.essences).some((n) => n > 0);
   if (dive.banked.flux.epic > 0 || (essence && profile.materials.flux.epic > 0)) return null;
   if (dive.heroHpFrac < 0.35 && dive.potions === 0 && !dive.doorChoices.includes('shrine')) return null;
@@ -507,6 +580,51 @@ function bestStop(
 }
 
 /**
+ * A guided stop's power-up (see the tutorial spec's gates): the stop's ladder
+ * (`takeBestStop`); where that takes nothing, the first offer it can take: a
+ * bag item equipped, an item upgraded, or (Adjust a move) the Primary move's
+ * kind changed that leaves Power highest.
+ */
+function takeGuidedStop(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const laddered = takeBestStop(registry, profile);
+  const stop = laddered.dive?.stop;
+  if (!stop || stop.taken) return laddered;
+  const take = (action: StopAction) => {
+    const res = takeStop(registry, profile, action);
+    return res.ok ? res.profile : null;
+  };
+  const items = [...GEAR_SLOTS.flatMap((s) => profile.equipped[s] ?? []), ...profile.bag];
+  const actions: StopAction[] = [
+    ...profile.bag.map((i) => ({ kind: 'equip', uid: i.uid }) as const),
+    ...items.map((i) => ({ kind: 'upgrade', uid: i.uid }) as const),
+  ];
+  for (const action of actions.filter((a) => stop.offers.includes(a.kind))) {
+    const taken = take(action);
+    if (taken) return taken;
+  }
+  const weapon = profile.equipped.weapon;
+  const chain = weapon && movesetOf(registry, weapon).chains.primary;
+  let best: { profile: DelveProfile; power: number } | null = null;
+  if (stop.offers.includes('move') && chain)
+    for (const [index, move] of chain.moves.entries())
+      for (const kind of MOVE_KINDS) {
+        if (kind === move.kind) continue;
+        const taken = take({ kind: 'move', skill: 'primary', index, move: { ...move, kind } });
+        const power = taken ? profilePower(registry, taken) : 0;
+        if (taken && power > (best?.power ?? -Infinity)) best = { profile: taken, power };
+      }
+  return best?.profile ?? profile;
+}
+
+/** Awaken the rare weapon it wields when it can pay and Power rises (see the tutorial spec's Awaken). */
+function awakenWeapon(registry: DataRegistry, p: DelveProfile): DelveProfile {
+  const weapon = p.equipped.weapon;
+  const res = weapon && awaken(registry, p, weapon.uid);
+  if (!res?.ok) return p;
+  return profilePower(registry, res.profile) > profilePower(registry, p) ? res.profile : p;
+}
+
+/**
  * Upgrade its cheapest equipped item while the scrap lasts.
  */
 function upgradeAll(registry: DataRegistry, profile: DelveProfile): DelveProfile {
@@ -792,7 +910,8 @@ interface AnvilVisit {
  * follows; it melts
  * the gear it doesn't wear, refines flux and bars up, forges (a legendary
  * first), moves its moveset to a better weapon and equips upgrades, melts
- * what they replaced; spends Links on slots up to `SOCKETS_AFTER` a chain,
+ * what they replaced; awakens a rare weapon it wields (`awakenWeapon`);
+ * spends Links on slots up to `SOCKETS_AFTER` a chain,
  * then on sockets for the pouch's runes (each filled as it opens), then on the
  * rest of the slots; sockets the best runes and fuses the copies left over;
  * buys and refines shards; hones and pours the rest of the scrap into
@@ -819,6 +938,7 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
   pay(equipBest(registry, transferBest(registry, p)).profile);
   melt();
   if (!legendaryWaits(registry, p)) {
+    pay(awakenWeapon(registry, p));
     // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
     // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left
     // over and socket again (a fused tier can beat a socketed one).
@@ -834,6 +954,139 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
   pay(fusePrimary(registry, p));
   return { profile: p, quests, spent, forged };
 }
+
+/**
+ * An Anvil lesson step's op (see the tutorial spec's lessons), by its trigger:
+ * claim what waits; forge the slot's item (`planForge`, its best flux, the
+ * highest bar it can pay for); wear it; bind `secondary` (else Hesta's
+ * partner); the Skills lesson (`lessonChain`); salvage the slot's items of the
+ * rarity; refine into the metal; transfer onto the bag weapon of the rarity;
+ * hone the cheapest worn item's first line; a beat's Continue; the Training
+ * Grounds' cast. A step whose state holds completes in the op it calls.
+ */
+function lessonOp(
+  registry: DataRegistry,
+  p: DelveProfile,
+  step: TutorialStep,
+  secondary: ManaType | undefined,
+): DelveProfile {
+  const f = step.trigger.filter ?? {};
+  const slot = f.slot as GearSlot;
+  const atLeast = (i: GearItem) => rarityIndex(i.rarity) >= rarityIndex(f.rarity as Rarity);
+  const weapons = p.bag.filter((i) => i.slot === 'weapon' && atLeast(i));
+  switch (step.trigger.type) {
+    case 'claim':
+      return claimAll(registry, p);
+    case 'forge':
+      for (const metal of [...METAL_IDS].reverse()) {
+        const req = p.materials.metals[metal] > 0 && planForge(registry, p, slot, metal);
+        const res = req && forge(registry, p, req);
+        if (res && res.ok) return res.profile;
+      }
+      return p;
+    case 'equip': {
+      const item = p.bag.find((i) => i.slot === slot && atLeast(i));
+      return item ? equipItem(registry, p, item.uid) : p;
+    }
+    case 'bind': {
+      const partner = registry.getTutorialData().partners[p.pair.primary!];
+      return bindSecondary(registry, p, secondary ?? partner).profile;
+    }
+    case 'setChains':
+      return lessonChain(registry, p, Number(f.moves));
+    case 'salvage': {
+      const old = p.bag.filter((i) => i.slot === slot && i.rarity === f.rarity);
+      return salvageItems(registry, p, old.map((i) => i.uid)).profile;
+    }
+    case 'refine': {
+      const metals = registry.getCraftingData().metals;
+      const from = metals[metals.findIndex((m) => m.id === f.metal) - 1];
+      return from ? refine(registry, p, { kind: 'metal', metal: from.id }).profile : p;
+    }
+    case 'transfer': {
+      const uid = bestGain(registry, p, 'home', (i) => weapons.includes(i)) ?? weapons[0]?.uid;
+      return uid ? transferMoveset(registry, p, uid).profile : p;
+    }
+    case 'hone': {
+      const worn = GEAR_SLOTS.flatMap((s) => p.equipped[s] ?? []).filter((i) => i.affixes.length);
+      const item = worn.sort((a, b) => honeCost(registry, a) - honeCost(registry, b))[0];
+      return item ? hone(registry, p, item.uid, 0).profile : p;
+    }
+    case 'ack':
+      return applyTutorialEvents(registry, p, [{ type: 'ack' }]);
+    case 'cast': {
+      const cast = { type: 'cast', slot: Number(f.slot ?? 0), step: 0, aimed: false } as const;
+      return applyTutorialEvents(registry, p, [cast]);
+    }
+    default:
+      return p;
+  }
+}
+
+/**
+ * The Skills lesson: the Primary grown to `moves` moves (`addSlot`), its last
+ * in the secondary, and a pouch rune that fits its first move in that move's
+ * first socket (the Apply opens it).
+ */
+function lessonChain(registry: DataRegistry, profile: DelveProfile, moves: number): DelveProfile {
+  let p = profile;
+  const weapon = () => p.equipped.weapon;
+  while (weapon() && (movesetOf(registry, weapon()!).slots.primary ?? 0) < moves) {
+    const res = addSlot(registry, p, 'primary');
+    if (!res.ok) break;
+    p = res.profile;
+  }
+  const chain = weapon() && movesetOf(registry, weapon()!).chains.primary;
+  const second = p.pair.secondary;
+  if (!chain || !second) return p;
+  const first = chain.moves[0];
+  const held = socketsOf(first).some((r) => r !== null);
+  const rune = held ? undefined : pouchBest(registry, p).find((r) => takes(registry, p, first, 0, r));
+  const last = chain.moves.length - 1;
+  const next = chain.moves.map((m, i) => ({
+    ...m,
+    ...(i === last && { elements: [second] }),
+    ...(i === 0 && rune && { runes: [rune, ...socketsOf(m).slice(1)] }),
+  }));
+  return setChains(registry, p, { primary: { ...chain, moves: next } }).profile;
+}
+
+/**
+ * An Anvil visit while the guided start runs: each lesson step's op
+ * (`lessonOp`) in the script's order, until the step waits for the dive
+ * (`reachDepth`) or the tutorial ends. A step its op doesn't complete takes
+ * "Skip this step" where it is offered, else the bot skips the tutorial
+ * (`run.skipped`). Nothing else happens on that visit.
+ */
+function lessonVisit(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  secondary: ManaType | undefined,
+  run: TutorialRun,
+): AnvilVisit {
+  let p = profile;
+  let quests = emptyHaul();
+  let spent = emptyHaul();
+  const held = (q: DelveProfile) => [...GEAR_SLOTS.flatMap((s) => q.equipped[s] ?? []), ...q.bag];
+  const before = new Set(held(p).map((i) => i.uid));
+  for (let step = tutorialStep(registry, p.tutorial); step; step = tutorialStep(registry, p.tutorial)) {
+    if (step.trigger.type === 'reachDepth') break;
+    const next = lessonOp(registry, p, step, secondary);
+    // A claim's rewards come in; every other op's price goes out.
+    if (step.trigger.type === 'claim') quests = addHaul(quests, outflow(next, p));
+    else spent = addHaul(spent, outflow(p, next));
+    p = next;
+    if (p.tutorial?.step !== step.id) continue;
+    if (tutorialSkippable(registry, p, p.tutorial)) {
+      run.skippedSteps.push(step.id);
+      p = applyTutorialEvents(registry, p, [{ type: 'skipStep' }]);
+    } else {
+      run.skipped = step.id;
+      p = skipTutorial(p);
+    }
+  }
+  return { profile: p, quests, spent, forged: held(p).filter((i) => !before.has(i.uid)) };
+}
 /** What a dive brought into the stockpile: what it banked and kept, and an extract's bounty. */
 function diveIncome(p: DelveProfile): Haul {
   const dive = p.dive!;
@@ -844,15 +1097,26 @@ function diveIncome(p: DelveProfile): Haul {
 export function runAutopilot(
   registry: DataRegistry,
   opts: AutopilotOptions,
-): { profile: DelveProfile; reports: AutopilotDiveReport[]; economy: EconomyDive[] } {
+): {
+  profile: DelveProfile;
+  reports: AutopilotDiveReport[];
+  economy: EconomyDive[];
+  tutorial: TutorialRun | null;
+} {
   const maxDepth = opts.maxDepth ?? 100;
   const maxFloorSeconds = opts.maxFloorSeconds ?? 420;
   let p = opts.profile;
   if (!p) {
     p = createDelveProfile(registry, opts.seed, { primary: opts.primary ?? 'fire' });
-    if (opts.secondary) p = fusePrimary(registry, bindSecondary(registry, p, opts.secondary).profile);
-    p = betweenDives(registry, p); // the starter kit's forge (the crafting spec's S8)
+    if (opts.tutorial) p = startTutorial(registry, p);
+    else {
+      if (opts.secondary) p = fusePrimary(registry, bindSecondary(registry, p, opts.secondary).profile);
+      p = betweenDives(registry, p); // the starter kit's forge (the crafting spec's S8)
+    }
   }
+  const run: TutorialRun | null = p.tutorial
+    ? { floors: [], stops: [], retries: 0, skippedSteps: [], skipped: null }
+    : null;
   const reports: AutopilotDiveReport[] = [];
   const economy: EconomyDive[] = [];
 
@@ -867,21 +1131,34 @@ export function runAutopilot(
 
     while (p.dive && (p.dive.phase === 'fighting' || p.dive.phase === 'choosing')) {
       if (p.dive.phase === 'fighting') {
-        const played = playFloor(registry, p, maxFloorSeconds, opts.policy ?? 'thorough');
+        const played = playFloor(registry, p, maxFloorSeconds, opts.policy ?? 'thorough', run);
         p = played.profile;
         seconds += played.seconds;
-        if (played.timedOut) timedOut++;
+        timedOut += played.timedOut;
         continue;
       }
       const before = p;
-      p = takeBestStop(registry, p);
+      // A guided stop: its power-up, then its one road (Extract, or a door); never `closeDive`.
+      const guided = tutorialStep(registry, p.tutorial)?.stop;
+      if (guided) run?.stops.push(p.dive!.stop?.offers ?? []);
+      p = guided ? takeGuidedStop(registry, p) : takeBestStop(registry, p);
       stops = addHaul(stops, outflow(before, p));
+      if (guided?.extract) {
+        p = extractDive(registry, p);
+        result = 'extracted';
+        break;
+      }
+      if (guided) {
+        const doors = p.dive!.doorChoices;
+        p = chooseDoor(registry, p, DOOR_PREFERENCE.find((id) => doors.includes(id)) ?? doors[0]);
+        continue;
+      }
       if (p.dive!.depth >= maxDepth) {
         p = extractDive(registry, p);
         result = 'capped';
         break;
       }
-      const door = pickDoor(p);
+      const door = pickDoor(registry, p);
       if (!door) {
         p = extractDive(registry, p);
         result = 'extracted';
@@ -904,7 +1181,11 @@ export function runAutopilot(
       reactionsSeen: p.reactionsSeen.length,
       scrap: p.scrap,
     });
-    const visit = anvilVisit(registry, closeDive(registry, p));
+    const closed = closeDive(registry, p);
+    const visit =
+      run && closed.tutorial
+        ? lessonVisit(registry, closed, opts.secondary, run)
+        : anvilVisit(registry, closed);
     const forged = Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>;
     for (const item of visit.forged) forged[item.rarity]++;
     economy.push({
@@ -920,5 +1201,5 @@ export function runAutopilot(
     });
     p = visit.profile;
   }
-  return { profile: p, reports, economy };
+  return { profile: p, reports, economy, tutorial: run };
 }

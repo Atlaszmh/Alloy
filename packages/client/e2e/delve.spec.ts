@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, seedProfile } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile } from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
+  // A floor's clear may take most of the default two minutes under load.
+  test.describe.configure({ timeout: 240_000 });
   test('D01: menu → anvil → dive → clear depth → extract → back to the anvil', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/');
@@ -33,7 +35,7 @@ test.describe('Delve loot loop', () => {
       'aria-label',
       /^Primary: (light|medium|heavy) Fire Bolt$/,
     );
-    // The starting sword is common: it carries no Defensive or Ultimate, so they have no button.
+    // The seeded sword is uncommon: it carries no Defensive or Ultimate, so they have no button.
     await expect(page.getByTestId('ability-1')).toHaveCount(0);
     await expect(page.getByTestId('ability-2')).toHaveCount(0);
     await expect(page.getByTestId('mana-bar')).toBeVisible();
@@ -47,7 +49,7 @@ test.describe('Delve loot loop', () => {
 
     const door = page.getByTestId('door-choice');
     const summary = page.getByTestId('dive-summary');
-    await expect(door.or(summary)).toBeVisible({ timeout: 60_000 });
+    await expect(door.or(summary)).toBeVisible({ timeout: FLOOR_CLEAR });
 
     if (await door.isVisible()) {
       await expect(page.getByTestId('bounty')).toHaveText(/[1-9]\d*/);
@@ -58,7 +60,8 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     await expect(page.getByTestId('scrap-count')).toHaveText(/[1-9][\d,]* scrap/);
-    await expect(page.getByTestId('delve-howto')).toHaveCount(0);
+    // How to delve stays until Strike the Anvil is claimed (a forge, after Bring It Home).
+    await expect(page.getByTestId('delve-howto')).toBeVisible();
   });
 
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
@@ -72,7 +75,7 @@ test.describe('Delve loot loop', () => {
 
     // Inspected from the right column's "Found this floor" log: the pause opens on Loadout.
     const loot = page.getByTestId('pickup-feed').getByTestId('loot-item').first();
-    await expect(loot).toBeVisible({ timeout: 60_000 });
+    await expect(loot).toBeVisible({ timeout: FLOOR_CLEAR });
     const name = (await loot.locator('span.truncate').textContent())!;
     await loot.click();
     const pause = page.getByTestId('dive-pause');
@@ -106,7 +109,7 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('delve-button').click();
 
     const door = page.getByTestId('door-choice');
-    await expect(door).toBeVisible({ timeout: 60_000 });
+    await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
     await expect(door.getByRole('heading', { level: 1 })).toHaveText('Depth 1 cleared');
     await expect(door.getByTestId('risk-line')).toHaveText(
       /^Banked this dive · dying loses \d+% of it$/,
@@ -142,7 +145,7 @@ test.describe('Delve loot loop', () => {
     await seedProfile(page);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
-    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: FLOOR_CLEAR });
     await page.getByTestId('extract-button').click();
     const summary = page.getByTestId('dive-summary');
     await expect(summary).toContainText('EXTRACTED');
@@ -164,7 +167,7 @@ test.describe('Delve loot loop', () => {
 
     // Picked up mid-floor: the purse counts this dive's materials, the Found log groups them.
     await expect(page.getByTestId('purse-materials')).toContainText(/\+[1-9]/, {
-      timeout: 60_000,
+      timeout: FLOOR_CLEAR,
     });
     await expect(
       page.getByTestId('pickup-feed').getByTestId('feed-material').first(),
@@ -172,7 +175,7 @@ test.describe('Delve loot loop', () => {
 
     // Banked at the clear: the stop lists the floor's materials over the risk line.
     const door = page.getByTestId('door-choice');
-    await expect(door).toBeVisible({ timeout: 60_000 });
+    await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
     await expect(door.getByTestId('loot-material').first()).toBeVisible();
     await expect(door.getByTestId('risk-line')).toBeVisible();
 
@@ -261,7 +264,7 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
   });
 
-  test('D08: a new save chooses its mana first; Frost starts with frost gear and abilities', async ({
+  test('D08: a new save asks Guided start or Jump in, then its mana; Frost starts with frost gear', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -271,16 +274,19 @@ test.describe('Delve loot loop', () => {
       sessionStorage.setItem('delve-e2e', '1');
     });
     await page.goto('/delve');
+    await expect(page.getByTestId('guided-choice')).toBeVisible();
+    await page.getByTestId('guided-jump').click();
     const choice = page.getByTestId('mana-choice');
     await expect(choice).toBeVisible();
     await page.getByTestId('mana-choice-frost').click();
     await expect(choice).toBeHidden();
     await page.getByTestId('tab-skills').click();
+    // The common sword carries the Basic alone: the others show locked.
     const summary = page.getByTestId('abilities-summary');
-    await expect(summary).toContainText('Frost Bolt');
-    // The common sword carries Basic and Primary: the others show locked.
+    await page.getByTestId('chain-skill-primary').click();
+    await expect(summary).toContainText('Carried by uncommon weapons and better');
     await page.getByTestId('chain-skill-defensive').click();
-    await expect(summary).toContainText('Carried by magic weapons and better');
+    await expect(summary).toContainText('Carried by rare weapons and better');
     // The paper doll is on the Loadout tab.
     await page.getByTestId('tab-loadout').click();
     await page.getByTestId('slot-weapon').click();
@@ -342,7 +348,7 @@ test.describe('Delve loot loop', () => {
     const door = page.getByTestId('door-choice');
     const used: string[] = [];
     let asked = 0;
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + FLOOR_CLEAR;
     while (!(await door.isVisible())) {
       expect(Date.now()).toBeLessThan(deadline);
       if (await confirm.isVisible()) {
@@ -360,10 +366,19 @@ test.describe('Delve loot loop', () => {
       } else if (await page.getByTestId('alcove-dialog').isVisible()) {
         await page.keyboard.press('Escape');
       } else if (await plaque.isVisible()) {
-        const kind = (await plaque.getAttribute('data-interactable'))!;
-        if (kind === 'chest') await expect(plaque).toContainText('Open');
-        if (!used.includes(kind)) used.push(kind);
-        await page.keyboard.press('c');
+        // Read in one go: the bot may walk on past the prop (to a drop or a foe it saw). A busy
+        // page answers slowly: give it the expect's 10 s, and pass over a plaque that went.
+        const seen = await plaque
+          .evaluate((el) => [el.getAttribute('data-interactable')!, el.textContent ?? ''], null, {
+            timeout: 10_000,
+          })
+          .catch(() => null);
+        if (seen) {
+          const [kind, text] = seen;
+          if (kind === 'chest') expect(text).toContain('Open');
+          if (!used.includes(kind)) used.push(kind);
+          await page.keyboard.press('c');
+        }
       }
       await page.waitForTimeout(100);
     }

@@ -54,7 +54,6 @@ export function createSandboxWorld(registry: DataRegistry, o: SandboxWorldOption
       nextUid: 1,
       find: 0,
       legendaryBoost: 1,
-      firstEssence: false,
       patterns: [],
       dropsGiven: [],
       pair: [],

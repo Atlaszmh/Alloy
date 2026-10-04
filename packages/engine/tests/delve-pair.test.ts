@@ -72,6 +72,7 @@ import {
   strikeWorld,
   withChains,
 } from './fixtures/arena.js';
+import { armed, armedWeapon } from './fixtures/carries.js';
 
 /** A plain item of `mana`: no implicits, and only the lines given (as affixes). */
 function item(
@@ -269,8 +270,9 @@ describe('Power values the pair', () => {
   });
 
   it('rises with primary attunement, and with secondary attunement only once bound', () => {
+    const sword = armedWeapon(registry, weapon); // its Primary spends the pool attunement grows
     const power = (pair: ManaPair, ring?: GearItem) =>
-      heroPower(ring ? { weapon, ring } : { weapon }, registry, 3, pair);
+      heroPower(ring ? { weapon: sword, ring } : { weapon: sword }, registry, 3, pair);
     expect(power(solo, item('fire'))).toBeGreaterThan(power(solo));
     expect(power(solo, item('storm'))).toBe(power(solo)); // unbound: no attunement, no gain
     expect(power(bound, item('storm'))).toBeGreaterThan(power(bound));
@@ -294,10 +296,10 @@ describe('the save and the pair', () => {
     expect(c.defensive.moves.map((m) => m.form)).toEqual(['ward']);
   });
 
-  it('a new profile is version 10 with no pair yet, no Mana Dust, no Links and no runes, and round-trips', () => {
+  it('a new profile is version 11 with no pair yet, no Mana Dust, no Links and no runes, and round-trips', () => {
     const p = createDelveProfile(registry, 3);
     expect(p).toMatchObject({
-      version: 10,
+      version: 11,
       pair: { primary: null, secondary: null },
       manaDust: 0,
       links: 0,
@@ -362,9 +364,9 @@ describe('the save and the pair', () => {
 
 describe('the pair ops', () => {
   const fresh = () => createDelveProfile(registry, 3);
-  /** A fire hero (sword and cuirass: fire 2) with storm bound. */
+  /** A fire hero (an uncommon sword and cuirass: fire 2) with storm bound. */
   const bound = (manaDust = 0, scrap = 0): DelveProfile => ({
-    ...createDelveProfile(registry, 3, { primary: 'fire' }),
+    ...armed(registry, createDelveProfile(registry, 3, { primary: 'fire' })),
     pair: { primary: 'fire', secondary: 'storm' },
     manaDust,
     scrap,
@@ -886,7 +888,7 @@ describe("Power values the hero's own chains", () => {
 
 describe('real stats read the pair', () => {
   it('setChain refuses elements outside the pair (anything goes before the choice)', () => {
-    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     const plague: Chain = {
       moves: [{ kind: 'medium', form: 'bolt', elements: ['fire', 'nature'] }],
       payment: 'mana',
@@ -898,7 +900,7 @@ describe('real stats read the pair', () => {
     const withNature = bindSecondary(registry, p, 'nature').profile;
     const set = (q: DelveProfile) => chainsOf(setChain(registry, q, 'primary', plague).profile);
     expect(set(withNature).primary).toEqual(plague);
-    expect(set(createDelveProfile(registry, 3)).primary).toEqual(plague);
+    expect(set(armed(registry, createDelveProfile(registry, 3))).primary).toEqual(plague);
   });
 
   it('Power, Equip best, salvage, the floor and max life ignore attunement outside the pair', () => {

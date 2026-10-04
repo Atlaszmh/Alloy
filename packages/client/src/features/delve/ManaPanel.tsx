@@ -56,7 +56,10 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
     ...GEAR_SLOTS.flatMap((s) => profile.equipped[s]?.mana ?? []),
     ...profile.bag.map((i) => i.mana),
   ]);
-  const candidates = MANA_TYPES.filter((m) => m !== primary && owned.has(m));
+  // The guided start's bind (see the tutorial spec) offers any element: its hero owns no other.
+  const candidates = MANA_TYPES.filter(
+    (m) => m !== primary && (owned.has(m) || profile.tutorial !== null),
+  );
   const overtake = overtakeProgress(registry, profile);
   // Realign always sends both elements: the engine refuses a lone primary equal to the secondary.
   const next = secondary
@@ -141,7 +144,7 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
         </div>
       )}
       {!secondary && (
-        <div className="flex flex-col gap-2" data-testid="bind-section">
+        <div className="flex flex-col gap-2" data-testid="bind-section" data-tutorial="mana.bind">
           <div className="text-[14px] text-[var(--k-text-3)]">
             Bind a second element: your moves and blows can use it, and your chains keep the ones
             they have (add the element in the chain builder). Power now{' '}

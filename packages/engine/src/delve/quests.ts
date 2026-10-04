@@ -22,6 +22,7 @@ import {
 import { isDiveActive } from './dive.js';
 import type { ProfileActionResult } from './profile.js';
 import { resolveReward } from './rewards.js';
+import { applyTutorialEvents } from './tutorial.js';
 
 /**
  * Quests on the profile (see the quests spec): progress from quest events,
@@ -141,10 +142,28 @@ function advance(
   });
 }
 
-function unlockMet(def: QuestDef, profile: DelveProfile): boolean {
+/** Whether quest `id` is complete in `progress`: every objective done, claimed or not. */
+function isComplete(
+  registry: DataRegistry,
+  progress: ProfileQuests['progress'],
+  id: QuestId,
+): boolean {
+  const def = questDef(registry, id);
+  return !!def && def.objectives.every((_, i) => progress[id]?.[i]?.done);
+}
+
+/** Whether `def` unlocks: the quest it follows complete (see the tutorial spec), and the rest it asks. */
+function unlockMet(
+  registry: DataRegistry,
+  def: QuestDef,
+  profile: DelveProfile,
+  progress: ProfileQuests['progress'],
+): boolean {
   const u = def.unlock ?? {};
   return (
-    (!u.after || profile.quests.claimed.includes(u.after)) &&
+    (!u.after ||
+      profile.quests.claimed.includes(u.after) ||
+      isComplete(registry, progress, u.after)) &&
     profile.bestDepth >= (u.bestDepth ?? 0) &&
     profile.reactionsSeen.length >= (u.reactionsSeen ?? 0) &&
     profile.patterns.length >= (u.patterns ?? 0) &&
@@ -155,12 +174,14 @@ function unlockMet(def: QuestDef, profile: DelveProfile): boolean {
 /**
  * The profile with `events` applied: every unlocked, unclaimed quest's
  * matching objectives (the board's contracts' too) advance, the state types
- * are read again from the profile, then the unlocks run: a newly unlocked
- * quest starts with its state types read (an early bind counts at once), and
- * a newly unlocked main quest takes the tracked slot of the quest it comes
- * after, or the first free one. Pure and deterministic: every op that emits
- * calls it and returns its result, and an op that only changes a state calls
- * it with no events.
+ * are read again from the profile, then the unlocks run until none is left: a
+ * quest unlocks once the one it comes after is complete, claimed or not (see
+ * the tutorial spec), so one call can cascade; a newly unlocked quest starts
+ * afresh with its state types read (an early bind counts at once), and a newly
+ * unlocked main quest takes the tracked slot of the quest it comes after, or
+ * the first free one. Pure and deterministic: every op that emits calls it and
+ * returns its result, and an op that only changes a state calls it with no
+ * events.
  */
 export function applyQuestEvents(
   registry: DataRegistry,
@@ -180,14 +201,18 @@ export function applyQuestEvents(
   const unlocked = [...q.unlocked];
   const tracked = [...q.tracked];
   const { maxTracked } = registry.getDelveBalance().quests;
-  for (const def of registry.getQuestsData().quests) {
-    if (unlocked.includes(def.id) || !unlockMet(def, profile)) continue;
-    unlocked.push(def.id);
-    progress[def.id] = advance(registry, profile, def.objectives, undefined, []);
-    if (def.kind !== 'main') continue;
-    const slot = def.unlock?.after ? tracked.indexOf(def.unlock.after) : -1;
-    if (slot >= 0) tracked[slot] = def.id;
-    else if (tracked.length < maxTracked) tracked.push(def.id);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const def of registry.getQuestsData().quests) {
+      if (unlocked.includes(def.id) || !unlockMet(registry, def, profile, progress)) continue;
+      grew = true;
+      unlocked.push(def.id);
+      progress[def.id] = advance(registry, profile, def.objectives, undefined, []);
+      if (def.kind !== 'main') continue;
+      const slot = def.unlock?.after ? tracked.indexOf(def.unlock.after) : -1;
+      if (slot >= 0) tracked[slot] = def.id;
+      else if (tracked.length < maxTracked) tracked.push(def.id);
+    }
   }
   return withQuests(profile, { progress, board, unlocked, tracked });
 }
@@ -289,10 +314,9 @@ const NOT_DONE = 'Finish its objectives first';
 /**
  * Claim a completed, unclaimed quest or contract: its rewards into the
  * stockpile (`grantRewards`, `ProfileActionResult.rewards`); it leaves
- * `tracked`; a main quest's claim unlocks the next, which takes its tracked
- * slot; a contract leaves the board (`contractsClaimed` + 1, its id out of
- * `seen`). Then the state types are read again (a pattern reward). Refused
- * mid-dive.
+ * `tracked` (the next main quest unlocked as it completed); a contract leaves
+ * the board (`contractsClaimed` + 1, its id out of `seen`). Then the state
+ * types are read again (a pattern reward). Refused mid-dive.
  */
 export function claimQuest(
   registry: DataRegistry,
@@ -312,7 +336,12 @@ export function claimQuest(
       tracked: without(r.profile.quests.tracked, questId),
       seen: without(r.profile.quests.seen, questId),
     });
-    return { ok: true, rewards: r.granted, profile: applyQuestEvents(registry, left, []) };
+    const next = applyQuestEvents(registry, left, []);
+    return {
+      ok: true,
+      rewards: r.granted,
+      profile: applyTutorialEvents(registry, next, [{ type: 'claim', quest: questId }]),
+    };
   }
   const def = questDef(registry, questId);
   if (!def || !q.unlocked.includes(questId)) return { ok: false, profile, reason: 'No such quest' };
@@ -321,12 +350,13 @@ export function claimQuest(
     return { ok: false, profile, reason: NOT_DONE };
   const r = grantRewards(registry, profile, questId, def.rewards);
   const claimed = withQuests(r.profile, { claimed: [...r.profile.quests.claimed, questId] });
-  // The next main quest unlocks into this one's tracked slot; then this one leaves `tracked`.
+  // The state types read again (a pattern reward); then this one leaves `tracked`.
   const next = applyQuestEvents(registry, claimed, []);
+  const left = withQuests(next, { tracked: without(next.quests.tracked, questId) });
   return {
     ok: true,
     rewards: r.granted,
-    profile: withQuests(next, { tracked: without(next.quests.tracked, questId) }),
+    profile: applyTutorialEvents(registry, left, [{ type: 'claim', quest: questId }]),
   };
 }
 

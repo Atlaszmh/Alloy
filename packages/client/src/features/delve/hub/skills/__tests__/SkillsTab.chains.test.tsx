@@ -14,6 +14,7 @@ import {
 } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { renderSkills } from './harness';
 
 const mockNavigate = vi.fn();
@@ -59,6 +60,7 @@ describe('SkillsTab', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
   });
 
   it("lists the four skills, Basic first, and names the chosen skill's chain", () => {
@@ -83,31 +85,30 @@ describe('SkillsTab', () => {
     expect(screen.queryByText('Quick and cheap.')).toBeNull(); // nor a cost
   });
 
-  it("a new hero's common sword carries Basic and a one-move Primary; the others show locked", () => {
+  it("a new hero's common sword carries Basic alone; the others show locked, saying what carries them", () => {
+    store().resetProfile(1234, 'fire'); // the common sword, as a new save has it
     renderSkills();
     expect(screen.getByTestId('mana-pair')).toHaveTextContent('Fire · 2');
-    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('1 of 1');
-    expect(screen.queryByTestId('move-add')).toBeNull(); // the Primary's one slot holds its move
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
-    expect(screen.getByTestId('chain-skill-defensive')).toHaveTextContent('Locked');
-    fireEvent.click(screen.getByTestId('chain-skill-defensive'));
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
-      'Carried by magic weapons and better',
-    );
-    expect(screen.queryByTestId('move-0')).toBeNull();
-    expect(screen.queryByTestId('move-add')).toBeNull();
-    expect(screen.queryByTestId('add-slot')).toBeNull();
-    fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
-      'Carried by epic weapons and better',
-    );
+    for (const [skill, text] of [
+      ['primary', 'Carried by uncommon weapons and better'],
+      ['defensive', 'Carried by rare weapons and better'],
+      ['ultimate', 'Carried by epic weapons and better, or an awakened rare'],
+    ]) {
+      expect(screen.getByTestId(`chain-skill-${skill}`)).toHaveTextContent('Locked');
+      fireEvent.click(screen.getByTestId(`chain-skill-${skill}`));
+      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(text);
+      expect(screen.queryByTestId('move-0')).toBeNull();
+      expect(screen.queryByTestId('move-add')).toBeNull();
+      expect(screen.queryByTestId('add-slot')).toBeNull();
+    }
   });
 
-  it('unarmed, the default chains show at their base slots', () => {
+  it('unarmed, the default chains show at their base slots: the basic chain alone', () => {
     store().unequip('weapon');
     renderSkills();
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
-    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('1 of 1');
+    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('Locked');
     expect(screen.getByTestId('chain-skill-defensive')).toHaveTextContent('Locked');
   });
 
@@ -512,12 +513,14 @@ describe('SkillsTab', () => {
   it('unarmed, it shows the default chains read-only', () => {
     store().unequip('weapon');
     renderSkills();
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
     expect(screen.getByTestId('abilities-locked')).toHaveTextContent(
       'Equip a weapon to build your moves.',
     );
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Bolt');
-    expect(screen.getByTestId('form-lance')).toBeDisabled();
-    expect(screen.getByTestId('chain-slots')).toHaveTextContent('1 of 1 slots');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
+      'light Fire blow · light Fire blow · heavy Fire blow',
+    );
+    expect(screen.getByTestId('chain-slots')).toHaveTextContent('3 of 3 slots');
     expect(screen.queryByTestId('add-slot')).toBeNull();
   });
 });
@@ -528,6 +531,7 @@ describe('SkillsTab: sockets and runes', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
     useDelveStore.setState({ unsocket: null });
   });
 

@@ -14,6 +14,7 @@ import type { SetChainsOptions } from './runes.js';
 import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
 import { emptyMaterials } from '../loot/materials.js';
 import { applyQuestEvents, emptyQuests } from './quests.js';
+import { applyTutorialEvents } from './tutorial.js';
 import { refillBoard } from './contracts.js';
 import { rollFloor } from '../loot/forge.js';
 import { applySalvage, salvageRng } from '../loot/salvage-yield.js';
@@ -70,7 +71,7 @@ export function createDelveProfile(
   Object.assign(materials.metals, kit.startingMaterials.metals);
   Object.assign(materials.flux, kit.startingMaterials.flux);
   const profile: DelveProfile = {
-    version: 10,
+    version: 11,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -90,7 +91,6 @@ export function createDelveProfile(
       scrapEarned: 0,
       itemsFound: perRarity(0),
     },
-    firstEssenceGiven: false,
     autoSalvage: perRarity(false),
     pair: { primary: null, secondary: null },
     manaDust: 0,
@@ -101,6 +101,7 @@ export function createDelveProfile(
     essencesSeen: [],
     reactionsSeen: [],
     quests: emptyQuests(registry),
+    tutorial: null,
     dive: null,
   };
   // The first unlocks, and a full Contract board once there are templates (see the quests spec).
@@ -162,7 +163,7 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
   const fit = (item: GearItem): GearItem => {
     if (item.slot !== 'weapon') return item;
     const old = movesetOf(registry, item);
-    const carried = carriedSkills(registry, item.rarity);
+    const carried = carriedSkills(registry, item);
     const cap = socketCap(registry, item.rarity);
     const moveset: Moveset = { chains: {}, slots: {} };
     for (const skill of CHAIN_SKILLS) {
@@ -207,13 +208,13 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
 }
 
 /**
- * Validate an unknown JSON blob as a save. A version 10 save is fitted to the
+ * Validate an unknown JSON blob as a save. A version 11 save is fitted to the
  * data (`fitMovesets`); a save of any other version is `{ reset: true }`. Null
- * when it isn't an object, or a version 10 save doesn't fit the schema.
+ * when it isn't an object, or a version 11 save doesn't fit the schema.
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  if ((raw as { version?: unknown }).version !== 10) return { reset: true };
+  if ((raw as { version?: unknown }).version !== 11) return { reset: true };
   const parsed = DelveProfileSchema.safeParse(raw);
   return parsed.success ? { profile: fitMovesets(registry, parsed.data as DelveProfile) } : null;
 }
@@ -342,7 +343,8 @@ export interface BagInsertResult extends Melted {
 }
 
 /**
- * Put fresh loot in the bag, honouring auto-salvage and bag capacity. What
+ * Put fresh loot in the bag, honouring auto-salvage (off while the tutorial
+ * runs) and bag capacity. What
  * doesn't fit or is set to auto-salvage melts (`melt`): mid-dive its yield
  * goes to the floor's haul (see the crafting spec), and a melted weapon's
  * runes leave by the parts rule (`opts.unsocket`, else the balance's).
@@ -360,7 +362,9 @@ export function addLootToBag(
   const salvaged: GearItem[] = [];
   let bagFull = false;
   for (const item of items) {
-    const auto = item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
+    // Never while the tutorial runs: its set gear is the next steps' (see the tutorial spec).
+    const auto =
+      !profile.tutorial && item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
     if (auto || bag.length >= bagSize) {
       if (!auto) bagFull = true;
       salvaged.push(item);
@@ -379,7 +383,7 @@ const FORGE_LOCKED = 'Forge at the Anvil, between dives';
 
 /** Equip a bag item; a weapon brings its own moveset. Throws mid-dive. */
 export function equipItem(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
 ): DelveProfile {
@@ -389,7 +393,8 @@ export function equipItem(
   const previous = profile.equipped[item.slot];
   const bag = profile.bag.filter((i) => i.uid !== uid);
   if (previous) bag.push(previous);
-  return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
+  const equipped = { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
+  return applyTutorialEvents(registry, equipped, [{ type: 'equip', slot: item.slot }]);
 }
 
 /** Unequip into the bag (a weapon keeps its moveset). Throws mid-dive. */
@@ -437,7 +442,12 @@ export function salvageItems(
     : profile.bag.filter((item) => targets.has(item.uid) && !item.locked);
   const bag = profile.bag.filter((item) => !melted.includes(item));
   const res = melt(registry, melted.length > 0 ? { ...profile, bag } : profile, melted, opts);
-  return { ...res, count: melted.length };
+  const events = melted.map((item) => ({ type: 'salvage', slot: item.slot }) as const);
+  return {
+    ...res,
+    profile: applyTutorialEvents(registry, res.profile, events),
+    count: melted.length,
+  };
 }
 
 /** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`, and no weapon holding runes. */

@@ -1,4 +1,4 @@
-import { useMemo, useRef, type RefObject } from 'react';
+import { useMemo, useRef, useState, type RefObject } from 'react';
 import {
   alcoveOffers,
   bankWorld,
@@ -11,10 +11,12 @@ import {
   heroChains,
   takeAlcove,
   takeBestAlcove,
+  worldTutorialEvents,
   type DataRegistry,
   profileStats,
   type ArpgEvent,
   type ArpgWorld,
+  type DelveProfile,
   type DiveState,
   type GearItem,
   type Haul,
@@ -22,6 +24,7 @@ import {
   type ReactionId,
   type StopAction,
   type StopKind,
+  type TutorialEvent,
   type WorldPending,
 } from '@alloy/engine';
 import { pullOpts, useDelveStore } from '@/stores/delveStore';
@@ -55,6 +58,8 @@ export type ArenaUiEvent =
   /** `haul`: the floor's haul as the clear banked it (the stop's "Found this floor"). */
   | { kind: 'cleared'; bountyAdded: number; bossKilled: boolean; haul: Haul }
   | { kind: 'fell' }
+  /** A fall while the guided start runs: the page's retry screen, the dive left as it is. */
+  | { kind: 'tutorialFell' }
   /** The exit gate asks (a generated floor): `unexplored` rooms are left. */
   | { kind: 'exitRequest'; unexplored: number }
   /** An anvil alcove opened: its power-ups (`alcoveOffers`), the arena to pause under them. */
@@ -93,6 +98,14 @@ export function banksNow(
 }
 
 /**
+ * Whether the floor's tutorial step has moved since the last bank (`banked`): then it banks at
+ * once, so the save's step, which the Anvil-wide highlights read, never lags the floor.
+ */
+export function stepMoved(world: ArpgWorld, banked: string | null): boolean {
+  return (world.tutorial?.step ?? null) !== banked;
+}
+
+/**
  * A cleared floor: what waits banks first (`bank`), so the stop's "Found this floor" holds it, then
  * the clear runs on the save that bank left (`completeFloor`). Returns its result and that haul.
  */
@@ -121,6 +134,14 @@ export function floorOver(world: ArpgWorld): boolean {
     world.exited ||
     (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 2.5))
   );
+}
+
+/**
+ * Whether the hero's fall goes to the retry screen (see the tutorial spec): while the guided start
+ * runs, a death never reaches the dive's `failFloor`; the page offers Retry or Skip tutorial.
+ */
+export function retriesDeath(profile: DelveProfile, world: ArpgWorld): boolean {
+  return world.heroDead && profile.tutorial !== null;
 }
 
 /**
@@ -175,10 +196,24 @@ export function alcoveTake(
 /**
  * The arena's world key: a floor under way. Only while fighting, so the finished floor stays on
  * screen behind the doors or the summary; and not once the dive has settled, so after an abandon
- * mid-floor a dive again at that depth starts a fresh floor.
+ * mid-floor a dive again at that depth starts a fresh floor. Each tutorial retry (`attempt`) is a
+ * new key, so the depth starts afresh.
  */
-export function diveWorldKey(dive: DiveState | null): string | null {
-  return dive?.phase === 'fighting' && !dive.settled ? `fighting:${dive.depth}` : null;
+export function diveWorldKey(dive: DiveState | null, attempt = 0): string | null {
+  if (dive?.phase !== 'fighting' || dive.settled) return null;
+  return attempt > 0 ? `fighting:${dive.depth}:${attempt}` : `fighting:${dive.depth}`;
+}
+
+/**
+ * The floor under way's world, from the save. A guided depth is built from its entry
+ * (`retryTutorialDepth`, which changes nothing on a fresh one): after a reload, an HMR or a
+ * Resume mid-floor the save holds what the floor banked, and a one-shot step (a set drop, the
+ * chest, the shrine) could never happen again.
+ */
+export function startFloor(registry: DataRegistry): ArpgWorld {
+  const { profile, retryTutorialDepth } = useDelveStore.getState();
+  if (profile.tutorial && profile.dive?.tutorialEntry) retryTutorialDepth();
+  return beginFloor(registry, useDelveStore.getState().profile);
 }
 
 export function useArena(
@@ -204,6 +239,10 @@ export function useArena(
   }, []);
   /** When the dive last banked (performance.now() seconds). */
   const bankedAtRef = useRef(-Infinity);
+  /** The floor's tutorial step at the last bank (`stepMoved`). */
+  const bankedStepRef = useRef<string | null>(null);
+  /** The tutorial retries of this depth: each one a new world. */
+  const [attempt, setAttempt] = useState(0);
   const { equipped, pair } = profile;
   const stats = useMemo(
     () => profileStats(registry, { equipped, pair }),
@@ -214,6 +253,7 @@ export function useArena(
 
   function bank(world: ArpgWorld) {
     bankedAtRef.current = performance.now() / 1000;
+    bankedStepRef.current = world.tutorial?.step ?? null;
     const store = useDelveStore.getState();
     const res = bankWorld(registry, store.profile, world, pullOpts(store));
     store.setProfile(res.profile);
@@ -251,7 +291,9 @@ export function useArena(
     const wait = world.heroDead ? END_DELAY : world.exited ? 0 : 0.4;
     if (now - endAtRef.current < wait) return false;
     const store = useDelveStore.getState();
-    if (world.heroDead) {
+    if (retriesDeath(store.profile, world)) {
+      onUiRef.current({ kind: 'tutorialFell' });
+    } else if (world.heroDead) {
       const res = failFloor(registry, store.profile, world, pullOpts(store));
       store.setProfile(res.profile);
       onUiRef.current({ kind: 'fell' });
@@ -268,16 +310,19 @@ export function useArena(
   }
 
   const mode: ArenaMode = {
-    worldKey: diveWorldKey(profile.dive),
+    worldKey: diveWorldKey(profile.dive, attempt),
     createWorld: () => {
       endAtRef.current = null;
-      return beginFloor(registry, useDelveStore.getState().profile);
+      const world = startFloor(registry);
+      bankedStepRef.current = world.tutorial?.step ?? null;
+      return world;
     },
     loadout,
     frame: (world) => {
       const since = performance.now() / 1000 - bankedAtRef.current;
       const { reactionsSeen } = useDelveStore.getState().profile;
-      if (banksNow(world.pending, since, reactionsSeen)) bank(world);
+      if (banksNow(world.pending, since, reactionsSeen) || stepMoved(world, bankedStepRef.current))
+        bank(world);
       return checkEnd(world);
     },
     onEvents: (world, events) =>
@@ -312,5 +357,21 @@ export function useArena(
     if (world) return alcoveTake(registry, world, action, bank);
     return { ok: false, profile: useDelveStore.getState().profile, reason: 'No floor under way' };
   };
-  return { ...core, flush, leave, alcove };
+  /**
+   * The guided start's retry (a tutorial death's Retry, Abandon): the depth as it was entered
+   * (`retryTutorialDepth`), on a new world. With `skip` (the retry screen's Skip tutorial) the
+   * rails go too, and the depth starts again as an ordinary floor.
+   */
+  const retry = (skip = false) => {
+    const store = useDelveStore.getState();
+    store.retryTutorialDepth();
+    if (skip) store.skipTutorial();
+    setAttempt((n) => n + 1);
+  };
+  /** A beat's Continue or Skip this step, on the floor under way (`worldTutorialEvents`). */
+  const tutorialEvent = (event: TutorialEvent) => {
+    const world = core.worldRef.current;
+    if (world?.tutorial) worldTutorialEvents(registry, world, [event]);
+  };
+  return { ...core, flush, leave, alcove, retry, tutorialEvent };
 }

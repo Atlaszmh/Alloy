@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, seedProfile } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile } from './fixtures/delve';
 
 // Quests (see the quests spec): the main line's first quest done in a dive and claimed at the
 // Anvil, and a contract rerolled once a visit.
 test.describe('Delve quests', () => {
+  // A floor's clear may take most of the default two minutes under load.
+  test.describe.configure({ timeout: 240_000 });
   test('Q01: First Steps done in a dive, claimed at the Anvil, and the next main quest opens', async ({
     page,
   }) => {
@@ -21,7 +23,7 @@ test.describe('Delve quests', () => {
     // A door down enters depth 2 (First Steps done the moment it happens, with its toast), then
     // abandon: progress counts, death or not.
     const door = page.getByTestId('door-choice');
-    await expect(door).toBeVisible({ timeout: 60_000 });
+    await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
     // The toast lasts 2 s: watch for it from before the click, so a slow run can't miss it.
     const toast = page
       .getByText('Quest complete: First Steps · claim at the Anvil')
@@ -30,7 +32,11 @@ test.describe('Delve quests', () => {
     await toast;
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
-    await expect(tracked.getByRole('img', { name: 'Done' })).toBeVisible();
+    // Done, Bring It Home unlocks at once and takes its tracker slot (First Steps waits to be claimed).
+    await expect(tracked).toHaveCount(0);
+    await expect(
+      page.getByTestId('quest-tracker').getByTestId('tracked-bring_it_home'),
+    ).toBeVisible();
     await page.keyboard.press('Escape');
     await page.getByTestId('dive-pause').getByTestId('pause-abandon').click();
     await expect(page.getByTestId('dive-summary')).toContainText('ABANDONED');
@@ -49,7 +55,7 @@ test.describe('Delve quests', () => {
     await expect(page.getByTestId('quest-message')).toContainText('Claimed First Steps');
 
     // Claimed: First Steps moves to Done (open, since it is the open quest), and the next main
-    // quest arrives NEW.
+    // quest (open since First Steps was done) is still NEW.
     await expect(page.getByTestId('quest-group-done')).toContainText('First Steps');
     const next = page.getByTestId('quest-group-main').getByTestId('quest-bring_it_home');
     await expect(next.getByTestId('quest-new')).toBeVisible();

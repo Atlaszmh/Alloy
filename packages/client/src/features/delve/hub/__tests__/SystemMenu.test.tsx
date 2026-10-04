@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { skipTutorial, type DelveProfile } from '@alloy/engine';
 import { SystemMenu } from '../SystemMenu';
 import { UNSOCKET_KEY, useDelveStore } from '@/stores/delveStore';
+
+// Skipping is the tutorial's B1: here it clears the save's tutorial.
+vi.mock('@alloy/engine', async (orig) => ({
+  ...(await orig<typeof import('@alloy/engine')>()),
+  skipTutorial: vi.fn((p: DelveProfile) => ({ ...p, tutorial: null })),
+}));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -59,6 +66,33 @@ describe('SystemMenu', () => {
     renderMenu({ extra: [{ id: 'anvil', label: 'Anvil', onSelect }] });
     fireEvent.click(screen.getByTestId('menu-anvil'));
     expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('while the guided start runs, Skip tutorial asks first: Back keeps it, the confirm drops it', () => {
+    act(() => {
+      const s = useDelveStore.getState();
+      s.setProfile({ ...s.profile, tutorial: { step: 'welcome', count: 0, misses: 0 } });
+    });
+    const onClose = vi.fn();
+    renderMenu({ onClose });
+    fireEvent.click(screen.getByTestId('menu-skip-tutorial'));
+    const confirm = screen.getByRole('dialog', { name: 'Skip the guided start?' });
+    expect(screen.queryByTestId('system-menu')).toBeNull();
+    const back = within(confirm).getByRole('button', { name: 'Back' });
+    expect(back).toHaveFocus();
+    fireEvent.click(back);
+    expect(screen.getByTestId('system-menu')).toBeInTheDocument();
+    expect(skipTutorial).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('menu-skip-tutorial'));
+    fireEvent.click(screen.getByTestId('skip-tutorial-confirm'));
+    expect(skipTutorial).toHaveBeenCalledTimes(1);
+    expect(useDelveStore.getState().profile.tutorial).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('an ordinary save has no Skip tutorial', () => {
+    renderMenu();
+    expect(screen.queryByTestId('menu-skip-tutorial')).toBeNull();
   });
 
   it('Restart Delve (dev) wipes the save on a second press, and closes the menu', () => {

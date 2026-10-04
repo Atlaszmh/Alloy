@@ -192,6 +192,7 @@ export function Minimap({ map }: { map: HudMap | null }): ReactElement {
       role="img"
       aria-label="Minimap"
       data-testid="minimap"
+      data-tutorial="hud.minimap"
       className="block h-[150px] w-full bg-[var(--k-well)] shadow-[inset_0_0_0_2px_var(--k-steel-1)]"
     />
   );

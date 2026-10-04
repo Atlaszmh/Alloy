@@ -126,12 +126,12 @@
           "text": "Defeat Foreman Grask in the Cinder Mines"
         },
         {
-          "id": "legendary",
+          "id": "rare",
           "type": "forge",
-          "filter": { "legendary": true },
+          "filter": { "minRarity": "rare" },
           "count": 1,
           "scope": "total",
-          "text": "Forge a legendary"
+          "text": "Forge a rare or better item"
         }
       ],
       "rewards": [
@@ -278,7 +278,7 @@
         }
       ],
       "rewards": [
-        { "kind": "essence", "id": "fit", "count": 1 },
+        { "kind": "flux", "grade": "epic", "count": 1 },
         { "kind": "scrap", "count": 100 }
       ]
     },

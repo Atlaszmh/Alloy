@@ -28,6 +28,7 @@ import {
 import { TAP_MS } from '../arena/aim';
 import { aimView } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
+import { armed } from './armed';
 import { padMemory, padToArena, type ArenaPadActions } from '@/features/gamepad/arena-pad';
 import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { useControlsStore } from '@/stores/controlsStore';
@@ -319,8 +320,9 @@ describe('the aim marker of a key or button held to aim', () => {
   const aiming = { slot: 0, since: 0, at: { x: 1, y: 1 } };
 
   it("none for a skill the weapon doesn't carry", () => {
-    // A new hero's common sword: no Defensive.
-    const w = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    // An uncommon sword: no Defensive.
+    const hero = armed(createDelveProfile(registry, 99));
+    const w = beginFloor(registry, startDive(registry, hero, 1));
     expect(aimView(w, { ...aiming, slot: 1 }, point, 1000)).toBeNull();
     expect(aimView(w, aiming, point, 1000)).toMatchObject({ marker: 'line' });
   });
@@ -534,8 +536,9 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
   });
 
   it("the pad's button of a skill the weapon doesn't carry casts nothing", () => {
-    // A new hero's common sword: no Defensive.
-    const w = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    // An uncommon sword: no Defensive.
+    const hero = armed(createDelveProfile(registry, 99));
+    const w = beginFloor(registry, startDive(registry, hero, 1));
     const input = createArenaInput();
     expect(frameInput(registry, w, input, pad({ cast: [1] }), padMemory(), opts).cast).toBeNull();
     expect(frameInput(registry, w, input, pad({ cast: [0] }), padMemory(), opts).cast).toEqual({

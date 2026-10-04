@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import {
   chooseDoor,
@@ -6,10 +15,12 @@ import {
   extractDive,
   settleDive,
   startDepthOptions,
+  tutorialSkippable,
   type GearItem,
   type Haul,
   type StopAction,
   type StopKind,
+  type TutorialEvent,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
@@ -32,6 +43,9 @@ import { BossBar } from '@/features/delve/arena/hud/BossBar';
 import { FloorColumn } from '@/features/delve/arena/hud/FloorColumn';
 import { useQuests } from '@/features/delve/quests/useQuests';
 import { StopScreen } from '@/features/delve/stop/StopScreen';
+import { TutorialPanel } from '@/features/delve/tutorial/TutorialPanel';
+import { RetryScreen } from '@/features/delve/tutorial/RetryScreen';
+import { SHOWN_AT, stepIn } from '@/features/delve/tutorial/tutorial-view';
 import { reducedMotion } from '@/features/delve/kit';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
 import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';
@@ -101,6 +115,10 @@ export function DelveRun() {
   const [exitAsk, setExitAsk] = useState<number | null>(null);
   /** An open anvil alcove's offers, or null. */
   const [alcove, setAlcove] = useState<StopKind[] | null>(null);
+  /** A fall while the guided start runs: the retry screen, in place of the summary. */
+  const [fallen, setFallen] = useState(false);
+  /** Reads the floor's tutorial again at once, after the page sends it an event. */
+  const [, bump] = useReducer((n: number) => n + 1, 0);
   const bannerId = useRef(0);
   const noManaToast = useMemo(() => noManaToaster(), []);
   useDelveNotices(!!dive);
@@ -153,6 +171,9 @@ export function DelveRun() {
           break;
         case 'fell':
           break;
+        case 'tutorialFell':
+          setFallen(true);
+          break;
         case 'exitRequest':
           setExitAsk(e.unexplored);
           break;
@@ -165,17 +186,32 @@ export function DelveRun() {
   );
 
   const choosing = dive?.phase === 'choosing';
+  // The guided start (see the tutorial spec): the floor's own state while it is fought (it runs
+  // ahead of the save's, which each bank catches up), else the save's.
+  const fighting = dive?.phase === 'fighting' && !dive.settled;
+  const world = arenaRef.current?.worldRef.current ?? null;
+  const tutorial = fighting ? (world?.tutorial ?? null) : profile.tutorial;
+  const tutorialStep = stepIn(registry, tutorial, SHOWN_AT.dive);
+  // A reading beat holds the fight until its Continue, with no pause screen.
+  const beat = !!tutorialStep?.beat;
   // An abandon settles the dive where it stands (it counts as a death): the summary shows it too.
   const finished = dive?.phase === 'dead' || dive?.phase === 'extracted' || !!dive?.settled;
   // The floor's dialogs (the exit confirm, an alcove) pause the fight under them.
   const asking = exitAsk !== null || !!alcove;
-  const paused = !!pause || fanfares.length > 0 || choosing || finished || asking;
+  const paused = !!pause || fanfares.length > 0 || choosing || finished || asking || beat || fallen;
   // A layout effect, so the controller switches owner in the same commit as the
   // pause or resume: a press right after resuming reaches the fight, not the menus.
   useLayoutEffect(() => {
     setArenaLive(!paused);
     return () => setArenaLive(false);
   }, [paused]);
+  /** The stop's own pad scope (its screen), which Hesta's panel joins so the pad reaches it. */
+  const stopRef = useRef<HTMLDivElement>(null);
+  const [stopScope, setStopScope] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const screen = stopRef.current?.querySelector<HTMLElement>('[data-pad-scope]');
+    setStopScope(choosing && !finished ? (screen ?? null) : null);
+  }, [choosing, finished]);
   const manualAttack = useDelveStore((s) => s.manualAttack);
   const arena = useArena(hostRef, { paused, insets, onUi, manualAttack });
   arenaRef.current = arena;
@@ -234,23 +270,62 @@ export function DelveRun() {
   }, []);
   const closeAlcove = useCallback(() => setAlcove(null), []);
   const takeAlcove = useCallback((action: StopAction) => arenaRef.current!.alcove(action), []);
-  /** The floor restarts when the dive resumes: what it picked up since the last bank banks first. */
+  /**
+   * The floor restarts when the dive resumes: what it picked up since the last bank banks first.
+   * While the guided start runs it restarts as it was entered (its retry), nothing banked.
+   */
   const toAnvil = useCallback(() => {
-    arenaRef.current?.flush();
+    const s = useDelveStore.getState();
+    if (s.profile.tutorial && s.profile.dive?.phase === 'fighting') s.retryTutorialDepth();
+    else arenaRef.current?.flush();
     navigate('/delve');
   }, [navigate]);
-  /** Abandon counts as a death (the crafting spec's S2): the dive settles, and the summary shows its losses. */
+  /**
+   * Abandon counts as a death (the crafting spec's S2): the dive settles, and the summary shows its
+   * losses. While the guided start runs, mid-floor, it is the depth's retry.
+   */
   const abandon = useCallback(() => {
     setPause(null);
+    const { profile: p } = useDelveStore.getState();
+    if (p.tutorial && p.dive?.phase === 'fighting') return arenaRef.current?.retry();
     arenaRef.current?.flush();
     const s = useDelveStore.getState();
     s.setProfile(settleDive(registry, s.profile, 'abandon'));
   }, [registry]);
+  /** A beat's Continue or Skip this step: to the floor under way, else to the save. */
+  const onTutorial = useCallback(
+    (event: TutorialEvent) => {
+      if (fighting) arenaRef.current?.tutorialEvent(event);
+      else useDelveStore.getState().tutorialEvents([event]);
+      bump();
+    },
+    [fighting],
+  );
+  const skipStep = useCallback(() => onTutorial({ type: 'skipStep' }), [onTutorial]);
+  /** The pause's Skip tutorial: the save's rails, and the floor's while one is fought. */
+  const skipTutorial = useCallback(() => {
+    const s = useDelveStore.getState();
+    const fought = s.profile.dive?.phase === 'fighting';
+    s.skipTutorial(fought ? (arenaRef.current?.worldRef.current ?? null) : null);
+    bump();
+  }, []);
+  /** The retry screen's Retry: the depth as it was entered, on a new floor. */
+  const retry = useCallback(() => {
+    setFallen(false);
+    arenaRef.current?.retry();
+  }, []);
+  /** The retry screen's Skip tutorial: the depth starts again, as an ordinary floor. */
+  const skipFallen = useCallback(() => {
+    setFallen(false);
+    arenaRef.current?.retry(true);
+  }, []);
 
   if (!dive) return null;
 
   const biome = registry.getBiomeForDepth(dive.depth);
   const starts = startDepthOptions(registry, profile);
+  const skippable =
+    !!tutorial && !!tutorialStep && tutorialSkippable(registry, profile, tutorial, world);
 
   const onAgain = () => {
     const s = useDelveStore.getState();
@@ -285,7 +360,7 @@ export function DelveRun() {
 
       <HudGrid
         onInsets={setInsets}
-        inert={!!pause || choosing || asking}
+        inert={!!pause || choosing || asking || fallen}
         top={<PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />}
         right={
           <FloorColumn
@@ -300,15 +375,29 @@ export function DelveRun() {
         dock={
           !choosing &&
           !finished && (
-            <SkillDock
-              hud={arena.hud}
-              world={arena.worldRef}
-              onCast={arena.cast}
-              onDodge={arena.dodge}
-              onPotion={arena.potion}
-              onAttack={tapAttack}
-              manualAttack={manualAttack}
-            />
+            <>
+              {/* Hesta's panel, above the dock (see the tutorial spec). */}
+              {tutorial && !fallen && (
+                <div className="mb-4">
+                  <TutorialPanel
+                    state={tutorial}
+                    where={SHOWN_AT.dive}
+                    world={world}
+                    context="hud"
+                    onEvent={onTutorial}
+                  />
+                </div>
+              )}
+              <SkillDock
+                hud={arena.hud}
+                world={arena.worldRef}
+                onCast={arena.cast}
+                onDodge={arena.dodge}
+                onPotion={arena.potion}
+                onAttack={tapAttack}
+                manualAttack={manualAttack}
+              />
+            </>
           )
         }
       >
@@ -318,7 +407,7 @@ export function DelveRun() {
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
       {choosing && !finished && (
-        <div className="absolute inset-0 z-40" inert={!!pause}>
+        <div ref={stopRef} className="absolute inset-0 z-40" inert={!!pause}>
           <StopScreen
             dive={dive}
             haul={floorHaul}
@@ -328,6 +417,20 @@ export function DelveRun() {
             onMenu={openMenu}
             onInspect={openItem}
           />
+          {/* Hesta's panel, in the stop's screen: top centre, between its title and its counts. */}
+          {tutorial &&
+            stopScope &&
+            createPortal(
+              <div className="absolute left-1/2 top-2 z-10 w-[560px] -translate-x-1/2">
+                <TutorialPanel
+                  state={tutorial}
+                  where={SHOWN_AT.dive}
+                  context="ui"
+                  onEvent={onTutorial}
+                />
+              </div>,
+              stopScope,
+            )}
         </div>
       )}
 
@@ -342,6 +445,8 @@ export function DelveRun() {
             onResume={resume}
             onAnvil={toAnvil}
             onAbandon={abandon}
+            onSkipTutorial={profile.tutorial ? skipTutorial : undefined}
+            onSkipStep={skippable ? skipStep : undefined}
           />
         </div>
       )}
@@ -349,12 +454,13 @@ export function DelveRun() {
       {exitAsk !== null && <ExitConfirm unexplored={exitAsk} onLeave={leave} onStay={stay} />}
       {alcove && <AlcoveDialog offers={alcove} onTake={takeAlcove} onClose={closeAlcove} />}
 
+      {fallen && <RetryScreen onRetry={retry} onSkip={skipFallen} />}
       {finished && (
         <DiveSummary
           dive={dive}
           biomeName={biome.name}
           onCamp={onCamp}
-          onAgain={onAgain}
+          onAgain={profile.tutorial ? undefined : onAgain}
           againLabel={`Dive again from depth ${starts[starts.length - 1]}`}
         />
       )}

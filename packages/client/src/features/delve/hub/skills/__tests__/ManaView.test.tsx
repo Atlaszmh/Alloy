@@ -4,6 +4,7 @@ import { bindSecondary, generateItem, profilePower, SeededRNG, type ManaType } f
 import { formatNumber } from '../../../format';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { armed } from '../../../__tests__/armed';
 import { renderSkills } from './harness';
 
 vi.mock('react-router', async () => {
@@ -27,6 +28,7 @@ describe('the Mana view (the Anvil, Skills tab)', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
   });
 
   it("opens from the mana pair's Realign as its own pad scope; Back returns to the move", () => {
@@ -55,6 +57,17 @@ describe('the Mana view (the Anvil, Skills tab)', () => {
     expect(store().profile.pair).toEqual({ primary: 'fire', secondary: 'storm' });
     expect(screen.getByTestId('overtake')).toHaveTextContent('to overtake Fire');
     expect(screen.getAllByTestId(/^attune-/)).toHaveLength(2); // the pair's bars only
+  });
+
+  it("offers every element while Hesta's lesson asks for the bind, gear of it or not", () => {
+    store().setProfile({ ...store().profile, tutorial: { step: 'l1-bind', count: 0, misses: 0 } });
+    renderMana();
+    for (const m of ['frost', 'storm', 'earth', 'shadow', 'nature'])
+      expect(screen.getByTestId(`mana-bind-${m}`)).toBeInTheDocument();
+    expect(screen.queryByTestId('mana-bind-fire')).toBeNull();
+    fireEvent.click(screen.getByTestId('mana-bind-frost'));
+    fireEvent.click(screen.getByTestId('mana-bind-confirm'));
+    expect(store().profile.pair).toEqual({ primary: 'fire', secondary: 'frost' });
   });
 
   it('says a bind leaves the chains their moves', () => {

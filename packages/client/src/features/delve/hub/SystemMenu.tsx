@@ -5,6 +5,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { Button, Chip, Dialog, Glyph } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
+import { SkipTutorialConfirm } from '../tutorial/SkipTutorial';
 import { SettingsPanel } from './SettingsPanel';
 
 /** An entry a screen adds to the menu, above Title screen (the Training Grounds' "Anvil", 3F). */
@@ -15,9 +16,10 @@ export interface SystemMenuEntry {
 }
 
 /**
- * The one Esc / B menu: Resume, Controls, Settings, any `extra` entries and
- * Title screen, plus Restart and the pull rule in dev builds. Controls and
- * Settings open in its place, and their Back returns to it.
+ * The one Esc / B menu: Resume, Controls, Settings, any `extra` entries, Skip
+ * tutorial while the guided start runs, and Title screen, plus Restart and the
+ * pull rule in dev builds. Controls, Settings and Skip tutorial's confirm open
+ * in its place, and their Back returns to it.
  */
 export function SystemMenu({
   onClose,
@@ -28,13 +30,24 @@ export function SystemMenu({
 }) {
   const navigate = useNavigate();
   const unsocket = useDelveStore((s) => s.unsocket);
-  const [view, setView] = useState<'menu' | 'controls' | 'settings'>('menu');
+  const guided = useDelveStore((s) => s.profile.tutorial !== null);
+  const [view, setView] = useState<'menu' | 'controls' | 'settings' | 'skip'>('menu');
   const [confirmRestart, setConfirmRestart] = useState(false);
   // Dev builds: what pulling a rune does here (the balance's rule until the chip picks one).
   const pull = unsocketMode(getDelveRegistry(), unsocket);
 
   if (view === 'controls') return <ControlsPanel onClose={() => setView('menu')} />;
   if (view === 'settings') return <SettingsPanel onClose={() => setView('menu')} />;
+  if (view === 'skip')
+    return (
+      <SkipTutorialConfirm
+        onConfirm={() => {
+          useDelveStore.getState().skipTutorial();
+          onClose();
+        }}
+        onClose={() => setView('menu')}
+      />
+    );
   return (
     <Dialog title="Menu" onClose={onClose} width={440} testId="system-menu">
       <div className="flex flex-col gap-3">
@@ -52,6 +65,11 @@ export function SystemMenu({
             {e.label}
           </Button>
         ))}
+        {guided && (
+          <Button onClick={() => setView('skip')} testId="menu-skip-tutorial">
+            Skip tutorial
+          </Button>
+        )}
         <Button onClick={() => navigate('/')} testId="menu-main">
           Title screen
         </Button>

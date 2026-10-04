@@ -11,7 +11,13 @@ import {
   type ArpgWorld,
   type DelveProfile,
 } from '@alloy/engine';
-import { alcoveTake, floorOver, routeFloorEvents, type ArenaUiEvent } from '../arena/useArena';
+import {
+  alcoveTake,
+  floorOver,
+  retriesDeath,
+  routeFloorEvents,
+  type ArenaUiEvent,
+} from '../arena/useArena';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
@@ -35,6 +41,15 @@ describe("a floor's end", () => {
     expect(floorOver({ ...w, cleared: true, drops: [] })).toBe(true);
     const loot = [{ id: 1 }] as ArpgWorld['drops'];
     expect(floorOver({ ...w, cleared: true, clearedAt: w.t, drops: loot })).toBe(false);
+  });
+
+  it('a fall goes to the retry screen while the guided start runs, never to the dive', () => {
+    const p = startDive(registry, createDelveProfile(registry, 7), 1);
+    const w = beginFloor(registry, p);
+    const guided = { ...p, tutorial: { step: 'walk', count: 0, misses: 0 } };
+    expect(retriesDeath(guided, { ...w, heroDead: true })).toBe(true);
+    expect(retriesDeath(guided, w)).toBe(false);
+    expect(retriesDeath(p, { ...w, heroDead: true })).toBe(false);
   });
 });
 

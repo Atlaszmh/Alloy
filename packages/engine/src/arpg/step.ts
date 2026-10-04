@@ -47,6 +47,8 @@ import { clearanceOf, downhill, flowTick, homeWay, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
+import { tutorialTick } from './tutorial.js';
+import { scriptTick, spawnMults } from './tutorial-floor.js';
 import { nearIndices, spatialHash } from './spatial.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
@@ -129,6 +131,8 @@ function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   sealTick(ctx);
   dropsTick(ctx, dt);
   fogTick(ctx);
+  // The guided start's tallies, step and gates (see the tutorial spec): a no-op off it.
+  tutorialTick(ctx);
 
   world.projectiles = world.projectiles.filter((p) => !p.dead);
   world.zones = world.zones.filter((z) => !z.dead);
@@ -629,6 +633,8 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
           ),
           packId: m.packId,
           roomId: m.roomId,
+          // A hand-built floor's boss (Grask) passes its spawn's tuning on to what it summons.
+          ...spawnMults(ctx, m),
         },
         world.rng,
       );
@@ -703,6 +709,11 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       } else continue;
     }
     if (isStunned(ctx, m)) continue;
+    // A hand-built floor's scripted foe (see the tutorial spec) plays its script, not its AI.
+    if (m.script) {
+      scriptTick(ctx, m);
+      continue;
+    }
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
@@ -889,7 +900,6 @@ function dropsTick(ctx: SimCtx, dt: number): void {
         break;
       case 'material':
         if (d.material) world.pending.haul = addMaterial(world.pending.haul, d.material, d.amount);
-        if (d.firstEssence) world.firstEssenceTaken = true;
         break;
       case 'pattern':
         if (d.pattern) world.pending.patterns.push(d.pattern);

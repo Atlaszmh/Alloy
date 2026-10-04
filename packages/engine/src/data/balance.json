@@ -100,8 +100,8 @@
     },
     "movesets": {
       "carries": {
-        "common": ["basic", "primary"], "uncommon": ["basic", "primary"],
-        "magic": ["basic", "primary", "defensive"], "rare": ["basic", "primary", "defensive"],
+        "common": ["basic"], "uncommon": ["basic", "primary"],
+        "magic": ["basic", "primary"], "rare": ["basic", "primary", "defensive"],
         "epic": ["basic", "primary", "defensive", "ultimate"], "legendary": ["basic", "primary", "defensive", "ultimate"]
       },
       "extraSlots": { "common": [0, 0], "uncommon": [0, 0], "magic": [0, 1], "rare": [1, 2], "epic": [2, 3], "legendary": [3, 4] },
@@ -158,7 +158,8 @@
       "attuneRoll": { "perPoint": 0.03, "cap": 0.5 },
       "salvageShardTier": [0.3, 0.55, 0.75, 0.9], "salvageExtraShard": 0.25,
       "shardBench": { "scrap": 30, "dust": 5 },
-      "deathLoss": 0.4
+      "deathLoss": 0.4,
+      "awaken": { "epicFlux": 1, "links": 2, "scrap": 120 }
     },
     "drops": {
       "normal": {
@@ -177,7 +178,7 @@
       "vault": { "flux": { "chance": 1, "count": [1, 2] }, "shards": { "chance": 1, "count": [2, 3] }, "shardTierUp": 1, "essenceChance": 0.1 },
       "den": { "gearBonus": 0.25 },
       "scrapByKind": { "normal": 9, "elite": 27, "boss": 90 }, "scrapPickups": { "normal": 1, "elite": 3, "boss": 8 },
-      "metalUpChance": 0.1, "find": { "perPoint": 0.5, "cap": 0.5 },
+      "metalUpChance": 0.1, "essenceMinDepth": 20, "find": { "perPoint": 0.5, "cap": 0.5 },
       "shardTierDepths": [1, 6, 12, 20, 30], "fluxGradeDepths": [1, 5, 11, 20], "tierWeights": [8, 4, 2, 1, 0.5],
       "biomeShardWeights": {
         "cinder_mines": { "offense": 1.5 }, "frostvault": { "defense": 1.5 }, "storm_foundry": { "utility": 1.5 },

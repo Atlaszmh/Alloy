@@ -18,7 +18,7 @@ export function Vitals({ hud }: { hud: ArenaHud | null }) {
   const mana = hud.mana / Math.max(1, hud.manaMax);
   const barrier = hud.barrier ? Math.min(1, hud.barrier.hp / Math.max(1, hud.maxHp)) : 0;
   return (
-    <div className="flex flex-col gap-[14px] pt-[10px]">
+    <div className="flex flex-col gap-[14px] pt-[10px]" data-tutorial="hud.vitals">
       <div
         className={`k-bar k-lifeframe ${life < 0.3 ? 'animate-pulse' : ''}`}
         style={{ height: 32 }}

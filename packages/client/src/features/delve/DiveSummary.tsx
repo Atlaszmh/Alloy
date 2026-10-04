@@ -12,8 +12,9 @@ interface DiveSummaryProps {
   dive: DiveState;
   biomeName: string;
   onCamp: () => void;
-  onAgain: () => void;
-  againLabel: string;
+  /** None while the guided start runs: its next step waits at the Anvil. */
+  onAgain?: () => void;
+  againLabel?: string;
 }
 
 /** A stepped glow behind the title: red for a fall or an abandon, forge orange for an extract. */
@@ -144,9 +145,11 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
         <Button variant="primary" size="lg" onClick={onCamp} data-pad-first testId="return-camp">
           RETURN TO THE ANVIL
         </Button>
-        <Button onClick={onAgain} testId="dive-again">
-          {againLabel}
-        </Button>
+        {onAgain && (
+          <Button onClick={onAgain} testId="dive-again">
+            {againLabel}
+          </Button>
+        )}
       </div>
     </div>
   );

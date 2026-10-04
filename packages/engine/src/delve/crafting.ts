@@ -9,12 +9,15 @@ import {
   imprintRefusal,
   previewForge,
 } from '../loot/forge.js';
+import { scrapLevelFactor } from '../loot/item-generator.js';
 import { materialCount, refineCost, refinedRef, withMaterial } from '../loot/materials.js';
-import type { ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
+import { baseSlots, defaultChain, movesetOf } from '../loot/moveset.js';
+import type { AwakenPrice, ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { HeroStatKey } from '../types/gear.js';
+import type { GearItem, HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from './dive.js';
 import { applyQuestEvents } from './quests.js';
+import { applyTutorialEvents } from './tutorial.js';
 import {
   findItem,
   forgeRng,
@@ -58,8 +61,9 @@ export function forge(
     forgeCount: profile.forgeCount + 1,
   };
   const forged = recordFinds(paid, [item]).profile;
-  const event = { type: 'forge', rarity: item.rarity, legendary: !!item.legendary } as const;
-  return { ok: true, item, profile: applyQuestEvents(registry, forged, [event]) };
+  const events = [{ type: 'forge', rarity: item.rarity, legendary: !!item.legendary }] as const;
+  const next = applyTutorialEvents(registry, applyQuestEvents(registry, forged, events), events);
+  return { ok: true, item, profile: next };
 }
 
 /** Hone affix line `line` of item `uid`, for scrap. */
@@ -76,15 +80,12 @@ export function hone(
   const cost = honeCost(registry, found.item);
   if (profile.scrap < cost) return refuse(profile, 'Not enough scrap');
   const item = honeLine(registry, profile, found.item, line, forgeRng(profile));
-  return {
-    ok: true,
-    item,
-    profile: {
-      ...replaceItem(profile, item),
-      scrap: profile.scrap - cost,
-      forgeCount: profile.forgeCount + 1,
-    },
+  const honed: DelveProfile = {
+    ...replaceItem(profile, item),
+    scrap: profile.scrap - cost,
+    forgeCount: profile.forgeCount + 1,
   };
+  return { ok: true, item, profile: applyTutorialEvents(registry, honed, [{ type: 'hone' }]) };
 }
 
 /** Imprint `shard` on affix line `line` of item `uid`, for the shard and scrap. */
@@ -135,7 +136,61 @@ export function refine(
     materials: withMaterial(withMaterial(profile.materials, what, -cost.count), next, 1),
     scrap: profile.scrap - cost.scrap,
   };
-  return { ok: true, profile: applyQuestEvents(registry, refined, [{ type: 'refine' }]) };
+  const events = [{ type: 'refine' }] as const;
+  const done = applyTutorialEvents(registry, applyQuestEvents(registry, refined, events), events);
+  return { ok: true, profile: done };
+}
+
+/**
+ * Awaken rare weapon `uid` (see the tutorial spec's Awaken): it carries the
+ * Ultimate too (`GearItem.awakened`; its moveset gains the Ultimate's base
+ * chain in the pair's primary), once, for `awakenPrice`. Refused mid-dive, on
+ * anything but a rare weapon, on an awakened one, and unpaid. Pure: the Temper
+ * bench reads its refusal from a dry run.
+ */
+export function awaken(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  uid: string,
+): ProfileActionResult {
+  if (isDiveActive(profile)) return refuse(profile, FORGE_LOCKED);
+  const found = findItem(profile, uid);
+  if (!found) return refuse(profile, 'Item not found');
+  const { item } = found;
+  if (item.slot !== 'weapon' || item.rarity !== 'rare')
+    return refuse(profile, 'Only a rare weapon awakens');
+  if (item.awakened) return refuse(profile, 'Already awakened');
+  const price = awakenPrice(registry, item);
+  const epic: MaterialRef = { kind: 'flux', grade: 'epic' };
+  if (materialCount(profile.materials, epic) < price.epicFlux)
+    return refuse(profile, 'Not enough epic flux');
+  if (profile.links < price.links) return refuse(profile, 'Not enough Links');
+  if (profile.scrap < price.scrap) return refuse(profile, 'Not enough scrap');
+  const { chains, slots } = movesetOf(registry, item);
+  const base = baseSlots(registry, item.baseId, 'ultimate');
+  const element = profile.pair.primary ?? item.mana;
+  const ultimate = defaultChain(registry, 'ultimate', item.baseId, element, base);
+  const awakened: GearItem = {
+    ...item,
+    awakened: true,
+    moveset: { chains: { ...chains, ultimate }, slots: { ...slots, ultimate: base } },
+  };
+  return {
+    ok: true,
+    item: awakened,
+    profile: {
+      ...replaceItem(profile, awakened),
+      materials: withMaterial(profile.materials, epic, -price.epicFlux),
+      links: profile.links - price.links,
+      scrap: profile.scrap - price.scrap,
+    },
+  };
+}
+
+/** What awakening `item` costs: `crafting.awaken`, its scrap × `scrapLevelFactor(ilvl)`. */
+export function awakenPrice(registry: DataRegistry, item: GearItem): AwakenPrice {
+  const price = registry.getDelveBalance().crafting.awaken;
+  return { ...price, scrap: Math.round(price.scrap * scrapLevelFactor(registry, item.ilvl)) };
 }
 
 /** Buy a tier I shard of `stat` at the shard bench (`crafting.shardBench`). */

@@ -207,7 +207,10 @@ export function ChainLane({
                 </button>
                 <span className="flex flex-wrap items-center gap-2">
                   {runes && (
-                    <span data-testid={`sockets-${i}`}>
+                    <span
+                      data-testid={`sockets-${i}`}
+                      data-tutorial={skill === 'primary' && i === 0 ? 'skills.socket' : undefined}
+                    >
                       <SocketRow
                         runes={socketsOf(e)}
                         cap={runes.socketCap}
@@ -294,6 +297,7 @@ export function ChainLane({
             aria-describedby={offer.why && !locked ? `${id}-slot` : undefined}
             onClick={() => anvil.buySlot(skill)}
             data-testid="add-slot"
+            data-tutorial={skill === 'primary' ? 'skills.addSlot' : undefined}
           >
             <span className="k-disp text-[18px] text-[var(--k-text-2)]">+ Slot</span>
             <Price links={offer.price.links} scrap={offer.price.scrap} />

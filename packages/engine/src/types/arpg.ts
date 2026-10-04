@@ -6,6 +6,8 @@ import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
 import type { QuestEvent } from './quests.js';
 import type { Buff, FloorMap, InteractableKind } from './floor-map.js';
+import type { WorldTutorial } from './tutorial.js';
+import type { TutorialScript } from './tutorial-floor.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -218,6 +220,10 @@ export interface MonsterEntity {
   dead: boolean;
   /** A training dummy: where it stands, and the element it resists (null = Neutral). Null for real monsters. */
   dummy: { homeX: number; homeY: number; element: ManaType | null } | null;
+  /** A hand-built floor's foe: its spawn's id (`TutorialSpawn.id`; see the tutorial spec). */
+  spawnId?: string;
+  /** A scripted foe's script (a hand-built floor's). */
+  script?: TutorialScript;
 }
 
 export interface Projectile {
@@ -304,8 +310,6 @@ export interface Drop {
   material?: MaterialRef;
   /** A pattern drop's base id (kind `'pattern'`): learned when it banks. */
   pattern?: string;
-  /** The first boss's guaranteed essence: picking it up sets `ArpgWorld.firstEssenceTaken`. */
-  firstEssence?: boolean;
   /** The room of the foe it fell from (none: a hall's, or the open room's): its last kill pulls it in. */
   roomId?: number;
   amount: number;
@@ -564,6 +568,9 @@ export type ArpgEvent =
   | {
       kind: 'cast';
       slot: number;
+      /** The chain's move it cast, and whether the press aimed it (a manual aim; else auto-aim). */
+      step: number;
+      aimed: boolean;
       name: string;
       form: FormId;
       element: ManaType;
@@ -675,6 +682,8 @@ export type ArpgEvent =
     }
   /** An interactable in reach, each step one is: what a press does to it (see the floor maps spec). */
   | { kind: 'interactPrompt'; id: string; interactable: InteractableKind; text: string }
+  /** An interactable used up: a chest opened, a shrine's blessing given (see the tutorial spec's tallies). */
+  | { kind: 'used'; id: string; interactable: InteractableKind }
   /** The gate was used: the client confirms (`roomsUnexplored`), then `exitFloor`. */
   | { kind: 'exitRequest'; roomsUnexplored: number }
   /** An anvil alcove opened: the client (or the bot) offers `alcoveOffers`. */
@@ -694,11 +703,6 @@ export interface LootContext {
   /** Total Find in percentage points (gear + the door's `find`). The door's drop multipliers are `world.door`'s. */
   find: number;
   legendaryBoost: number;
-  /**
-   * The first boss's essence hasn't banked (`DelveProfile.firstEssenceGiven`):
-   * the first boss guarantees it, with an epic flux (`dropMaterials` clears it).
-   */
-  firstEssence: boolean;
   /** The patterns the hero knows: a pattern drop teaches one it doesn't. */
   patterns: string[];
   /**
@@ -839,11 +843,6 @@ export interface ArpgWorld {
   queuedInteract: boolean;
   kills: number;
   bossKilled: boolean;
-  /**
-   * The first boss's guaranteed essence was picked up on this floor (it rides the
-   * floor's haul): `completeFloor` counts it as given only then.
-   */
-  firstEssenceTaken: boolean;
   cleared: boolean;
   clearedAt: number;
   heroDead: boolean;
@@ -853,4 +852,8 @@ export interface ArpgWorld {
   hurt: boolean;
   /** The Training Grounds' toggles, or null in a dive. Change them with `setSandboxToggles`. */
   sandbox: SandboxToggles | null;
+  /** A hand-built floor's id (`tutorial.json → floors`), or null (see the tutorial spec). */
+  tutorialFloor: string | null;
+  /** The guided start on this floor: its step and the floor's tallies, or null (off, done or skipped). */
+  tutorial: WorldTutorial | null;
 }

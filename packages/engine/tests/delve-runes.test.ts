@@ -41,6 +41,7 @@ import { RARITY_ORDER } from '../src/types/gear.js';
 import type { DelveProfile, StopKind } from '../src/types/delve.js';
 import type { RunePouch, RuneRef } from '../src/types/rune.js';
 import { arena, bal, chainsOf, dummy, registry, run } from './fixtures/arena.js';
+import { armed } from './fixtures/carries.js';
 
 // See the runes spec: sockets, the pouch, the draft's price, fusing, drops and the stop.
 
@@ -387,7 +388,7 @@ describe('transfer: sockets move with their moves', () => {
         rng.fork(uid),
       );
       const slots: Moveset['slots'] = {};
-      for (const s of carriedSkills(registry, rarity))
+      for (const s of carriedSkills(registry, { rarity }))
         slots[s] = rng.nextInt(baseSlots(registry, baseId, s), bal.chains.cap[s]);
       const moveset = defaultMoveset(registry, w, 'fire', slots);
       for (const m of allMoves(moveset)) {
@@ -745,12 +746,16 @@ describe('opening a socket, socketing a rune, fusing', () => {
     expect(openSocket(registry, { ...p, links: 0 }, 'primary', 2).reason).toBe('Not enough Links');
     expect(openSocket(registry, { ...p, scrap: 0 }, 'primary', 2).reason).toBe('Not enough scrap');
     expect(openSocket(registry, p, 'primary', 3).reason).toBe('Pick a move the chain holds');
-    // A common weapon: one socket a move, and no Defensive.
-    const fresh = { ...createDelveProfile(registry, 3, { primary: 'fire' }), links: 9, scrap: 999 };
+    // An uncommon weapon: one socket a move, and no Defensive.
+    const fresh = {
+      ...armed(registry, createDelveProfile(registry, 3, { primary: 'fire' })),
+      links: 9,
+      scrap: 999,
+    };
     const opened = openSocket(registry, fresh, 'primary', 0).profile;
     expect(openSocket(registry, opened, 'primary', 0).reason).toBe('This move has every socket');
     expect(openSocket(registry, fresh, 'defensive', 0).reason).toBe(
-      'Carried by magic weapons and better',
+      'Carried by rare weapons and better',
     );
     expect(openSocket(registry, unequipSlot(registry, fresh, 'weapon'), 'primary', 0).reason).toBe(
       'Equip a weapon to build your moves',

@@ -110,7 +110,10 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
             </span>
           </section>
         )}
-        <section className="flex flex-col gap-2">
+        <section
+          className="flex flex-col gap-2"
+          data-tutorial={ed.skill === 'primary' ? 'skills.elements' : undefined}
+        >
           <span className="k-label">{'form' in move ? 'Elements' : 'Element'}</span>
           {'element' in move ? (
             <Segmented
