@@ -12,7 +12,7 @@ import { upgradeCost } from '../src/loot/smithing.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { Haul, MaterialRef } from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
-import { RARITY_ORDER } from '../src/types/gem.js';
+import { RARITY_ORDER } from '../src/types/gear.js';
 import { bal, registry } from './fixtures/arena.js';
 
 // See the crafting spec: "Engine shape → Autopilot" and the Economy view.

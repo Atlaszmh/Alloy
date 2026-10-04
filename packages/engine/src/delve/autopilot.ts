@@ -1,8 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../types/gear.js';
-import { GEAR_SLOTS } from '../types/gear.js';
-import { RARITY_ORDER } from '../types/gem.js';
+import { GEAR_SLOTS, RARITY_ORDER } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import {
   FLUX_GRADES,

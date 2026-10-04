@@ -7,7 +7,7 @@ import { addHaul } from '../../src/loot/materials.js';
 import { METAL_IDS, type Haul } from '../../src/types/crafting.js';
 import type { DelveProfile } from '../../src/types/delve.js';
 import type { Rarity } from '../../src/types/gear.js';
-import { RARITY_ORDER, rarityIndex } from '../../src/types/gem.js';
+import { RARITY_ORDER, rarityIndex } from '../../src/types/gear.js';
 
 /** The crafting spec's pacing targets, measured on the autopilot's economy (`economySim`). */
 

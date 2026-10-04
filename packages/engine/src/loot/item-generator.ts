@@ -2,9 +2,8 @@ import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { GearAffixDef, ImplicitTemplate } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity, StatRoll } from '../types/gear.js';
-import { GEAR_SLOTS } from '../types/gear.js';
+import { GEAR_SLOTS, RARITY_ORDER } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
-import { RARITY_ORDER } from '../types/gem.js';
 import { rollMoveset, rollSockets } from './moveset.js';
 import { metalAt } from './materials.js';
 

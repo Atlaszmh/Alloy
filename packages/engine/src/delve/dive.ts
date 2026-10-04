@@ -5,7 +5,7 @@ import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
 import type { Haul, SettleOutcome } from '../types/crafting.js';
 import type { GearItem, Rarity } from '../types/gear.js';
-import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
+import { RARITY_ORDER, rarityIndex } from '../types/gear.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, emptyPending, isBossFloor } from '../arpg/world.js';
 import { profileStats } from './pair.js';

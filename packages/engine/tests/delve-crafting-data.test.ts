@@ -19,7 +19,7 @@ import { materialName, scrapLevelFactor } from '../src/loot/item-generator.js';
 import { metalAt, shardTiersOf } from '../src/loot/materials.js';
 import { METAL_IDS } from '../src/types/crafting.js';
 import { HERO_STAT_KEYS } from '../src/types/gear.js';
-import { RARITY_ORDER } from '../src/types/gem.js';
+import { RARITY_ORDER } from '../src/types/gear.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import { arena } from './fixtures/arena.js';
 import * as engine from '../src/index.js';
