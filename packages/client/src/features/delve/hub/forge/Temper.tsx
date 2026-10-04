@@ -1,5 +1,7 @@
-import { useId, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import {
+  awaken,
+  awakenPrice,
   honeCost,
   imprintCost,
   itemStatLines,
@@ -20,7 +22,7 @@ import { ItemHeader } from '../../items/ItemHeader';
 import { ItemStatLines, AffixLine } from '../../items/ItemStatLines';
 import { manaStyle } from '../../format';
 import { ShardPicker } from './ShardPicker';
-import { shardName } from './materials-text';
+import { materialLabel, shardName } from './materials-text';
 
 const BACK = { key: 'Escape', pad: 'b' } as const;
 
@@ -37,12 +39,13 @@ const LINE_OP: Record<LineOp, { label: string; pick: string; done: string }> = {
  * line to a random affix, Hone its value within its band, Imprint a shard over
  * it) and Re-attune to the pair's other element, each at the engine's price
  * against the purse: one the purse can't pay is off, and says what it needs.
+ * A rare weapon not yet awakened adds Awaken, once (it carries the Ultimate
+ * too), enabled by the engine's dry run, which says why not.
  */
 export function Temper({ item }: { item: GearItem }) {
   const registry = getDelveRegistry();
-  const scrap = useDelveStore((s) => s.profile.scrap);
-  const dust = useDelveStore((s) => s.profile.manaDust);
-  const pair = useDelveStore((s) => s.profile.pair);
+  const profile = useDelveStore((s) => s.profile);
+  const { scrap, manaDust: dust, pair } = profile;
   const store = useDelveStore.getState;
   const [op, setOp] = useState<LineOp | null>(null);
   const [line, setLine] = useState<number | null>(null);
@@ -68,6 +71,13 @@ export function Temper({ item }: { item: GearItem }) {
   const upShort = upCost !== null && upCost > scrap;
   const ready = line !== null && (op !== 'imprint' || shard !== null);
   const opShort = ready && opCost > scrap;
+  // Awaken, on a rare weapon not yet awakened: its price, and the engine's dry run.
+  const awakenable = item.slot === 'weapon' && item.rarity === 'rare' && !item.awakened;
+  const awakenCost = awakenable ? awakenPrice(registry, item) : null;
+  const awakenTry = useMemo(
+    () => (awakenable ? awaken(registry, profile, item.uid) : null),
+    [awakenable, registry, profile, item.uid],
+  );
 
   const say = (text: string, good: boolean) => {
     setMessage({ text, good });
@@ -121,6 +131,11 @@ export function Temper({ item }: { item: GearItem }) {
     const res = store().reattune(item.uid, to);
     if (res.ok) playSound('combineMerge');
     done(res.ok, `Attuned to ${manaStyle(registry, to).name}`, res.reason, 'Cannot re-attune');
+  };
+  const onAwaken = () => {
+    const res = store().awaken(item.uid);
+    if (res.ok) playSound('upgradeTier');
+    done(res.ok, 'Awakened!', res.reason, 'Cannot awaken');
   };
 
   return (
@@ -241,7 +256,12 @@ export function Temper({ item }: { item: GearItem }) {
             </Button>
             {affixes.length > 0 &&
               (Object.keys(LINE_OP) as LineOp[]).map((o) => (
-                <Button key={o} onClick={() => open(o)} testId={`${o}-open`}>
+                <Button
+                  key={o}
+                  onClick={() => open(o)}
+                  testId={`${o}-open`}
+                  data-tutorial={o === 'hone' ? 'temper.hone' : undefined}
+                >
                   {LINE_OP[o].label}…
                 </Button>
               ))}
@@ -280,6 +300,40 @@ export function Temper({ item }: { item: GearItem }) {
                 )}
               </div>
             </div>
+          )}
+          {awakenCost && awakenTry && (
+            <div className="flex flex-col gap-2" data-testid="awaken">
+              <p className="k-caption">
+                Awaken this rare weapon, once: it carries the Ultimate too.
+              </p>
+              <Button
+                variant="primary"
+                className="self-start"
+                disabled={!awakenTry.ok}
+                onClick={onAwaken}
+                aria-describedby={awakenTry.ok ? undefined : `${id}-aw`}
+                testId="awaken-button"
+              >
+                Awaken · {awakenCost.epicFlux}{' '}
+                {materialLabel(registry, { kind: 'flux', grade: 'epic' })} ·{' '}
+                <Price links={awakenCost.links} scrap={awakenCost.scrap} />
+              </Button>
+              {!awakenTry.ok && (
+                <span
+                  id={`${id}-aw`}
+                  className="k-caption"
+                  style={{ color: 'var(--k-bad-text)' }}
+                  data-testid="awaken-refused"
+                >
+                  {awakenTry.reason}
+                </span>
+              )}
+            </div>
+          )}
+          {item.awakened && (
+            <p className="k-caption" data-testid="awakened">
+              Awakened: it carries the Ultimate.
+            </p>
           )}
         </div>
       )}
