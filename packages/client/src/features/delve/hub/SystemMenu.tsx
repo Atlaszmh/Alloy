@@ -7,7 +7,7 @@ import { Button, Chip, Dialog, Glyph } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
 import { SettingsPanel } from './SettingsPanel';
 
-/** An entry a screen adds to the menu, above Main menu (the Training Grounds' "Anvil", 3F). */
+/** An entry a screen adds to the menu, above Title screen (the Training Grounds' "Anvil", 3F). */
 export interface SystemMenuEntry {
   id: string;
   label: string;
@@ -16,7 +16,7 @@ export interface SystemMenuEntry {
 
 /**
  * The one Esc / B menu: Resume, Controls, Settings, any `extra` entries and
- * Main menu, plus Restart and the pull rule in dev builds. Controls and
+ * Title screen, plus Restart and the pull rule in dev builds. Controls and
  * Settings open in its place, and their Back returns to it.
  */
 export function SystemMenu({
@@ -53,7 +53,7 @@ export function SystemMenu({
           </Button>
         ))}
         <Button onClick={() => navigate('/')} testId="menu-main">
-          Main menu
+          Title screen
         </Button>
         {import.meta.env.DEV && (
           <div className="flex flex-wrap justify-center gap-2 pt-2">

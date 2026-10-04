@@ -11,9 +11,7 @@ export type SoundName =
   // Draft
   | 'orbSelect'
   | 'orbConfirm'
-  | 'orbPickOpponent'
   | 'forgeSlam'
-  | 'forgeCreak'
   | 'gemScatter'
   // Forge
   | 'orbPlace'
@@ -21,13 +19,11 @@ export type SoundName =
   | 'combineMerge'
   | 'combineFail'
   | 'upgradeTier'
-  | 'forgeSubmit'
   | 'synergyActivate'
   // Duel
   | 'attack'
   | 'crit'
   | 'dodge'
-  | 'block'
   | 'death'
   // Results
   | 'victory'
@@ -35,13 +31,7 @@ export type SoundName =
   // UI
   | 'buttonClick'
   | 'phaseTransition'
-  | 'timerTick'
-  | 'timerUrgent'
-  | 'dragStart'
   | 'dropSuccess'
-  | 'fluxSpend'
-  | 'matchFound'
-  | 'roundStart'
   // Delve
   | 'lootDrop'
   | 'lootRare'
@@ -72,9 +62,7 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   // Draft
   orbSelect:       { sprite: 'orb-select',       volume: 0.6, category: 'sfx', files: ['orb-select-1.wav', 'orb-select-2.wav', 'orb-select-3.wav'] },
   orbConfirm:      { sprite: 'orb-confirm',       volume: 0.7, category: 'sfx', files: ['orb-confirm-1.wav', 'orb-confirm-2.wav', 'orb-confirm-3.wav'] },
-  orbPickOpponent: { sprite: 'orb-pick-opponent', volume: 0.4, category: 'sfx', varyPitch: true },
   forgeSlam:       { sprite: 'forge-slam',        volume: 0.9, category: 'sfx', files: ['forge-slam-1.wav', 'forge-slam-2.wav', 'forge-slam-3.wav'] },
-  forgeCreak:      { sprite: 'forge-creak',       volume: 0.5, category: 'sfx', files: ['forge-creak-1.wav', 'forge-creak-2.wav', 'forge-creak-3.wav'] },
   gemScatter:      { sprite: 'gem-scatter',       volume: 0.7, category: 'sfx', files: ['gem-scatter-1.wav', 'gem-scatter-2.wav', 'gem-scatter-3.wav'] },
   // Forge
   orbPlace:        { sprite: 'orb-place',         volume: 0.7, category: 'sfx', files: ['orb-place-1.wav', 'orb-place-2.wav', 'orb-place-3.wav', 'orb-place-4.wav'] },
@@ -82,13 +70,11 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   combineMerge:    { sprite: 'combine-merge',     volume: 0.8, category: 'sfx', files: ['combine-merge-1.wav', 'combine-merge-2.wav', 'combine-merge-3.wav'] },
   combineFail:     { sprite: 'combine-fail',      volume: 0.5, category: 'sfx', files: ['combine-fail-1.wav', 'combine-fail-2.wav', 'combine-fail-3.wav'] },
   upgradeTier:     { sprite: 'upgrade-tier',      volume: 0.8, category: 'sfx' },
-  forgeSubmit:     { sprite: 'forge-submit',      volume: 0.7, category: 'sfx', files: ['forge-submit-1.wav', 'forge-submit-2.wav', 'forge-submit-3.wav'] },
   synergyActivate: { sprite: 'synergy-activate',  volume: 0.7, category: 'sfx' },
   // Duel
   attack:          { sprite: 'attack',            volume: 0.6, category: 'sfx', varyPitch: true, cooldownMs: 80 },
   crit:            { sprite: 'crit',              volume: 0.8, category: 'sfx', cooldownMs: 80 },
   dodge:           { sprite: 'dodge',             volume: 0.5, category: 'sfx', cooldownMs: 80 },
-  block:           { sprite: 'block',             volume: 0.6, category: 'sfx', cooldownMs: 80 },
   death:           { sprite: 'death',             volume: 0.7, category: 'sfx' },
   // Results
   victory:         { sprite: 'victory',           volume: 0.8, category: 'sfx' },
@@ -96,13 +82,7 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   // UI
   buttonClick:     { sprite: 'button-click',      volume: 0.3, category: 'ui' },
   phaseTransition: { sprite: 'phase-transition',  volume: 0.6, category: 'sfx', files: ['phase-transition-1.wav', 'phase-transition-2.wav'] },
-  timerTick:       { sprite: 'timer-tick',        volume: 0.4, category: 'ui' },
-  timerUrgent:     { sprite: 'timer-urgent',      volume: 0.6, category: 'ui', files: ['timer-urgent-1.wav', 'timer-urgent-2.wav'] },
-  dragStart:       { sprite: 'drag-start',        volume: 0.3, category: 'ui', files: ['drag-start-1.wav', 'drag-start-2.wav'] },
   dropSuccess:     { sprite: 'drop-success',      volume: 0.7, category: 'sfx', files: ['drop-success-1.wav', 'drop-success-2.wav', 'drop-success-3.wav'] },
-  fluxSpend:       { sprite: 'flux-spend',        volume: 0.4, category: 'ui', files: ['flux-spend-1.wav', 'flux-spend-2.wav'] },
-  matchFound:      { sprite: 'match-found',       volume: 0.7, category: 'sfx' },
-  roundStart:      { sprite: 'round-start',       volume: 0.6, category: 'sfx' },
   // Delve
   lootDrop:        { sprite: 'loot-drop',         volume: 0.45, category: 'sfx', varyPitch: true, cooldownMs: 60 },
   lootRare:        { sprite: 'loot-rare',         volume: 0.6, category: 'sfx', cooldownMs: 120 },
@@ -231,14 +211,6 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
       osc.connect(g).connect(ctx.destination); osc.start(t + start); osc.stop(t + end);
     }
   },
-  orbPickOpponent(vol, rate) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const osc = ctx.createOscillator(); const g = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.value = 330 * rate;
-    g.gain.setValueAtTime(vol * 0.15, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-    osc.connect(g).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.08);
-  },
   orbPlace(vol, rate) {
     const ctx = getAudioContext(); if (!ctx) return;
     const osc = ctx.createOscillator(); const g = ctx.createGain();
@@ -252,22 +224,6 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
     const osc = ctx.createOscillator(); const g = ctx.createGain();
     osc.type = 'sine'; osc.frequency.value = 330;
     osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.2);
-    g.gain.setValueAtTime(vol, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-    osc.connect(g).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.2);
-  },
-  timerTick(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const osc = ctx.createOscillator(); const g = ctx.createGain();
-    osc.type = 'square'; osc.frequency.value = 587.33;
-    g.gain.setValueAtTime(vol, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-    osc.connect(g).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1);
-  },
-  timerUrgent(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const osc = ctx.createOscillator(); const g = ctx.createGain();
-    osc.type = 'square'; osc.frequency.value = 698.46;
     g.gain.setValueAtTime(vol, ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
     osc.connect(g).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.2);
@@ -302,17 +258,6 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
     const g = ctx.createGain(); g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
     src.connect(f).connect(g).connect(ctx.destination); src.start(t); src.stop(t + 0.2);
-  },
-  block(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const t = ctx.currentTime;
-    for (const detune of [0, 15]) {
-      const osc = ctx.createOscillator(); const g = ctx.createGain();
-      osc.type = 'square'; osc.frequency.value = 164.81; osc.detune.value = detune;
-      g.gain.setValueAtTime(detune === 0 ? vol : vol * 0.6, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-      osc.connect(g).connect(ctx.destination); osc.start(t); osc.stop(t + 0.15);
-    }
   },
   death(vol) {
     const ctx = getAudioContext(); if (!ctx) return;
@@ -411,23 +356,6 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
       osc.connect(g).connect(ctx.destination); osc.start(t + start); osc.stop(t + end);
     }
   },
-  forgeSubmit(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator(); const g = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.setValueAtTime(300, t);
-    osc.frequency.exponentialRampToValueAtTime(600, t + 0.2);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-    osc.connect(g).connect(ctx.destination); osc.start(t); osc.stop(t + 0.4);
-  },
-  dragStart(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const osc = ctx.createOscillator(); const g = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.value = 350;
-    g.gain.setValueAtTime(vol * 0.4, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-    osc.connect(g).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.08);
-  },
   dropSuccess(vol) {
     const ctx = getAudioContext(); if (!ctx) return;
     const t = ctx.currentTime;
@@ -435,37 +363,6 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
     osc.type = 'triangle'; osc.frequency.value = 500;
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
     osc.connect(g).connect(ctx.destination); osc.start(t); osc.stop(t + 0.15);
-  },
-  fluxSpend(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const osc = ctx.createOscillator(); const g = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.value = 600;
-    osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.15);
-    g.gain.setValueAtTime(vol * 0.5, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc.connect(g).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.15);
-  },
-  matchFound(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const t = ctx.currentTime;
-    for (const [freq, start, end] of [[440, 0, 0.15], [554.37, 0.15, 0.3], [659.25, 0.3, 0.5]] as const) {
-      const osc = ctx.createOscillator(); const g = ctx.createGain();
-      osc.type = 'sine'; osc.frequency.value = freq;
-      g.gain.setValueAtTime(0.001, t); g.gain.setValueAtTime(vol, t + start);
-      g.gain.exponentialRampToValueAtTime(0.001, t + end);
-      osc.connect(g).connect(ctx.destination); osc.start(t + start); osc.stop(t + end);
-    }
-  },
-  roundStart(vol) {
-    const ctx = getAudioContext(); if (!ctx) return;
-    const t = ctx.currentTime;
-    const buf = createNoiseBuffer(ctx, 0.3); const src = ctx.createBufferSource(); src.buffer = buf;
-    const f = ctx.createBiquadFilter(); f.type = 'bandpass';
-    f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(1200, t + 0.15);
-    f.frequency.exponentialRampToValueAtTime(300, t + 0.3); f.Q.value = 1.5;
-    const g = ctx.createGain(); g.gain.setValueAtTime(vol * 0.6, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-    src.connect(f).connect(g).connect(ctx.destination); src.start(t); src.stop(t + 0.3);
   },
 };
 

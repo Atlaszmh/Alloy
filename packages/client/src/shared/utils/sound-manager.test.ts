@@ -41,14 +41,15 @@ describe('SoundManager', () => {
       'orbSelect', 'orbConfirm',
       // Forge
       'orbPlace', 'orbRemove', 'combineMerge', 'combineFail',
-      'upgradeTier', 'forgeSubmit', 'synergyActivate',
+      'upgradeTier', 'synergyActivate',
       // Duel
-      'attack', 'crit', 'dodge', 'block', 'death',
+      'attack', 'crit', 'dodge', 'death',
       // Results
       'victory', 'defeat',
       // UI
-      'buttonClick', 'phaseTransition', 'timerTick', 'timerUrgent',
-      'dragStart', 'dropSuccess', 'fluxSpend', 'matchFound', 'roundStart',
+      'buttonClick', 'phaseTransition', 'dropSuccess',
+      // Delve
+      'lootDrop', 'lootRare', 'lootLegendary', 'potion', 'heroHurt',
     ];
 
     it('every SoundName can be played without throwing', () => {
@@ -60,17 +61,17 @@ describe('SoundManager', () => {
 
     const SOUNDS_WITH_FILES: SoundName[] = [
       'orbSelect', 'orbConfirm', 'orbPlace', 'orbRemove',
-      'dragStart', 'dropSuccess',
+      'dropSuccess',
       'combineMerge', 'combineFail',
-      'forgeSubmit', 'fluxSpend', 'timerUrgent', 'phaseTransition',
-      'forgeSlam', 'forgeCreak', 'gemScatter',
+      'phaseTransition',
+      'forgeSlam', 'gemScatter',
     ];
 
     const SYNTH_ONLY_SOUNDS: SoundName[] = [
       'upgradeTier', 'synergyActivate',
-      'attack', 'crit', 'dodge', 'block', 'death',
+      'attack', 'crit', 'dodge', 'death',
       'victory', 'defeat',
-      'buttonClick', 'timerTick', 'matchFound', 'roundStart',
+      'buttonClick',
     ];
 
     it('file-backed sounds have at least 2 variants each', () => {
@@ -175,8 +176,8 @@ describe('SoundManager', () => {
       const callsBefore = MockHowl.mock.calls.length;
       mgr.loadFiles();
       const callsAfter = MockHowl.mock.calls.length;
-      // Should create 42 Howl instances (total file count across all file-backed sounds)
-      expect(callsAfter - callsBefore).toBe(42);
+      // Should create 30 Howl instances (total file count across all file-backed sounds)
+      expect(callsAfter - callsBefore).toBe(30);
     });
 
     it('does not double-load on repeated calls', () => {
