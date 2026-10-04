@@ -724,6 +724,13 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
   m.nextSpecialAt = world.t + 6 + world.rng.next() * 2 - (enrageMult(ctx, m) > 1 ? 2 : 0);
 }
 
+/** Whether a foe of `m`'s room is awake (an ambusher wakes with its room). */
+function roomAwake(world: ArpgWorld, m: MonsterEntity): boolean {
+  return (
+    m.roomId !== null && world.monsters.some((o) => !o.dead && o.aggro && o.roomId === m.roomId)
+  );
+}
+
 function monstersTick(ctx: SimCtx, dt: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
@@ -777,9 +784,14 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       continue;
     }
 
-    // A foe wakes when it perceives the hero near (or is hit), and its pack with it.
+    // A foe wakes when it perceives the hero near (or is hit), and its pack with it; one hidden in
+    // ambush only when the hero comes within `ambushWake` or a pack in its room wakes.
     if (!m.aggro) {
-      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && perceives(world.map, m, h)) {
+      const d = dist(m.x, m.y, h.x, h.y);
+      const wakes = m.ambush
+        ? d < bal.ai.pack.ambush.ambushWake || roomAwake(world, m)
+        : d < bal.monster.aggroRadius && perceives(world.map, m, h);
+      if (wakes) {
         for (const o of world.monsters) {
           if (!o.dead && !o.aggro && o.packId === m.packId) {
             o.aggro = true;
@@ -789,6 +801,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
         if (m.kind === 'boss') m.nextSpecialAt = world.t + AGGRO_SPECIAL_DELAY;
       } else continue;
     }
+    // Awake, an ambusher hides no more.
+    m.ambush = false;
     if (isStunned(ctx, m)) continue;
     // A hand-built floor's scripted foe (see the tutorial spec) plays its script, not its AI.
     if (m.script) {
