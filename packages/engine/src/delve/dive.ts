@@ -135,7 +135,6 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
       nextUid: profile.nextUid,
       find: stats.magicFind + (mods.find ?? 0),
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
-      firstEssence: !profile.firstEssenceGiven,
       patterns: [...profile.patterns],
       dropsGiven: [...dive.dropsGiven],
       pair: pairElements(profile.pair),
@@ -282,9 +281,7 @@ export interface FloorResult extends BankResult {
 
 /**
  * The floor is cleared: bank loot (`bankWorld`, with `opts`) and the floor's haul
- * into `dive.banked`, pay the depth bounty, heal, offer doors. The first boss's
- * guaranteed essence counts as given once the haul holding it banks here
- * (`ArpgWorld.firstEssenceTaken`).
+ * into `dive.banked`, pay the depth bounty, heal, offer doors.
  */
 export function completeFloor(
   registry: DataRegistry,
@@ -298,8 +295,6 @@ export function completeFloor(
   const dive = banked.profile.dive!;
   const mods = dive.door?.mods ?? {};
   const bossKilled = world.bossKilled;
-  // The guaranteed essence itself, picked up this floor: another essence in the haul doesn't count.
-  const essenceBanked = world.firstEssenceTaken;
 
   const bountyAdded = Math.round(
     bal.dive.bountyBase *
@@ -339,7 +334,6 @@ export function completeFloor(
 
   const cleared: DelveProfile = {
     ...left,
-    firstEssenceGiven: left.firstEssenceGiven || essenceBanked,
     checkpoints,
     dive: nextDive,
     stats: { ...left.stats, bossKills: left.stats.bossKills + (bossKilled ? 1 : 0) },

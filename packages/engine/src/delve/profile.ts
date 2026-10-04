@@ -91,7 +91,6 @@ export function createDelveProfile(
       scrapEarned: 0,
       itemsFound: perRarity(0),
     },
-    firstEssenceGiven: false,
     autoSalvage: perRarity(false),
     pair: { primary: null, secondary: null },
     manaDust: 0,

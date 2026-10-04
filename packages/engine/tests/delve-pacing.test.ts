@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { runAutopilot, type AutopilotDiveReport } from '../src/delve/autopilot.js';
 import { GEAR_SLOTS } from '../src/types/gear.js';
-import { essenceForgedAtOnce, firstEpicDive, pacingRun } from './fixtures/pacing.js';
+import { firstEpicDive, legendaryFollowsEssence, pacingRun } from './fixtures/pacing.js';
 
 /**
  * Guard rails for the Delve ARPG progression curve. The autopilot plays the
@@ -82,9 +82,7 @@ describe('Delve ARPG pacing (autopilot)', () => {
     expect(clear).toBeGreaterThan(1.25 * rush);
   });
 
-  // Fails since B3 (the tutorial's carries: a new save's sword carries the basic chain alone); B3's
-  // plan records what it measured. B4 re-bands.
-  it.fails("rushing still progresses: a beeline reaches at least 80% of the full clear's depth by dive 12", () => {
+  it("rushing still progresses: a beeline reaches at least 80% of the full clear's depth by dive 12", () => {
     const rush = avg(rushRuns.map((r) => r[DIVES - 1].endDepth));
     expect(rush).toBeGreaterThanOrEqual(0.8 * endDepthAt(DIVES));
   });
@@ -105,8 +103,7 @@ describe('Delve crafting pacing targets (economySim)', () => {
       expect(first, `seed ${SEEDS[i]}`).toEqual({ opened: true, kitAlone: false, withDive1: true, forged: true });
   });
 
-  // Fails since B3 (no essence below depth 20); B3's plan records what it measured. B4 re-bands.
-  it.fails('a first epic (or a legendary) is forged by about dive 5', () => {
+  it('a first epic (or a legendary) is forged by about dive 5', () => {
     const first = economies.map(firstEpicDive);
     for (const [i, dive] of first.entries()) {
       expect(dive, `seed ${SEEDS[i]}`).toBeGreaterThan(0);
@@ -115,9 +112,8 @@ describe('Delve crafting pacing targets (economySim)', () => {
     expect(avg(first)).toBeLessThanOrEqual(5);
   });
 
-  // Fails since B3: the first boss drops no essence (none below depth 20). B4 replaces this target
-  // with the spec's "the first legendary within two Anvil visits of the first essence banking".
-  it.fails("the first boss's essence becomes a forged legendary on the Anvil visit after its dive", () => {
-    for (const e of economies) expect(essenceForgedAtOnce(e), `seed ${e.seed}`).toBe(true);
+  // The tutorial spec's target: no essence comes before drops.essenceMinDepth (20).
+  it('the first legendary is forged within two Anvil visits of the first essence banking', () => {
+    for (const e of economies) expect(legendaryFollowsEssence(e), `seed ${e.seed}`).toBe(true);
   });
 });

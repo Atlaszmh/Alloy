@@ -19,8 +19,11 @@ describe('save v8', () => {
     expect(p.materials.flux).toEqual({ uncommon: 5, magic: 0, rare: 0, epic: 0 });
     expect(p.scrap).toBe(50);
     expect([p.materials.shards, p.materials.essences, p.essencesSeen]).toEqual([{}, {}, []]);
-    expect(p.firstEssenceGiven).toBe(false);
-    expect('pity' in p || 'firstBossLegendaryGiven' in p).toBe(false);
+    const gone = ['pity', 'firstBossLegendaryGiven', 'firstEssenceGiven'];
+    expect(gone.filter((k) => k in p)).toEqual([]);
+    // A v11 save from before the first boss's guarantee went still loads, without it.
+    const old = parseDelveProfile(registry, json({ ...p, firstEssenceGiven: true }));
+    expect(old && 'profile' in old ? 'firstEssenceGiven' in old.profile : 'refused').toBe(false);
     // The kit is the data's: a new save never shares its records.
     expect(registry.getCraftingData().startingMaterials.metals).toEqual({ rusty: 5 });
   });

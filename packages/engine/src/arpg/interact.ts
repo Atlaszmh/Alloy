@@ -157,7 +157,6 @@ export function rollVault(
       door: world.door,
       find: loot.find,
       legendaryBoost: loot.legendaryBoost,
-      firstEssence: false,
       patterns: loot.patterns,
     },
     rng,
