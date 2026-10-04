@@ -246,18 +246,22 @@ export function tutorialHolds(
 }
 
 /**
- * Whether the hero can't pay for an Anvil step's op as the lesson asks
- * (`tutorialSkippable`): a forge of the cheapest bar at the step's rarity; the
- * Skills step's slot, socket, elements and a pouch rune for what is left of
- * it; the refine into `metal`; the transfer onto a bag weapon of `rarity`; any
- * hone. Generous by design: it only offers "Skip this step".
+ * Whether the hero can't do an Anvil step's op as the lesson asks
+ * (`tutorialSkippable`): a forge of the cheapest bar at the step's rarity (an
+ * equip too, with nothing of the slot and rarity to wear); the Skills step on
+ * a weapon that can't hold its moves, or its slot, socket, elements and a
+ * pouch rune for what is left of it; the refine into `metal`; the transfer
+ * onto a bag weapon of `rarity`; any hone. Generous by design: it only offers
+ * "Skip this step".
  */
 function unaffordable(registry: DataRegistry, profile: DelveProfile, step: TutorialStep): boolean {
   const f = step.trigger.filter ?? {};
   const bal = registry.getDelveBalance();
   const { primary, secondary } = profile.pair;
   const weapon = profile.equipped.weapon;
-  switch (step.trigger.type) {
+  // With nothing to wear, an equip is as unaffordable as the forge that would make it.
+  const owned = itemsOf(profile).some((i) => i.slot === f.slot && atLeast(i, f.rarity));
+  switch (step.trigger.type === 'equip' && !owned ? 'forge' : step.trigger.type) {
     case 'forge': {
       const base = profile.patterns.find((id) => registry.getGearBase(id).slot === f.slot);
       if (!base || !primary) return true;
@@ -273,9 +277,12 @@ function unaffordable(registry: DataRegistry, profile: DelveProfile, step: Tutor
       return !!refused && refused.code !== 'bagFull';
     }
     case 'setChains': {
-      if (!weapon || !secondary) return false;
+      if (!secondary) return false;
+      // A weapon that can't hold the moves (unarmed, no Primary, every slot bought) can't do it.
       const moves = primaryMoves(registry, profile);
-      const slot = moves.length < Number(f.moves) ? slotPrice(registry, weapon, 'primary') : null;
+      const short = moves.length < Number(f.moves);
+      const slot = weapon && short ? slotPrice(registry, weapon, 'primary') : null;
+      if (!weapon || moves.length === 0 || (short && !slot)) return true;
       const socket = moves.length > 0 && socketsOf(moves[0]).length === 0;
       const links = (slot?.links ?? 0) + (socket ? bal.runes.socketLinks[0] : 0);
       const scrap = (slot?.scrap ?? 0) + (socket ? bal.runes.socketScrap[0] : 0);
