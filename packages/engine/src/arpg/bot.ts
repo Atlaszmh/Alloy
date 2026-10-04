@@ -9,6 +9,7 @@ import { UNREACHED, downhill, flowField } from './flow.js';
 import { doorShut, moveCircle, perceives, solidCode } from './grid.js';
 import { roomAt } from './fog.js';
 import { openedAlcove } from './interact.js';
+import { footprints } from './objects-base.js';
 import { tutorialStep } from '../delve/tutorial.js';
 
 /**
@@ -149,11 +150,16 @@ function plainInput(registry: DataRegistry, world: ArpgWorld, policy: BotPolicy)
     move = away;
   }
 
-  // Detour for loot when the coast is clear.
+  // Detour for loot it can walk to when the coast is clear; shut in a sealed
+  // room, its foes come first (the loot waits outside the shut door).
   const threat = nearestMonster(ctx, h.x, h.y, 4);
-  if (!threat) {
+  if (!threat && (world.map.open || !shutIn(world))) {
     const item = world.drops.find(
-      (d) => !d.dead && (d.kind === 'item' || d.kind === 'rune') && dist(h.x, h.y, d.x, d.y) < 6,
+      (d) =>
+        !d.dead &&
+        (d.kind === 'item' || d.kind === 'rune') &&
+        dist(h.x, h.y, d.x, d.y) < 6 &&
+        (world.map.open || stepsFrom(world, fieldTo(world, d)) !== UNREACHED),
     );
     if (item) move = toward(world, item);
   }
@@ -224,8 +230,8 @@ function shutIn(world: ArpgWorld): Room | undefined {
 
 /**
  * Each world's map as the hero walks it (`heroMap`) and the bot's flow fields
- * on it toward the cells it walks to, kept until the map's `version` moves or
- * a door opens or shuts (`key`).
+ * on it toward the cells it walks to, kept until the map's `version` moves, a
+ * door opens or shuts or a prop breaks (`key`).
  */
 const paths = new WeakMap<
   ArpgWorld,
@@ -233,17 +239,20 @@ const paths = new WeakMap<
 >();
 
 /**
- * `map` with every one-cell gap walled (a walkable cell, not a door's, with a
- * solid cell on each side across it, as between two pillars): the hero's
- * bounding square (radius 0.5) passes one only dead on its centre line, which
- * a step at its pace rarely lands on. Only the cells' codes count here: the
- * doors are read live (`solid`, through the shared `doors`).
+ * `map` with the standing objects' footprints walled (`feet`), then every
+ * one-cell gap walled (a walkable cell, not a door's, with a solid cell on
+ * each side across it, as between two pillars, or a pillar and a crate): the
+ * hero's bounding square (radius 0.5) passes one only dead on its centre line,
+ * which a step at its pace rarely lands on. Only the cells' codes count here:
+ * the doors are read live (`solid`, through the shared `doors`).
  */
-function heroMap(map: FloorMap): FloorMap {
+function heroMap(map: FloorMap, feet: ReadonlySet<number>): FloorMap {
   const { width: w, height: h } = map;
+  const walled = map.cells.slice();
+  for (const c of feet) if (walled[c] !== CELL.door) walled[c] = CELL.wall;
   const wall = (x: number, y: number) =>
-    x < 0 || y < 0 || x >= w || y >= h || solidCode(map.cells[y * w + x]);
-  const cells = map.cells.slice();
+    x < 0 || y < 0 || x >= w || y >= h || solidCode(walled[y * w + x]);
+  const cells = walled.slice();
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const squeezed = (wall(x - 1, y) && wall(x + 1, y)) || (wall(x, y - 1) && wall(x, y + 1));
@@ -260,13 +269,17 @@ function cellOf(world: ArpgWorld, p: Vec): number {
   return cy * w + cx;
 }
 
-/** A flow field over the hero's map toward `p`'s cell, as the cells and doors stand now. */
+/** A flow field over the hero's map toward `p`'s cell, as the cells, doors and objects stand now. */
 function fieldTo(world: ArpgWorld, p: Vec): Uint16Array {
   const doors = world.map.doors.map((d) => (doorShut(d) ? 1 : 0)).join('');
-  const key = `${world.map.version}:${doors}`;
+  const broken = world.props.filter((o) => o.dead).length;
+  const key = `${world.map.version}:${doors}:${broken}`;
   let kept = paths.get(world);
   if (!kept || kept.key !== key)
-    paths.set(world, (kept = { map: heroMap(world.map), key, byCell: new Map() }));
+    paths.set(
+      world,
+      (kept = { map: heroMap(world.map, footprints(world)), key, byCell: new Map() }),
+    );
   const cell = cellOf(world, p);
   let field = kept.byCell.get(cell);
   if (!field) {
@@ -302,6 +315,47 @@ function toward(world: ArpgWorld, p: Vec): Vec {
  * square) first steps sideways onto its cell's centre line.
  */
 function walk(world: ArpgWorld, field: Uint16Array, p: Vec): Vec {
+  return headway(world, square(world, field, p));
+}
+
+/** How long (s) a walk may go without `STUCK_MOVE` of headway before it side-steps, and for how long. */
+const STUCK_TIME = 1;
+const STUCK_MOVE = 0.3;
+const SIDE_STEP = 0.5;
+
+/** Each world's walk: where it last made headway and when, its side-step, and the last tick it walked. */
+const walks = new WeakMap<
+  ArpgWorld,
+  { x: number; y: number; since: number; last: number; until: number; side: number }
+>();
+
+/**
+ * The no-progress guard on a walk's way `d`: a walk that hasn't got
+ * `STUCK_MOVE` from where it was for `STUCK_TIME` (pressed on something its
+ * field doesn't see, or flip-flopping) steps square to `d` for `SIDE_STEP`,
+ * each time to the other side. A tick without a walk starts it afresh.
+ */
+function headway(world: ArpgWorld, d: Vec): Vec {
+  const h = world.hero;
+  let s = walks.get(world);
+  if (!s || world.t - s.last > 0.1) {
+    s = { x: h.x, y: h.y, since: world.t, last: world.t, until: 0, side: s?.side ?? 1 };
+    walks.set(world, s);
+  }
+  s.last = world.t;
+  if (world.t < s.until) return { x: -d.y * s.side, y: d.x * s.side };
+  if (dist(h.x, h.y, s.x, s.y) > STUCK_MOVE) Object.assign(s, { x: h.x, y: h.y, since: world.t });
+  else if (world.t - s.since > STUCK_TIME) {
+    s.side = -s.side;
+    s.until = world.t + SIDE_STEP;
+    Object.assign(s, { x: h.x, y: h.y, since: s.until });
+    return { x: -d.y * s.side, y: d.x * s.side };
+  }
+  return d;
+}
+
+/** Down `field` toward `p`, squared to a cell's centre line at a wall's edge (`walk`). */
+function square(world: ArpgWorld, field: Uint16Array, p: Vec): Vec {
   const h = world.hero;
   const d = downhill(world.map, field, h, p) ?? dirTo(h.x, h.y, p.x, p.y);
   const probe = 0.1;
@@ -323,10 +377,18 @@ interface Goal {
   use?: boolean;
 }
 
+/** Each world's last goal from `nearestReachable` (the point it was). */
+const lastGoal = new WeakMap<ArpgWorld, Vec>();
+
+/** How many steps nearer another point must be for `nearestReachable` to leave its last one. */
+const KEEP = 2;
+
 /**
  * The nearest of `points` the hero can walk to, by path where the foes' field
  * toward the hero reaches (`flow.small`, `ai.flowRadius` steps), else in a
- * straight line; null if none.
+ * straight line; null if none. The last one it gave stays first while it is
+ * among them and no other is `KEEP` steps nearer, so two at about the same
+ * steps don't flip-flop as the hero crosses a cell.
  */
 function nearestReachable(world: ArpgWorld, points: Vec[]): Goal | null {
   const h = world.hero;
@@ -334,9 +396,15 @@ function nearestReachable(world: ArpgWorld, points: Vec[]): Goal | null {
   const sorted = [...points].sort(
     (a, b) => steps(a) - steps(b) || dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y),
   );
+  const last = lastGoal.get(world);
+  if (last && sorted[0] !== last && sorted.includes(last) && steps(last) <= steps(sorted[0]) + KEEP)
+    sorted.unshift(...sorted.splice(sorted.indexOf(last), 1));
   for (const at of sorted) {
     const field = fieldTo(world, at);
-    if (stepsFrom(world, field) !== UNREACHED) return { at, field };
+    if (stepsFrom(world, field) !== UNREACHED) {
+      lastGoal.set(world, at);
+      return { at, field };
+    }
   }
   return null;
 }
