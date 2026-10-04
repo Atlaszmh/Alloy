@@ -1,7 +1,7 @@
 import type { Vec } from './arpg.js';
 import type { MaterialRef } from './crafting.js';
 import type { MonsterTrait } from './delve.js';
-import type { Rect, RoomKind } from './floor-map.js';
+import type { InteractableKind, Rect, RoomKind } from './floor-map.js';
 import type { Rarity } from './gear.js';
 
 /**
@@ -16,6 +16,14 @@ import type { Rarity } from './gear.js';
  * `A` an anvil alcove (each of the last five on floor).
  */
 export const TUTORIAL_CELLS = '#.0123456789SXCHA';
+
+/** The interactable each of those cells places: one a room at most. */
+export const TUTORIAL_INTERACTABLES: Readonly<Record<string, InteractableKind>> = {
+  C: 'chest',
+  H: 'shrine',
+  A: 'alcove',
+  X: 'gate',
+};
 
 /** A foe's script: `slamOnly` holds its ground and only slams, on a fixed cadence with a long telegraph. */
 export type TutorialScript = 'slamOnly';
