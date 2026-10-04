@@ -1,5 +1,5 @@
 import type { Vec } from '../types/arpg.js';
-import type { FloorMap } from '../types/floor-map.js';
+import type { Door, FloorMap } from '../types/floor-map.js';
 import { clamp } from './geometry.js';
 
 /**
@@ -35,13 +35,18 @@ export function openRoom(width: number, height: number): FloorMap {
   };
 }
 
-/** Whether cell (cx, cy) stops movement and sight: out of bounds, a wall, or a closed door's. */
+/** Whether a door is shut: closed by a seal, or held by the guided start's gate. */
+export function doorShut(d: Door): boolean {
+  return d.closed || !!d.held;
+}
+
+/** Whether cell (cx, cy) stops movement and sight: out of bounds, a wall, or a shut door's. */
 export function blocked(map: FloorMap, cx: number, cy: number): boolean {
   if (cx < 0 || cy < 0 || cx >= map.width || cy >= map.height) return true;
   const cell = map.cells[cy * map.width + cx];
   if (cell !== 2) return cell === 1;
   // ponytail: scans the doors for each door cell; index them if sealing ever runs hot.
-  return map.doors.some((d) => d.closed && d.cells.some((c) => c.x === cx && c.y === cy));
+  return map.doors.some((d) => doorShut(d) && d.cells.some((c) => c.x === cx && c.y === cy));
 }
 
 /** The cell a coordinate falls in along an axis of `n` cells (the far edge is the last cell's). */

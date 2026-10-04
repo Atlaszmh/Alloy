@@ -13,7 +13,7 @@ import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import { CONTRACT_TIERS } from '../types/quests.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves (version 10 only) — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 11 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
@@ -166,6 +166,7 @@ export const GearItemSchema = z.object({
   hones: z.number().int().min(0).default(0),
   locked: z.boolean(),
   moveset: MovesetSchema.optional(),
+  awakened: z.boolean().optional(),
 });
 
 const PerRarityCount = z.object({
@@ -224,6 +225,7 @@ const DiveSchema = z.object({
     .object({
       offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade', 'rune'])),
       taken: z.boolean(),
+      required: z.boolean().optional(),
     })
     .nullable()
     .default(null),
@@ -274,9 +276,12 @@ const QuestsSchema = z.object({
   claimCount: count,
 });
 
-/** Version 10: the dive's used interactables and blessings (see the floor maps spec); older saves reset. */
-export const DelveProfileSchema = z.object({
-  version: z.literal(10),
+/** The guided start's state (see the tutorial spec). */
+const TutorialStateSchema = z.object({ step: z.string().min(1), count, misses: count });
+
+/** Version 11: the guided start (see the tutorial spec); older saves reset. Every field but the dive. */
+const ProfileSchema = z.object({
+  version: z.literal(11),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
@@ -322,5 +327,12 @@ export const DelveProfileSchema = z.object({
   essencesSeen: z.array(z.string()),
   reactionsSeen: z.array(ReactionIdSchema),
   quests: QuestsSchema,
-  dive: DiveSchema.nullable(),
+  tutorial: TutorialStateSchema.nullable(),
+});
+
+/** A tutorial depth's entry: the profile as it entered, its dive without an entry (never nested). */
+const TutorialEntrySchema = ProfileSchema.extend({ dive: DiveSchema });
+
+export const DelveProfileSchema = ProfileSchema.extend({
+  dive: DiveSchema.extend({ tutorialEntry: TutorialEntrySchema.nullable() }).nullable(),
 });

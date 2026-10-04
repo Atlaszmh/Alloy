@@ -15,6 +15,11 @@ import {
   imprint as engineImprint,
   refine as engineRefine,
   buyShard as engineBuyShard,
+  awaken as engineAwaken,
+  startTutorial as engineStartTutorial,
+  skipTutorial as engineSkipTutorial,
+  applyTutorialEvents,
+  retryTutorialDepth as engineRetryTutorialDepth,
   claimQuest as engineClaimQuest,
   rerollContract as engineRerollContract,
   trackQuest as engineTrackQuest,
@@ -36,6 +41,7 @@ import {
   CHAIN_SKILLS,
   heroChains,
   sameChain,
+  type ArpgWorld,
   type ChainFix,
   type ChainOrigins,
   type Chains,
@@ -60,6 +66,7 @@ import {
   type SetChainsOptions,
   type ShardRef,
   type StopAction,
+  type TutorialEvent,
   type UnsocketMode,
 } from '@alloy/engine';
 import { SKILL_NAME, listed } from '@/features/delve/chains/chain-text';
@@ -449,6 +456,16 @@ interface DelveStore {
   refine: (what: MaterialRef) => ProfileActionResult;
   /** Buy a tier I shard at the shard bench. */
   buyShard: (stat: HeroStatKey) => ProfileActionResult;
+  /** Awaken rare weapon `uid`: it carries the Ultimate too (see the tutorial spec). */
+  awaken: (uid: string) => ProfileActionResult;
+  /** A new save's Guided start: the script's first step (see the tutorial spec). */
+  startTutorial: () => void;
+  /** Drop the rails (the confirm is the caller's), and a floor's in progress (`world`). */
+  skipTutorial: (world?: ArpgWorld | null) => void;
+  /** Off a floor, the events only the tutorial reads: a beat's `ack`, a `skipStep`, Training's cast. */
+  tutorialEvents: (events: TutorialEvent[]) => void;
+  /** A tutorial death, Abandon or floor restart: the depth as it was entered. */
+  retryTutorialDepth: () => void;
   /** Claim a completed quest or contract at the Anvil: its rewards to the stockpile (see the quests spec). */
   claimQuest: (id: string) => ProfileActionResult;
   /** Replace a board slot's contract, for scrap, once an Anvil visit. */
@@ -669,6 +686,16 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     refine: (what) => applyResult(engineRefine(registry(), get().profile, what)),
 
     buyShard: (stat) => applyResult(engineBuyShard(registry(), get().profile, stat)),
+
+    awaken: (uid) => applyResult(engineAwaken(registry(), get().profile, uid)),
+
+    startTutorial: () => commit(engineStartTutorial(registry(), get().profile)),
+
+    skipTutorial: (world) => commit(engineSkipTutorial(get().profile, world)),
+
+    tutorialEvents: (events) => commit(applyTutorialEvents(registry(), get().profile, events)),
+
+    retryTutorialDepth: () => commit(engineRetryTutorialDepth(registry(), get().profile)),
 
     claimQuest: (id) => applyResult(engineClaimQuest(registry(), get().profile, id)),
 

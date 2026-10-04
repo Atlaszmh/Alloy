@@ -387,7 +387,7 @@ describe('transfer: sockets move with their moves', () => {
         rng.fork(uid),
       );
       const slots: Moveset['slots'] = {};
-      for (const s of carriedSkills(registry, rarity))
+      for (const s of carriedSkills(registry, { rarity }))
         slots[s] = rng.nextInt(baseSlots(registry, baseId, s), bal.chains.cap[s]);
       const moveset = defaultMoveset(registry, w, 'fire', slots);
       for (const m of allMoves(moveset)) {

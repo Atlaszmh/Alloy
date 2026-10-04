@@ -27,7 +27,7 @@ export function MovesetView({ item }: { item: GearItem }): ReactElement {
   const stats = useMemo(() => profileStats(registry, profile), [registry, profile]);
   const { chains, slots } = movesetOf(registry, item);
   const cap = registry.getDelveBalance().chains.cap;
-  const carried = carriedSkills(registry, item.rarity);
+  const carried = carriedSkills(registry, item);
   return (
     <div
       className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-[14px]"

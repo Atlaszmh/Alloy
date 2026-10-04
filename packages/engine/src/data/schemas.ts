@@ -14,7 +14,7 @@ import {
 
 // --- Delve (loot-crawler ARPG) Schemas ---
 
-const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
+export const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const GearSlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
 export const ManaTypeSchema = z.enum(['fire', 'frost', 'storm', 'earth', 'shadow', 'nature']);
 export const HeroStatKeySchema = z.enum([
@@ -48,7 +48,7 @@ export const HeroStatKeySchema = z.enum([
   'shadowAttune',
   'natureAttune',
 ]);
-const MonsterTraitSchema = z.enum([
+export const MonsterTraitSchema = z.enum([
   'armored',
   'swift',
   'brute',
@@ -893,6 +893,11 @@ export const CraftingBalanceSchema = z.object({
   salvageExtraShard: z.number().min(0).max(1),
   shardBench: z.object({ scrap: z.number().min(0), dust: z.number().min(0) }),
   deathLoss: z.number().min(0).max(1),
+  awaken: z.object({
+    epicFlux: z.number().int().min(0),
+    links: z.number().int().min(0),
+    scrap: z.number().min(0),
+  }),
 });
 
 /** `balance.json → delve.drops` (see the crafting spec). */
@@ -929,6 +934,7 @@ export const DropsBalanceSchema = z.object({
   scrapByKind: perFoe(z.number().min(0)),
   scrapPickups: perFoe(z.number().int().min(1)),
   metalUpChance: z.number().min(0).max(1),
+  essenceMinDepth: z.number().int().min(1),
   find: z.object({ perPoint: z.number().min(0), cap: z.number().min(0).max(1) }),
   shardTierDepths: StartDepthsSchema.refine((ds) => ds.length === 5, 'one per tier, I to V'),
   fluxGradeDepths: StartDepthsSchema.refine(

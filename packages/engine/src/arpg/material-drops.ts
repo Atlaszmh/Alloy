@@ -47,6 +47,14 @@ export interface MaterialDrops {
   pattern: string | null;
 }
 
+/**
+ * Whether anything at `depth` may yield an essence (`drops.essenceMinDepth`;
+ * see the tutorial spec): a vault's roll asks it. Always, until B3 fills it.
+ */
+export function essenceAllowed(_registry: DataRegistry, _depth: number): boolean {
+  return true;
+}
+
 /** The bar a floor at `depth` drops: its item level's metal, the next one up at `drops.metalUpChance`. */
 function rollMetal(registry: DataRegistry, depth: number, rng: SeededRNG): MetalId {
   const metals = registry.getCraftingData().metals;

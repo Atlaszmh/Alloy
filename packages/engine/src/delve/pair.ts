@@ -9,6 +9,7 @@ import { isDiveActive } from './dive.js';
 import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
 import { findItem, replaceItem, withMoveset, type ProfileActionResult } from './profile.js';
 import { applyQuestEvents } from './quests.js';
+import { applyTutorialEvents } from './tutorial.js';
 import { settleParts, type SetChainsOptions } from './runes.js';
 
 /**
@@ -181,7 +182,9 @@ export function bindSecondary(
   if (secondary) return refuse(profile, 'Your second element is already bound');
   if (mana === primary) return refuse(profile, 'That is already your primary');
   const bound = { ...profile, pair: { primary, secondary: mana } };
-  return { ok: true, profile: applyQuestEvents(registry, bound, [{ type: 'bind' }]) };
+  const events = [{ type: 'bind' }] as const;
+  const next = applyTutorialEvents(registry, applyQuestEvents(registry, bound, events), events);
+  return { ok: true, profile: next };
 }
 
 /**

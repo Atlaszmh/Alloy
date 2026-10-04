@@ -9,3 +9,5 @@ export * from './rune.js';
 export * from './crafting.js';
 export * from './quests.js';
 export * from './floor-map.js';
+export * from './tutorial.js';
+export * from './tutorial-floor.js';

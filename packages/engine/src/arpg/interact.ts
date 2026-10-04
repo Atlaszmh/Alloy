@@ -8,7 +8,9 @@ import { shardTiersOf } from '../loot/materials.js';
 import type { SimCtx } from './combat.js';
 import { dist } from './geometry.js';
 import { snapToWalkable } from './grid.js';
-import { rollMaterialDrops } from './material-drops.js';
+import { essenceAllowed, rollMaterialDrops } from './material-drops.js';
+import { tutorialExitHeld } from './tutorial.js';
+import { tutorialChest } from './tutorial-floor.js';
 
 /**
  * Using what the rooms hold, and the floor's flow (see the floor maps spec's
@@ -38,9 +40,9 @@ function shrineOf(registry: DataRegistry, it: Interactable): ShrineDef | undefin
   return registry.getDelveData().shrines.find((s) => s.id === it.shrine);
 }
 
-/** A boss of the floor still stands: its gate stays shut. */
+/** A boss of the floor still stands, or the guided start holds it (see the tutorial spec): its gate stays shut. */
 function gateShut(world: ArpgWorld): boolean {
-  return world.monsters.some((m) => !m.dead && m.kind === 'boss');
+  return world.monsters.some((m) => !m.dead && m.kind === 'boss') || tutorialExitHeld(world);
 }
 
 /** The nearest interactable the hero can use from where it stands, if any. */
@@ -60,10 +62,11 @@ function inReach(world: ArpgWorld, radius: number): Interactable | null {
   return best;
 }
 
-/** One use a dive: on the world's interactable and, for the bank, in `pending.used`. */
-function use(world: ArpgWorld, it: Interactable): void {
+/** One use a dive: on the world's interactable and, for the bank, in `pending.used` (a `used` event). */
+function use(ctx: SimCtx, it: Interactable): void {
   it.used = true;
-  world.pending.used.push(it.id);
+  ctx.world.pending.used.push(it.id);
+  ctx.events.push({ kind: 'used', id: it.id, interactable: it.kind });
 }
 
 /**
@@ -95,7 +98,7 @@ export function interactTick(ctx: SimCtx): void {
       const it = interactableOf(world, prayer.id);
       const shrine = it && shrineOf(registry, it);
       if (it && !it.used && shrine) {
-        use(world, it);
+        use(ctx, it);
         applyShrine(registry, world, shrine);
       }
     }
@@ -111,7 +114,7 @@ export function interactTick(ctx: SimCtx): void {
   if (!pressed) return;
   switch (it.kind) {
     case 'chest':
-      use(world, it);
+      use(ctx, it);
       openChest(ctx, it);
       break;
     case 'shrine':
@@ -174,7 +177,7 @@ export function rollVault(
       : { material, amount },
   );
   const essence = vault.essenceChance * (world.door?.mods.essence ?? 1) * loot.legendaryBoost;
-  if (rng.next() < Math.min(1, essence)) {
+  if (rng.next() < Math.min(1, essence) && essenceAllowed(registry, world.depth)) {
     const legendaries = registry.getDelveData().legendaries;
     const id = legendaries[rng.nextInt(0, legendaries.length - 1)].id;
     haul.push({ material: { kind: 'essence', essence: id }, amount: 1 });
@@ -182,8 +185,9 @@ export function rollVault(
   return haul;
 }
 
-/** The chest bursts its haul around it, on `world.materialRng`. */
+/** The chest bursts its haul around it, on `world.materialRng` (a hand-built floor's: its set drops). */
 function openChest(ctx: SimCtx, it: Interactable): void {
+  if (tutorialChest(ctx, it)) return;
   const { world, registry } = ctx;
   const rng = world.materialRng;
   for (const { material, amount } of rollVault(registry, world, rng)) {

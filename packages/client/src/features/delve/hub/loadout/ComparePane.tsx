@@ -86,9 +86,7 @@ export function ComparePane({
   // Your chains the target can't carry stay behind (their extra slots come back as Links).
   const leaves =
     worn && transfer
-      ? carriedSkills(registry, worn.rarity).filter(
-          (s) => !carriedSkills(registry, item.rarity).includes(s),
-        )
+      ? carriedSkills(registry, worn).filter((s) => !carriedSkills(registry, item).includes(s))
       : [];
   // Equip takes a weapon as it is; Transfer is marked by its value as a home.
   const equipCmp = asIs ?? cmp;

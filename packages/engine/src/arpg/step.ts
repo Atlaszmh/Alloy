@@ -47,6 +47,7 @@ import { clearanceOf, downhill, flowTick, homeWay, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
+import { tutorialTick } from './tutorial.js';
 import { nearIndices, spatialHash } from './spatial.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
@@ -129,6 +130,8 @@ function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   sealTick(ctx);
   dropsTick(ctx, dt);
   fogTick(ctx);
+  // The guided start's tallies, step and gates (see the tutorial spec): a no-op off it.
+  tutorialTick(ctx);
 
   world.projectiles = world.projectiles.filter((p) => !p.dead);
   world.zones = world.zones.filter((z) => !z.dead);

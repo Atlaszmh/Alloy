@@ -75,7 +75,7 @@ export function forgedMoveset(
 ): Moveset {
   const bal = registry.getDelveBalance();
   const extras = bal.crafting.weaponExtras[item.rarity];
-  const carried = carriedSkills(registry, item.rarity);
+  const carried = carriedSkills(registry, item);
   const order = EXTRAS_ORDER.filter((s) => carried.includes(s));
   const slots: Partial<Record<ChainSkill, number>> = {};
   let left = extras.slots;
@@ -215,10 +215,10 @@ export function previewForge(
       dust: inPair(profile, req.element) ? 0 : bal.crafting.offPairDust,
     },
     weapon: moveset && {
-      carries: [...carriedSkills(registry, rarity)],
+      carries: [...carriedSkills(registry, { rarity })],
       // Each carried skill's extra slots, past its base.
       slots: Object.fromEntries(
-        carriedSkills(registry, rarity).map((s) => [
+        carriedSkills(registry, { rarity }).map((s) => [
           s,
           moveset.slots[s]! - baseSlots(registry, base.id, s),
         ]),

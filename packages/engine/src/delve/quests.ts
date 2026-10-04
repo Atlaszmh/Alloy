@@ -22,6 +22,7 @@ import {
 import { isDiveActive } from './dive.js';
 import type { ProfileActionResult } from './profile.js';
 import { resolveReward } from './rewards.js';
+import { applyTutorialEvents } from './tutorial.js';
 
 /**
  * Quests on the profile (see the quests spec): progress from quest events,
@@ -312,7 +313,12 @@ export function claimQuest(
       tracked: without(r.profile.quests.tracked, questId),
       seen: without(r.profile.quests.seen, questId),
     });
-    return { ok: true, rewards: r.granted, profile: applyQuestEvents(registry, left, []) };
+    const next = applyQuestEvents(registry, left, []);
+    return {
+      ok: true,
+      rewards: r.granted,
+      profile: applyTutorialEvents(registry, next, [{ type: 'claim', quest: questId }]),
+    };
   }
   const def = questDef(registry, questId);
   if (!def || !q.unlocked.includes(questId)) return { ok: false, profile, reason: 'No such quest' };
@@ -323,10 +329,11 @@ export function claimQuest(
   const claimed = withQuests(r.profile, { claimed: [...r.profile.quests.claimed, questId] });
   // The next main quest unlocks into this one's tracked slot; then this one leaves `tracked`.
   const next = applyQuestEvents(registry, claimed, []);
+  const left = withQuests(next, { tracked: without(next.quests.tracked, questId) });
   return {
     ok: true,
     rewards: r.granted,
-    profile: withQuests(next, { tracked: without(next.quests.tracked, questId) }),
+    profile: applyTutorialEvents(registry, left, [{ type: 'claim', quest: questId }]),
   };
 }
 

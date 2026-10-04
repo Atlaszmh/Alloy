@@ -21,7 +21,7 @@ export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null 
   const weapon = useDelveStore((s) => s.profile.equipped.weapon);
   if (!item.legendary) return null;
   const needs = legendaryNeeds(item.legendary.id);
-  const dead = !!needs && !carriedSkills(registry, weapon?.rarity ?? null).includes(needs);
+  const dead = !!needs && !carriedSkills(registry, weapon ?? null).includes(needs);
   return (
     <div
       className="mt-2 rounded-lg px-3 py-2 text-[16px]"

@@ -6,6 +6,7 @@ import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
 import type { AiBalance, Buff, LayoutBalance, LayoutsData, ShrineDef } from './floor-map.js';
+import type { TutorialState } from './tutorial.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -750,6 +751,8 @@ export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade' | 'rune';
 export interface DiveStop {
   offers: StopKind[];
   taken: boolean;
+  /** A tutorial stop's power-up must be taken before a door (see the tutorial spec's gates). */
+  required?: boolean;
 }
 
 export interface DiveState {
@@ -803,7 +806,15 @@ export interface DiveState {
   used: string[];
   /** The dive's blessings: each floor's hero wears them from the start. */
   diveBuffs: Buff[];
+  /**
+   * The profile as it entered this tutorial depth (`retryTutorialDepth` restores
+   * it; see the tutorial spec's Retry), or null off the tutorial.
+   */
+  tutorialEntry: TutorialEntry | null;
 }
+
+/** A tutorial depth's entry: the whole profile, its dive without an entry of its own, so it never nests. */
+export type TutorialEntry = Omit<DelveProfile, 'dive'> & { dive: Omit<DiveState, 'tutorialEntry'> };
 
 /** The hero's two elements (`DelveProfile.pair`). */
 export interface ManaPair {
@@ -829,7 +840,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 10;
+  version: 11;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -862,5 +873,7 @@ export interface DelveProfile {
   reactionsSeen: string[];
   /** Quests, the Contract board and their progress (see the quests spec). */
   quests: ProfileQuests;
+  /** The guided start under way, or null: off, done or skipped (see the tutorial spec). */
+  tutorial: TutorialState | null;
   dive: DiveState | null;
 }
