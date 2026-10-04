@@ -6,11 +6,13 @@ import type {
   DropKind,
   HitSource,
   MonsterEntity,
+  MonsterKind,
   ReactionDef,
   ReactionId,
   StatusId,
   Vec,
 } from '../types/arpg.js';
+import type { MaterialRef } from '../types/crafting.js';
 import type { DelveBalance } from '../types/delve.js';
 import type { GearItem } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
@@ -671,17 +673,24 @@ export function hitMonster(
 }
 
 /**
- * A drop from foe `from` thrown toward (x, y): it lands short of any wall
- * between them, and belongs to the foe's room (see the floor maps spec).
+ * A drop from `from` (a dying foe, a broken prop) thrown toward (x, y): it
+ * lands short of any wall between them, and belongs to its room (see the floor
+ * maps spec).
  */
-function spawnDrop(
+export function spawnDrop(
   ctx: SimCtx,
   kind: DropKind,
-  from: MonsterEntity,
+  from: Vec & { roomId: number | null },
   tx: number,
   ty: number,
   /** `vacuum`: pulled to the hero from anywhere (default: once the floor is cleared). */
-  extra: { item?: GearItem; mana?: ManaType; amount: number; vacuum?: boolean },
+  extra: {
+    item?: GearItem;
+    mana?: ManaType;
+    material?: MaterialRef;
+    amount: number;
+    vacuum?: boolean;
+  },
 ): void {
   const { world } = ctx;
   const id = world.nextId++;
@@ -693,6 +702,7 @@ function spawnDrop(
     y,
     item: extra.item,
     mana: extra.mana,
+    ...(extra.material && { material: extra.material }),
     ...(from.roomId !== null && { roomId: from.roomId }),
     amount: extra.amount,
     born: world.t,
@@ -711,9 +721,23 @@ export function livingBossId(world: ArpgWorld): number | null {
   return null;
 }
 
+/**
+ * A kill's scrap for a foe of `kind`, by the depth and the hero's Scrap Find
+ * (a broken prop's is a normal foe's).
+ */
+export function killScrap(ctx: SimCtx, kind: MonsterKind): number {
+  const { world, bal, registry } = ctx;
+  return Math.round(
+    bal.loot.scrapPerKill *
+      scrapLevelFactor(registry, world.depth) *
+      bal.drops.scrapByKind[kind] *
+      (1 + world.hero.stats.scrapFind / 100),
+  );
+}
+
 export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (m.dead) return;
-  const { world, bal, registry } = ctx;
+  const { world, bal } = ctx;
   const h = world.hero;
   const t = world.t;
   m.dead = true;
@@ -725,14 +749,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
 
   // The Training Grounds drop nothing from kills: no scrap, items, motes, orbs or materials.
   // The kill's scrap bursts out as pickups (`dropMaterials`).
-  const scrap = world.sandbox
-    ? 0
-    : Math.round(
-        bal.loot.scrapPerKill *
-          scrapLevelFactor(registry, world.depth) *
-          bal.drops.scrapByKind[m.kind] *
-          (1 + h.stats.scrapFind / 100),
-      );
+  const scrap = world.sandbox ? 0 : killScrap(ctx, m.kind);
   ctx.events.push({ kind: 'death', id: m.id, x: m.x, y: m.y, monsterKind: m.kind, scrap });
 
   if (h.stats.healOnKill > 0) healHero(ctx, h.stats.maxHp * h.stats.healOnKill, 'kill');

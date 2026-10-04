@@ -1,15 +1,19 @@
 import type { ArpgWorld, HazardEntity, PropEntity, Vec } from '../types/arpg.js';
-import type { SimCtx } from './combat.js';
-import { angleBetween, clamp, dirTo, dist, distToSegment } from './geometry.js';
-import { sees } from './grid.js';
+import { killScrap, spawnDrop, type SimCtx } from './combat.js';
+import { roomAt } from './fog.js';
+import { angleBetween, dirTo, dist, distToSegment } from './geometry.js';
+import { sees, snapToWalkable } from './grid.js';
+import { rollMetal } from './material-drops.js';
+import { standing } from './objects-base.js';
 
 /**
  * The room's living things (see the room objects spec): props and hazards, on
  * `ArpgWorld.props` / `hazards`. The shape helpers are what each hit site tests
  * (an area's circle, a melee arc's cone, a beam's segment, a body's contact),
- * seen from the hit's origin as foes are; `footprint` is what the furnisher,
- * the flow fields, spawns and drops treat as blocked. `hitObject` and the ticks
- * are B3's.
+ * seen from the hit's origin as foes are; `hitObject` is a hit reaching one,
+ * `objectsTick` the hazards' fuses and recharge, `objectsSeparate` their
+ * bodies. Placing them and their footprints live in `objects-base.ts`
+ * (re-exported here).
  */
 
 /** A prop or a hazard. */
@@ -18,34 +22,7 @@ export type RoomObject = PropEntity | HazardEntity;
 /** Whose hit reached an object: the hero's, a foe's, or a hazard's burst (a chain). */
 export type ObjectHitSource = 'hero' | 'foe' | 'hazard';
 
-/** A circle's footprint: every cell (its index, `y × width + x`) it overlaps, on the map. */
-export function footprint(
-  map: { width: number; height: number },
-  c: { x: number; y: number; radius: number },
-): number[] {
-  const cells: number[] = [];
-  const y1 = Math.min(map.height - 1, Math.floor(c.y + c.radius));
-  const x1 = Math.min(map.width - 1, Math.floor(c.x + c.radius));
-  for (let y = Math.max(0, Math.floor(c.y - c.radius)); y <= y1; y++)
-    for (let x = Math.max(0, Math.floor(c.x - c.radius)); x <= x1; x++) {
-      const dx = c.x - clamp(c.x, x, x + 1);
-      const dy = c.y - clamp(c.y, y, y + 1);
-      if (dx * dx + dy * dy < c.radius * c.radius) cells.push(y * map.width + x);
-    }
-  return cells;
-}
-
-/** The unbroken props and every hazard (a dormant one is still a body). */
-export function standing(world: ArpgWorld): RoomObject[] {
-  return [...world.props.filter((p) => !p.dead), ...world.hazards];
-}
-
-/** Every standing object's footprint, as one set of cells. */
-export function footprints(world: ArpgWorld): Set<number> {
-  const cells = new Set<number>();
-  for (const o of standing(world)) for (const c of footprint(world.map, o)) cells.add(c);
-  return cells;
-}
+export { footprint, footprints, placeObjects, standing } from './objects-base.js';
 
 /**
  * What an area round `at` reaches (to an object's edge): the circle of
@@ -83,12 +60,41 @@ export function objectsTouching(
 }
 
 /**
- * A hit reaching a prop or a hazard (B3; see the room objects spec): a prop
- * breaks, a ready hazard primes. Returns whether the object stops what hit it
- * (a shot ends at it as at a wall). Stub: nothing happens; false.
+ * A hit reaching a prop or a hazard (see the room objects spec): a prop takes
+ * one of its `life` hits and breaks at none. Whatever it is, the object stops
+ * what hit it (a shot ends at it as at a wall); `source` is whose hit it was.
  */
-export function hitObject(_ctx: SimCtx, _obj: RoomObject, _source: ObjectHitSource): boolean {
-  return false;
+export function hitObject(ctx: SimCtx, obj: RoomObject, _source: ObjectHitSource): boolean {
+  if (obj.type === 'prop' && !obj.dead) {
+    obj.life -= 1;
+    if (obj.life <= 0) breakProp(ctx, obj);
+  }
+  return true;
+}
+
+/**
+ * A prop breaks (`propBreak`): it stays on `world.props`, `dead` (drawn broken;
+ * no longer a body or a footprint). At `terrain.propDrops.chance` it drops
+ * scrap (a normal foe's kill scrap) or, at `material` of those, a bar of the
+ * floor's metal, rolled and thrown on the world's own `propRng`, in the prop's
+ * room.
+ */
+function breakProp(ctx: SimCtx, p: PropEntity): void {
+  const { world, bal, registry } = ctx;
+  p.dead = true;
+  ctx.events.push({ kind: 'propBreak', id: p.id, prop: p.kind, x: p.x, y: p.y });
+  const rng = world.propRng;
+  const drops = bal.terrain.propDrops;
+  if (rng.next() >= drops.chance) return;
+  const bar = rng.next() < drops.material;
+  const angle = rng.next() * Math.PI * 2;
+  const r = 0.6 + rng.next() * 0.9;
+  const at = snapToWalkable(world.map, p.x + Math.cos(angle) * r, p.y + Math.sin(angle) * r, 1);
+  const from = { x: p.x, y: p.y, roomId: roomAt(world.map, p.x, p.y)?.id ?? null };
+  if (bar) {
+    const metal = rollMetal(registry, world.depth, rng);
+    spawnDrop(ctx, 'material', from, at.x, at.y, { amount: 1, material: { kind: 'metal', metal } });
+  } else spawnDrop(ctx, 'scrap', from, at.x, at.y, { amount: killScrap(ctx, 'normal') });
 }
 
 /**

@@ -56,7 +56,7 @@ export function essenceAllowed(registry: DataRegistry, depth: number): boolean {
 }
 
 /** The bar a floor at `depth` drops: its item level's metal, the next one up at `drops.metalUpChance`. */
-function rollMetal(registry: DataRegistry, depth: number, rng: SeededRNG): MetalId {
+export function rollMetal(registry: DataRegistry, depth: number, rng: SeededRNG): MetalId {
   const metals = registry.getCraftingData().metals;
   const at = metals.indexOf(metalAt(registry, depth));
   const up = rng.next() < registry.getDelveBalance().drops.metalUpChance ? 1 : 0;
