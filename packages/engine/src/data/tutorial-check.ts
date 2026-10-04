@@ -22,8 +22,10 @@ function badTokens(text: string): string[] {
  * files (see the tutorial spec): a floor or stop step names a floor, an Anvil
  * or Training step none; a marker, a gate or an alcove only on a floor step,
  * a stop only on a stop step; its marker on its floor, its gated door among
- * the floor's; a stop's doors known and none skipping a depth; only known
- * tokens. One line a problem; `createDefaultRegistry` refuses data with any.
+ * the floor's; a stop's doors known and none skipping a depth, and either
+ * doors or Extract; the floors in their order, never back to an earlier one;
+ * only known tokens. One line a problem; `createDefaultRegistry` refuses data
+ * with any.
  * (Trigger types, stop kinds, targets and partners are the schema's.)
  */
 export function tutorialDataProblems(registry: DataRegistry): string[] {
@@ -47,6 +49,8 @@ export function tutorialDataProblems(registry: DataRegistry): string[] {
       check(s, !!floor?.markers.some((m) => m.id === s.marker), `no marker ${s.marker}`);
     if (s.gate?.door !== undefined)
       check(s, !!floor && s.gate.door < tutorialDoorCount(floor), `no door ${s.gate.door}`);
+    if (s.stop)
+      check(s, s.stop.doors.length > 0 !== s.stop.extract, 'doors or Extract, one of them');
     for (const id of s.stop?.doors ?? []) {
       const door = doors.find((d) => d.id === id);
       check(s, !!door, `no door ${id}`);
@@ -54,6 +58,13 @@ export function tutorialDataProblems(registry: DataRegistry): string[] {
     }
     for (const t of [...badTokens(s.line), ...badTokens(s.objective)])
       problems.push(`${s.id}: no token {${t}}`);
+  }
+  // One sequence: the steps walk the floors in their order, never back to an earlier one.
+  let reached = -1;
+  for (const s of steps) {
+    const at = floors.findIndex((f) => f.id === s.floor);
+    if (at >= 0 && at < reached) problems.push(`${s.id}: back to floor ${s.floor}`);
+    reached = Math.max(reached, at);
   }
   return problems;
 }

@@ -18,6 +18,7 @@ import { runeTargetOf, socketRune } from './runes.js';
 import { bankWorld } from './dive.js';
 import { openedAlcove } from '../arpg/interact.js';
 import { profileStats } from './pair.js';
+import { applyTutorialEvents, tutorialStep } from './tutorial.js';
 
 /**
  * Stops between depths (see the weapon movesets spec): after a depth is
@@ -152,7 +153,10 @@ function canEdit(registry: DataRegistry, profile: DelveProfile): boolean {
 /**
  * The stop after `dive`'s depth is cleared (`completeFloor`): 2 or 3 of the
  * kinds that apply, at random from the dive seed's fork `stop:<depth>`, or all
- * of them when fewer apply; none apply, no stop.
+ * of them when fewer apply; none apply, no stop. A guided stop (the profile's
+ * current step a stop step) offers the kinds its step names that apply, all of
+ * them, required before a door when its step waits for the power-up
+ * (`takeStop`; see the tutorial spec's gates).
  */
 export function rollStop(
   registry: DataRegistry,
@@ -160,6 +164,12 @@ export function rollStop(
   dive: DiveState,
 ): DiveStop | null {
   const kinds = stopKinds(registry, { ...profile, dive });
+  const step = tutorialStep(registry, profile.tutorial);
+  if (step?.stop) {
+    const offers = kinds.filter((k) => step.stop!.kinds.includes(k));
+    if (offers.length === 0) return null;
+    return { offers, taken: false, required: step.trigger.type === 'takeStop' };
+  }
   if (kinds.length === 0) return null;
   return {
     offers: pickKinds(kinds, new SeededRNG(dive.seed).fork(`stop:${dive.depth}`)),
@@ -265,13 +275,19 @@ export function takeStop(
   if (!res.ok) return { ...res, profile };
   const spent = unpool(profile, res.profile, dive.banked);
   const taken = { ...dive, banked: spent.banked, stop: { ...stop, taken: true } };
-  return { ...res, profile: { ...spent.profile, dive: taken } };
+  const next = { ...spent.profile, dive: taken };
+  return {
+    ...res,
+    profile: applyTutorialEvents(registry, next, [{ type: 'takeStop', kind: action.kind }]),
+  };
 }
 
 /**
  * An anvil alcove's offers (see the floor maps spec): 2 or 3 of the kinds the
  * hero can take and pay for (`stopKinds`), on `alcove:<depth>:<roomId>`, so a
- * reopened alcove offers the same.
+ * reopened alcove offers the same. On a guided floor, the kinds its step names
+ * (`alcove.kinds`) that the hero can take and pay for, all of them (see the
+ * tutorial spec's gates).
  */
 export function alcoveOffers(
   registry: DataRegistry,
@@ -284,7 +300,12 @@ export function alcoveOffers(
   if (!dive || !alcove) return [];
   // What the floor has hauled pays too: pooled with the banked (`stopKinds` pools `banked`).
   const hauled = { ...profile, dive: { ...dive, banked: addHaul(dive.banked, dive.haul) } };
-  return pickKinds(stopKinds(registry, hauled), new SeededRNG(dive.seed).fork(`alcove:${id}`));
+  const kinds = stopKinds(registry, hauled);
+  const guided =
+    world.tutorial &&
+    registry.getTutorialData().steps.find((s) => s.floor === world.tutorialFloor && s.alcove);
+  if (guided) return kinds.filter((k) => guided.alcove!.kinds.includes(k));
+  return pickKinds(kinds, new SeededRNG(dive.seed).fork(`alcove:${id}`));
 }
 
 /** The world's alcoves not yet used. */

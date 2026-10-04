@@ -20,7 +20,7 @@ import type { SetChainsOptions } from './runes.js';
 import { refillBoard } from './contracts.js';
 import { applyQuestEvents, resetDiveQuests } from './quests.js';
 import type { QuestEvent } from '../types/quests.js';
-import { tutorialFloorOf } from './tutorial.js';
+import { applyTutorialEvents, retryTutorialDepth, tutorialBlocksDive, tutorialFloorOf, tutorialStep } from './tutorial.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
   return isBossFloor(registry, depth);
@@ -40,6 +40,9 @@ export function isDiveActive(profile: DelveProfile): boolean {
 
 export function startDive(registry: DataRegistry, profile: DelveProfile, startDepth: number): DelveProfile {
   if (isDiveActive(profile)) throw new Error('A dive is already in progress');
+  // The guided start's Anvil lessons hold the dive until they end or are skipped.
+  const lesson = tutorialBlocksDive(registry, profile);
+  if (lesson) throw new Error(lesson);
   if (!startDepthOptions(registry, profile).includes(startDepth)) throw new Error(`Cannot start at depth ${startDepth}`);
   const bal = registry.getDelveBalance();
   const seed = new SeededRNG(profile.seed).fork(`dive:${profile.diveCount}`).nextInt(1, 0x7fffffff);
@@ -80,7 +83,20 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     stats: { ...profile.stats, dives: profile.stats.dives + 1 },
   };
   // A dive's dive-scoped objectives start afresh, and it enters its first depth (see the quests spec).
-  return applyQuestEvents(registry, resetDiveQuests(registry, started), [{ type: 'reachDepth', depth: startDepth }]);
+  const events = [{ type: 'reachDepth', depth: startDepth }] as const;
+  const entered = applyQuestEvents(registry, resetDiveQuests(registry, started), events);
+  return withEntry(registry, applyTutorialEvents(registry, entered, events));
+}
+
+/**
+ * `profile` entering a depth: on a guided depth (`tutorialFloorOf`) its dive
+ * holds the profile as it enters (`tutorialEntry`, less the entry itself), for
+ * `retryTutorialDepth`; else no entry (see the tutorial spec's Retry).
+ */
+function withEntry(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const { tutorialEntry: _old, ...dive } = profile.dive!;
+  const entry = tutorialFloorOf(registry, profile) ? { ...profile, dive } : null;
+  return { ...profile, dive: { ...dive, tutorialEntry: entry } };
 }
 
 /** The dive; with `phase`, one in that phase and not settled (a settled dive goes nowhere). */
@@ -205,6 +221,8 @@ export function bankWorld(
 
   next = {
     ...next,
+    // The floor's tutorial (its step, count and misses) comes back with the rest.
+    ...(world.tutorial && { tutorial: { step: world.tutorial.step, count: world.tutorial.count, misses: world.tutorial.misses } }),
     patterns: [...next.patterns, ...patterns],
     essencesSeen: [...next.essencesSeen, ...essences],
     reactionsSeen: [...next.reactionsSeen, ...newReactions],
@@ -300,22 +318,6 @@ export function completeFloor(
     potions: bossKilled ? Math.min(bal.dive.maxPotions, dive.potions + bal.dive.bossPotionReward) : dive.potions,
     phase: 'choosing',
   };
-  nextDive = {
-    ...nextDive,
-    doorChoices: rollDoorChoices(registry, nextDive),
-    stop: rollStop(registry, banked.profile, nextDive),
-  };
-
-  let checkpoints = banked.profile.checkpoints;
-  if (bossKilled && !checkpoints.includes(dive.depth)) checkpoints = [...checkpoints, dive.depth].sort((a, b) => a - b);
-
-  const cleared: DelveProfile = {
-    ...banked.profile,
-    firstEssenceGiven: banked.profile.firstEssenceGiven || essenceBanked,
-    checkpoints,
-    dive: nextDive,
-    stats: { ...banked.profile.stats, bossKills: banked.profile.stats.bossKills + (bossKilled ? 1 : 0) },
-  };
   // The floor's quest events: a boss counts here, once a floor, never as a kill (the quests spec's S4).
   // A generated floor counts its cleared rooms (the open room clears whole).
   const rooms = world.map.open ? {} : { roomsCleared: world.map.rooms.filter((r) => r.cleared).length };
@@ -323,6 +325,25 @@ export function completeFloor(
     { type: 'clearFloor', biome: world.biomeId, depth: dive.depth, noPotion: !world.potionDrunk, noDamage: !world.hurt, ...rooms },
   ];
   if (bossKilled) events.push({ type: 'boss', biome: world.biomeId });
+  // The guided start leaves the floor first: its stop step names the stop's power-ups and doors.
+  const left = applyTutorialEvents(registry, banked.profile, events);
+  const roads = tutorialStep(registry, left.tutorial)?.stop?.doors;
+  nextDive = {
+    ...nextDive,
+    doorChoices: roads ? [...roads] : rollDoorChoices(registry, nextDive),
+    stop: rollStop(registry, left, nextDive),
+  };
+
+  let checkpoints = left.checkpoints;
+  if (bossKilled && !checkpoints.includes(dive.depth)) checkpoints = [...checkpoints, dive.depth].sort((a, b) => a - b);
+
+  const cleared: DelveProfile = {
+    ...left,
+    firstEssenceGiven: left.firstEssenceGiven || essenceBanked,
+    checkpoints,
+    dive: nextDive,
+    stats: { ...left.stats, bossKills: left.stats.bossKills + (bossKilled ? 1 : 0) },
+  };
 
   return {
     ...banked,
@@ -342,6 +363,11 @@ export function failFloor(
   world: ArpgWorld,
   opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): BankResult {
+  // A guided depth's death: Hesta pulls the hero back to the depth as it was entered, nothing lost.
+  if (profile.tutorial && profile.dive?.tutorialEntry) {
+    const retried = retryTutorialDepth(registry, profile);
+    return { profile: retried, kept: [], salvaged: [], bagFull: false, newCodex: [], newReactions: [], scrap: 0, dust: 0, links: 0, runes: [], patterns: [] };
+  }
   const banked = bankWorld(registry, profile, world, opts);
   const dive = banked.profile.dive!;
   const dead: DelveProfile = {
@@ -352,10 +378,11 @@ export function failFloor(
   return { ...banked, profile: settleDive(registry, dead, 'death') };
 }
 
-/** Take one of the offered doors into the next depth. */
+/** Take one of the offered doors into the next depth (a guided stop's required power-up taken first). */
 export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId: string): DelveProfile {
   const bal = registry.getDelveBalance();
   const dive = requireDive(profile, 'choosing');
+  if (dive.stop?.required && !dive.stop.taken) throw new Error('Take the power-up first');
   if (!dive.doorChoices.includes(doorId)) throw new Error(`Door not offered: ${doorId}`);
   const door = registry.getDoor(doorId);
   const depth = dive.depth + 1 + (door.mods.skip ?? 0);
@@ -374,12 +401,17 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
       phase: 'fighting',
     },
   };
-  return applyQuestEvents(registry, entered, [{ type: 'reachDepth', depth }]);
+  const events = [{ type: 'reachDepth', depth }] as const;
+  return withEntry(registry, applyTutorialEvents(registry, applyQuestEvents(registry, entered, events), events));
 }
 
-/** Leave the depths alive, cash in the bounty and settle what the dive banked (`settleDive`). */
+/**
+ * Leave the depths alive, cash in the bounty and settle what the dive banked (`settleDive`). A guided
+ * stop offers it only where its step says (`stop.extract`).
+ */
 export function extractDive(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const dive = requireDive(profile, 'choosing');
+  if (tutorialStep(registry, profile.tutorial)?.stop?.extract === false) throw new Error('This stop has no road home: take a door');
   const extracted: DelveProfile = {
     ...profile,
     scrap: profile.scrap + dive.bounty,
@@ -391,7 +423,8 @@ export function extractDive(registry: DataRegistry, profile: DelveProfile): Delv
     },
   };
   // The extract counts before the settle, so the board's refill there comes after it.
-  return settleDive(registry, applyQuestEvents(registry, extracted, [{ type: 'extract', depth: dive.depth }]), 'extract');
+  const events = [{ type: 'extract', depth: dive.depth }] as const;
+  return applyTutorialEvents(registry, settleDive(registry, applyQuestEvents(registry, extracted, events), 'extract'), events);
 }
 
 /** `haul` with each count passed through `f`, in a fixed order (its essences left out). */
@@ -446,9 +479,15 @@ export function settleDive(registry: DataRegistry, profile: DelveProfile, outcom
 /**
  * Clear the dive record (after the summary, or to abandon — the bounty is lost).
  * A dive still under way settles first, as an abandon (`settleDive`); an
- * extracted or dead dive has settled already.
+ * extracted or dead dive has settled already. While the guided start runs, an
+ * abandon on a floor retries its depth (`retryTutorialDepth`, the dive kept),
+ * and one at a stop is refused (it would replay a depth already cleared).
  */
 export function closeDive(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  if (profile.tutorial && isDiveActive(profile)) {
+    if (profile.dive!.phase === 'choosing') throw new Error('Hesta holds the stop: take a door');
+    if (profile.dive!.tutorialEntry) return retryTutorialDepth(registry, profile);
+  }
   const settled = isDiveActive(profile) ? settleDive(registry, profile, 'abandon') : profile;
   return { ...settled, dive: null };
 }

@@ -20,18 +20,8 @@ import { arena, run, STEP } from './fixtures/arena.js';
 // event through `applyTutorialEvents`, the tick calls `tutorialTick`, and every hook is inert
 // until its area fills it.
 
-vi.mock('../src/delve/tutorial.js', async (original) => {
-  const t = await original<typeof import('../src/delve/tutorial.js')>();
-  return {
-    ...t,
-    applyTutorialEvents: vi.fn(t.applyTutorialEvents),
-    tutorialFloorOf: vi.fn(t.tutorialFloorOf),
-  };
-});
-vi.mock('../src/arpg/tutorial.js', async (original) => {
-  const t = await original<typeof import('../src/arpg/tutorial.js')>();
-  return { ...t, tutorialTick: vi.fn(t.tutorialTick) };
-});
+vi.mock('../src/delve/tutorial.js', { spy: true });
+vi.mock('../src/arpg/tutorial.js', { spy: true });
 
 const registry = createDefaultRegistry();
 /** The events of the last `applyTutorialEvents` call. */
@@ -43,7 +33,10 @@ function forged(): DelveProfile {
   return forge(registry, p, req as Parameters<typeof forge>[2]).profile;
 }
 
-beforeEach(() => vi.mocked(applyTutorialEvents).mockClear());
+// A block body: a returned function would run as a cleanup hook, the mock with no arguments.
+beforeEach(() => {
+  vi.mocked(applyTutorialEvents).mockClear();
+});
 
 describe('the stubs', () => {
   it('are exported whole', () => {
@@ -90,8 +83,6 @@ describe('the stubs', () => {
 
   it('the ops left to fill throw', () => {
     const p = createDelveProfile(registry, 5, { primary: 'fire' });
-    expect(() => engine.startTutorial(registry, p)).toThrow('startTutorial: not implemented');
-    expect(() => engine.retryTutorialDepth(registry, p)).toThrow('not implemented');
     expect(() => engine.awaken(registry, p, 'g0')).toThrow('awaken: not implemented');
   });
 });
