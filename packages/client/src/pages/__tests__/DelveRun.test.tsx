@@ -12,6 +12,8 @@ import {
 import { createArenaInput } from '@/features/delve/arena/input';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { useUIStore } from '@/stores/uiStore';
+import type { Insets } from '@/features/delve/arena/camera';
 import type { PauseScreenProps } from '@/features/delve/hub/PauseScreen';
 import type { StopScreenProps } from '@/features/delve/stop/StopScreen';
 import type { ArenaUiEvent } from '@/features/delve/arena/useArena';
@@ -27,6 +29,8 @@ const seen = vi.hoisted(() => ({
   onUi: null as null | ((e: ArenaUiEvent) => void),
   /** The order the arena's flush and the engine's settle ran in. */
   calls: [] as string[],
+  /** The camera's insets the page handed the arena. */
+  insets: [] as Insets[],
 }));
 
 // The engine's settle is stage 4c's B1: here an abandon settles the dive, two Iron bars lost.
@@ -62,8 +66,12 @@ vi.mock('@/features/gamepad/gamepad-hub', async (orig) => ({
 vi.mock('@/features/delve/arena/useArena', async () => {
   const { useState } = await import('react');
   return {
-    useArena: (_host: unknown, opts: { paused: boolean; onUi: (e: ArenaUiEvent) => void }) => {
+    useArena: (
+      _host: unknown,
+      opts: { paused: boolean; insets: Insets; onUi: (e: ArenaUiEvent) => void },
+    ) => {
       seen.paused.push(opts.paused);
+      seen.insets.push(opts.insets);
       seen.onUi = opts.onUi;
       const [, setTick] = useState(0);
       seen.tick = () => setTick((n) => n + 1);
@@ -150,7 +158,9 @@ describe('DelveRun', () => {
     seen.paused.length = 0;
     seen.live.length = 0;
     seen.calls.length = 0;
+    seen.insets.length = 0;
     vi.mocked(questStates).mockImplementation(() => []);
+    useUIStore.setState({ hudMode: 'full' });
     const registry = getDelveRegistry();
     useDelveStore.setState({
       profile: startDive(registry, createDelveProfile(registry, 7), 1),
@@ -369,7 +379,7 @@ describe('DelveRun', () => {
 
   it('the pause makes the stop and the HUD behind it inert, and the stop the HUD: Tab stays in the top screen', () => {
     renderRun();
-    const hud = () => screen.getByTestId('purse-bar').closest('.delve-hud-zoom')!;
+    const hud = () => screen.getByTestId('dive-hud');
     expect(hud()).not.toHaveAttribute('inert');
     expect(hud()).not.toHaveStyle({ visibility: 'hidden' });
     fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
@@ -437,5 +447,60 @@ describe('DelveRun', () => {
     );
     act(() => seen.tick!());
     heldStill(seen.pause);
+  });
+});
+
+describe('DelveRun (the lean HUD, the default)', () => {
+  beforeAll(() => {
+    if (!Element.prototype.animate)
+      Element.prototype.animate = function () {
+        return { finished: Promise.resolve(), cancel() {} } as unknown as Animation;
+      };
+  });
+  beforeEach(() => {
+    seen.pause.length = 0;
+    seen.paused.length = 0;
+    seen.insets.length = 0;
+    vi.mocked(questStates).mockImplementation(() => []);
+    useUIStore.setState({ hudMode: 'lean' });
+    const registry = getDelveRegistry();
+    useDelveStore.setState({
+      profile: startDive(registry, createDelveProfile(registry, 7), 1),
+      diveDrops: [],
+      floorDropsFrom: 0,
+    });
+  });
+
+  it('lays the gain feed top left and the corner top right; no purse bar, floor column or Found log', () => {
+    renderRun();
+    const hud = screen.getByTestId('dive-hud');
+    expect(screen.getByTestId('gain-feed').closest('[data-hud="top"]')).not.toBeNull();
+    expect(screen.getByTestId('lean-corner').closest('[data-hud="right"]')).not.toBeNull();
+    expect(within(hud).getByTestId('depth-label')).toHaveTextContent('DEPTH 1');
+    expect(within(hud).getByTestId('skill-bar')).toBeInTheDocument();
+    for (const gone of ['purse-bar', 'pickup-feed', 'biome-element', 'rooms-explored'])
+      expect(screen.queryByTestId(gone)).toBeNull();
+  });
+
+  it("the camera centres on the hero: the corner takes no right inset (the full HUD's column does)", () => {
+    renderRun();
+    expect(seen.insets.at(-1)!.right).toBe(0);
+    act(() => useUIStore.setState({ hudMode: 'full' }));
+    expect(seen.insets.at(-1)!.right).toBeGreaterThan(0);
+  });
+
+  it("the corner's Menu opens the pause, its Journal the pause on Quests", () => {
+    renderRun();
+    fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
+    expect(pauseLink()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    fireEvent.click(screen.getByTestId('lean-corner').querySelector<HTMLElement>('[data-pad-journal]')!);
+    expect(pauseLink()).toEqual({ tab: 'quests' });
+  });
+
+  it('a pattern learned is a line of the gain feed while the fight is live', () => {
+    renderRun();
+    act(() => seen.onUi!({ kind: 'patterns', ids: ['maul'] }));
+    expect(within(screen.getByTestId('gain-feed')).getByText('Pattern learned: Maul')).toBeInTheDocument();
   });
 });
