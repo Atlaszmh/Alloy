@@ -1,10 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
+  beginFloor,
+  completeFloor,
   createDefaultRegistry,
   defaultMoveset,
   economySim,
   generateItem,
   SeededRNG,
+  startDive,
   type DataRegistry,
   type GearItem,
 } from '@alloy/engine';
@@ -17,7 +20,7 @@ import { SAVE_KEY } from './fixtures/delve';
  * three walks with a fake pad through the screens that felt worst.
  */
 
-const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, up: 12, down: 13, left: 14, right: 15 } as const;
+const BUTTON = { a: 0, b: 1, x: 2, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, up: 12, down: 13, left: 14, right: 15 } as const;
 type Dir = 'up' | 'down' | 'left' | 'right';
 
 /**
@@ -38,6 +41,20 @@ const ALLOW: Record<string, [number, number]> = {
   depart: [0, 0],
   'system-menu': [0, 0],
   settings: [0, 0],
+  'stop-powerup': [0, 0],
+  'stop-road': [0, 0],
+  'pause-list': [0, 0],
+};
+
+/**
+ * The most D-pad stops a rebuilt screen may hold (the pad-first spec's Measures: the Evidence
+ * table's targets as each screen is rebuilt). The stop's road holds the finds line, up to three
+ * doors and Extract (the seeded hero's life is full: no potion).
+ */
+const CEILING: Record<string, number> = {
+  'stop-powerup': 4,
+  'stop-road': 5,
+  'pause-list': 7,
 };
 
 /** A dozen bag items of mixed slots and rarities, two of them weapons. */
@@ -61,11 +78,19 @@ function bagOf(registry: DataRegistry): GearItem[] {
   });
 }
 
-/** A mid-game save (three dives of the autopilot) with a filled bag, and a fake pad to press. */
-async function seed(page: Page): Promise<void> {
+/**
+ * A mid-game save (three dives of the autopilot) with a filled bag, and a fake pad to press; with
+ * `atStop`, its next dive's first floor cleared, so it opens at the stop (its bag offers Equip).
+ */
+async function seed(page: Page, atStop = false): Promise<void> {
   const registry = createDefaultRegistry();
   const sim = economySim(registry, 1, 3).profile;
-  const save = JSON.stringify({ ...sim, bag: [...sim.bag, ...bagOf(registry)] });
+  let profile = { ...sim, bag: [...sim.bag, ...bagOf(registry)] };
+  if (atStop) {
+    profile = startDive(registry, profile, 1);
+    profile = completeFloor(registry, profile, beginFloor(registry, profile)).profile;
+  }
+  const save = JSON.stringify(profile);
   await page.addInitScript(
     ([key, value]) => {
       const w = window as unknown as { __pad: unknown };
@@ -206,6 +231,7 @@ async function check(page: Page, name: string): Promise<void> {
   expect(r.unreachable, `${name}: every stop is reachable`).toEqual([]);
   expect(r.clipped, `${name}: no move lands on a row scrolled out of another list`).toEqual([]);
   expect(r.unreversed.length, `${name}: moves inside a pane that don't reverse\n${r.unreversed.join('\n')}`).toBeLessThanOrEqual(ALLOW[name][wide]);
+  if (CEILING[name]) expect(r.stops, `${name}: at most ${CEILING[name]} stops`).toBeLessThanOrEqual(CEILING[name]);
 }
 
 const click = (page: Page, id: string) => page.getByTestId(id).first().click();
@@ -396,5 +422,42 @@ test.describe('Delve pad navigation', () => {
     expect((await where(page)).id).toBe('delve-button');
     await tap(page, BUTTON.a);
     await expect(page).toHaveURL(/\/delve\/run$/);
+  });
+  test('PN06: the stop by the pad: the cards, X to the road, B back; Menu opens the pause list on Resume, B resumes', async ({ page }) => {
+    test.setTimeout(120_000);
+    await seed(page, true);
+    await page.goto('/delve/run');
+    const stop = page.getByTestId('door-choice');
+    await expect(stop).toBeVisible({ timeout: 30_000 });
+    // The stop wakes ARM_MS after it mounts.
+    await expect(stop.locator('main > div')).not.toHaveAttribute('inert', '');
+    await tap(page, BUTTON.up); // the pad takes the input lock
+    await stop.locator('[data-pad-first]').focus();
+    expect((await where(page)).id).toMatch(/^stop-(equip|slot|move|upgrade|rune)$/);
+    await check(page, 'stop-powerup');
+
+    await tap(page, BUTTON.x);
+    await expect(stop.getByTestId('stop-road')).toBeVisible();
+    expect((await where(page)).id).toMatch(/^door-/);
+    await check(page, 'stop-road');
+
+    await tap(page, BUTTON.b);
+    await expect(stop.getByTestId('stop-powerup')).toBeVisible();
+    expect((await where(page)).id).toMatch(/^stop-/);
+
+    await tap(page, BUTTON.menu);
+    await expect(page.getByTestId('pause-screen')).toBeVisible();
+    expect((await where(page)).id).toBe('pause-resume');
+    await check(page, 'pause-list');
+    // Down from the last row comes back round (the list wraps, its Back included).
+    let presses = 0;
+    do {
+      await tap(page, BUTTON.down);
+      presses++;
+    } while ((await where(page)).id !== 'pause-resume' && presses < 10);
+    expect((await where(page)).id).toBe('pause-resume');
+    await tap(page, BUTTON.b);
+    await expect(page.getByTestId('pause-screen')).toHaveCount(0);
+    await expect(stop.getByTestId('stop-powerup')).toBeVisible();
   });
 });
