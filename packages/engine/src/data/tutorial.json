@@ -236,8 +236,8 @@
       "highlight": "hub.tab.forge",
       "trail": [
         "forge.pattern:cuirass",
-        "forge.bar:rusty",
-        "forge.flux:uncommon",
+        "forge.bar",
+        "forge.flux",
         "forge.shard",
         "forge.go"
       ],
