@@ -6,7 +6,7 @@ import {
   questStates,
   type DelveProfile,
 } from '@alloy/engine';
-import { ARENA_READY, FLOOR_CLEAR, SAVE_KEY, seedProfile, startDive } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, SAVE_KEY, seedProfile, startDive, toRoad } from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 // Quests (see the quests spec): the main line's first quest done in a dive and claimed at the
@@ -60,6 +60,7 @@ test.describe('Delve quests', () => {
     const toast = page
       .getByText('Quest complete: First Steps · claim at the Anvil')
       .waitFor({ timeout: 15_000 });
+    await toRoad(page);
     await door.getByTestId('door-list').locator('[data-door]').first().click();
     await toast;
     await expect(door).toBeHidden();

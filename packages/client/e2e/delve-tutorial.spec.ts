@@ -148,19 +148,22 @@ test.describe('Delve guided start', () => {
           await expect(door.getByTestId('tutorial-panel')).toHaveAttribute('data-place', 'stop');
           await expect(page.getByTestId('purse-bar')).toBeHidden();
           await expect(door.getByTestId('roads-held')).toBeVisible();
-          await expect(roads.first()).toBeDisabled();
-          await expect(door.getByTestId('extract-button')).toHaveCount(0);
+          await expect(door.getByRole('button', { name: 'Skip power-up' })).toBeDisabled();
+          await expect(roads).toHaveCount(0);
           // The marker leads both clicks: the card, then its picker.
           await marked('stop.card:equip');
           await door.getByTestId('stop-equip').click();
           await marked('stop.pick');
           await door.getByTestId('stop-equip-item').first().click();
           await expect(door.getByTestId('stop-taken')).toBeVisible();
+          await marked('stop.doors');
+          // The step's stop doesn't extract.
+          await expect(door.getByTestId('extract-button')).toHaveCount(0);
           await expect(roads.first()).toBeEnabled();
           await roads.first().click();
         } else if (stops === 2) {
           // Stop 2: Adjust a move, paid with the chest's Mana Dust.
-          await expect(roads.first()).toBeDisabled();
+          await expect(roads).toHaveCount(0);
           await marked('stop.card:move');
           await door.getByTestId('stop-move').click();
           await marked('stop.pick');

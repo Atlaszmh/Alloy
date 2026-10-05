@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive, toRoad } from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
   // A floor's clear may take most of the default two minutes under load.
@@ -52,7 +52,8 @@ test.describe('Delve loot loop', () => {
     await expect(door.or(summary)).toBeVisible({ timeout: FLOOR_CLEAR });
 
     if (await door.isVisible()) {
-      await expect(page.getByTestId('bounty')).toHaveText(/[1-9]\d*/);
+      await expect(door.getByTestId('stop-finds')).toHaveText(/^[1-9][\d,]* scrap bounty/);
+      await toRoad(page);
       await page.getByTestId('extract-button').click();
       await expect(summary).toContainText('EXTRACTED');
     }
@@ -82,6 +83,7 @@ test.describe('Delve loot loop', () => {
     const door = page.getByTestId('door-choice');
     await expect(loot.or(door)).toBeVisible({ timeout: FLOOR_CLEAR });
     if (!(await loot.isVisible())) {
+      await toRoad(page);
       await door.getByTestId('door-list').locator('[data-door]').first().click();
       await expect(door).toBeHidden();
     }
@@ -111,7 +113,7 @@ test.describe('Delve loot loop', () => {
     await expect(sheet).toContainText('Equipped · your');
   });
 
-  test('D03: the stop shows the floor, a power-up expanding in place, and a door to the next depth', async ({
+  test('D03: the stop asks for a power-up, then a road, and the road leads to the next depth', async ({
     page,
   }) => {
     await seedProfile(page);
@@ -124,28 +126,34 @@ test.describe('Delve loot loop', () => {
     await expect(door.getByTestId('risk-line')).toHaveText(
       /^Banked this dive · dying loses \d+% of it$/,
     );
-    // At 1280×720 every door fits in its list, above Extract, without scrolling.
+    // Step 1, when the stop offers a power-up: the first card expands in place; Esc presses the
+    // picker's Back and the focus returns to the card. Then Skip: the road.
+    const stop = door.getByTestId('stop');
+    if (await door.getByTestId('stop-powerup').isVisible()) {
+      await expect(door.getByTestId('door-list')).toHaveCount(0);
+      const card = stop.locator('[data-testid^="stop-"]').first();
+      await card.click();
+      const picker = stop.getByTestId('stop-picker');
+      await expect(picker).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(picker).toBeHidden();
+      await expect(card).toBeFocused();
+    }
+    await toRoad(page);
+    // At 1280×720 every road sits in one row on screen, the row unscrolled.
     await page.setViewportSize({ width: 1280, height: 720 });
     const list = door.getByTestId('door-list');
     await expect
-      .poll(() => list.evaluate((el) => el.scrollHeight - el.clientHeight))
+      .poll(() => list.evaluate((el) => el.scrollWidth - el.clientWidth))
       .toBeLessThanOrEqual(0);
-    const doors = list.locator('[data-door]');
-    const lastDoor = (await doors.nth((await doors.count()) - 1).boundingBox())!;
-    const extract = (await door.getByTestId('extract-button').boundingBox())!;
-    expect(lastDoor.y + lastDoor.height).toBeLessThanOrEqual(extract.y);
+    const roads = door.getByTestId('stop-road').locator('[data-door], [data-testid="door-potion"]');
+    for (let i = 0; i < (await roads.count()); i++) {
+      const box = (await roads.nth(i).boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(1280);
+      expect(box.y + box.height).toBeLessThanOrEqual(720);
+    }
     await page.setViewportSize({ width: 1280, height: 800 });
-    // The first card expands in place to its picker; Esc presses the picker's Back and the
-    // focus returns to the card. Skipping the power-up is taking a door.
-    const stop = door.getByTestId('stop');
-    const card = stop.locator('[data-testid^="stop-"]').first();
-    await card.click();
-    const picker = stop.getByTestId('stop-picker');
-    await expect(picker).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(picker).toBeHidden();
-    await expect(card).toBeFocused();
-    await door.locator('[data-testid^="door-"]').first().click();
+    await list.locator('[data-door]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
     await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored');
@@ -156,6 +164,7 @@ test.describe('Delve loot loop', () => {
     await page.goto('/delve');
     await startDive(page);
     await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: FLOOR_CLEAR });
+    await toRoad(page);
     await page.getByTestId('extract-button').click();
     const summary = page.getByTestId('dive-summary');
     await expect(summary).toContainText('EXTRACTED');
@@ -183,10 +192,14 @@ test.describe('Delve loot loop', () => {
       page.getByTestId('pickup-feed').getByTestId('feed-material').first(),
     ).toBeVisible();
 
-    // Banked at the clear: the stop lists the floor's materials over the risk line.
+    // Banked at the clear: the stop's finds sheet lists the floor's materials; the risk line shows.
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
-    await expect(door.getByTestId('loot-material').first()).toBeVisible();
+    await door.getByTestId('stop-finds').click();
+    const sheet = page.getByTestId('floor-finds');
+    await expect(sheet.getByTestId('loot-material').first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
     await expect(door.getByTestId('risk-line')).toBeVisible();
 
     // Abandon counts as a death: the summary shows what the dive brought home and what it lost.
