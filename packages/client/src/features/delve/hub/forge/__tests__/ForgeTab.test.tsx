@@ -106,6 +106,17 @@ describe('ForgeTab', () => {
     expect(row(helmName)).toHaveAttribute('data-pad-first');
   });
 
+  it("comes back to its pattern from the hub's memory", () => {
+    const memory = {};
+    const first = render(<ForgeTab {...props({ memory })} />);
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    first.unmount();
+    render(<ForgeTab {...props({ memory })} />);
+    expect(screen.getByTestId('pattern-cuirass')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('pattern-cuirass')).toHaveAttribute('data-pad-first');
+    expect(screen.getByTestId('forge-title')).toHaveTextContent('Common Cuirass');
+  });
+
   it('a link picks its bench and item: an item opens Temper, and a new link moves them', () => {
     store().setProfile({ ...store().profile, bag: [item('h1', 'helm'), item('h2', 'helm')] });
     const { rerender } = render(<ForgeTab {...props({ link: { tab: 'forge', uid: 'h1' } })} />);

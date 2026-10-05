@@ -1,40 +1,49 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FLUX_GRADES,
   MANA_TYPES,
   METAL_IDS,
+  forgePowerRange,
   inPair,
+  pairElements,
   previewForge,
   type FluxGrade,
+  type ForgePowerRange,
   type ForgeRequest,
   type GearItem,
+  type GearSlot,
   type MaterialRef,
   type MetalId,
   type ShardRef,
-  type TutorialTarget,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
-import { Button, Panel, Price, Segmented, type Prompt } from '../../kit';
+import { Button, Panel, Price, Stepper, type Prompt } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { ItemIcon } from '../../ItemIcon';
 import { LegendaryFanfare } from '../../LegendaryFanfare';
-import { RARITY_LABEL, RARITY_TEXT, SLOT_LABEL, manaStyle } from '../../format';
+import {
+  RARITY_LABEL,
+  RARITY_TEXT,
+  SLOT_LABEL,
+  UPGRADE_EPSILON,
+  formatDelta,
+  manaStyle,
+} from '../../format';
 import { SKILL_NAME } from '../../chains/chain-text';
 import { PatternList } from './PatternList';
 import { ShardPicker, heldShards } from './ShardPicker';
-import { materialLabel, pct, shardName, statRange, valueRange } from './materials-text';
+import {
+  DROPS_FROM,
+  materialLabel,
+  pct,
+  shardName,
+  statRange,
+  valueRange,
+} from './materials-text';
 
 export const SELECT_PROMPT: Prompt = {
   id: 'select',
@@ -52,46 +61,53 @@ export function ForgeLocked() {
   );
 }
 
-function Field({
-  label,
-  tutorial,
-  done,
-  children,
-}: {
-  label: string;
-  tutorial?: TutorialTarget;
-  /** The guided start's trail: this field's click is made (`data-tutorial-done`). */
-  done?: boolean;
-  children: ReactNode;
-}) {
+/** The forge's Power against what is worn (the engine's `forgePowerRange`): "+3% to +8% Power against your chest". */
+function PowerRange({ range, slot }: { range: ForgePowerRange; slot: GearSlot }) {
+  const { low, high, random } = range;
+  const span =
+    formatDelta(low) === formatDelta(high)
+      ? formatDelta(high)
+      : `${formatDelta(low)} to ${formatDelta(high)}`;
   return (
-    <div className="flex flex-col gap-2" data-tutorial={tutorial} data-tutorial-done={done}>
-      <span className="k-label">{label}</span>
-      {children}
-    </div>
+    <p
+      className="k-disp text-[22px]"
+      style={{ color: low > UPGRADE_EPSILON ? 'var(--k-ok)' : 'var(--k-text)' }}
+      data-testid="forge-power"
+    >
+      {span} Power against your {SLOT_LABEL[slot].toLowerCase()}
+      {slot === 'weapon' && ', as a home for your moveset'}
+      {random > 0 && (
+        <span className="k-caption block">
+          before {random} random line{random === 1 ? '' : 's'}
+        </span>
+      )}
+    </p>
   );
 }
 
 /**
- * The Forge bench: the pattern list (the left pane) and the forge (the centre):
- * a learned pattern, a bar, a flux (and with epic flux an essence), the element
- * and a shard for each line it should set, with the engine's live
- * `previewForge`: the lines' bands, the attunement floor, the implicits, a
- * weapon's skills, slots and sockets, the price and why it refuses. Forge
- * (Enter, or A on the button) makes it; a legendary plays the fanfare.
+ * The Forge bench, in three columns: the patterns; the rows (Flux, Metal and Element steppers
+ * over what the save holds, each with where what it lacks drops; with epic flux, Essence; a row
+ * a line, opening the shard picker; Forge, Enter or A); and the preview (no stops): the engine's
+ * `previewForge` (the lines' bands, the attunement floor, the implicits, a weapon's skills, slots
+ * and sockets, what it uses) and its Power against what is worn as a range (`forgePowerRange`).
+ * The chosen pattern is the tab's (`baseId`, `onBase`). A legendary plays the fanfare.
  */
 export function ForgeBench({
   locked,
   setPrompts,
+  baseId,
+  onBase,
 }: {
   locked: boolean;
   setPrompts: (prompts: Prompt[]) => void;
+  baseId: string | null;
+  onBase: (baseId: string | null) => void;
 }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const { metals, flux: fluxHeld, essences } = profile.materials;
-  const [baseId, setBaseId] = useState<string | null>(null);
   // The picks follow the stock: a bar or a flux grade picked while held, else the
   // first held (a flux none); an essence while held, else none (forged away).
   const [metalPick, setMetal] = useState<MetalId>(METAL_IDS[0]);
@@ -123,23 +139,26 @@ export function ForgeBench({
   const req = baseId ? request(flux, essence, shards) : null;
   const preview = req && previewForge(registry, profile, req);
 
-  // After a pick the focus goes to Forge, so Enter or A forges next; a refused
-  // forge leaves it where it was, by the reason.
-  const picked = useRef(false);
-  const pick = () => {
-    picked.current = true;
-  };
+  // A pattern picked puts the focus on the Flux row. A shard picked puts it on Forge, so Enter
+  // or A forges next; refused, on its line (the reason under Forge). A step never moves it.
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const focusTo = useRef<'rows' | number | null>(null);
   useEffect(() => {
-    if (!picked.current) return;
-    picked.current = false;
-    if (preview && !preview.refused)
-      document.getElementById(`${id}-forge`)?.focus({ preventScroll: true });
+    const to = focusTo.current;
+    if (to === null) return;
+    focusTo.current = null;
+    const el =
+      to === 'rows'
+        ? rowsRef.current?.querySelector<HTMLElement>('[data-testid="forge-flux"]')
+        : preview && !preview.refused
+          ? document.getElementById(`${id}-forge`)
+          : rowsRef.current?.querySelector<HTMLElement>(`[data-testid="shard-slot-${to}"]`);
+    el?.focus({ preventScroll: true });
   });
 
   const say = (text: string, good: boolean) => setMessage({ text, good });
   // A rarity's line count doesn't depend on the shards: a lower one keeps the first that fit.
   const pickIngot = (f: FluxGrade | null, e: string | null) => {
-    pick();
     const lines = previewForge(registry, profile, request(f, e, [])).lines.length;
     setFlux(f);
     setEssence(e);
@@ -147,7 +166,7 @@ export function ForgeBench({
   };
   // Line i takes `shard`, or (null) rolls at random: the shards come first, in order.
   const setLine = (i: number, shard: ShardRef | null) => {
-    pick();
+    focusTo.current = shard ? Math.min(i, shards.length) : i;
     setShards((s) =>
       shard
         ? i < s.length
@@ -236,6 +255,14 @@ export function ForgeBench({
     (!!preview && preview.lines.length === 0) ||
     (!!preview && heldShards(registry, profile.materials.shards, preview.slot, []).length === 0);
 
+  const heldMetals = METAL_IDS.filter((m) => metals[m] > 0);
+  const elements = [
+    ...pairElements(profile.pair),
+    ...MANA_TYPES.filter((m) => !inPair(profile, m)),
+  ];
+  const heldEssences = Object.entries(essences).filter(([, n]) => n > 0);
+  const range = req && forgePowerRange(registry, profile, req);
+
   return (
     <>
       <PatternList
@@ -244,8 +271,8 @@ export function ForgeBench({
         essence={flux === 'epic' ? essence : null}
         onSelect={(b) => {
           playSound('orbSelect');
-          pick();
-          setBaseId(b);
+          focusTo.current = 'rows';
+          onBase(b);
           setShards([]);
           setPicking(null);
           setMessage(null);
@@ -290,113 +317,85 @@ export function ForgeBench({
             />
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <span
-                aria-hidden
-                className="k-socket flex h-14 w-14 flex-none items-center justify-center"
-              >
-                <ItemIcon baseId={preview.baseId} rarity={preview.rarity} size={28} />
-              </span>
-              <span className="flex flex-col gap-1">
-                <span
-                  className="text-[20px]"
-                  style={{ color: RARITY_TEXT[preview.rarity] }}
-                  data-testid="forge-title"
-                >
-                  {RARITY_LABEL[preview.rarity]} {registry.getGearBase(preview.baseId).name}
-                </span>
-                <span className="k-caption">
-                  {SLOT_LABEL[preview.slot]} · item level {preview.ilvl}
-                </span>
-              </span>
-            </div>
-            <div className="k-caption flex items-center gap-2" data-testid="forge-purse">
-              In hand: <Price scrap={profile.scrap} dust={profile.manaDust} />
-            </div>
-            <Field label="Metal" tutorial="forge.bar">
-              <Segmented
-                aria-label="Metal"
-                columns={4}
+          <div ref={rowsRef} className="flex flex-col gap-4">
+            <Stepper
+              label="Flux"
+              testId="forge-flux"
+              tutorial="forge.flux"
+              done={flux !== null}
+              value={flux ?? 'none'}
+              onChange={(f) => pickIngot(f === 'none' ? null : f, essence)}
+              options={[
+                { id: 'none' as const, label: 'None · common', text: 'None' },
+                ...FLUX_GRADES.filter((g) => fluxHeld[g] > 0).map((g) => {
+                  const text = `${RARITY_LABEL[g]} ×${fluxHeld[g]}`;
+                  return { id: g, label: text, text };
+                }),
+              ]}
+              note={FLUX_GRADES.some((g) => fluxHeld[g] === 0) ? DROPS_FROM.flux : undefined}
+            />
+            {heldMetals.length > 0 ? (
+              <Stepper
+                label="Metal"
+                testId="forge-metal"
+                tutorial="forge.bar"
+                done={metals[metal] > 0}
                 value={metal}
-                onChange={(m) => {
-                  pick();
-                  setMetal(m);
-                }}
-                options={METAL_IDS.map((m) => ({
-                  id: m,
-                  label: `${materialLabel(registry, { kind: 'metal', metal: m })} ×${metals[m]}`,
-                  disabled: metals[m] === 0,
-                  testId: `metal-${m}`,
-                  tutorial: `forge.bar:${m}`,
-                }))}
-              />
-            </Field>
-            <Field label="Flux" tutorial="forge.flux">
-              <Segmented
-                aria-label="Flux"
-                columns={5}
-                value={flux ?? 'none'}
-                onChange={(f) => pickIngot(f === 'none' ? null : f, essence)}
-                options={[
-                  { id: 'none' as const, label: 'None', testId: 'flux-none' },
-                  ...FLUX_GRADES.map((g) => ({
-                    id: g,
-                    label: `${RARITY_LABEL[g]} ×${fluxHeld[g]}`,
-                    disabled: fluxHeld[g] === 0,
-                    testId: `flux-${g}`,
-                    tutorial: `forge.flux:${g}`,
-                  })),
-                ]}
-              />
-            </Field>
-            {flux === 'epic' && (
-              <Field label="Essence">
-                <Segmented
-                  aria-label="Essence"
-                  value={essence ?? 'none'}
-                  onChange={(e) => pickIngot('epic', e === 'none' ? null : e)}
-                  options={[
-                    { id: 'none', label: 'None · epic', testId: 'essence-none' },
-                    ...Object.entries(essences)
-                      .filter(([, n]) => n > 0)
-                      .map(([e, n]) => ({
-                        id: e,
-                        label: `${registry.getLegendary(e).name} ×${n}`,
-                        testId: `essence-${e}`,
-                      })),
-                  ]}
-                />
-              </Field>
-            )}
-            <Field label="Element">
-              <Segmented
-                aria-label="Element"
-                columns={3}
-                value={element}
-                onChange={(m) => {
-                  pick();
-                  setElement(m);
-                }}
-                options={MANA_TYPES.map((m) => {
-                  const st = manaStyle(registry, m);
-                  return {
-                    id: m,
-                    color: st.color,
-                    label: inPair(profile, m) ? (
-                      st.name
-                    ) : (
-                      // One wrapping run, so a narrow cell breaks it between the name and the price.
-                      <span>
-                        {st.name} · <Price dust={offPairDust} />
-                      </span>
-                    ),
-                    testId: `element-${m}`,
-                  };
+                onChange={setMetal}
+                options={heldMetals.map((m) => {
+                  const text = `${materialLabel(registry, { kind: 'metal', metal: m })} ×${metals[m]}`;
+                  return { id: m, label: text, text };
                 })}
+                note={heldMetals.length < METAL_IDS.length ? DROPS_FROM.metal : undefined}
               />
-            </Field>
-            <Field label="Lines" tutorial="forge.shard" done={linesDone}>
+            ) : (
+              <p className="k-caption" data-tutorial="forge.bar" data-tutorial-done="false">
+                Metal: none held. {DROPS_FROM.metal}
+              </p>
+            )}
+            <Stepper
+              label="Element"
+              testId="forge-element"
+              value={element}
+              onChange={setElement}
+              options={elements.map((m) => {
+                const name = manaStyle(registry, m).name;
+                return inPair(profile, m)
+                  ? { id: m, label: name, text: name }
+                  : {
+                      id: m,
+                      // One wrapping run, so a narrow cell breaks it between the name and the price.
+                      label: (
+                        <span>
+                          {name} · <Price dust={offPairDust} />
+                        </span>
+                      ),
+                      text: `${name} · ${offPairDust} Mana Dust`,
+                    };
+              })}
+            />
+            {flux === 'epic' && (
+              <Stepper
+                label="Essence"
+                testId="forge-essence"
+                value={essence ?? 'none'}
+                onChange={(e) => pickIngot('epic', e === 'none' ? null : e)}
+                options={[
+                  { id: 'none', label: 'None · epic', text: 'None' },
+                  ...heldEssences.map(([e, n]) => {
+                    const text = `${registry.getLegendary(e).name} ×${n}`;
+                    return { id: e, label: text, text };
+                  }),
+                ]}
+                note={heldEssences.length === 0 ? DROPS_FROM.essence : undefined}
+              />
+            )}
+            <div
+              className="flex flex-col gap-2"
+              data-tutorial="forge.shard"
+              data-tutorial-done={linesDone}
+            >
+              <span className="k-label">Lines</span>
               {preview.lines.length === 0 && (
                 <p className="k-caption">A common item rolls no lines: add flux for some.</p>
               )}
@@ -409,50 +408,19 @@ export function ForgeBench({
                   data-testid={`shard-slot-${i}`}
                 >
                   <span className="text-[16px]">
+                    Line {i + 1} ·{' '}
                     {l.shard
                       ? `${shardName(registry, l.shard)}: ${
                           l.range ? valueRange(registry, l.shard.stat, l.range[0], l.range[1]) : ''
                         }`
-                      : 'Random line'}
+                      : 'Random'}
                   </span>
                   <span className="k-caption">
                     rolls {pct(l.band[0])}–{pct(l.band[1])}
                   </span>
                 </button>
               ))}
-            </Field>
-            {preview.floor > 0 && (
-              <p className="k-caption" data-testid="forge-floor">
-                Your {manaStyle(registry, preview.element).name} attunement lifts every roll: each
-                starts at least {pct(preview.floor)} up its band.
-              </p>
-            )}
-            <Field label="Implicits">
-              <div className="flex flex-col gap-1" data-testid="forge-implicits">
-                {preview.implicits.map((im) => (
-                  <span key={im.stat} className="text-[16px]">
-                    {statRange(registry, im.stat, im.min, im.max)}
-                  </span>
-                ))}
-              </div>
-            </Field>
-            {legend && (
-              <p className="text-[16px]" data-testid="forge-legendary">
-                <span style={{ color: RARITY_TEXT.legendary }}>{legend.name}:</span>{' '}
-                {legend.text.replace('{v}', preview.legendary!.range.join('–'))}
-              </p>
-            )}
-            {preview.weapon && (
-              <p className="k-caption" data-testid="forge-weapon">
-                Carries {preview.weapon.carries.map((s) => SKILL_NAME[s]).join(', ')}
-                {extras.length > 0 && ` · extra slots: ${extras.join(', ')}`}
-                {preview.weapon.sockets > 0 &&
-                  ` · ${preview.weapon.sockets} open socket${preview.weapon.sockets === 1 ? '' : 's'}`}
-              </p>
-            )}
-            <p className="k-caption" data-testid="forge-uses">
-              Uses {uses.map((u) => materialLabel(registry, u)).join(', ')}
-            </p>
+            </div>
             <Button
               id={`${id}-forge`}
               variant="primary"
@@ -479,6 +447,76 @@ export function ForgeBench({
             )}
           </div>
         )}
+      </Panel>
+      <Panel aria-label="The item" testId="forge-preview" scroll={false}>
+        {/* No stops: the right stick scrolls it. */}
+        <div
+          className="k-scroll flex min-h-0 flex-1 flex-col gap-4"
+          data-pad-scroll
+          data-pad-skip=""
+        >
+          {!preview || locked ? (
+            <p className="k-body-2">The item you forge shows here.</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="k-socket flex h-14 w-14 flex-none items-center justify-center"
+                >
+                  <ItemIcon baseId={preview.baseId} rarity={preview.rarity} size={28} />
+                </span>
+                <span className="flex flex-col gap-1">
+                  <span
+                    className="text-[20px]"
+                    style={{ color: RARITY_TEXT[preview.rarity] }}
+                    data-testid="forge-title"
+                  >
+                    {RARITY_LABEL[preview.rarity]} {registry.getGearBase(preview.baseId).name}
+                  </span>
+                  <span className="k-caption">
+                    {SLOT_LABEL[preview.slot]} · item level {preview.ilvl}
+                  </span>
+                </span>
+              </div>
+              {range && <PowerRange range={range} slot={preview.slot} />}
+              <div className="flex flex-col gap-1" data-testid="forge-implicits">
+                <span className="k-label">Implicits</span>
+                {preview.implicits.map((im) => (
+                  <span key={im.stat} className="text-[16px]">
+                    {statRange(registry, im.stat, im.min, im.max)}
+                  </span>
+                ))}
+              </div>
+              {preview.floor > 0 && (
+                <p className="k-caption" data-testid="forge-floor">
+                  Your {manaStyle(registry, preview.element).name} attunement lifts every roll: each
+                  starts at least {pct(preview.floor)} up its band.
+                </p>
+              )}
+              {legend && (
+                <p className="text-[16px]" data-testid="forge-legendary">
+                  <span style={{ color: RARITY_TEXT.legendary }}>{legend.name}:</span>{' '}
+                  {legend.text.replace('{v}', preview.legendary!.range.join('–'))}
+                </p>
+              )}
+              {preview.weapon && (
+                <p className="k-caption" data-testid="forge-weapon">
+                  Carries {preview.weapon.carries.map((s) => SKILL_NAME[s]).join(', ')}
+                  {extras.length > 0 && ` · extra slots: ${extras.join(', ')}`}
+                  {preview.weapon.sockets > 0 &&
+                    ` · ${preview.weapon.sockets} open socket${preview.weapon.sockets === 1 ? '' : 's'}`}
+                </p>
+              )}
+              <p className="k-caption" data-testid="forge-uses">
+                Uses {uses.map((u) => materialLabel(registry, u)).join(', ')}
+              </p>
+              <div className="k-caption flex items-center gap-2" data-testid="forge-purse">
+                In hand: <Price scrap={profile.scrap} dust={profile.manaDust} />
+              </div>
+            </>
+          )}
+        </div>
       </Panel>
       {fanfare &&
         createPortal(

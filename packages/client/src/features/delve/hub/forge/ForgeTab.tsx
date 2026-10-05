@@ -17,7 +17,7 @@ const benchOf = (l?: HubLink): ForgeBenchId =>
 /**
  * The Forge tab: three benches (a sub tab, LT/RT): Forge (a new item from a pattern), Temper
  * (the gear list, the operations on the picked item, its detail) and Materials (refining, the
- * shard bench, the rune pouch). Its bench and gear row live in the hub's memory; a
+ * shard bench, the rune pouch). Its bench, gear row and pattern live in the hub's memory; a
  * `{ tab: 'forge', uid, bench }` link picks them. Locked while a dive is under way (the hub
  * disables the tab in the pause).
  */
@@ -30,9 +30,10 @@ export function ForgeTab({ mode, setPrompts, link, memory }: HubTabProps) {
   const [bench, setBench] = useState<ForgeBenchId>(
     forgeLink(link) ? benchOf(link) : (kept?.bench ?? 'forge'),
   );
+  const [baseId, setBaseId] = useState<string | null>(kept?.baseId ?? null);
   useEffect(() => {
-    if (memory) memory.forge = { bench, uid: selected, baseId: memory.forge?.baseId ?? null };
-  }, [memory, bench, selected]);
+    if (memory) memory.forge = { bench, uid: selected, baseId };
+  }, [memory, bench, selected, baseId]);
   // A new link picks its item and bench.
   const [seen, setSeen] = useState(link);
   if (link !== seen) {
@@ -84,11 +85,7 @@ export function ForgeTab({ mode, setPrompts, link, memory }: HubTabProps) {
         }}
       >
         {bench === 'forge' && (
-          <>
-            <ForgeBench locked={locked} setPrompts={setPrompts} />
-            {/* The preview's column (plan 05). */}
-            <div />
-          </>
+          <ForgeBench locked={locked} setPrompts={setPrompts} baseId={baseId} onBase={setBaseId} />
         )}
         {bench === 'temper' && (
           <>
