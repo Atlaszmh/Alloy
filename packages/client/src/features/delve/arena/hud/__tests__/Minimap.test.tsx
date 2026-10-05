@@ -213,13 +213,13 @@ describe('Minimap', () => {
     expect(clear).toHaveBeenCalledTimes(2);
   });
 
-  it("large, it is the peek's map: its own test id, no guided-start target, and taller", () => {
+  it("large, it is the peek's map: its own test id, no guided-start target, and its panel's height", () => {
     const { rerender } = render(<Minimap map={MAP} />);
     expect(screen.getByTestId('minimap')).toHaveClass('h-[150px]');
     rerender(<Minimap map={MAP} large />);
     const canvas = screen.getByTestId('peek-map');
     expect(canvas).not.toHaveAttribute('data-tutorial');
-    expect(canvas).toHaveClass('h-[640px]');
+    expect(canvas).toHaveClass('h-full');
     expect(canvas).not.toHaveClass('h-[150px]');
   });
 

@@ -62,6 +62,20 @@ test.describe('Delve HUD', () => {
       [box.x + box.width / 2, box.y + box.height / 2],
     );
     expect(caught).toBe(false);
+    // It sits in the clear part of the screen: under the corner (still clickable) and right of the dock.
+    const body = (await peek.getByTestId('peek-body').boundingBox())!;
+    for (const id of ['[data-testid="lean-corner"]', '[data-hud="dock"]']) {
+      const other = (await page.locator(id).boundingBox())!;
+      const overlaps =
+        body.x < other.x + other.width &&
+        other.x < body.x + body.width &&
+        body.y < other.y + other.height &&
+        other.y < body.y + body.height;
+      expect(overlaps, `the peek clears ${id}`).toBe(false);
+    }
+    // And the large map stays inside it, on screen.
+    const viewport = page.viewportSize()!;
+    expect(box.y + box.height).toBeLessThanOrEqual(Math.min(body.y + body.height, viewport.height) + 1);
     await page.keyboard.press('m');
     await expect(peek).toBeHidden();
     // The pad: D-pad up opens it (taking the input lock), and again closes it.

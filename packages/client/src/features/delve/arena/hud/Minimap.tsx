@@ -224,7 +224,7 @@ export function Minimap({
       aria-label="Minimap"
       data-testid={large ? 'peek-map' : 'minimap'}
       data-tutorial={large ? undefined : 'hud.minimap'}
-      className={`block ${large ? 'h-[640px]' : 'h-[150px]'} w-full bg-[var(--k-well)] shadow-[inset_0_0_0_2px_var(--k-steel-1)]`}
+      className={`block ${large ? 'h-full' : 'h-[150px]'} w-full bg-[var(--k-well)] shadow-[inset_0_0_0_2px_var(--k-steel-1)]`}
     />
   );
 }
