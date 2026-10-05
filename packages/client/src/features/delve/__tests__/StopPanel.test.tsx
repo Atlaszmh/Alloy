@@ -57,6 +57,22 @@ describe('StopPanel (the stop between depths)', () => {
     store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
   });
 
+  it("keys each card for the guided start by its kind (stop.card), and marks the open card's picker (stop.pick)", () => {
+    atStop(['equip', 'upgrade']);
+    expect(screen.getByTestId('stop-equip')).toHaveAttribute('data-tutorial', 'stop.card:equip');
+    expect(screen.getByTestId('stop-upgrade')).toHaveAttribute(
+      'data-tutorial',
+      'stop.card:upgrade',
+    );
+    fireEvent.click(screen.getByTestId('stop-equip'));
+    // Open, the cards are gone; the picker's body is the target, inside the picker's own scope.
+    expect(document.querySelector('[data-tutorial^="stop.card"]')).toBeNull();
+    const pick = document.querySelector('[data-tutorial="stop.pick"]')!;
+    expect(screen.getByTestId('stop-picker')).toContainElement(pick as HTMLElement);
+    expect(pick).toContainElement(screen.getByTestId('stop-equip-item'));
+    expect(pick).not.toContainElement(back());
+  });
+
   it('shows the offered kinds as cards that expand in place to their picker, and once one is taken, says so', () => {
     atStop(['equip', 'upgrade']);
     const stop = screen.getByTestId('stop');

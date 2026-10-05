@@ -149,6 +149,7 @@ export function StopPanel({ stop, ops = STOP_OPS }: { stop: DiveStop; ops?: Stop
               }}
               data-pad-first={i === 0 || undefined}
               data-testid={`stop-${kind}`}
+              data-tutorial={`stop.card:${kind}`}
             >
               <Glyph id={STOP_TEXT[kind].glyph} size={32} />
               <span className="k-disp text-[30px]">{STOP_TEXT[kind].name}</span>
@@ -245,11 +246,14 @@ function StopPicker({
           Back
         </Button>
       </div>
-      {kind === 'equip' && <EquipPick take={take} />}
-      {kind === 'slot' && <SlotPick take={take} dryRun={ops.dry} />}
-      {kind === 'move' && <MovePick take={take} dryRun={ops.dry} />}
-      {kind === 'upgrade' && <UpgradePick take={take} />}
-      {kind === 'rune' && <RunePick take={take} />}
+      {/* The guided start's `stop.pick`: the picker's body (its root is the pad scope itself). */}
+      <div data-tutorial="stop.pick">
+        {kind === 'equip' && <EquipPick take={take} />}
+        {kind === 'slot' && <SlotPick take={take} dryRun={ops.dry} />}
+        {kind === 'move' && <MovePick take={take} dryRun={ops.dry} />}
+        {kind === 'upgrade' && <UpgradePick take={take} />}
+        {kind === 'rune' && <RunePick take={take} />}
+      </div>
       {message && (
         <p className="m-0 text-[15px] text-[var(--k-bad-text)]" role="status">
           {message}
