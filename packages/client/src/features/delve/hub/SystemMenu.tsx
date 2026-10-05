@@ -8,6 +8,7 @@ import { getDelveRegistry } from '../registry';
 import { SkipTutorialConfirm } from '../tutorial/SkipTutorial';
 import { SHOWN_AT, stepIn } from '../tutorial/tutorial-view';
 import { SettingsPanel } from './SettingsPanel';
+import { HelpDialog } from './help/HelpDialog';
 
 /** An entry a screen adds to the menu, above Title screen (the Training Grounds' "Anvil", 3F). */
 export interface SystemMenuEntry {
@@ -17,11 +18,11 @@ export interface SystemMenuEntry {
 }
 
 /**
- * The one Esc / B menu: Resume, Controls, Settings, any `extra` entries, Skip
+ * The one Esc / B menu: Resume, Controls, Settings, Help, any `extra` entries, Skip
  * this step (while the engine allows it for an Anvil or Training step: the
  * pad's way to it, as the pause has it in a dive) and Skip tutorial while the
  * guided start runs, and Title screen, plus Restart and the pull rule in dev
- * builds. Controls, Settings and Skip tutorial's confirm open in its place,
+ * builds. Controls, Settings, Help and Skip tutorial's confirm open in its place,
  * and their Back returns to it. Under the pad its list wraps (the dialog's
  * `wrap`): down from the last entry goes to Back, up from Back to the last.
  */
@@ -42,13 +43,14 @@ export function SystemMenu({
       !!stepIn(getDelveRegistry(), p.tutorial, SHOWN_AT.anvil) &&
       tutorialSkippable(getDelveRegistry(), p, p.tutorial),
   );
-  const [view, setView] = useState<'menu' | 'controls' | 'settings' | 'skip'>('menu');
+  const [view, setView] = useState<'menu' | 'controls' | 'settings' | 'help' | 'skip'>('menu');
   const [confirmRestart, setConfirmRestart] = useState(false);
   // Dev builds: what pulling a rune does here (the balance's rule until the chip picks one).
   const pull = unsocketMode(getDelveRegistry(), unsocket);
 
   if (view === 'controls') return <ControlsPanel onClose={() => setView('menu')} />;
   if (view === 'settings') return <SettingsPanel onClose={() => setView('menu')} />;
+  if (view === 'help') return <HelpDialog onClose={() => setView('menu')} />;
   if (view === 'skip')
     return (
       <SkipTutorialConfirm
@@ -70,6 +72,9 @@ export function SystemMenu({
         </Button>
         <Button onClick={() => setView('settings')} testId="open-settings">
           <Glyph id="settings" size={20} /> Settings
+        </Button>
+        <Button onClick={() => setView('help')} testId="open-help">
+          <Glyph id="journal" size={20} /> Help
         </Button>
         {extra.map((e) => (
           <Button key={e.id} onClick={e.onSelect} testId={`menu-${e.id}`}>

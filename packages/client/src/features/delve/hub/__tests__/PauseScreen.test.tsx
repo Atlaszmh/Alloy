@@ -121,7 +121,7 @@ describe('PauseScreen', () => {
     expect(screen.queryByText(/foes left/)).toBeNull();
   });
 
-  it('the list: Resume (the first focus), Build and quests, Controls, Settings, then the Anvil and Abandon with their stakes', () => {
+  it('the list: Resume (the first focus), Build and quests, Controls, Settings, Help, then the Anvil and Abandon with their stakes', () => {
     const on = renderPause();
     const list = screen.getByTestId('pause-screen');
     expect(list).toHaveAttribute('role', 'dialog');
@@ -136,6 +136,7 @@ describe('PauseScreen', () => {
       'pause-build',
       'open-controls',
       'open-settings',
+      'pause-help',
       'pause-anvil',
       'pause-abandon',
     ]);
@@ -204,6 +205,16 @@ describe('PauseScreen', () => {
     expect(screen.getByTestId('settings-panel')).toBeInTheDocument();
     press('Escape');
     expect(screen.queryByTestId('settings-panel')).toBeNull();
+    expect(on.onResume).not.toHaveBeenCalled();
+  });
+
+  it('Help opens over the pause, and Esc closes only it', () => {
+    const on = renderPause();
+    fireEvent.click(screen.getByTestId('pause-help'));
+    expect(screen.getByTestId('help-dialog')).toBeInTheDocument();
+    press('Escape');
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
+    expect(screen.getByTestId('pause-screen')).toBeInTheDocument();
     expect(on.onResume).not.toHaveBeenCalled();
   });
 

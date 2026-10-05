@@ -10,6 +10,7 @@ import { useQuests } from '../quests/useQuests';
 import { objectiveCount } from '../quests/types';
 import { useHubTabs } from './AnvilHub';
 import { SettingsPanel } from './SettingsPanel';
+import { HelpDialog } from './help/HelpDialog';
 import type { HubLink } from './types';
 
 // hub/PauseScreen.tsx — DelveRun renders it while menuOpen
@@ -49,9 +50,9 @@ const TABS_PROMPT: Prompt = { id: 'tabs', label: 'Tabs', binding: { key: '1 – 
 /**
  * The pause (the pad-first spec, 3): Menu or Esc in a dive opens a short list over the dimmed
  * arena, a kit dialog that wraps for the pad (`pause-screen`): Resume (the first focus), Build and
- * quests, Controls, Settings, the guided start's skips while they apply, then the Anvil and Abandon
- * with their stakes; beside it the dive as it stands (`PauseState`). Its Back, B, Esc and the pad's
- * Menu resume. Build and quests opens the hub's tabs read-only (`pause-hub`; a `link` opens there
+ * quests, Controls, Settings, Help (How to delve), the guided start's skips while they apply, then
+ * the Anvil and Abandon with their stakes; beside it the dive as it stands (`PauseState`). Its
+ * Back, B, Esc and the pad's Menu resume. Build and quests opens the hub's tabs read-only (`pause-hub`; a `link` opens there
  * directly), where B and Esc return to the list and Menu resumes.
  */
 export const PauseScreen = memo(function PauseScreen(props: PauseScreenProps) {
@@ -59,7 +60,7 @@ export const PauseScreen = memo(function PauseScreen(props: PauseScreenProps) {
   const [view, setView] = useState<'list' | 'hub'>(link ? 'hub' : 'list');
   /** Back from the hub, the list's focus is on Build and quests, the row that opened it. */
   const [fromHub, setFromHub] = useState(false);
-  const [dialog, setDialog] = useState<'controls' | 'settings' | 'skip' | null>(null);
+  const [dialog, setDialog] = useState<'controls' | 'settings' | 'help' | 'skip' | null>(null);
   return (
     <>
       {view === 'hub' ? (
@@ -80,6 +81,7 @@ export const PauseScreen = memo(function PauseScreen(props: PauseScreenProps) {
       )}
       {dialog === 'controls' && <ControlsPanel onClose={() => setDialog(null)} />}
       {dialog === 'settings' && <SettingsPanel onClose={() => setDialog(null)} />}
+      {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
       {dialog === 'skip' && onSkipTutorial && (
         <SkipTutorialConfirm
           onConfirm={() => {
@@ -102,7 +104,7 @@ function PauseList({
 }: PauseScreenProps & {
   first: 'resume' | 'build';
   onBuild: () => void;
-  onDialog: (d: 'controls' | 'settings' | 'skip') => void;
+  onDialog: (d: 'controls' | 'settings' | 'help' | 'skip') => void;
 }): ReactElement {
   const { atStop = false, onResume, onAnvil, onAbandon, onSkipStep, onSkipTutorial } = props;
   const guided = !!onSkipTutorial;
@@ -131,6 +133,9 @@ function PauseList({
           </Button>
           <Button onClick={() => onDialog('settings')} testId="open-settings">
             <Glyph id="settings" size={20} /> Settings
+          </Button>
+          <Button onClick={() => onDialog('help')} testId="pause-help">
+            <Glyph id="journal" size={20} /> Help
           </Button>
           {onSkipStep && (
             <Button onClick={onSkipStep} testId="pause-skip-step">

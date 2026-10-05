@@ -79,6 +79,16 @@ describe('SystemMenu', () => {
     expect(screen.getByTestId('system-menu')).toBeInTheDocument();
   });
 
+  it('Help opens How to delve in its place, and its Back comes back to the menu', () => {
+    renderMenu();
+    fireEvent.click(screen.getByTestId('open-help'));
+    expect(screen.getByTestId('help-dialog')).toBeInTheDocument();
+    expect(screen.queryByTestId('system-menu')).toBeNull();
+    fireEvent.click(within(screen.getByTestId('help-dialog')).getByRole('button', { name: /back/i }));
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
+    expect(screen.getByTestId('system-menu')).toBeInTheDocument();
+  });
+
   it("lists a screen's extra entries", () => {
     const onSelect = vi.fn();
     renderMenu({ extra: [{ id: 'anvil', label: 'Anvil', onSelect }] });

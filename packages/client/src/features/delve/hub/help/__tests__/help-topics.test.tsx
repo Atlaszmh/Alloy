@@ -1,34 +1,54 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { CHAIN_SKILLS, carriedByText, carriedFrom, carriedSkills } from '@alloy/engine';
-import { HowTo } from '../HowTo';
-import { getDelveRegistry } from '../../registry';
-import { SKILL_NAME } from '../../chains/chain-text';
+import { HELP_TOPICS, HelpPage } from '../help-topics';
+import { getDelveRegistry } from '../../../registry';
+import { SKILL_NAME } from '../../../chains/chain-text';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 
 const registry = getDelveRegistry();
 
-describe('HowTo', () => {
+describe('HelpPage', () => {
   beforeEach(() => {
     localStorage.clear();
     useControlsStore.getState().reset();
     act(() => useInputDeviceStore.getState().setDevice('keyboard'));
   });
 
+  it('has one topic a page, in order, each with its title', () => {
+    expect(HELP_TOPICS.map((t) => [t.id, t.title])).toEqual([
+      ['controls', 'Controls'],
+      ['weapons', 'Weapons'],
+      ['skills', 'Skills'],
+      ['forge', 'The forge'],
+      ['floor', 'The floor'],
+      ['banking', 'Banking'],
+    ]);
+    for (const { id } of HELP_TOPICS) {
+      cleanup();
+      render(<HelpPage topic={id} />);
+      expect(screen.getByTestId('delve-howto')).toHaveAttribute('data-topic', id);
+    }
+  });
+
   it('speaks mouse and keys with the keys in hand, and names the Skills tab', () => {
-    render(<HowTo />);
+    render(<HelpPage topic="controls" />);
     const howto = screen.getByTestId('delve-howto');
     expect(howto).toHaveTextContent('hold one to aim with the mouse');
     expect(howto).not.toHaveTextContent('left stick');
-    expect(howto).toHaveTextContent('Skills');
-    expect(howto).not.toHaveTextContent('Abilities');
     expect(howto).toHaveTextContent('F drinks a potion');
-    expect(howto).toHaveTextContent('press C at it');
+    cleanup();
+    render(<HelpPage topic="skills" />);
+    expect(screen.getByTestId('delve-howto')).toHaveTextContent('Skills');
+    expect(screen.getByTestId('delve-howto')).not.toHaveTextContent('Abilities');
+    cleanup();
+    render(<HelpPage topic="floor" />);
+    expect(screen.getByTestId('delve-howto')).toHaveTextContent('press C at it');
   });
 
   it('speaks the controller once the pad has the input lock', () => {
-    render(<HowTo />);
+    render(<HelpPage topic="controls" />);
     act(() => useInputDeviceStore.getState().setDevice('gamepad'));
     const howto = screen.getByTestId('delve-howto');
     expect(howto).toHaveTextContent('The left stick moves and the right stick aims');
@@ -37,12 +57,12 @@ describe('HowTo', () => {
 
   it("draws the player's own bindings", () => {
     act(() => useControlsStore.getState().setKey('dodge', 'KeyZ'));
-    render(<HowTo />);
+    render(<HelpPage topic="controls" />);
     expect(screen.getByTestId('delve-howto')).toHaveTextContent('Z dodges');
   });
 
   it("names what a weapon carries in the engine's words, and where a rare awakens", () => {
-    render(<HowTo />);
+    render(<HelpPage topic="weapons" />);
     const always = carriedSkills(registry, { rarity: 'common' });
     const carries = screen.getByTestId('howto-carries');
     expect(carries).toHaveTextContent(
@@ -60,14 +80,20 @@ describe('HowTo', () => {
   });
 
   it('tells of materials, the forge, the floor and what a death costs, from the balance', () => {
-    render(<HowTo />);
-    const howto = screen.getByTestId('delve-howto');
+    const page = (topic: 'forge' | 'floor' | 'banking') => {
+      cleanup();
+      render(<HelpPage topic={topic} />);
+      const howto = screen.getByTestId('delve-howto');
+      expect(howto.outerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
+      return howto;
+    };
+    const forge = page('forge');
+    expect(forge).toHaveTextContent('gear drops only from elites and bosses');
+    expect(forge).toHaveTextContent('forge your gear from materials on the Forge tab');
+    expect(page('floor')).toHaveTextContent('find its exit gate');
     const loss = Math.round(registry.getDelveBalance().crafting.deathLoss * 100);
-    expect(howto).toHaveTextContent('gear drops only from elites and bosses');
-    expect(howto).toHaveTextContent('forge your gear from materials on the Forge tab');
-    expect(howto).toHaveTextContent('find its exit gate');
-    expect(howto).toHaveTextContent(`the floor's haul and ${loss}% of what the dive banked`);
-    expect(howto).not.toHaveTextContent('keep every item'); // the old rule
-    expect(howto.outerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
+    const banking = page('banking');
+    expect(banking).toHaveTextContent(`the floor's haul and ${loss}% of what the dive banked`);
+    expect(banking).not.toHaveTextContent('keep every item'); // the old rule
   });
 });
