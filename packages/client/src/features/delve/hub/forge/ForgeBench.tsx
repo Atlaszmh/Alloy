@@ -229,9 +229,11 @@ export function ForgeBench({
         .map(([s, n]) => `${SKILL_NAME[s as keyof typeof SKILL_NAME]} +${n}`)
     : [];
   // The guided start's trail: the Lines are done once one holds a shard, or at once when no
-  // shard held fits the item (the forge needs none), so the marker goes on to Forge.
+  // shard held fits the item, or it rolls no lines (the forge needs none), so the marker goes on
+  // to Forge.
   const linesDone =
     shards.length > 0 ||
+    (!!preview && preview.lines.length === 0) ||
     (!!preview && heldShards(registry, profile.materials.shards, preview.slot, []).length === 0);
 
   return (

@@ -213,7 +213,7 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
                   onClick={() => ed.openPicker(index, s)}
                   data-testid={`inspect-socket-${s}`}
                   data-tutorial={lessonFirst && s === 0 ? 'skills.rune' : undefined}
-                  data-tutorial-done={ed.sockets.some((x) => x !== null)}
+                  data-tutorial-done={r !== null}
                 >
                   {r ? (
                     <RuneGlyph rune={r} dormant={idle} />
