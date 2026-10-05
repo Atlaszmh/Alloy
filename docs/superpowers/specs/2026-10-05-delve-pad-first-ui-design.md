@@ -41,7 +41,9 @@ Approved by the user (2026-10-05):
 Taken on the user's behalf (flag on review):
 
 - **Lean is the default HUD**; Full stays a setting. (The approved line read either way.)
-- **Claim all is a button**, the journal's first control when anything waits, not a Y shortcut: Y stays Track on Quests.
+- **Claim all is a button**, the journal's first control when two or more wait, not a Y shortcut: Y stays Track on Quests.
+- **Undo is on B** (phase 3): putting it on X would make a second salvage undo the first.
+- **The stop's finds open with A** on their summary line, not Y (phase 2).
 - **The Depart sheet serves the mouse and keys too**: Delve is two clicks, or Enter twice. T still goes to Training.
 - **B does nothing at the hub's root.** Esc and Menu open the system menu.
 - **Lists wrap only at a true edge** (a dialog's list), never inside a hub pane, where down from the last row still reaches the footer.
@@ -57,7 +59,7 @@ One job a button, on every Delve screen outside the fight. Each phase brings its
 | A | The main thing with what is focused | Equip, edit a move, forge, claim, take |
 | X | Take it away | Salvage, remove a move, skip the power-up, reroll a contract |
 | Y | Keep or commit | Lock, track, apply changes |
-| B | Back, and nothing else | Close a sheet or a picker; nothing at a screen's root |
+| B | Back, and nothing else | Close a sheet or a picker; take back a salvage (phase 3); else nothing at a screen's root |
 | LB / RB | The top tabs | As today |
 | LT / RT | The level under the tabs | A skill, a bench, a Codex section, the bag's filter |
 | Right stick | Scroll the detail pane | Never moves the focus |
@@ -79,17 +81,18 @@ Kit and hub shell only: no tab's panes are rebuilt. Client only.
 
 ### 2.1 Menu, View and the Depart sheet
 
-- The hub's `menu` prompt becomes `{ key: 'Escape', pad: 'menu' }` with no `padBack`: Menu and Esc open the system menu, and B does nothing at the root (a tab's own B prompts, such as the Loadout's "Back to bag", are untouched).
-- The footer's Delve button no longer starts a dive. It opens the **Depart sheet** (`hub/DepartSheet.tsx`, a kit `Dialog` titled "Depart", `depart-sheet`): on a click, on View (a `depart` prompt bound `{ pad: 'view' }`), and on Enter with nothing focused (it keeps `data-pad-menu`). Its test id becomes `depart-button`; it keeps `data-tutorial="hub.delve"` and its label ("Delve ▸ depth N", "Resume dive · depth N"), and is never disabled: the sheet says what holds a dive.
-- The Skills tab's compact Delve (`ApplyBar`) opens the sheet too: every tab's `onDelve` is "open the sheet".
+- The hub's `menu` prompt becomes `{ key: 'Escape' (and the configured menu key, when it is another, as the stop's Menu binds it), pad: 'menu' }` with no `padBack`: Menu and Esc open the system menu, and B does nothing at the root (a tab's own B prompts, such as the Loadout's "Back to bag", are untouched). The configured key must be the prompt's own: with no `[data-pad-back]` left in the hub, the runtime's fallback for it would press `[data-pad-menu]`, the Delve button.
+- The footer's Delve button no longer starts a dive. It opens the **Depart sheet** (`hub/DepartSheet.tsx`, a kit `Dialog` titled "Depart", `depart-sheet`): on a click, on View (a `depart` prompt bound `{ pad: 'view' }`), and on Enter with nothing focused (it keeps `data-pad-menu`). Its test id becomes `depart-button`; it draws `{ key: 'Enter', pad: 'view' }` (the `depart` prompt is bound, not drawn in the prompt bar: the button is its glyph), keeps `data-tutorial="hub.delve"`, `data-primary-action="delve"` (the responsive probe's), `data-pad-first` and its label ("Delve ▸ depth N", "Resume dive · depth N"), and is never disabled: the sheet says what holds a dive.
+- The Skills tab's compact Delve (`ApplyBar`) opens the sheet too: every tab's `onDelve` is "open the sheet". It becomes `depart-button` as well (one on screen at a time: the footer shows the tab's action or its own button), with the same binding and attributes, and is never disabled either. The pause passes its own Resume as `onDelve` and never mounts `ApplyBar`: untouched.
 - The sheet, top to bottom:
   1. **Start at** (`start-depths`): the start-depth chips, between dives when there is more than one.
   2. **Tracked**: each tracked quest's name and its first objective still to do (read-only; none: nothing).
   3. **Waiting** (`claim-count`): "n to claim" as a button that closes the sheet and opens Quests, between dives when n > 0.
   4. **What holds the dive**: the unapplied-draft block (`draft-block`: its warning, Apply with the engine's reason, and "Discard changes & delve", absent under a lesson) and the lesson's reason (`lesson-block`), exactly as the footer has them today.
-  5. **Delve** (`delve-button`, the primary button, `data-pad-first`, `data-tutorial="hub.delve"`, disabled by a draft or a lesson with the same `aria-describedby`), **Training** (`training-button`, `data-tutorial="hub.training"`, drawing the T key) and the dialog's Back.
+  5. **Delve** (`delve-button`, the primary button, `data-tutorial="hub.delve"`, disabled by a draft or a lesson with the same `aria-describedby`; "Resume dive · depth N" while a dive is open, when nothing holds it and parts 1 and 3 are absent), **Training** (`training-button`, `data-tutorial="hub.training"`, drawing the T key) and the dialog's Back.
+- **The sheet's first focus** (the dialog's `data-pad-first`, for every device): Delve when it is enabled; else the draft's Apply when it can apply; else the dialog's Back.
 - Delve in the sheet does what the footer's did (`startDive(depth)` unless a dive is active, the sound, the route). Training closes nothing: it navigates.
-- T still opens the Training Grounds from the hub (the hub's `training` prompt keeps `KeyT`, without the pad's View).
+- T still opens the Training Grounds from the hub (the hub's `training` prompt keeps `KeyT`, without the pad's View), and from the sheet, which binds T itself (a dialog is its own scope, where the hub's prompts are inert).
 - The start depth stays the hub's state, so the footer's label and the sheet agree.
 
 ### 2.2 The footer
@@ -99,19 +102,20 @@ The hub's planks hold the tab's prompts and Menu on the left and, on the right, 
 ### 2.3 Quests: claim where you are
 
 - **Opens on what is ready.** With no link, the open quest is the first complete one, else the first not yet claimed, else the first.
-- **A row opens on focus under the pad** (as a bag tile is selected by the focus), so the D-pad reads the journal without presses.
-- **A claims on the row.** Under the pad, pressing a row that is open and complete claims it (the same `onClaim`); the footer's prompt reads "Claim" then, "Select" otherwise. The Rewards pane's Claim button stays (the mouse, Enter, the guided start's `quests.claim`).
-- **After a claim** the next complete quest opens, else the claimed one stays open (in Done).
-- **Claim all** (`quest-claim-all`): a `go` button in the journal's head while two or more quests wait and no dive is open, the journal's `data-pad-first` then. It claims each complete quest in the journal's order through the store's `claimQuest`, stops at a refusal, and reports "Claimed n quests: …" (or the refusal) in the status line.
+- **The pad lands on it.** The open quest's row carries `data-pad-first`, and `stepTabs` puts the focus on the new tab's `[data-pad-first]` control when it has one (else its first control, as now). So LB/RB into Quests focuses the open row. (A scope with no focus history also starts on its first `[data-pad-first]` in document order: on Quests that is now this row, not the footer's Delve.)
+- **A claims on the row.** Under the pad, while no dive is open, pressing the row of the open quest when it is complete claims it (the same `onClaim`); the footer's A prompt reads "Claim" then, "Select" otherwise. Any other press of a row opens it, as now, and so does every press while a dive is open (the pause; the Anvil mid-dive). The Rewards pane's Claim button stays (the mouse, Enter, the guided start's `quests.claim`).
+- **After a claim** the next complete quest in the journal's order opens and, under the pad, its row takes the focus: A, A, A claims them in turn. With none left, the claimed quest stays open while it is still in the journal (a quest: under Done, which opens for it); a claimed contract leaves the board, so the first rule picks what opens, and the focus goes where `keepFocus` puts it (the nearest row).
+- **Claim all** (`quest-claim-all`): a `go` button in the journal's head while two or more quests wait and no dive is open. While it shows, it carries the tab's `data-pad-first` instead of the open row. It claims each complete quest in the journal's order through the store's `claimQuest`, stops at a refusal, and reports "Claimed n quests: …" (or the refusal) in the status line; then it is gone, and `keepFocus` puts the focus on the nearest row.
+- Rows do not open on focus: a press opens, as today (opening marks a quest seen, which passing over it should not).
 - Y stays Track and X Reroll: both already fit the grammar.
 
 ### 2.4 Lists wrap at a true edge
 
-`moveFocus` wraps when `nextFocus` finds nothing: if the focused control sits in a `[data-pad-wrap]` container and the press is up or down, the focus goes to that container's last or first candidate. The kit's `Dialog` takes `wrap` (sets the attribute on its body); the system menu passes it. `nextFocus` itself is unchanged, so the pad audit's rules hold. Phase 2's pause list uses the same attribute.
+`moveFocus` wraps when `nextFocus` finds nothing: if the focused control sits in a `[data-pad-wrap]` container and the press is up or down, the focus goes to that container's lowest or topmost candidate. The kit's `Dialog` takes `wrap`, which sets the attribute on the dialog itself, its Back included: the system menu passes it, so its loop is Back, Resume, the entries (in dev builds the chips under them), and round again, both ways. `nextFocus` itself is unchanged, so the pad audit's rules hold. Phase 2's pause list uses the same attribute.
 
 ### 2.5 Prompt order
 
-`kit/prompts.ts` exports `orderPrompts(prompts)`: a stable sort by the pad button's rank (`a, x, y, lb, rb, lt, rt, l3, r3, view, menu, b`; a prompt with no pad button keeps its place after the ranked ones, before B). `PromptBar` draws through it, for every device, so the keys' prompts sit in the same places as the pad's.
+`kit/prompts.ts` exports `orderPrompts(prompts)`: a stable sort by the pad button's rank (`a, x, y, lb, rb, lt, rt, ls, rs, view, menu, b`; a prompt with no pad button, or one on the D-pad such as the Skills tab's carry, keeps its place after the ranked ones, before B). `PromptBar` draws through it, for every device, so the keys' prompts sit in the same places as the pad's.
 
 ### 2.6 The guided start
 
@@ -123,15 +127,17 @@ The hub's planks hold the tab's prompts and Menu on the left and, on the right, 
 ### 2.7 Testing
 
 - **Unit:** `DepartSheet` (each part's presence by state; Delve starts the dive at the chosen depth and is disabled by a draft and by a lesson; Discard & delve; Training; the claim button opens Quests); `AnvilHub` (Menu / Esc open the system menu, B doesn't; View, Enter and a click open the sheet; T goes to Training); `HubFooter` (one button, or the tab's action); `QuestsTab` (the default open quest; focus opens under the pad; A on an open complete row claims; the next complete one opens; Claim all's presence, order, stop at a refusal, and message); `use-gamepad-nav` (wrap inside `[data-pad-wrap]` at an edge, none without it, none sideways); `prompts` (`orderPrompts`); `marked` (the Training step's way).
-- **Tests that encode today's shell, to change with it:** `HubFooter.test.tsx`, `AnvilHub.test.tsx`, `DelveCamp.test.tsx`, `GuidedChoice.test.tsx`, `ApplyBar.test.tsx`, `QuestsTab` tests, and every E2E that clicks `delve-button` from the hub (25 call sites over ten specs) or `training-button` (two): a fixture `startDive(page)` (the footer's button, then the sheet's) and `openTraining(page)` replace them.
-- **E2E:** `delve-pad-nav.spec.ts` PN01 gains the Depart sheet (audited as a screen, allowance recorded) and loses the footer's old stops; a new PN05 walks the pad through View → A (a dive starts) and Menu (the system menu opens, down from Title screen wraps to Resume). `delve-quests.spec.ts` claims by the row with the pad and by Claim all. `delve-tutorial.spec.ts` TU01 passes with the sheet in the way (the bot's test presses Delve through the fixture).
+- **Tests that encode today's shell, to change with it:** `HubFooter.test.tsx`, `AnvilHub.test.tsx`, `DelveCamp.test.tsx`, `GuidedChoice.test.tsx`, `ApplyBar.test.tsx`, `QuestsTab` tests, and every E2E that clicks `delve-button` from the hub (25 call sites over ten specs) or `training-button` (two): a fixture `startDive(page)` (the footer's button, then the sheet's) and `openTraining(page)` replace them. Two E2Es read what moved into the sheet and must open it first: `delve-quests.spec.ts` (`claim-count`) and `delve-tutorial.spec.ts` (`lesson-block` and Delve's disabled state, twice).
+- **E2E:** `delve-pad-nav.spec.ts` PN01 gains the Depart sheet (audited as a screen, allowance recorded) and loses the footer's old stops; a new PN05 walks the pad through Menu (the system menu opens; pressing down from Resume comes back round to Resume, and up from its Back lands on its lowest control) and View → A (a dive starts). `delve-quests.spec.ts` claims by the row with the pad and by Claim all. `delve-tutorial.spec.ts` TU01 passes with the sheet in the way (the bot's test presses Delve through the fixture).
 - **Close:** `CLAUDE.md` (the Client and Controller paragraphs), version 0.65.0.
+
+Not in this phase: the title screen's Delve keeps its Menu shortcut (it enters the Anvil; it starts no dive).
 
 ## 3. Phase 2: the dive's edges (v0.66.0)
 
 Each item's plan starts by reading its screen's code; what follows is the design to meet.
 
-- **The stop in two steps** (`stop/StopScreen.tsx`, `StopPanel.tsx`, `DoorPane.tsx`). Step 1, "Take one power-up": the cards in one row, A takes (its picker as today), X skips. Step 2, "Choose your road": the doors and Extract in one row, each door's cost and gain on separate lines with wording as well as colour. The finds become one summary line ("26 scrap bounty · 18 materials · 1 rune · ▲ 1 upgrade waiting") opened with Y. The potion is offered on its fight button (D-pad down) when life is low, not as a stop. B on step 2 returns to step 1 only while no power-up was taken. A guided stop's `required` power-up holds step 1 as it holds the doors today.
+- **The stop in two steps** (`stop/StopScreen.tsx`, `StopPanel.tsx`, `DoorPane.tsx`). Step 1, "Take one power-up": the cards in one row, A takes (its picker as today), X skips. Step 2, "Choose your road": the doors and Extract in one row, each door's cost and gain on separate lines with wording as well as colour. The finds become one summary line ("26 scrap bounty · 18 materials · 1 rune · ▲ 1 upgrade waiting"), a control above the cards that A opens (today's Y Inspect goes: Y is not "look"). The potion is offered on its fight button (D-pad down) when life is low, not as a stop. B on step 2 returns to step 1 only while no power-up was taken. A guided stop's `required` power-up holds step 1 as it holds the doors today.
 - **The pause list** (`hub/PauseScreen.tsx`). Menu opens a short wrapping list over the dimmed arena: Resume, Build and quests, Controls, Settings, Restart the floor, Abandon the dive (and the guided start's skip entries), with the dive's state beside it (depth, biome, rooms, what is banked, the death-loss line, the tracked quest). View, and "Build and quests", open today's read-only hub. Menu and B resume.
 - **The lean HUD** (`arena/hud/*`, `uiStore`). Settings → HUD: Lean (the default) or Full (today's). Lean keeps the dock, the vitals, the minimap with the depth and one tracked-objective line under it, the boss bar and the interact plaque; the purse bar and Found log become a **gain feed** (each pickup a line at the top left for a few seconds; notices join it), and the right column's inset goes, so the camera centres on the hero.
 - **The peek.** D-pad up (a new bindable action, `peek`; a key too) toggles an overlay: the large map, the purse with this dive's gains, and the floor's finds. The fight keeps running.
@@ -140,7 +146,7 @@ Each item's plan starts by reading its screen's code; what follows is the design
 ## 4. Phase 3: Loadout and Forge (v0.67.0)
 
 - **Loadout** (`hub/loadout/*`). The bag's filters step on LT/RT (a kit sub `Tabs`), off the D-pad. The compare pane always shows the focused item, a worn one too (its stats and moveset), with one verdict line first ("An upgrade as it comes", "Better only as a home for your moveset", "Worse"); under the pad, tiles show no focus tooltip. Its buttons stay for the mouse but leave the D-pad (the footer's A / X / Y act on the focused tile), which retires the RT "Actions" jump. The right stick scrolls the pane.
-- **Salvage with Undo.** X (and Del) salvages the focused item at once; the store keeps the profile from before for 5 seconds and the footer offers "Undo" on X meanwhile. Any other change to the save ends the offer. The 2-second "press again" arming for precious items goes.
+- **Salvage with Undo.** X (and Del) salvages the focused item at once; the store keeps the profile from before for 5 seconds and the footer offers "Undo" on B (and Ctrl+Z) meanwhile: B is "back", it has no other job at the Loadout's root, and X stays free to salvage the next item. Any other change to the save ends the offer. The 2-second "press again" arming for precious items goes.
 - **Salvage junk** opens a review sheet: each candidate with what it gives, A keeps one back, Y salvages the rest, with the total. The engine's fences are unchanged.
 - **How to delve** leaves the Loadout's default pane: a Help entry in the system menu and the pause, and a Codex section, one topic a page.
 - **Forge** (`hub/forge/*`). The bench is rows, not chip fields: Metal, Flux and Element are steppers over what the save holds (what it lacks is one line saying where it drops), Lines open the shard picker. The preview pane (no stops) adds the item's Power against what is worn, as a range from `previewForge`'s bands (an engine helper if the client can't compose it). **Materials** becomes a third sub tab: bars, flux, shards and essences as rows with Refine on the row, then the shard bench, the rune pouch and Fuse.
@@ -182,7 +188,7 @@ Each phase is held by `e2e/delve-pad-nav.spec.ts`: the stop allowances it alread
 
 | Phase | Version | Plan folder |
 |---|---|---|
-| 1. The shell | 0.65.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui/` (`01` to `03`) |
+| 1. The shell | 0.65.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui/` (`00` to `04`) |
 | 2. The dive's edges | 0.66.0 | written when phase 1 has merged |
 | 3. Loadout and Forge | 0.67.0 | |
 | 4. Skills | 0.68.0 | |
