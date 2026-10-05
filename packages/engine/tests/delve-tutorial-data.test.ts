@@ -278,4 +278,43 @@ describe('trails', () => {
       'walk: a trail on an Anvil, Training or stop step',
     ]);
   });
+
+  it("ships the spec's trails, each on its step, and they pass the checks", () => {
+    const claim = ['quests.done', 'quests.claim'];
+    const pick = (kind: string) => [`stop.card:${kind}`, 'stop.pick'];
+    const shipped = Object.fromEntries(
+      data.steps.flatMap((s) => (s.trail ? [[s.id, s.trail]] : [])),
+    );
+    expect(shipped).toEqual({
+      's1-equip': pick('equip'),
+      's2-move': pick('move'),
+      's4-upgrade': pick('upgrade'),
+      'l1-claim': claim,
+      'l1-forge': [
+        'forge.pattern:cuirass',
+        'forge.bar:rusty',
+        'forge.flux:uncommon',
+        'forge.shard',
+        'forge.go',
+      ],
+      'l1-equip': ['loadout.bag:chest.uncommon', 'loadout.equip'],
+      'l1-bind': ['mana.bind', 'mana.confirm'],
+      'l1-skills': [
+        'skills.primary',
+        'skills.addSlot',
+        'skills.elements',
+        'skills.socket',
+        'skills.rune',
+        'skills.apply',
+      ],
+      'l1-salvage': ['loadout.bag:weapon.common', 'loadout.salvage'],
+      'l1-refine': ['forge.refine:rusty'],
+      'l1-claim2': claim,
+      'l2-compare': ['loadout.bag:weapon.rare'],
+      'l2-transfer': ['loadout.bag:weapon.rare', 'loadout.transfer'],
+      'l2-hone': ['temper.hone', 'temper.line', 'temper.go'],
+      'l2-claim': claim,
+    });
+    expect(tutorialDataProblems(registry)).toEqual([]);
+  });
 });

@@ -60,6 +60,7 @@
       "line": "Between depths you get one power-up. Better weapons carry more skills, and that blade carries a Primary. Put it on.",
       "objective": "Take Equip",
       "highlight": "stop.powerup",
+      "trail": ["stop.card:equip", "stop.pick"],
       "stop": { "kinds": ["equip"], "doors": ["winding"], "extract": false },
       "trigger": { "type": "takeStop", "filter": { "kind": "equip" }, "count": 1 }
     },
@@ -167,6 +168,7 @@
       "line": "That chest gave you Mana Dust. Spend a little here: change one move of a chain however you like.",
       "objective": "Take Adjust a move",
       "highlight": "stop.powerup",
+      "trail": ["stop.card:move", "stop.pick"],
       "stop": { "kinds": ["move"], "doors": ["winding"], "extract": false },
       "trigger": { "type": "takeStop", "filter": { "kind": "move" }, "count": 1 }
     },
@@ -223,6 +225,7 @@
       "line": "Welcome back! Quests pay out here at the Anvil: claim what you finished.",
       "objective": "Claim your completed quests",
       "highlight": "quests.claim",
+      "trail": ["quests.done", "quests.claim"],
       "trigger": { "type": "claim", "count": 1 }
     },
     {
@@ -231,6 +234,13 @@
       "line": "Now the fun part. Forge a cuirass: its pattern, a Rusty bar, uncommon flux, and that shard from the chest.",
       "objective": "Forge an uncommon cuirass",
       "highlight": "hub.tab.forge",
+      "trail": [
+        "forge.pattern:cuirass",
+        "forge.bar:rusty",
+        "forge.flux:uncommon",
+        "forge.shard",
+        "forge.go"
+      ],
       "trigger": {
         "type": "forge",
         "filter": { "slot": "chest", "rarity": "uncommon" },
@@ -243,6 +253,7 @@
       "line": "See the ▲ on it? It beats what you're wearing. Put it on.",
       "objective": "Equip the cuirass",
       "highlight": "loadout.equip",
+      "trail": ["loadout.bag:chest.uncommon", "loadout.equip"],
       "trigger": {
         "type": "equip",
         "filter": { "slot": "chest", "rarity": "uncommon" },
@@ -255,6 +266,7 @@
       "line": "One element's a start. Bind a second: {partner} pairs nicely with {primary}, but pick whichever you like.",
       "objective": "Bind a second element",
       "highlight": "mana.bind",
+      "trail": ["mana.bind", "mana.confirm"],
       "trigger": { "type": "bind", "count": 1 }
     },
     {
@@ -263,6 +275,14 @@
       "line": "Let's build your Primary. Add a slot, set the new move to {secondary}, open a socket on the first move, set the rune in it, then Apply.",
       "objective": "Add a slot, set {secondary}, socket the rune, Apply",
       "highlight": "skills.addSlot",
+      "trail": [
+        "skills.primary",
+        "skills.addSlot",
+        "skills.elements",
+        "skills.socket",
+        "skills.rune",
+        "skills.apply"
+      ],
       "trigger": { "type": "setChains", "filter": { "moves": 3 }, "count": 1 }
     },
     {
@@ -271,6 +291,7 @@
       "line": "That old sword's done its job. Salvage it: it melts down into scrap and parts.",
       "objective": "Salvage the old sword",
       "highlight": "loadout.salvage",
+      "trail": ["loadout.bag:weapon.common", "loadout.salvage"],
       "trigger": {
         "type": "salvage",
         "filter": { "slot": "weapon", "rarity": "common" },
@@ -283,6 +304,7 @@
       "line": "Three Rusty bars make one Iron bar, and better bars forge deeper gear.",
       "objective": "Refine an Iron bar",
       "highlight": "forge.refine",
+      "trail": ["forge.refine:rusty"],
       "trigger": { "type": "refine", "filter": { "metal": "iron" }, "count": 1 }
     },
     {
@@ -291,6 +313,7 @@
       "line": "More quests done. Claim them before you go.",
       "objective": "Claim your completed quests",
       "highlight": "quests.claim",
+      "trail": ["quests.done", "quests.claim"],
       "trigger": { "type": "claim", "count": 1 }
     },
     {
@@ -335,6 +358,7 @@
       "line": "A power-up you'll see often: upgrade a piece of gear for scrap.",
       "objective": "Take Upgrade",
       "highlight": "stop.powerup",
+      "trail": ["stop.card:upgrade", "stop.pick"],
       "stop": { "kinds": ["upgrade"], "doors": ["winding"], "extract": false },
       "trigger": { "type": "takeStop", "filter": { "kind": "upgrade" }, "count": 1 }
     },
@@ -473,6 +497,7 @@
       "line": "Look at Grask's weapon. As it comes it's no match for yours, but the ◇ says it's a better home for the moves you've built.",
       "objective": "Continue",
       "highlight": "loadout.compare",
+      "trail": ["loadout.bag:weapon.rare"],
       "beat": true,
       "trigger": { "type": "ack", "count": 1 }
     },
@@ -482,6 +507,7 @@
       "line": "So move your moveset onto it. Your slots and your socket come along, for a little scrap.",
       "objective": "Transfer your moveset",
       "highlight": "loadout.transfer",
+      "trail": ["loadout.bag:weapon.rare", "loadout.transfer"],
       "trigger": { "type": "transfer", "filter": { "rarity": "rare" }, "count": 1 }
     },
     {
@@ -490,6 +516,7 @@
       "line": "On the Temper bench you can hone a line: it rolls its value again within its band.",
       "objective": "Hone a line",
       "highlight": "temper.hone",
+      "trail": ["temper.hone", "temper.line", "temper.go"],
       "trigger": { "type": "hone", "count": 1 }
     },
     {
@@ -498,6 +525,7 @@
       "line": "Claim what you finished down there.",
       "objective": "Claim your completed quests",
       "highlight": "quests.claim",
+      "trail": ["quests.done", "quests.claim"],
       "trigger": { "type": "claim", "count": 1 }
     },
     {
