@@ -14,6 +14,7 @@ import {
 } from '../../format';
 import type { HubLink, HubTabProps } from '../types';
 import { ReactionsGrid } from './ReactionsGrid';
+import { HELP_TOPICS, HelpPage, type HelpTopicId } from '../help/help-topics';
 
 type Section = NonNullable<Extract<HubLink, { tab: 'codex' }>['section']>;
 
@@ -41,7 +42,7 @@ const ESSENCE_SOURCE = 'Bosses drop essences; salvaging a legendary extracts its
 
 /**
  * The Codex tab: the sections (Legendaries n/12, Reactions n/15, Patterns n/13,
- * Essences n/12, Records), the
+ * Essences n/12, Records, and Help: How to delve, a card a topic), the
  * section's cards, and the card hovered or focused in detail (the section's
  * first until one is). `{ tab: 'codex', section }` links open a section.
  */
@@ -85,6 +86,7 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
   const legendary = legendaries.find((l) => l.id === active) ?? legendaries[0];
   const reaction = reactions.find((r) => r.id === active) ?? reactions[0];
   const base = bases.find((b) => b.id === active) ?? bases[0];
+  const topic: HelpTopicId = HELP_TOPICS.find((t) => t.id === active)?.id ?? 'controls';
 
   return (
     <div
@@ -129,10 +131,11 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
                 testId: 'codex-section-essences',
               },
               { id: 'records', label: 'Records', testId: 'codex-section-records' },
+              { id: 'help', label: 'Help', testId: 'codex-section-help' },
             ]}
           />
         </div>
-        {section !== 'records' && (
+        {section !== 'records' && section !== 'help' && (
           <Bar kind="progress" value={progress[section][0]} max={progress[section][1]} />
         )}
       </Panel>
@@ -266,6 +269,25 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
             ))}
           </section>
         )}
+        {section === 'help' && (
+          <section className="flex flex-col gap-4" aria-label="Help">
+            <span className="k-section">How to delve</span>
+            <div className="grid grid-cols-2 gap-3">
+              {HELP_TOPICS.map((t) => (
+                <EntryCard
+                  key={t.id}
+                  active={topic === t.id}
+                  onActive={() => setActive(t.id)}
+                  icon={<Glyph id="journal" size={40} />}
+                  name={t.title}
+                  color="var(--k-text)"
+                  caption="Help"
+                  testId={`help-card-${t.id}`}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </Panel>
 
       <Panel aria-label="Detail" testId="codex-detail">
@@ -287,6 +309,11 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
             seen={essencesSeen.includes(legendary.id)}
             held={essencesHeld[legendary.id] ?? 0}
           />
+        )}
+        {section === 'help' && (
+          <div className="k-scroll h-full min-h-0" data-pad-scroll>
+            <HelpPage topic={topic} />
+          </div>
         )}
         {section === 'records' && (
           <div className="flex flex-col gap-3">

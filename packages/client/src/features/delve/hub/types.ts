@@ -27,7 +27,7 @@ export type HubLink =
   | { tab: 'forge'; uid?: string; bench?: ForgeBenchId }
   | {
       tab: 'codex';
-      section?: 'legendaries' | 'reactions' | 'patterns' | 'essences' | 'records';
+      section?: 'legendaries' | 'reactions' | 'patterns' | 'essences' | 'records' | 'help';
     }
   | { tab: 'quests'; questId?: string };
 
