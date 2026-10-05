@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive, toRoad } from './fixtures/delve';
+import {
+  ARENA_READY,
+  FLOOR_CLEAR,
+  seedProfile,
+  startDive,
+  toRoad,
+  useFullHud,
+} from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
   // A floor's clear may take most of the default two minutes under load.
@@ -73,6 +80,7 @@ test.describe('Delve loot loop', () => {
     // Only elites and bosses drop gear: seed 11's first floor, played by the bot to the exit,
     // drops gear at every steady step (pinned in the engine's delve-banking test).
     await seedProfile(page, 11);
+    await useFullHud(page);
     await page.goto('/delve');
     await startDive(page);
 
@@ -159,7 +167,7 @@ test.describe('Delve loot loop', () => {
     await list.locator('[data-door]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
-    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored');
+    await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
   });
 
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
@@ -175,15 +183,14 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('dive-again').click();
     await expect(summary).toBeHidden();
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
-    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored', {
-      timeout: ARENA_READY,
-    });
+    await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
   });
 
   test("D11: materials ride the floor's haul, bank at the stop, and an abandon loses a share", async ({
     page,
   }) => {
     await seedProfile(page);
+    await useFullHud(page);
     await page.goto('/delve');
     await startDive(page);
 

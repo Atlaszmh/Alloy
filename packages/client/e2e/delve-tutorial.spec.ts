@@ -146,7 +146,7 @@ test.describe('Delve guided start', () => {
           // One strip, the stop's own, in its header row; the dive's HUD is not drawn under it.
           await expect(panel).toHaveCount(1);
           await expect(door.getByTestId('tutorial-panel')).toHaveAttribute('data-place', 'stop');
-          await expect(page.getByTestId('purse-bar')).toBeHidden();
+          await expect(page.getByTestId('dive-hud')).toBeHidden();
           await expect(door.getByTestId('roads-held')).toBeVisible();
           await expect(door.getByRole('button', { name: 'Skip power-up' })).toBeDisabled();
           await expect(roads).toHaveCount(0);

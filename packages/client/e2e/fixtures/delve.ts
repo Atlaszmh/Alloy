@@ -58,6 +58,11 @@ export async function seedProfile(
   );
 }
 
+/** The dive's full HUD (the purse bar, the floor column and the Found log), for a test that reads it. Call after `seedProfile`. */
+export async function useFullHud(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('alloy:delve:hud', 'full'));
+}
+
 /** From the Anvil: the footer's Delve opens the Depart sheet, whose Delve starts (or resumes) the dive. */
 export async function startDive(page: Page): Promise<void> {
   await page.getByTestId('depart-button').click();
