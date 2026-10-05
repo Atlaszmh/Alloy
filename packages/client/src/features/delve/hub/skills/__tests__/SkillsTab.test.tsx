@@ -66,7 +66,7 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
   it("draws its prompts in the hub's footer", () => {
     renderSkills();
     const bar = screen.getByTestId('hub-footer');
-    for (const label of ['Select move', 'Reorder', 'Remove', 'Next skill', 'Apply'])
+    for (const label of ['Edit move', 'Reorder', 'Remove', 'Next skill', 'Apply'])
       expect(bar).toHaveTextContent(label);
   });
 
@@ -85,7 +85,8 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
     press('BracketLeft');
     expect(screen.getByTestId('chain-skill-basic')).toHaveAttribute('aria-selected', 'true');
     press('BracketRight');
-    fireEvent.click(screen.getByTestId('move-3'));
+    // Focus selects a card (a click opens its editor, whose scope would take the keys).
+    act(() => screen.getByTestId('move-3').focus());
     press('ArrowLeft', { altKey: true });
     expect(summary()).toHaveTextContent(kinds('light', 'medium', 'heavy', 'medium'));
     press('Delete');

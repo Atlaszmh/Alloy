@@ -5,7 +5,7 @@ import { formatNumber } from '../../../format';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
-import { renderSkills } from './harness';
+import { edit, renderSkills, valuesOf } from './harness';
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
@@ -177,10 +177,7 @@ describe('the Mana view (the Anvil, Skills tab)', () => {
   it('the element picker offers only the pair', () => {
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
     renderSkills();
-    expect(screen.getByTestId('element-fire')).toBeInTheDocument();
-    expect(screen.getByTestId('element-storm')).toBeInTheDocument();
-    expect(screen.queryByTestId('element-frost')).toBeNull();
-    expect(screen.getByTestId('infusion-storm')).toBeInTheDocument();
-    expect(screen.queryByTestId('infusion-nature')).toBeNull();
+    edit(0);
+    expect(valuesOf('move-elements')).toEqual(['Fire', 'Storm', 'Fire + Storm', 'Storm + Fire']);
   });
 });

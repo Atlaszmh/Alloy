@@ -45,7 +45,11 @@ describe('the skill strip', () => {
     const list = within(strip).getByRole('tablist');
     expect(list).toHaveAttribute('data-pad-tabs', 'sub');
     expect(list).toHaveAttribute('data-pad-skip');
-    expect(within(list).getAllByRole('tab').map((t) => t.dataset.testid)).toEqual([
+    expect(
+      within(list)
+        .getAllByRole('tab')
+        .map((t) => t.dataset.testid),
+    ).toEqual([
       'chain-skill-basic',
       'chain-skill-primary',
       'chain-skill-defensive',
@@ -64,9 +68,7 @@ describe('the skill strip', () => {
       expect(tab(s)).toBeEnabled();
       fireEvent.click(tab(s));
       expect(tab(s)).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
-        carriedByText(registry, s),
-      );
+      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(carriedByText(registry, s));
     }
   });
 

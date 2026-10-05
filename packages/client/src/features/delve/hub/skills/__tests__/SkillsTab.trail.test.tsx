@@ -4,7 +4,7 @@ import { defaultMoveset } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
-import { renderSkills } from './harness';
+import { edit, renderSkills, stepTo } from './harness';
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
@@ -43,7 +43,7 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     lesson();
   });
 
-  it("the lane: the first and last cards are keyed, Add slot is done at the lesson's moves, the first move's sockets once it has one", () => {
+  it("the lane: the first and last cards are keyed, Add slot is done at the lesson's moves, the first move's Open a socket row until it has one", () => {
     renderSkills();
     expect(screen.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('move-0')).toHaveAttribute('data-tutorial', 'skills.card:first');
@@ -54,11 +54,15 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     expect(done('skills.addSlot')).toBe('true');
     expect(screen.getByTestId('move-1')).not.toHaveAttribute('data-tutorial');
     expect(screen.getByTestId('move-2')).toHaveAttribute('data-tutorial', 'skills.card:last');
-    // The first move stays selected: its sockets show "+ socket", and are done once one is open.
-    expect(target('skills.socket')).toBe(screen.getByTestId('sockets-0'));
+    // The first move's editor: its "Open a socket" row, done once one is open.
+    expect(target('skills.socket')).toBeNull();
+    edit(0);
+    expect(target('skills.socket')).toBe(screen.getByTestId('socket-open'));
     expect(done('skills.socket')).toBe('false');
-    fireEvent.click(within(screen.getByTestId('sockets-0')).getByTestId('socket-open'));
-    expect(done('skills.socket')).toBe('true');
+    fireEvent.click(screen.getByTestId('socket-open'));
+    // At the uncommon sword's cap the row goes; the socket's rune row takes the trail on.
+    expect(target('skills.socket')).toBeNull();
+    expect(target('skills.rune')).toBe(screen.getByTestId('inspect-socket-0'));
     // Another skill's cards and Add slot are no targets.
     fireEvent.click(screen.getByTestId('chain-skill-basic'));
     expect(target('skills.card:first')).toBeNull();
@@ -69,14 +73,16 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     renderSkills();
     // Move 1 of 2 is selected: its elements are not the lesson's.
     expect(target('skills.elements')).toBeNull();
-    fireEvent.click(screen.getByTestId('move-1'));
+    edit(1);
+    expect(target('skills.elements')).toBe(screen.getByTestId('move-elements'));
     expect(done('skills.elements')).toBe('false');
-    fireEvent.click(screen.getByTestId('element-frost'));
+    stepTo('move-elements', 'Frost');
     expect(done('skills.elements')).toBe('true');
     // The first move's socket row, once it has a socket.
-    fireEvent.click(screen.getByTestId('move-0'));
+    edit(0);
+    expect(target('skills.elements')).toBeNull();
     expect(target('skills.rune')).toBeNull();
-    fireEvent.click(within(screen.getByTestId('sockets-0')).getByTestId('socket-open'));
+    fireEvent.click(screen.getByTestId('socket-open'));
     expect(target('skills.rune')).toBe(screen.getByTestId('inspect-socket-0'));
     expect(done('skills.rune')).toBe('false');
     // Its picker, a scope of its own, carries the same target on its list of runes.
@@ -94,12 +100,12 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
   it('a card is done as a way once its move holds what selecting it is for: the last the secondary, the first a rune', () => {
     renderSkills();
     expect(done('skills.card:last')).toBe('false');
-    fireEvent.click(screen.getByTestId('move-1'));
-    fireEvent.click(screen.getByTestId('element-frost'));
+    edit(1);
+    stepTo('move-elements', 'Frost');
     expect(done('skills.card:last')).toBe('true');
     expect(done('skills.card:first')).toBe('false');
-    fireEvent.click(screen.getByTestId('move-0'));
-    fireEvent.click(within(screen.getByTestId('sockets-0')).getByTestId('socket-open'));
+    edit(0);
+    fireEvent.click(screen.getByTestId('socket-open'));
     // An open, empty socket is not yet what the card is for.
     expect(done('skills.card:first')).toBe('false');
     fireEvent.click(screen.getByTestId('inspect-socket-0'));

@@ -104,7 +104,11 @@ describe('useChainEditor', () => {
   it("dps is the chain's damage over its cycle's seconds, and dpsWith the same with the chosen move replaced", () => {
     const { result } = setup();
     const m = result.current;
-    const cycle = chainCycle(registry, stats, resolveChain(registry, stats, 'primary', chains.primary));
+    const cycle = chainCycle(
+      registry,
+      stats,
+      resolveChain(registry, stats, 'primary', chains.primary),
+    );
     expect(m.dps).toBeCloseTo(cycle.damage / cycle.seconds);
     const heavy = { ...(m.move as Move), kind: 'heavy' as const };
     const next = chainCycle(
@@ -125,5 +129,4 @@ describe('useChainEditor', () => {
     expect(result.current.dps).toBeNull();
     expect(result.current.dpsWith(result.current.move as Move)).toBeNull();
   });
-
 });
