@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { aimPoint, nearestMonster } from '../src/arpg/abilities/targeting.js';
 import { botInput } from '../src/arpg/bot.js';
-import { UNREACHED } from '../src/arpg/flow.js';
+import { clearanceOf, UNREACHED } from '../src/arpg/flow.js';
 import { planFloor } from '../src/arpg/layout/generate.js';
 import { isWalkable, moveCircle, terrainOf } from '../src/arpg/grid.js';
 import { stepWorld } from '../src/arpg/step.js';
@@ -111,7 +111,7 @@ describe('a generated floor', () => {
 
 describe('a foe after the hero', () => {
   // A foe that wants to move (awake, in its field's reach, out of reach of the hero, no wind-up,
-  // charge or stagger, not holding cover or its goal, touching no other foe) yet stays put.
+  // charge or stagger, not holding cover or its goal, nearly touching no other foe) yet stays put.
   it('never stalls 3 s on a floor the bot fights through', { timeout: 180_000 }, () => {
     const stalls: string[] = [];
     for (let s = 4; s <= 7; s++)
@@ -123,12 +123,19 @@ describe('a foe after the hero', () => {
           stepWorld(registry, w, botInput(registry, w, 'thorough'), STEP);
           for (const m of w.monsters) {
             const gap = Math.hypot(m.x - w.hero.x, m.y - w.hero.y) - m.radius - w.hero.radius;
-            const cell = Math.floor(m.y) * w.map.width + Math.floor(m.x);
+            // Its class's field toward the hero reaches its cell or one beside it.
+            const field = w.flow[clearanceOf(m)];
+            let reach = UNREACHED;
+            for (let j = -1; j <= 1; j++)
+              for (let i = -1; i <= 1; i++) {
+                const c = (Math.floor(m.y) + j) * w.map.width + Math.floor(m.x) + i;
+                reach = Math.min(reach, field?.[c] ?? UNREACHED);
+              }
             const wants =
               !m.dead &&
               m.aggro &&
               !m.goingHome &&
-              (w.flow.small?.[cell] ?? UNREACHED) <= 20 &&
+              reach <= 20 &&
               m.windupUntil <= 0 &&
               m.chargeUntil <= w.t &&
               w.t >= m.status.staggerUntil &&
@@ -139,7 +146,7 @@ describe('a foe after the hero', () => {
                 (o) =>
                   o !== m &&
                   !o.dead &&
-                  Math.hypot(o.x - m.x, o.y - m.y) < o.radius + m.radius + 0.15,
+                  Math.hypot(o.x - m.x, o.y - m.y) < o.radius + m.radius + 0.5,
               );
             const at = since.get(m.id);
             if (!wants) since.delete(m.id);

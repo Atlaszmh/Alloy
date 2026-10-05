@@ -154,6 +154,9 @@ export function downhill(map: FloorMap, field: Uint16Array, p: Vec, target: Vec)
     best = v;
     to = { x: cx + dx + 0.5, y: cy + dy + 0.5 };
   }
+  // A cell whose open square holds the target's (1, nothing lower beside it): straight there,
+  // inside that square.
+  if (!to && here === 1) return dirTo(p.x, p.y, target.x, target.y);
   return to && dirTo(p.x, p.y, to.x, to.y);
 }
 
