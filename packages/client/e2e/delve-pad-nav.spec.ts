@@ -20,7 +20,7 @@ import { SAVE_KEY } from './fixtures/delve';
  * three walks with a fake pad through the screens that felt worst.
  */
 
-const BUTTON = { a: 0, b: 1, x: 2, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, up: 12, down: 13, left: 14, right: 15 } as const;
+const BUTTON = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, up: 12, down: 13, left: 14, right: 15 } as const;
 type Dir = 'up' | 'down' | 'left' | 'right';
 
 /**
@@ -117,7 +117,8 @@ function bagOf(registry: DataRegistry): GearItem[] {
 async function seed(page: Page, atStop = false): Promise<void> {
   const registry = createDefaultRegistry();
   const sim = economySim(registry, 1, 3).profile;
-  let profile = { ...sim, bag: [...sim.bag, ...bagOf(registry)] };
+  // Mana Dust for PN07's element edit (three dives in, an edit is no longer free).
+  let profile = { ...sim, manaDust: sim.manaDust + 500, bag: [...sim.bag, ...bagOf(registry)] };
   if (atStop) {
     profile = startDive(registry, profile, 1);
     profile = completeFloor(registry, profile, beginFloor(registry, profile)).profile;
@@ -575,7 +576,7 @@ test.describe('Delve pad navigation', () => {
     await expect(stop.getByTestId('stop-powerup')).toBeVisible();
   });
 
-  test('PN07: the press budgets: equip an upgrade, salvage an item and forge an item, each in six D-pad presses or fewer', async ({ page }) => {
+  test("PN07: the press budgets: equip an upgrade, salvage an item, forge an item and change a move's element and apply, each in six D-pad presses or fewer", async ({ page }) => {
     test.setTimeout(120_000);
     await seed(page);
     await page.goto('/delve');
@@ -636,5 +637,32 @@ test.describe('Delve pad navigation', () => {
     await page.getByTestId('forge-button').focus();
     await tap(page, BUTTON.a);
     await expect.poll(async () => (await save()).bag.length).toBe(bag + 1);
+
+    // 4. Change a move's element and apply: LB from the Forge to Skills (the chosen card leads),
+    //    A on it, down to Elements, one step, then Y and A.
+    await tap(page, BUTTON.lb);
+    await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
+    const card = '[data-testid^="move-"][data-pad-first]';
+    const toCard = await presses(page, card);
+    await page.locator(card).focus();
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await expect(page.getByTestId('move-kind')).toBeFocused(); // the editor's first row
+    const toElements = await presses(page, '[data-testid="move-elements"]');
+    const els = page.getByTestId('move-elements');
+    await els.focus();
+    const before = await els.getAttribute('aria-valuetext');
+    const last = (await els.getAttribute('aria-valuenow')) === (await els.getAttribute('aria-valuemax'));
+    await tap(page, last ? BUTTON.left : BUTTON.right);
+    await expect(els).not.toHaveAttribute('aria-valuetext', before!);
+    expect(Math.min(toCard, toElements), 'the card and Elements are reachable').toBeGreaterThanOrEqual(0);
+    const element = toCard + toElements + 1;
+    if (process.env.NAV_REPORT) console.log(`PN07 (${test.info().project.name}): element ${element} (${toCard} + ${toElements} + 1)`);
+    expect(element, `change an element: ${toCard} to the card, ${toElements} to Elements, 1 step`).toBeLessThanOrEqual(BUDGET);
+    const was = JSON.stringify((await save()).equipped.weapon.moveset.chains.primary);
+    await tap(page, BUTTON.y);
+    await expect(page.getByTestId('apply-sheet-confirm')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => JSON.stringify((await save()).equipped.weapon.moveset.chains.primary)).not.toBe(was);
   });
 });
