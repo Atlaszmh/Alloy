@@ -6,6 +6,8 @@ import type {
   TutorialStep,
   TutorialWhere,
 } from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
+import { getDelveRegistry } from '../registry';
 
 /**
  * The guided start as the client reads it (see the tutorial spec): the engine runs the script;
@@ -28,6 +30,15 @@ export function stepIn(
   if (!state) return undefined;
   const step = registry.getTutorialData().steps.find((s) => s.id === state.step);
   return step && where.includes(step.where) ? step : undefined;
+}
+
+/** The save's current guided step's data, or undefined (none running, or unknown). */
+export function useTutorialStep(): TutorialStep | undefined {
+  const id = useDelveStore((s) => s.profile.tutorial?.step);
+  if (id === undefined) return undefined;
+  return getDelveRegistry()
+    .getTutorialData()
+    .steps.find((s) => s.id === id);
 }
 
 /**

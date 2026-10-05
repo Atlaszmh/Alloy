@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { TUTORIAL_TARGETS, type TutorialTarget } from '@alloy/engine';
 import { getDelveRegistry } from '../../registry';
-import { WAY_TO } from '../TutorialHighlight';
+import { WAY_TO } from '../marked';
 import { HubHeader } from '../../hub/HubHeader';
 import { Tabs } from '../../kit';
 

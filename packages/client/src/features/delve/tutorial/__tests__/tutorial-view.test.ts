@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 import type { ArpgEvent } from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../../registry';
-import { SHOWN_AT, stepIn, trainingEvents } from '../tutorial-view';
+import { SHOWN_AT, stepIn, trainingEvents, useTutorialStep } from '../tutorial-view';
 import { at, withSteps } from './tutorial-fixture';
 
 const registry = getDelveRegistry();
@@ -43,5 +45,22 @@ describe("the client's reading of the script", () => {
     ]);
     expect(trainingEvents(registry, at('forge'), events)).toEqual([]);
     expect(trainingEvents(registry, null, events)).toEqual([]);
+  });
+
+  it("useTutorialStep is the save's current step's data: none with no tutorial or an unknown step", () => {
+    useDelveStore.getState().resetProfile(1234, 'fire');
+    const on = (step: string | null) =>
+      act(() =>
+        useDelveStore.setState({
+          profile: { ...useDelveStore.getState().profile, tutorial: step ? at(step) : null },
+        }),
+      );
+    const { result } = renderHook(() => useTutorialStep());
+    expect(result.current).toBeUndefined();
+    on('forge');
+    expect(result.current?.id).toBe('forge');
+    expect(result.current?.highlight).toBe('hub.tab.forge');
+    on('gone');
+    expect(result.current).toBeUndefined();
   });
 });
