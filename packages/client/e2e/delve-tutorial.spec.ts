@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { ARENA_READY, SAVE_KEY } from './fixtures/delve';
+import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
  * The guided start (see the tutorial spec): a new save chooses Guided start, the engine bot plays
@@ -9,16 +10,28 @@ import { ARENA_READY, SAVE_KEY } from './fixtures/delve';
  * until its first forge.
  */
 
-/** A fresh save (no profile at all), the bot playing the arena if `bot`. */
+/**
+ * A fresh save (no profile at all), the bot playing the arena if `bot`, with a resting fake pad
+ * (`installPad`): it claims nothing until `tap`.
+ */
 async function fresh(page: Page, bot: boolean): Promise<void> {
+  await installPad(page);
   await page.addInitScript((autopilot) => {
-    // Every objective Hesta's panel shows, in order (a step can pass between two polls).
+    // Every step Hesta's strip shows, in order (a step can pass between two polls): its
+    // `data-step`, the step itself, never the finished objective the strip holds for a moment.
     const seen: string[] = [];
-    (window as unknown as { __objectives: string[] }).__objectives = seen;
+    (window as unknown as { __steps: string[] }).__steps = seen;
     new MutationObserver(() => {
-      const text = document.querySelector('[data-testid="tutorial-objective"]')?.textContent;
-      if (text && seen[seen.length - 1] !== text) seen.push(text);
-    }).observe(document, { subtree: true, childList: true, characterData: true });
+      const id = document
+        .querySelector('[data-testid="tutorial-panel"]')
+        ?.getAttribute('data-step');
+      if (id && seen[seen.length - 1] !== id) seen.push(id);
+    }).observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-step'],
+    });
     if (sessionStorage.getItem('delve-e2e')) return;
     localStorage.clear();
     if (autopilot) localStorage.setItem('alloy:delve:autopilot', '1');
@@ -36,8 +49,8 @@ async function step(page: Page): Promise<string | null> {
   );
 }
 
-const objectives = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __objectives: string[] }).__objectives);
+const steps = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __steps: string[] }).__steps);
 
 /** Claim every completed quest and contract on the Quests tab. */
 async function claimAll(page: Page): Promise<void> {
@@ -78,10 +91,16 @@ test.describe('Delve guided start', () => {
     const panel = page.getByTestId('tutorial-panel');
     const highlight = page.getByTestId('tutorial-highlight');
     await expect(panel.getByTestId('tutorial-line')).toContainText('new hand');
+    // One objective strip: at the Anvil, the row under the header band.
+    await expect(panel).toHaveCount(1);
+    await expect(panel).toHaveAttribute('data-place', 'anvil');
     await expect(highlight).toBeVisible();
     expect(await step(page)).toBe('begin');
     await page.getByTestId('delve-button').click();
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
+    // In the dive, the one under the top bar.
+    await expect(panel).toHaveAttribute('data-place', 'hud', { timeout: ARENA_READY });
+    await expect(panel).toHaveCount(1);
 
     // Dive 1: the bot fights; the test reads the beats and answers the stops.
     const door = page.getByTestId('door-choice');
@@ -98,14 +117,16 @@ test.describe('Delve guided start', () => {
         stops++;
         // A depth's exit stays held until its floor steps are done: the last objective before
         // the stop is the exit's.
-        const seen = await objectives(page);
-        expect(seen.some((t) => t.startsWith('Take the exit'))).toBe(true);
+        const seen = await steps(page);
+        expect(seen.some((id) => id.startsWith('d1-exit'))).toBe(true);
         if (stops === 1) {
-          expect(seen.findIndex((t) => t === 'Pick up the weapon')).toBeLessThan(
-            seen.findIndex((t) => t.startsWith('Take the exit')),
-          );
+          expect(seen.indexOf('d1-weapon')).toBeLessThan(seen.indexOf('d1-exit'));
           // Stop 1: Equip is required; the roads wait for it.
           expect(await step(page)).toBe('s1-equip');
+          // One strip, the stop's own, in its header row; the dive's HUD is not drawn under it.
+          await expect(panel).toHaveCount(1);
+          await expect(door.getByTestId('tutorial-panel')).toHaveAttribute('data-place', 'stop');
+          await expect(page.getByTestId('purse-bar')).toBeHidden();
           await expect(door.getByTestId('roads-held')).toBeVisible();
           await expect(roads.first()).toBeDisabled();
           await expect(door.getByTestId('extract-button')).toHaveCount(0);
@@ -134,7 +155,13 @@ test.describe('Delve guided start', () => {
         // A reading beat pauses the fight until Continue; the first (mana) points at the vitals.
         beats++;
         await expect(highlight).toBeVisible();
-        await page.getByTestId('tutorial-continue').click();
+        const go = page.getByTestId('tutorial-continue');
+        if (beats === 1) {
+          // By the pad: Continue has the focus (the highlight is on screen), and A presses it.
+          await expect(go).toBeFocused();
+          await tap(page, BUTTON.a);
+          await expect(go).toBeHidden();
+        } else await go.click();
       } else if (await page.getByTestId('tutorial-skip-step').isVisible()) {
         await page.getByTestId('tutorial-skip-step').click();
       }
