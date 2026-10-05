@@ -451,6 +451,40 @@ test.describe('Delve with a controller', () => {
     expect((await save()).bag.map((i: GearItem) => i.uid)).toContain('bag-axe');
   });
 
+  test('G09: X salvages the focused tile at once, B takes it back, and the offer ends after 5 s', async ({
+    page,
+  }) => {
+    await setup(page, false, 1, false, (registry) => [
+      generateItem(
+        registry,
+        { uid: 'bag-helm', ilvl: 3, rarity: 'rare', slot: 'helm', mana: 'fire' },
+        new SeededRNG(7),
+      ),
+    ]);
+    await page.goto('/delve');
+    await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    const save = () => page.evaluate(() => JSON.parse(localStorage.getItem('alloy:delve:v2')!));
+    const undo = page.locator('.k-prompt', { hasText: 'Undo salvage' });
+    await tap(page, BUTTON.down); // the pad takes the input lock
+    await padWalk(page, 'bag-item');
+    // A rare helm is precious: it melts at once all the same.
+    await tap(page, BUTTON.x);
+    await expect.poll(async () => (await save()).bag.length).toBe(0);
+    await expect(undo).toBeVisible();
+    await tap(page, BUTTON.b);
+    await expect
+      .poll(async () => (await save()).bag.map((i: GearItem) => i.uid))
+      .toEqual(['bag-helm']);
+    await expect(undo).toHaveCount(0);
+    // Again; the offer is gone after 5 s.
+    await padWalk(page, 'bag-item');
+    await tap(page, BUTTON.x);
+    await expect.poll(async () => (await save()).bag.length).toBe(0);
+    await expect(undo).toBeVisible();
+    await expect(undo).toHaveCount(0, { timeout: 7_000 });
+    expect((await save()).bag).toHaveLength(0);
+  });
+
   test('G03: RB and LB step through the five Anvil tabs, wrapping round', async ({ page }) => {
     await setup(page, true);
     await page.goto('/delve');
