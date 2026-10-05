@@ -421,6 +421,8 @@ export function DelveRun() {
             dive={dive}
             biome={biome}
             foesLeft={arena.hud?.monstersLeft ?? 0}
+            roomsExplored={arena.hud?.map.floor?.explored}
+            roomsTotal={arena.hud?.map.floor?.total}
             link={pause.link}
             atStop={choosing}
             onResume={resume}

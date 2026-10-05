@@ -427,4 +427,15 @@ describe('DelveRun', () => {
     heldStill(seen.pause);
     heldStill(seen.stop);
   });
+
+  it("passes the pause the floor's rooms from the HUD's map (none on the open room), the same on every tick", () => {
+    renderRun();
+    fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
+    expect(seen.pause.at(-1)).toMatchObject({ roomsExplored: undefined, roomsTotal: undefined });
+    expect(Object.keys(seen.pause.at(-1)!)).toEqual(
+      expect.arrayContaining(['roomsExplored', 'roomsTotal']),
+    );
+    act(() => seen.tick!());
+    heldStill(seen.pause);
+  });
 });
