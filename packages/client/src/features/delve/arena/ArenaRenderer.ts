@@ -247,12 +247,14 @@ export class ArenaRenderer {
     this.entities.sortableChildren = true;
     this.groundFx = new PixelLayer(app.renderer);
     this.airFx = new PixelLayer(app.renderer, true);
+    // The ground marks (telegraphs, zones) and the drops over the creatures: the foliage's
+    // canopy goes between (`loadFloor`), hiding foes in it but never what warns or waits.
     this.root.addChild(
       this.floor,
-      this.groundFx.sprite,
       this.doorGfx,
-      this.dropLayer,
       this.entities,
+      this.groundFx.sprite,
+      this.dropLayer,
       this.airFx.sprite,
     );
     this.hero.addChild(this.heroAura, this.heroBody);
@@ -308,9 +310,8 @@ export class ArenaRenderer {
     this.pixelFloor?.destroy();
     this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
-    // The foliage's canopy, over the creatures (see pixel/pixel-floor.ts).
-    if (this.pixelFloor)
-      this.root.addChildAt(this.pixelFloor.canopy, this.root.getChildIndex(this.entities) + 1);
+    // The foliage's canopy, over the creatures, under the ground marks (see pixel/pixel-floor.ts).
+    this.root.addChildAt(this.pixelFloor.canopy, this.root.getChildIndex(this.entities) + 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
     // A still frame: the new floor's view at once, for the HUD's first snapshot of it.
