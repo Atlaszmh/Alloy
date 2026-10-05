@@ -241,6 +241,40 @@ async function audit(page: Page): Promise<Report> {
   });
 }
 
+/**
+ * The fewest D-pad presses from the focused control to `selector`'s first match: a BFS over the
+ * page's own `nextFocus` with the memory off, as `audit` walks the map (a stepper's left/right
+ * step it, so they are no moves). -1 when the target is not reached.
+ */
+async function presses(page: Page, selector: string): Promise<number> {
+  return page.evaluate(async (sel) => {
+    const nav = await import('/src/features/gamepad/use-gamepad-nav.ts' as string);
+    const target = document.querySelector<HTMLElement>(sel);
+    const start = document.activeElement;
+    if (!target || !(start instanceof HTMLElement)) return -1;
+    const dirs = ['up', 'down', 'left', 'right'] as const;
+    const dist = new Map<HTMLElement, number>([[start, 0]]);
+    const queue = [start];
+    while (queue.length) {
+      const el = queue.shift()!;
+      if (el === target) return dist.get(el)!;
+      for (const d of dirs) {
+        if (el.matches('[data-pad-step]') && (d === 'left' || d === 'right')) continue;
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const to = nav.nextFocus(el, d, { memory: false }) as HTMLElement | null;
+        if (to && !dist.has(to)) {
+          dist.set(to, dist.get(el)! + 1);
+          queue.push(to);
+        }
+      }
+    }
+    return -1;
+  }, selector);
+}
+
+/** The spec's press budget: an everyday task in at most this many D-pad presses, plus its face buttons. */
+const BUDGET = 6;
+
 /** Audit the screen now showing as `name` and hold it to the rules. */
 async function check(page: Page, name: string, min = 2): Promise<void> {
   await page.waitForTimeout(300);
@@ -497,5 +531,68 @@ test.describe('Delve pad navigation', () => {
     await tap(page, BUTTON.b);
     await expect(page.getByTestId('pause-screen')).toHaveCount(0);
     await expect(stop.getByTestId('stop-powerup')).toBeVisible();
+  });
+
+  test('PN07: the press budgets: equip an upgrade, salvage an item and forge an item, each in six D-pad presses or fewer', async ({ page }) => {
+    test.setTimeout(120_000);
+    await seed(page);
+    await page.goto('/delve');
+    const save = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
+    /** The tab's landing: the pad takes the input lock, and the focus is where the tab puts it. */
+    const land = async (selector: string) => {
+      await page.locator(selector).first().focus();
+      await tap(page, BUTTON.up);
+      await page.locator(selector).first().focus();
+    };
+
+    // 1. Equip an upgrade: from the Loadout's landing (the bag's first tile) to the first ▲ that
+    //    isn't a weapon (A on a weapon may ask through the take sheet), then A.
+    await land('[data-testid="bag-item"][data-pad-first]');
+    const up = '[data-testid="bag-item"][data-delta="up"]:not([data-tutorial^="loadout.bag:weapon"])';
+    const equip = await presses(page, up);
+    if (process.env.NAV_REPORT) console.log(`PN07 (${test.info().project.name}): equip ${equip}`);
+    expect(equip, 'equip an upgrade: D-pad presses').toBeGreaterThanOrEqual(0);
+    expect(equip).toBeLessThanOrEqual(BUDGET);
+    const uid = await page.locator(up).first().getAttribute('data-uid');
+    await page.locator(up).first().focus();
+    await tap(page, BUTTON.a);
+    await expect
+      .poll(async () => Object.values((await save()).equipped).some((i) => (i as GearItem | undefined)?.uid === uid))
+      .toBe(true);
+
+    // 2. Salvage an item: RT to the Weapons filter, then to the common weapon `bagOf` seeded, X.
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('bag-filter-weapons')).toHaveAttribute('aria-selected', 'true');
+    const junk = '[data-uid="audit-0"]';
+    const salvage = await presses(page, junk);
+    if (process.env.NAV_REPORT) console.log(`PN07 (${test.info().project.name}): salvage ${salvage}`);
+    expect(salvage, 'salvage an item: D-pad presses').toBeGreaterThanOrEqual(0);
+    expect(salvage).toBeLessThanOrEqual(BUDGET);
+    await page.locator(junk).focus();
+    await tap(page, BUTTON.x);
+    await expect.poll(async () => (await save()).bag.some((i: GearItem) => i.uid === 'audit-0')).toBe(false);
+    // And B takes it back.
+    await tap(page, BUTTON.b);
+    await expect.poll(async () => (await save()).bag.some((i: GearItem) => i.uid === 'audit-0')).toBe(true);
+
+    // 3. Forge an item: RB twice to the Forge, A on the pattern it lands on, a flux if one is held,
+    //    then Forge.
+    await tap(page, BUTTON.rb);
+    await tap(page, BUTTON.rb);
+    await expect(page.getByTestId('bench-forge')).toHaveAttribute('aria-selected', 'true');
+    const pattern = await presses(page, '[data-testid^="pattern-"][data-pad-first]');
+    await page.locator('[data-testid^="pattern-"][data-pad-first]').focus();
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('forge-flux')).toBeFocused();
+    const flux = (await page.getByTestId('forge-flux').getAttribute('aria-valuemax')) !== '0' ? 1 : 0;
+    if (flux) await tap(page, BUTTON.right);
+    const toForge = await presses(page, '[data-testid="forge-button"]');
+    const forge = pattern + flux + toForge;
+    if (process.env.NAV_REPORT) console.log(`PN07 (${test.info().project.name}): forge ${forge} (${pattern} + ${flux} + ${toForge})`);
+    expect(forge, `forge an item: ${pattern} to the pattern, ${flux} for the flux, ${toForge} to Forge`).toBeLessThanOrEqual(BUDGET);
+    const bag = (await save()).bag.length;
+    await page.getByTestId('forge-button').focus();
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => (await save()).bag.length).toBe(bag + 1);
   });
 });
