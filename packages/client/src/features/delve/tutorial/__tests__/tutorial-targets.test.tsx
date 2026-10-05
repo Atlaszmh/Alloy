@@ -39,17 +39,21 @@ describe("the guided start's targets", () => {
   it("every step's target is on the screen its step shows on, or a way there is (a hub tab, a view)", () => {
     const screenOf = { floor: 'hud.', stop: 'stop.', anvil: 'hub.', training: 'hub.' } as const;
     /** The target, then each way to it (`WAY_TO`), to the one on the screen itself. */
-    const ways = (t: TutorialTarget): string[] => [t, ...(WAY_TO[t] ? ways(WAY_TO[t]!) : [])];
+    const ways = (t: string): string[] => {
+      const next = WAY_TO[t.split(':')[0] as keyof typeof WAY_TO];
+      return [t, ...(next ? ways(next) : [])];
+    };
+    // A step's highlight, and every entry of its trail.
     const bad = getDelveRegistry()
       .getTutorialData()
-      .steps.filter((s) => s.highlight)
-      .filter((s) => !ways(s.highlight!).at(-1)!.startsWith(screenOf[s.where]))
-      .map((s) => `${s.id}: ${ways(s.highlight!).join(' < ')}`);
+      .steps.flatMap((s) =>
+        [...(s.highlight ? [s.highlight] : []), ...(s.trail ?? [])]
+          .filter((t) => !ways(t).at(-1)!.startsWith(screenOf[s.where]))
+          .map((t) => `${s.id}: ${ways(t).join(' < ')}`),
+      );
     expect(bad).toEqual([]);
     // Every target behind the hub's tabs has its way to one.
-    const behind = TUTORIAL_TARGETS.filter(
-      (t) => !/^(hud|stop|hub)\./.test(t) && !PENDING.includes(t),
-    );
+    const behind = TUTORIAL_TARGETS.filter((t) => !/^(hud|stop|hub)\./.test(t));
     expect(behind.filter((t) => !ways(t).at(-1)!.startsWith('hub.tab.'))).toEqual([]);
   });
 
