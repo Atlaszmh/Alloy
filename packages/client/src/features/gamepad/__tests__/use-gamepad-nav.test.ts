@@ -8,6 +8,7 @@ import {
   keepFocus,
   moveFocus,
   nextFocus,
+  STICK_SCROLL_PX,
   useGamepadNav,
 } from '../use-gamepad-nav';
 import type { GamepadLike } from '../gamepad';
@@ -160,8 +161,7 @@ describe('moveFocus in a wrapping list', () => {
     list.setAttribute('data-pad-wrap', '');
     const rows = column(list, 2);
     const below = document.body.appendChild(document.createElement('button'));
-    below.getBoundingClientRect = () =>
-      DOMRect.fromRect({ x: 0, y: 300, width: 200, height: 40 });
+    below.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 300, width: 200, height: 40 });
     rows[1].focus();
     moveFocus('down');
     expect(document.activeElement).toBe(below);
@@ -220,7 +220,7 @@ describe('candidates: a control scrolled out of its list', () => {
     expect(candidates(null)).toEqual([shown, outside]);
   });
 
-  it('is never the D-pad\'s pick from outside, and is the next row from inside', () => {
+  it("is never the D-pad's pick from outside, and is the next row from inside", () => {
     const { shown, hidden, outside } = scene();
     outside.focus();
     expect(isCandidate(hidden)).toBe(false);
@@ -491,19 +491,32 @@ describe('keepFocus: the pad never loses the focus', () => {
 });
 
 /** The standard mapping's button indices. */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, menu: 9, up: 12, right: 15 } as const;
+const PAD = {
+  a: 0,
+  b: 1,
+  x: 2,
+  y: 3,
+  lb: 4,
+  rb: 5,
+  lt: 6,
+  rt: 7,
+  menu: 9,
+  up: 12,
+  right: 15,
+} as const;
 
 describe('the pad outside combat: scopes, tab lists and prompts', () => {
   const frames = new Map<number, FrameRequestCallback>();
   let lastFrame = 0;
   const realGetGamepads = Object.getOwnPropertyDescriptor(navigator, 'getGamepads');
   let down: number[] = [];
+  let axes = [0, 0, 0, 0];
   let now = 0;
   let stop = () => {};
   const pad = (): GamepadLike => ({
     connected: true,
     mapping: 'standard',
-    axes: [0, 0, 0, 0],
+    axes: [...axes],
     buttons: Array.from({ length: 17 }, (_, i) => ({
       pressed: down.includes(i),
       value: down.includes(i) ? 1 : 0,
@@ -546,6 +559,7 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
   beforeEach(() => {
     clicks.length = 0;
     down = [];
+    axes = [0, 0, 0, 0];
     frames.clear();
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       frames.set(++lastFrame, cb);
@@ -564,6 +578,28 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     vi.unstubAllGlobals();
     document.body.replaceChildren();
     setDevice('keyboard');
+  });
+
+  it("the right stick scrolls the topmost scope's [data-pad-scroll] pane, by its tilt and the time, never the focus", () => {
+    const button = el('button');
+    button.focus();
+    const page = el('div', { 'data-pad-scroll': '' });
+    const sheet = el('div', { 'data-pad-scope': '' });
+    const pane = el('div', { 'data-pad-scroll': '' }, sheet);
+    const by: number[] = [];
+    pane.scrollBy = ((o: ScrollToOptions) => by.push(o.top ?? 0)) as typeof pane.scrollBy;
+    page.scrollBy = (() => by.push(NaN)) as typeof page.scrollBy;
+    axes = [0, 0, 0, 1]; // full tilt down
+    tick();
+    tick();
+    axes = [0, 0, 0, -1];
+    tick();
+    axes = [0, 0, 0, 0];
+    tick();
+    // 16 ms a frame at STICK_SCROLL_PX a second, down twice then up once; only the sheet's pane.
+    const step = (STICK_SCROLL_PX * 16) / 1000;
+    expect(by.map((v) => Math.round(v))).toEqual([step, step, -step].map(Math.round));
+    expect(document.activeElement).toBe(button);
   });
 
   it("B presses the topmost scope's back, never the page's; Menu its menu, else its back", () => {
@@ -617,7 +653,7 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     expect(top()).toBe('forge');
   });
 
-  it('a skipped tab list (the kit\'s) puts the focus in the content, or leaves it where it survived', () => {
+  it("a skipped tab list (the kit's) puts the focus in the content, or leaves it where it survived", () => {
     const list = el('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' });
     const main = el('div');
     const foot = el('div', { 'data-screen-section': 'screen-foot' });
@@ -626,7 +662,8 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     const tab = (name: string, selected: boolean) => {
       const t = el('button', { role: 'tab', 'aria-selected': String(selected) }, list);
       t.addEventListener('click', () => {
-        for (const o of list.querySelectorAll('[role="tab"]')) o.setAttribute('aria-selected', 'false');
+        for (const o of list.querySelectorAll('[role="tab"]'))
+          o.setAttribute('aria-selected', 'false');
         t.setAttribute('aria-selected', 'true');
         main.replaceChildren();
         el('button', { 'data-name': `${name}-first` }, main, 0, 20);
@@ -662,7 +699,8 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     const tab = (selected: boolean, fill: () => void) => {
       const t = el('button', { role: 'tab', 'aria-selected': String(selected) }, list);
       t.addEventListener('click', () => {
-        for (const o of list.querySelectorAll('[role="tab"]')) o.setAttribute('aria-selected', 'false');
+        for (const o of list.querySelectorAll('[role="tab"]'))
+          o.setAttribute('aria-selected', 'false');
         t.setAttribute('aria-selected', 'true');
         main.replaceChildren();
         fill();
@@ -704,7 +742,12 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
       return h(
         Fragment,
         null,
-        h('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' }, tabFor('a'), tabFor('b')),
+        h(
+          'div',
+          { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' },
+          tabFor('a'),
+          tabFor('b'),
+        ),
         ...(tab === 'a'
           ? [h('button', { key: 'a', 'data-name': 'a-only', 'data-top': '40' })]
           : [

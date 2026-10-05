@@ -24,8 +24,9 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * pad has the input lock the focus never gets lost (`keepFocus`, which starts
  * a scope on its `[data-pad-first]`). `[data-pad-skip]` controls are never
  * D-pad targets. While a card is carried (`captureNav`) the D-pad and A/B/X go
- * to it. It also lets the keys, the mouse and touch claim the lock
- * (`claimDevices`).
+ * to it. The right stick scrolls the topmost scope's `[data-pad-scroll]` pane
+ * (`STICK_SCROLL_PX`); it never moves the focus. It also lets the keys, the
+ * mouse and touch claim the lock (`claimDevices`).
  */
 
 /** What the pad's focus can land on. */
@@ -39,6 +40,9 @@ function visible(el: HTMLElement): boolean {
   const r = el.getBoundingClientRect();
   return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 }
+
+/** How far the right stick scrolls a detail pane at full tilt (px a second, before the UI's zoom). */
+export const STICK_SCROLL_PX = 1400;
 
 /** How far (px) the mouse must travel to claim the input lock: a bump on the desk doesn't. */
 export const MOUSE_CLAIM_PX = 16;
@@ -362,6 +366,7 @@ export function useGamepadNav(): void {
     let heldDir: NavDir | null = null;
     let repeatAt = 0;
     let stickArmed = true;
+    let last = 0;
     const stop = startGamepad((state, pressed, now) => {
       // A carried card (Skills' reorder) hears the D-pad and A/B/X instead of the focus.
       const carry = navCapture();
@@ -404,6 +409,11 @@ export function useGamepadNav(): void {
       if (left('lt')) stepTabs('sub', -1);
       if (left('rt')) stepTabs('sub', 1);
       if (left('menu')) (scopedLast('[data-pad-menu]') ?? scopedLast('[data-pad-back]'))?.click();
+      // The right stick scrolls the topmost scope's detail pane (the grammar: never the focus).
+      const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
+      last = now;
+      if (state.right.y !== 0 && dt > 0)
+        scopedLast('[data-pad-scroll]')?.scrollBy?.({ top: state.right.y * STICK_SCROLL_PX * dt });
       keepFocus();
     });
     return () => {
