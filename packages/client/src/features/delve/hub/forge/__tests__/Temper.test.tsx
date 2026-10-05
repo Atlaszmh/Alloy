@@ -15,6 +15,7 @@ import {
   type GearItem,
   type ManaType,
 } from '@alloy/engine';
+import { FOCUSABLE } from '@/features/gamepad/use-gamepad-nav';
 import { Temper } from '../Temper';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
@@ -63,15 +64,67 @@ describe('Temper', () => {
     vi.mocked(awakenPrice).mockReset();
   });
 
+  it("lists the six operations as rows, each with its price; one it can't do is off and says why on its row", () => {
+    const lines = [{ stat: 'armor' as const, value: 5, roll: 0.5 }];
+    bench(helm('fire', lines), { scrap: 0, manaDust: 0 });
+    const rows = screen.getAllByTestId(/^temper-op-/).map((r) => r.dataset.testid);
+    expect(rows).toEqual([
+      'temper-op-upgrade',
+      'temper-op-reforge',
+      'temper-op-hone',
+      'temper-op-imprint',
+      'temper-op-reattune',
+      'temper-op-awaken',
+    ]);
+    const item = store().profile.bag[0];
+    const op = (id: string) => screen.getByTestId(`temper-op-${id}`);
+    const why = (id: string) => document.getElementById(op(id).getAttribute('aria-describedby')!);
+    expect(op('upgrade')).toHaveTextContent(`${upgradeCost(registry, item)} scrap`);
+    expect(op('upgrade')).toBeDisabled();
+    expect(why('upgrade')).toHaveTextContent(`Needs ${upgradeCost(registry, item)} scrap`);
+    expect(op('hone')).toHaveTextContent(`${honeCost(registry, item)} scrap`);
+    expect(op('reforge')).toHaveTextContent(`${reforgeCost(registry, item)} scrap`);
+    // No shard held fits a helm line: Imprint says so.
+    expect(why('imprint')).toHaveTextContent('No shard you hold fits a helm');
+    // A pair of one element: nothing to re-attune to.
+    expect(why('reattune')).toHaveTextContent('Bind a second element first');
+    // Not a rare weapon.
+    expect(why('awaken')).toHaveTextContent('Only a rare weapon awakens');
+    // The reason sits in the row itself, beside its button.
+    expect(op('awaken').closest('[data-temper-row]')!.contains(why('awaken'))).toBe(true);
+  });
+
+  it("an item with no lines can't Reforge, Hone or Imprint: each row says so", () => {
+    bench(helm('fire'), { scrap: 1000 });
+    for (const id of ['reforge', 'hone', 'imprint']) {
+      const row = screen.getByTestId(`temper-op-${id}`);
+      expect(row).toBeDisabled();
+      expect(document.getElementById(row.getAttribute('aria-describedby')!)).toHaveTextContent(
+        'No lines to work',
+      );
+    }
+  });
+
+  it("the item's detail sits beside the list, with no stops", () => {
+    bench(helm('fire', [{ stat: 'armor', value: 5, roll: 0.5 }]));
+    const detail = screen.getByTestId('temper-detail');
+    expect(detail).toHaveTextContent(store().profile.bag[0].name);
+    // No D-pad stops: whatever could take the focus (the header's tile) sits under data-pad-skip.
+    const stops = [...detail.querySelectorAll<HTMLElement>(FOCUSABLE)];
+    expect(stops.filter((el) => !el.closest('[data-pad-skip]'))).toHaveLength(0);
+    expect(detail.querySelector('[data-pad-scroll]')).not.toBeNull();
+  });
+
   it('upgrades the item for scrap, priced against the purse', () => {
     const item = helm('fire');
     const cost = upgradeCost(registry, item)!;
     bench(item, { scrap: cost - 1 });
-    const up = screen.getByTestId('upgrade-button');
-    expect(up).toHaveTextContent(`Upgrade +1 · ${cost} scrap`);
+    const up = screen.getByTestId('temper-op-upgrade');
+    expect(up).toHaveTextContent('Upgrade +1');
+    expect(up).toHaveTextContent(`${cost} scrap`);
     expect(up).toBeDisabled();
     expect(up).toHaveAccessibleDescription(`Needs ${cost} scrap`);
-    expect(screen.getByTestId('temper').textContent).toContain(
+    expect(screen.getByTestId('temper-detail').textContent).toContain(
       `Each forge level adds +${Math.round(registry.getDelveBalance().forge.upgradeStep * 100)}% to every stat`,
     );
     expect(screen.getByTestId('forge-purse')).toHaveTextContent(`In hand: ${cost - 1} scrap`);
@@ -81,18 +134,19 @@ describe('Temper', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Upgraded to +1');
   });
 
-  it('at the top forge level Upgrade says so', () => {
+  it('at the top forge level Upgrade says so on its row', () => {
     const max = registry.getDelveBalance().forge.maxUpgrade;
     bench({ ...helm('fire'), upgrade: max });
-    expect(screen.getByTestId('upgrade-button')).toHaveTextContent(`Max +${max}`);
-    expect(screen.getByTestId('upgrade-button')).toBeDisabled();
+    const up = screen.getByTestId('temper-op-upgrade');
+    expect(up).toBeDisabled();
+    expect(up).toHaveAccessibleDescription(`At the top forge level, +${max}`);
   });
 
   it('reforges a line picked in its own pad scope; Back leaves it', () => {
     const item = helm('fire', [{ stat: 'fireAttune', value: 2, roll: 0.5 }]);
     const cost = reforgeCost(registry, item);
     bench(item, { scrap: cost });
-    fireEvent.click(screen.getByTestId('reforge-open'));
+    fireEvent.click(screen.getByTestId('temper-op-reforge'));
     expect(screen.getByTestId('reforge-pick')).toHaveAttribute('data-pad-scope');
     expect(screen.getByTestId('reforge-back')).toHaveAttribute('data-pad-back');
     expect(screen.getByTestId('reforge-line-0')).toHaveAttribute('data-pad-first');
@@ -111,18 +165,12 @@ describe('Temper', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Reforged!');
     fireEvent.click(screen.getByTestId('reforge-back'));
     expect(screen.queryByTestId('reforge-pick')).toBeNull();
-    expect(screen.getByTestId('upgrade-button')).toBeInTheDocument();
-  });
-
-  it('an item with no affixes has no Reforge, Hone or Imprint', () => {
-    bench(helm('fire'));
-    for (const op of ['reforge', 'hone', 'imprint'])
-      expect(screen.queryByTestId(`${op}-open`)).toBeNull();
+    expect(screen.getByTestId('temper-op-upgrade')).toBeInTheDocument();
   });
 
   it("Hone's picker carries the guided start's trail: its lines, done once one is picked, then its confirm", () => {
     bench(helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]), { scrap: 10_000 });
-    fireEvent.click(screen.getByTestId('hone-open'));
+    fireEvent.click(screen.getByTestId('temper-op-hone'));
     const lines = document.querySelector('[data-tutorial="temper.line"]')!;
     expect(lines).toContainElement(screen.getByTestId('hone-line-0'));
     expect(lines).toHaveAttribute('data-tutorial-done', 'false');
@@ -133,7 +181,7 @@ describe('Temper', () => {
     expect(screen.getByTestId('hone-button')).toBeEnabled();
     // Reforge's picker is no lesson's.
     fireEvent.click(screen.getByTestId('hone-back'));
-    fireEvent.click(screen.getByTestId('reforge-open'));
+    fireEvent.click(screen.getByTestId('temper-op-reforge'));
     expect(document.querySelector('[data-tutorial="temper.line"]')).toBeNull();
     expect(screen.getByTestId('reforge-button')).not.toHaveAttribute('data-tutorial');
   });
@@ -143,8 +191,8 @@ describe('Temper', () => {
     const cost = honeCost(registry, item);
     bench(item, { scrap: cost + 1 });
     // The guided start's Anvil lesson highlights it.
-    expect(screen.getByTestId('hone-open')).toHaveAttribute('data-tutorial', 'temper.hone');
-    fireEvent.click(screen.getByTestId('hone-open'));
+    expect(screen.getByTestId('temper-op-hone')).toHaveAttribute('data-tutorial', 'temper.hone');
+    fireEvent.click(screen.getByTestId('temper-op-hone'));
     expect(screen.getByTestId('hone-pick')).toHaveAttribute('data-pad-scope');
     expect(screen.getByTestId('hone-back')).toHaveAttribute('data-pad-back');
     expect(screen.getByTestId('hone-count')).toHaveTextContent(
@@ -176,7 +224,7 @@ describe('Temper', () => {
     });
     const cost = imprintCost(registry, item);
     bench(item, { scrap: cost });
-    fireEvent.click(screen.getByTestId('imprint-open'));
+    fireEvent.click(screen.getByTestId('temper-op-imprint'));
     expect(screen.queryByTestId('shard-picker')).toBeNull(); // a line first
     fireEvent.click(screen.getByTestId('imprint-line-0'));
     expect(screen.getByTestId('imprint-button')).toHaveTextContent('Pick a shard');
@@ -211,7 +259,7 @@ describe('Temper', () => {
       materials: { ...emptyMaterials(), shards: { critChance: [1], armor: [0, 1] } },
     });
     bench(item, { scrap: 100 });
-    fireEvent.click(screen.getByTestId('imprint-open'));
+    fireEvent.click(screen.getByTestId('temper-op-imprint'));
     fireEvent.click(screen.getByTestId('imprint-line-0'));
     expect(screen.getByTestId('shard-pick-armor-2')).toBeInTheDocument();
     expect(screen.queryByTestId('shard-pick-critChance-1')).toBeNull();
@@ -220,20 +268,23 @@ describe('Temper', () => {
     expect(screen.queryByTestId('shard-pick-armor-2')).toBeNull();
   });
 
-  it("re-attunes to the pair's other element for Mana Dust", () => {
+  it("re-attunes to the pair's other element for Mana Dust: a row each off the pair, one in it", () => {
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
     bench(helm('frost'), { manaDust: pal.reattuneDust.magic });
-    expect(screen.getByTestId('reattune-fire')).toHaveTextContent(
-      `Fire · ${pal.reattuneDust.magic} Mana Dust`,
-    );
-    fireEvent.click(screen.getByTestId('reattune-storm'));
+    // Off the pair: a row for each element of it.
+    expect(screen.queryByTestId('temper-op-reattune')).toBeNull();
+    const fire = screen.getByTestId('temper-op-reattune-fire');
+    expect(fire).toHaveTextContent('Re-attune to Fire');
+    expect(fire).toHaveTextContent(`${pal.reattuneDust.magic} Mana Dust`);
+    fireEvent.click(screen.getByTestId('temper-op-reattune-storm'));
     expect(store().profile.bag[0].mana).toBe('storm');
     expect(store().profile.manaDust).toBe(0);
-    expect(screen.queryByTestId('reattune-storm')).toBeNull(); // its own element now
-    expect(screen.getByTestId('reattune-fire')).toBeDisabled(); // no Dust left
-    expect(screen.getByTestId('reattune-fire')).toHaveAccessibleDescription(
-      `Needs ${pal.reattuneDust.magic} Mana Dust`,
-    );
+    // In the pair now: one row, to the other element, off for want of Dust.
+    expect(screen.queryByTestId('temper-op-reattune-storm')).toBeNull();
+    const row = screen.getByTestId('temper-op-reattune');
+    expect(row).toHaveTextContent('Re-attune to Fire');
+    expect(row).toBeDisabled();
+    expect(row).toHaveAccessibleDescription(`Needs ${pal.reattuneDust.magic} Mana Dust`);
     expect(screen.getByRole('status')).toHaveTextContent('Attuned to Storm');
   });
 
@@ -258,14 +309,14 @@ describe('Temper', () => {
       registry,
       expect.objectContaining({ uid: 'w1', rarity: 'rare' }),
     );
-    const button = screen.getByTestId('awaken-button');
-    expect(button).toHaveTextContent('Awaken · 1 Epic flux · 2 Links · 150 scrap');
+    const button = screen.getByTestId('temper-op-awaken');
+    expect(button).toHaveTextContent('Awaken');
+    expect(button).toHaveTextContent('1 Epic flux · 2 Links · 150 scrap');
     expect(button).toBeDisabled();
     expect(button).toHaveAccessibleDescription('Needs 150 scrap');
-    expect(screen.getByTestId('awaken-refused')).toHaveTextContent('Needs 150 scrap');
     act(() => store().setProfile({ ...store().profile, scrap: 150 }));
     expect(button).toBeEnabled();
-    expect(screen.queryByTestId('awaken-refused')).toBeNull();
+    expect(button).not.toHaveAttribute('aria-describedby');
     fireEvent.click(button);
     expect(awaken).toHaveBeenLastCalledWith(
       registry,
@@ -274,24 +325,33 @@ describe('Temper', () => {
     );
     expect(store().profile).toMatchObject({ scrap: 0, bag: [{ uid: 'w1', awakened: true }] });
     expect(screen.getByRole('status')).toHaveTextContent('Awakened!');
-    // Once: the bench says so instead.
-    expect(screen.queryByTestId('awaken')).toBeNull();
+    // Once: the row and the detail say so.
+    expect(screen.getByTestId('temper-op-awaken')).toBeDisabled();
+    expect(screen.getByTestId('temper-op-awaken')).toHaveAccessibleDescription(
+      'Awakened: it carries the Ultimate',
+    );
     expect(screen.getByTestId('awakened')).toHaveTextContent('Awakened: it carries the Ultimate.');
   });
 
-  it('offers Awaken only on a rare weapon not yet awakened', () => {
+  it('Awaken is enabled only on a rare weapon not yet awakened, as the dry run allows; an awakened one says it is', () => {
     for (const item of [
       sword('magic'),
       sword('epic'),
       { ...helm('fire'), rarity: 'rare' as const },
     ]) {
       const { unmount } = bench(item);
-      expect(screen.queryByTestId('awaken')).toBeNull();
+      expect(screen.getByTestId('temper-op-awaken')).toBeDisabled();
+      expect(screen.getByTestId('temper-op-awaken')).toHaveAccessibleDescription(
+        'Only a rare weapon awakens',
+      );
       expect(screen.queryByTestId('awakened')).toBeNull();
       unmount();
     }
     bench({ ...sword('rare'), awakened: true });
-    expect(screen.queryByTestId('awaken')).toBeNull();
+    expect(screen.getByTestId('temper-op-awaken')).toBeDisabled();
+    expect(screen.getByTestId('temper-op-awaken')).toHaveAccessibleDescription(
+      'Awakened: it carries the Ultimate',
+    );
     expect(screen.getByTestId('awakened')).toBeInTheDocument();
     // The engine is asked for neither the price nor a dry run.
     expect(awakenPrice).not.toHaveBeenCalled();

@@ -101,10 +101,16 @@ export function ForgeTab({ mode, setPrompts, link, memory }: HubTabProps) {
                 setSelected(uid);
               }}
             />
-            <Panel aria-label="Temper" testId="temper-bench">
-              {locked ? <ForgeLocked /> : item && <Temper key={item.uid} item={item} />}
-            </Panel>
-            <div />
+            {locked || !item ? (
+              <>
+                <Panel aria-label="Temper" testId="temper-bench">
+                  {locked && <ForgeLocked />}
+                </Panel>
+                <div />
+              </>
+            ) : (
+              <Temper key={item.uid} item={item} />
+            )}
           </>
         )}
         {bench === 'materials' && <MaterialsPane locked={locked} />}
