@@ -36,8 +36,8 @@ const DOCK_WIDTH = 400;
  * (the Panel button) opens it and gives it the focus, pausing; B or View
  * again hands the pad back to the fight, the dock staying open. Menu opens
  * the system menu, with an Anvil entry, pausing too. On the guided start's
- * Training step it opens on the hero's own build, with Hesta's panel at the
- * bottom of the right column (see the tutorial spec).
+ * Training step it opens on the hero's own build, with Hesta's strip under the
+ * top bar (see the tutorial spec).
  */
 export function DelveTraining() {
   const navigate = useNavigate();
@@ -198,17 +198,6 @@ export function DelveTraining() {
                 />
               </div>
             )}
-            {/* Hesta's panel, docked bottom right (see the tutorial spec). */}
-            {tutorial && tutorialStep && (
-              <div className="mt-auto">
-                <TutorialPanel
-                  state={tutorial}
-                  where={SHOWN_AT.training}
-                  place="hud"
-                  onEvent={(e) => useDelveStore.getState().tutorialEvents([e])}
-                />
-              </div>
-            )}
           </>
         }
         dock={
@@ -222,7 +211,20 @@ export function DelveTraining() {
             manualAttack={manualAttack}
           />
         }
-        centre={<BossBar hud={arena.hud} />}
+        centre={
+          <>
+            {/* Hesta's strip, under the top bar and over the boss's bar. */}
+            {tutorial && tutorialStep && (
+              <TutorialPanel
+                state={tutorial}
+                where={SHOWN_AT.training}
+                place="hud"
+                onEvent={(e) => useDelveStore.getState().tutorialEvents([e])}
+              />
+            )}
+            <BossBar hud={arena.hud} />
+          </>
+        }
       />
 
       {menuOpen && (

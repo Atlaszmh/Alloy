@@ -73,21 +73,18 @@ describe('DelveTraining: the guided start', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("on the Training step, opens on the hero's own build with Hesta's panel under the dock", () => {
+  it("on the Training step, opens on the hero's own build with Hesta's strip under the top bar", () => {
     onStep('raise');
     const load = vi.spyOn(useSandboxStore.getState(), 'loadMyBuild');
     renderPage();
     expect(load).toHaveBeenCalledWith(useDelveStore.getState().profile);
     const panel = screen.getByTestId('tutorial-panel');
-    const right = panel.closest('[data-hud="right"]')!;
-    expect(right).not.toBeNull();
-    expect(
-      screen.getByTestId('training-panel').compareDocumentPosition(panel) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(panel.closest('[data-hud="centre"]')).not.toBeNull();
+    expect(panel.closest('[data-hud="right"]')).toBeNull();
+    expect(panel).toHaveAttribute('data-place', 'hud');
     expect(panel).toHaveTextContent('Raise your Defensive.');
     expect(live.paused.at(-1)).toBe(false);
-    // With the dock closed, the panel still stands at the column's foot.
+    // With the dock closed, the strip stays.
     fireEvent.click(screen.getByTestId('training-panel-toggle'));
     expect(screen.queryByTestId('training-panel')).toBeNull();
     expect(screen.getByTestId('tutorial-panel')).toBeInTheDocument();
