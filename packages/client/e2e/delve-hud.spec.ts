@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive } from './fixtures/delve';
+import { BUTTON, installPad, tap } from './fixtures/pad';
 
 // The lean HUD (the pad-first spec, 3): the default; the gain feed, the corner, Full by choice.
 test.describe('Delve HUD', () => {
@@ -36,5 +37,37 @@ test.describe('Delve HUD', () => {
     await page.keyboard.press('Escape'); // the list: Resume
     await expect(page.getByTestId('purse-bar')).toBeVisible();
     await expect(corner).toHaveCount(0);
+  });
+
+  test('H02: M or the D-pad up toggles the peek over the running fight; it takes no pointer', async ({ page }) => {
+    await installPad(page);
+    // No bot: the hero stands, the fight runs.
+    await seedProfile(page, 4242, false);
+    await page.goto('/delve');
+    await startDive(page);
+    await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
+    const peek = page.getByTestId('peek-overlay');
+    await page.keyboard.press('m');
+    await expect(peek).toBeVisible();
+    await expect(peek.getByTestId('peek-map')).toBeVisible();
+    await expect(peek.getByTestId('purse-bar')).toBeVisible();
+    await expect(peek.getByTestId('pickup-feed')).toBeVisible();
+    // Not a pause: no pause screen, and the HUD stays live.
+    await expect(page.getByTestId('pause-screen')).toHaveCount(0);
+    await expect(page.getByTestId('dive-hud')).not.toHaveAttribute('inert', '');
+    // The pointer passes through it to what lies under.
+    const box = (await peek.getByTestId('peek-map').boundingBox())!;
+    const caught = await page.evaluate(
+      ([x, y]) => !!document.elementFromPoint(x, y)?.closest('[data-testid="peek-overlay"]'),
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    expect(caught).toBe(false);
+    await page.keyboard.press('m');
+    await expect(peek).toBeHidden();
+    // The pad: D-pad up opens it (taking the input lock), and again closes it.
+    await tap(page, BUTTON.up);
+    await expect(peek).toBeVisible();
+    await tap(page, BUTTON.up);
+    await expect(peek).toBeHidden();
   });
 });
