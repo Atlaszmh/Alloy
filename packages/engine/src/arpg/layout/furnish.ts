@@ -116,9 +116,11 @@ function furnishRoom(
   // interactable stands and its foes walk home), the start and the interactable.
   const doors = map.doors.filter((d) => d.rooms[0] === room.id);
   const kept = new Set<number>();
-  const shun: Vec[] = [
+  // What hazards keep their burst and a cell from (`pad` more: an interactable's use reach).
+  const reach = bal.ai.interactRadius;
+  const shun: (Vec & { pad?: number })[] = [
     map.start,
-    ...map.rooms.flatMap((r) => (r.interactable ? [r.interactable] : [])),
+    ...map.rooms.flatMap((r) => (r.interactable ? [{ ...r.interactable, pad: reach }] : [])),
   ];
   for (const d of doors)
     for (const c of d.cells) {
@@ -205,13 +207,17 @@ function furnishRoom(
       }
     if (!fits) continue;
 
-    // Hazards keep their burst and a cell from the doors, their fronts, the start and every interactable.
+    // Hazards keep their burst and a cell from the doors, their fronts, the start and every
+    // interactable (and where the hero stands to use it).
     const at = (i: number) => ({ x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5 });
     const burst = (id: string) => data.hazards.find((h) => h.id === id)!.burst;
     if (
       spots.some(
         (s) =>
-          s.hazard && shun.some((p) => dist(p.x, p.y, at(s.i).x, at(s.i).y) < burst(s.hazard!) + 1),
+          s.hazard &&
+          shun.some(
+            (p) => dist(p.x, p.y, at(s.i).x, at(s.i).y) < burst(s.hazard!) + 1 + (p.pad ?? 0),
+          ),
       )
     )
       continue;

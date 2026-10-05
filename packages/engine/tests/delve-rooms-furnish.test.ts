@@ -145,7 +145,9 @@ describe('the furnisher', () => {
 
   it('stands hazards their burst and a cell from the doors, their fronts, the start and every interactable', () => {
     let hazards = 0;
+    const { interactRadius } = registry.getDelveBalance().ai;
     for (const { label, map, f } of ALL) {
+      const its = map.rooms.flatMap((r) => (r.interactable ? [r.interactable] : []));
       const far = [
         map.start,
         ...map.rooms.flatMap((r) => (r.interactable ? [r.interactable] : [])),
@@ -159,6 +161,11 @@ describe('the furnisher', () => {
         const burst = data.hazards.find((d) => d.id === h.kind)!.burst;
         const near = far.filter((p) => Math.hypot(p.x - h.x, p.y - h.y) < burst + 1);
         expect(near, `${label} ${h.kind} at ${h.x},${h.y}`).toEqual([]);
+        // An interactable's too where the hero stands to use it (`ai.interactRadius` off).
+        const using = its.filter(
+          (p) => Math.hypot(p.x - h.x, p.y - h.y) < burst + 1 + interactRadius,
+        );
+        expect(using, `${label} ${h.kind} at ${h.x},${h.y}`).toEqual([]);
       }
     }
     expect(hazards).toBeGreaterThan(0);
