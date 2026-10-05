@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { ARENA_READY, SAVE_KEY, seedProfile } from './fixtures/delve';
+import { ARENA_READY, SAVE_KEY, seedProfile, startDive } from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
@@ -52,6 +52,24 @@ async function step(page: Page): Promise<string | null> {
 const steps = (page: Page) =>
   page.evaluate(() => (window as unknown as { __steps: string[] }).__steps);
 
+/**
+ * What the Depart sheet says of a new dive (the footer's Delve opens it, Esc shuts it): while a
+ * lesson holds it, its Delve waits beside the reason; else no reason, and Delve is ready.
+ */
+async function expectDiveHeld(page: Page, held: boolean): Promise<void> {
+  await page.getByTestId('depart-button').click();
+  const sheet = page.getByTestId('depart-sheet');
+  if (held) {
+    await expect(sheet.getByTestId('delve-button')).toBeDisabled();
+    await expect(sheet.getByTestId('lesson-block')).toHaveText("Finish Hesta's lesson or skip it");
+  } else {
+    await expect(sheet.getByTestId('lesson-block')).toHaveCount(0);
+    await expect(sheet.getByTestId('delve-button')).toBeEnabled();
+  }
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+}
+
 /** Claim every completed quest and contract on the Quests tab. */
 async function claimAll(page: Page): Promise<void> {
   await page.getByTestId('tab-quests').click();
@@ -98,7 +116,7 @@ test.describe('Delve guided start', () => {
     await expect(panel).toHaveAttribute('data-place', 'anvil');
     await expect(highlight).toBeVisible();
     expect(await step(page)).toBe('begin');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     // In the dive, the one under the top bar.
     await expect(panel).toHaveAttribute('data-place', 'hud', { timeout: ARENA_READY });
@@ -182,10 +200,8 @@ test.describe('Delve guided start', () => {
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
 
-    // Anvil lesson 1: Delve waits for it, saying why.
-    const delve = page.getByTestId('delve-button');
-    await expect(delve).toBeDisabled();
-    await expect(page.getByTestId('lesson-block')).toHaveText("Finish Hesta's lesson or skip it");
+    // Anvil lesson 1: the Depart sheet's Delve waits for it, saying why.
+    await expectDiveHeld(page, true);
     expect(await step(page)).toBe('l1-claim');
     await claimAll(page);
 
@@ -249,7 +265,7 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('item-sheet')).toContainText('Common Rusty Sword');
     await page.getByTestId('salvage-button').click();
     await expect.poll(() => step(page)).not.toBe('l1-salvage');
-    await expect(delve).toBeDisabled();
+    await expectDiveHeld(page, true);
     // A step completes by what holds: an Iron bar from the floors (a bar's chance of the next
     // metal) passes the refine at once.
     if ((await step(page)) === 'l1-refine') {
@@ -261,8 +277,7 @@ test.describe('Delve guided start', () => {
 
     // The lesson is done: Delve opens for dive 2.
     await expect.poll(() => step(page)).toBe('delve-2');
-    await expect(page.getByTestId('lesson-block')).toHaveCount(0);
-    await expect(delve).toBeEnabled();
+    await expectDiveHeld(page, false);
   });
 
   test('TU03: a view left open over the next step shows its way out, and the pad follows the marker', async ({
@@ -316,7 +331,7 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('tutorial-panel')).toHaveCount(0);
 
     // The common sword carries the Basic alone: no Primary slot in the dive.
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
     await expect(page.getByTestId('attack-button')).toBeVisible();
     await expect(page.getByTestId('ability-0')).toHaveCount(0);
@@ -333,7 +348,7 @@ test.describe('Delve guided start', () => {
     await page.getByTestId('tab-loadout').click();
     await page.locator('[data-testid="bag-item"][aria-label*=", uncommon"]').first().click();
     await page.getByTestId('equip-button').click();
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', /^Primary: /, {
       timeout: ARENA_READY,
     });

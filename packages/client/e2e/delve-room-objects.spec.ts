@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, FLOOR_CLEAR, seedProfile } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive } from './fixtures/delve';
 
 // Room objects (see the room objects spec): a generated floor is furnished, and the minimap
 // shows the cover and the hazards the hero has seen (its canvas's data-cover, data-hazards).
@@ -13,7 +13,7 @@ test.describe('Delve room objects', () => {
     // bot breaks one depends on the frame rate; the engine's tests cover it.)
     await seedProfile(page, 50);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
 
     const minimap = page.getByTestId('minimap');

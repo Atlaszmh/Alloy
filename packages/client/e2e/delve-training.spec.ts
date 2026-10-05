@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
+import { openTraining } from './fixtures/delve';
 
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
@@ -36,7 +37,7 @@ test.describe('Delve Training Grounds', () => {
   }) => {
     await seed(page);
     await page.goto('/delve');
-    await page.getByTestId('training-button').click();
+    await openTraining(page);
     await expect(page.getByTestId('delve-training')).toBeVisible({ timeout: ARENA_READY });
     await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible({
       timeout: ARENA_READY,
@@ -91,7 +92,7 @@ test.describe('Delve Training Grounds', () => {
   }) => {
     await seed(page);
     await page.goto('/delve');
-    await page.getByTestId('training-button').click();
+    await openTraining(page);
     const ability0 = page.getByTestId('ability-0');
     await expect(ability0).toBeVisible({ timeout: ARENA_READY });
     // The HUD's pips carry their rune's id as `data-rune`.

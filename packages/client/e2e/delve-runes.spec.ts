@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { armed } from './fixtures/delve';
+import { armed, startDive as departAndDelve } from './fixtures/delve';
 import {
   baseCost,
   beginFloor,
@@ -136,7 +136,7 @@ test.describe('Delve runes', () => {
     const registry = createDefaultRegistry();
     await seed(page, heroWith(registry, [QUICK_III]), true);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await departAndDelve(page);
     const primary = page.getByTestId('ability-0');
     await expect(primary).toBeVisible({ timeout: ARENA_READY });
     // One dot for Quick (the HUD's pips carry their rune's id as `data-rune`).
@@ -162,7 +162,7 @@ test.describe('Delve runes', () => {
     expect(profile.dive!.stop!.offers).toEqual(['rune']);
     await seed(page, profile);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await departAndDelve(page);
 
     await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: ARENA_READY });
     await page.getByTestId('stop-rune').click();

@@ -262,7 +262,7 @@ test.describe('Delve pad navigation', () => {
     test.setTimeout(240_000);
     await seed(page);
     await page.goto('/delve');
-    await expect(page.getByTestId('delve-button')).toBeVisible();
+    await expect(page.getByTestId('depart-button')).toBeVisible();
     await check(page, 'loadout');
     await click(page, 'bag-item');
     await check(page, 'loadout-item');

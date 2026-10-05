@@ -8,6 +8,7 @@ import {
   type GearItem,
   type Moveset,
 } from '@alloy/engine';
+import { startDive } from './fixtures/delve';
 
 /**
  * Controller support with a fake standard-mapping pad: Playwright has no real
@@ -190,7 +191,7 @@ test.describe('Delve with a controller', () => {
   }) => {
     await setup(page, true);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
 
     await tap(page, BUTTON.menu);
@@ -219,7 +220,7 @@ test.describe('Delve with a controller', () => {
   test('G02: B dodges, and the hints switch to the controller', async ({ page }) => {
     await setup(page, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const dodge = page.getByTestId('dodge-button');
     await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
     expect(await tapAndReadCharges(page, BUTTON.b)).toBe('1');
@@ -233,7 +234,7 @@ test.describe('Delve with a controller', () => {
   }) => {
     await setup(page, false, 2); // a light Bolt, then a medium one
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const bar = page.getByTestId('mana-bar');
     await expect(bar).toBeVisible({ timeout: ARENA_READY });
     const mana = async () =>
@@ -273,7 +274,7 @@ test.describe('Delve with a controller', () => {
   }) => {
     await setup(page, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const dodge = page.getByTestId('dodge-button');
     await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
 

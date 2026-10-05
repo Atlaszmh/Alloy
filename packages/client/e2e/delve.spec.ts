@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, FLOOR_CLEAR, seedProfile } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive } from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
   // A floor's clear may take most of the default two minutes under load.
@@ -13,7 +13,7 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('paper-doll')).toBeVisible();
     await expect(page.getByTestId('delve-howto')).toBeVisible();
 
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
     await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible({
@@ -73,7 +73,7 @@ test.describe('Delve loot loop', () => {
     // drops gear at every steady step (pinned in the engine's delve-banking test).
     await seedProfile(page, 11);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     // Inspected from the right column's "Found this floor" log: the pause opens on Loadout.
     const loot = page.getByTestId('pickup-feed').getByTestId('loot-item').first();
@@ -116,7 +116,7 @@ test.describe('Delve loot loop', () => {
   }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
@@ -154,7 +154,7 @@ test.describe('Delve loot loop', () => {
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: FLOOR_CLEAR });
     await page.getByTestId('extract-button').click();
     const summary = page.getByTestId('dive-summary');
@@ -173,7 +173,7 @@ test.describe('Delve loot loop', () => {
   }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     // Picked up mid-floor: the purse counts this dive's materials, the Found log groups them.
     await expect(page.getByTestId('purse-materials')).toContainText(/\+[1-9]/, {
@@ -207,7 +207,7 @@ test.describe('Delve loot loop', () => {
     // No bot, so the fight (and the HUD) stays up while we measure.
     await seedProfile(page, 4242, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const bar = page.getByTestId('skill-bar');
     await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
     const box = (await bar.boundingBox())!;
@@ -223,7 +223,7 @@ test.describe('Delve loot loop', () => {
   }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     await page.getByRole('button', { name: 'Dive menu' }).click();
     await page.getByTestId('open-controls').click();
@@ -309,7 +309,7 @@ test.describe('Delve loot loop', () => {
   }) => {
     await seedProfile(page, 4242, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     const menu = page.getByTestId('pause-screen');
     await page.keyboard.press('Escape');
@@ -352,7 +352,7 @@ test.describe('Delve loot loop', () => {
     // interactable until C is pressed, and the gate and an alcove open their dialogs.
     await seedProfile(page, 4, 'ask');
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     const plaque = page.getByTestId('interact-plaque');
     const confirm = page.getByTestId('exit-confirm');

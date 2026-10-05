@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, FLOOR_CLEAR, seedProfile } from './fixtures/delve';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive } from './fixtures/delve';
 
 // Quests (see the quests spec): the main line's first quest done in a dive and claimed at the
 // Anvil, and a contract rerolled once a visit.
@@ -11,7 +11,7 @@ test.describe('Delve quests', () => {
   }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
 
     // A new save tracks First Steps: the HUD shows its progress at depth 1.
@@ -43,10 +43,12 @@ test.describe('Delve quests', () => {
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
 
-    // The Anvil: the tab's pip and the footer's count (a contract may be done too); the count
-    // opens Quests.
+    // The Anvil: the tab's pip and the Depart sheet's count (a contract may be done too); the
+    // count closes the sheet and opens Quests.
     await expect(page.getByTestId('claim-pip')).toHaveText(/^[1-9][0-9]*$/);
+    await page.getByTestId('depart-button').click();
     await page.getByTestId('claim-count').click();
+    await expect(page.getByTestId('depart-sheet')).toHaveCount(0);
     await expect(page.getByTestId('tab-quests')).toHaveAttribute('aria-selected', 'true');
     const first = page.getByTestId('quest-journal').getByTestId('quest-first_steps');
     await expect(first.getByTestId('quest-done')).toHaveText('DONE');

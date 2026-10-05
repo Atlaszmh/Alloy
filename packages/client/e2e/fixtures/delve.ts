@@ -57,3 +57,15 @@ export async function seedProfile(
     [SAVE_KEY, save, autopilot] as const,
   );
 }
+
+/** From the Anvil: the footer's Delve opens the Depart sheet, whose Delve starts (or resumes) the dive. */
+export async function startDive(page: Page): Promise<void> {
+  await page.getByTestId('depart-button').click();
+  await page.getByTestId('delve-button').click();
+}
+
+/** From the Anvil: the Depart sheet's Training. */
+export async function openTraining(page: Page): Promise<void> {
+  await page.getByTestId('depart-button').click();
+  await page.getByTestId('training-button').click();
+}
