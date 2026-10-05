@@ -12,6 +12,12 @@ for (const vp of PC_VIEWPORTS) {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('pause-screen')).toBeVisible();
     await runProbes('delve-pause', vp, { delve: {} });
+    // Help over the pause.
+    await page.getByTestId('pause-help').click();
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    await runProbes('delve-pause-help', vp, { delve: {} });
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('help-dialog')).toHaveCount(0);
     await page.getByTestId('pause-build').click();
     await expect(page.getByTestId('pause-hub')).toBeVisible();
     await runProbes('delve-pause-hub', vp, { delve: {} });

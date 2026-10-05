@@ -1,11 +1,14 @@
 import { test, expect } from '../fixtures/responsive-fixture';
 import { PC_VIEWPORTS } from '../viewports';
-import { seedProfile, stepTo } from '../../fixtures/delve';
+import { armed, seedProfile, stepTo } from '../../fixtures/delve';
 import {
   applyQuestEvents,
   claimQuest,
   createDefaultRegistry,
   createDelveProfile,
+  generateItem,
+  SeededRNG,
+  type Rarity,
 } from '@alloy/engine';
 
 // The fixture's save (seed 4242, fire) with First Steps done, claimed or not.
@@ -18,6 +21,17 @@ const firstStepsDone = applyQuestEvents(
 const QUESTS = {
   claim: firstStepsDone.quests,
   done: claimQuest(registry, firstStepsDone, 'first_steps').profile.quests,
+};
+
+// Two common helms under a worn epic one: Salvage junk's sheet has rows to review.
+const helm = (rarity: Rarity, i: number) =>
+  generateItem(registry, { uid: `junk-${i}`, ilvl: 4, rarity, slot: 'helm', mana: 'fire' }, new SeededRNG(300 + i));
+const JUNK = {
+  equipped: {
+    ...armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' })).equipped,
+    helm: helm('epic', 0),
+  },
+  bag: [helm('common', 1), helm('common', 2)],
 };
 
 const TABS = ['loadout', 'skills', 'forge', 'codex', 'quests'] as const;
@@ -61,6 +75,28 @@ for (const vp of PC_VIEWPORTS) {
       await runProbes(`delve-anvil-${bench}`, vp, { delve: {} });
     });
   }
+
+  // Help over the system menu: its longest topic scrolls inside its body.
+  test(`Delve Anvil help @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await seedProfile(page, 4242, false);
+    await page.goto('/delve');
+    await expect(page.getByTestId('depart-button')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('open-help').click();
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    await runProbes('delve-anvil-help', vp, { delve: {} });
+  });
+
+  // Salvage junk's review sheet.
+  test(`Delve Anvil junk @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await seedProfile(page, 4242, false, undefined, JUNK);
+    await page.goto('/delve');
+    await page.getByTestId('salvage-junk').click();
+    await expect(page.getByTestId('junk-row')).toHaveCount(2);
+    await runProbes('delve-anvil-junk', vp, { delve: {} });
+  });
 
   // The Quests tab's fuller states: a contract open on the board (Reroll), a quest to claim, and
   // the Done group open on a claimed one.
