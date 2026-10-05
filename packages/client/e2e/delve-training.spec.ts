@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
-import { openTraining } from './fixtures/delve';
+import { openTraining, seedProfile, stepTo } from './fixtures/delve';
 
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
@@ -134,5 +134,30 @@ test.describe('Delve Training Grounds', () => {
     await page.keyboard.press('Escape');
     await page.getByTestId('menu-anvil').click();
     await expect(page).toHaveURL(/\/delve$/);
+  });
+
+  test('T04: Try in Training loads the unapplied draft into the Training Grounds, and the way back finds it as it was', async ({
+    page,
+  }) => {
+    await seedProfile(page, 4242, false); // an uncommon sword: it carries the Primary
+    await page.goto('/delve');
+    await page.getByTestId('tab-skills').click();
+    await page.getByTestId('move-0').click();
+    await stepTo(page, 'move-kind', /^Heavy$/);
+    await page.getByTestId('move-editor-back').click();
+    await page.getByTestId('chain-apply').click();
+    await page.getByTestId('apply-sheet-try').click();
+    await expect(page).toHaveURL(/\/delve\/training$/);
+    await expect(page.getByTestId('training-bar')).toBeVisible({ timeout: ARENA_READY });
+    const read = (key: string) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), key);
+    expect((await read('alloy:delve:sandbox:v1')).chains.primary.moves[0].kind).toBe('heavy');
+    expect(
+      (await read('alloy:delve:v2')).equipped.weapon.moveset.chains.primary.moves[0].kind,
+    ).toBe('light');
+    // The way back: the Skills tab on the Primary, one change still unapplied.
+    await page.getByTestId('training-back').click();
+    await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('chain-price')).toContainText('1 unapplied change');
   });
 });
