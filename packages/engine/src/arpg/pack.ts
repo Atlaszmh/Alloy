@@ -3,7 +3,7 @@ import { CELL, type FloorMap, type PackAiBalance, type Rect } from '../types/flo
 import type { SimCtx } from './combat.js';
 import { clamp, dirTo, dist } from './geometry.js';
 import { isWalkable, perceives, sees, snapToWalkable, solid } from './grid.js';
-import { clearanceOf, downhill, flowField } from './flow.js';
+import { clearanceCells, clearanceOf, downhill, flowField } from './flow.js';
 import { objectsOnBeam, objectsTouching } from './objects.js';
 import { footprints } from './objects-base.js';
 
@@ -178,17 +178,16 @@ function ringSlots(world: ArpgWorld, ring: MonsterEntity[]): void {
   }
 }
 
-/** A foe's clearance in cells, as the flow fields count it (`flow.ts`'s large class). */
-function clearanceCells(ctx: SimCtx, m: MonsterEntity): number {
-  // ponytail: mirrors flow.ts's private LARGE (2); export it there if it ever changes.
-  return clearanceOf(m) === 'large' ? Math.min(2, ctx.bal.layout.hallWidth) : 1;
+/** A foe's clearance in cells, as the flow fields count it. */
+function clearanceOfFoe(ctx: SimCtx, m: MonsterEntity): number {
+  return clearanceCells(clearanceOf(m), ctx.bal.layout.hallWidth);
 }
 
 /** The field toward `goal` for `m`'s clearance, within `ai.pack.flowRadius`: built once a pass. */
 function goalField(ctx: SimCtx, m: MonsterEntity, goal: Vec): Uint16Array {
   const { world, bal } = ctx;
   const { map } = world;
-  const clear = clearanceCells(ctx, m);
+  const clear = clearanceOfFoe(ctx, m);
   const cell = Math.floor(goal.y) * map.width + Math.floor(goal.x);
   const key = `${map.version}:${cell}:${clear}`;
   const fields = stateOf(world).fields;
@@ -236,7 +235,7 @@ function coverSpot(ctx: SimCtx, st: DirectorState, m: MonsterEntity): Vec | null
   let fire = st.cover.get(m.id);
   if (fire === undefined || !serves(fire)) {
     fire = undefined;
-    const steps = flowField(map, m, coverSearch, clearanceCells(ctx, m), footprints(ctx.world));
+    const steps = flowField(map, m, coverSearch, clearanceOfFoe(ctx, m), footprints(ctx.world));
     const cx = Math.floor(m.x);
     const cy = Math.floor(m.y);
     for (

@@ -506,7 +506,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     fogVersion: 0,
     fogAt: 0,
     exitHinted: false,
-    flow: { small: null, large: null, nextAt: 0 },
+    flow: { small: null, large: null, huge: null, nextAt: 0 },
     sealing: null,
     channel: null,
     exited: false,

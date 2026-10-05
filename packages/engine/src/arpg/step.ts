@@ -609,7 +609,7 @@ function pursue(
 ): void {
   const { world } = ctx;
   if (world.map.open || direct) return moveMonster(ctx, m, toTarget, speed, dt);
-  const field = clearanceOf(m) === 'large' ? world.flow.large : world.flow.small;
+  const field = world.flow[clearanceOf(m)];
   const way = field && downhill(world.map, field, m, world.hero);
   if (way) moveMonster(ctx, m, way, speed, dt);
 }

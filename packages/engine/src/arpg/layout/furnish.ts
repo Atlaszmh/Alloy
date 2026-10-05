@@ -13,6 +13,7 @@ import {
   type SetPiece,
 } from '../../types/floor-map.js';
 import type { ManaType } from '../../types/mana.js';
+import { clearanceCells, squareFits } from '../flow.js';
 import { dist } from '../geometry.js';
 import { solid } from '../grid.js';
 import { footprint } from '../objects-base.js';
@@ -296,25 +297,30 @@ function sound(map: FloorMap, room: Room, taken: Set<number>, structures: number
     .filter((d) => d.rooms[0] === room.id)
     .map((d) => d.cells[1] ?? d.cells[0])
     .map((c) => (c.y - y0) * gw + c.x - x0);
+  // A boss room: its boss (a huge foe, a 5 × 5) reaches every walkable cell from the centre too.
+  const centre = (Math.floor(ry + rh / 2) - y0) * gw + Math.floor(rx + rw / 2) - x0;
+  const huge = Math.floor(clearanceCells('huge', 0) / 2);
   return [[], ...structures].every((cells) => {
     const grid = base.slice();
     for (const k of cells) grid[(Math.floor(k / W) - y0) * gw + (k % W) - x0] = 1;
-    return reached(grid, gw, gh, doors);
+    return (
+      reached(grid, gw, gh, doors, 1) &&
+      (room.kind !== 'boss' || reached(grid, gw, gh, [centre], huge))
+    );
   });
 }
 
 /**
- * On a room's grid (see `sound`): whether a large foe (a 3 × 3) reaches every door from the
- * first, and every walkable cell of the room lies in a 3 × 3 it reaches.
+ * On a room's grid (see `sound`): whether a foe filling the odd square `half` cells round its
+ * cell (1: a large foe's 3 × 3) reaches every one of `doors` from the first, and every
+ * walkable cell of the room lies in a square it reaches.
  */
-function reached(grid: Uint8Array, gw: number, gh: number, doors: number[]): boolean {
+function reached(grid: Uint8Array, gw: number, gh: number, doors: number[], half: number): boolean {
+  const open = (i: number, j: number) =>
+    i >= 0 && j >= 0 && i < gw && j < gh && grid[j * gw + i] === 1;
   const fits = new Uint8Array(gw * gh);
-  for (let j = 1; j < gh - 1; j++)
-    for (let i = 1; i < gw - 1; i++) {
-      let all = 1;
-      for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) all &= grid[(j + b) * gw + i + a];
-      fits[j * gw + i] = all;
-    }
+  for (let j = 0; j < gh; j++)
+    for (let i = 0; i < gw; i++) fits[j * gw + i] = squareFits(open, i, j, half) ? 1 : 0;
   if (!fits[doors[0]]) return false;
   const seen = new Uint8Array(gw * gh);
   seen[doors[0]] = 1;
@@ -330,8 +336,8 @@ function reached(grid: Uint8Array, gw: number, gh: number, doors: number[]): boo
     for (let i = 2; i < gw - 2; i++) {
       if (!grid[j * gw + i]) continue;
       let near = 0;
-      for (let b = -1; b <= 1; b++)
-        for (let a = -1; a <= 1; a++) near |= seen[(j + b) * gw + i + a];
+      for (let b = -half; b <= half; b++)
+        for (let a = -half; a <= half; a++) near |= seen[(j + b) * gw + i + a];
       if (!near) return false;
     }
   return true;
