@@ -192,7 +192,7 @@ Each phase is held by `e2e/delve-pad-nav.spec.ts`: the stop allowances it alread
 |---|---|---|
 | 1. The shell | 0.65.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui/` (`00` to `04`) |
 | 2. The dive's edges | 0.66.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui-p2/` (`00` to `05`) |
-| 3. Loadout and Forge | 0.67.0 | |
+| 3. Loadout and Forge | 0.67.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui-p3/` (`00` to `07`) |
 | 4. Skills | 0.68.0 | |
 | 5. Reading and options | 0.69.0 | |
 
