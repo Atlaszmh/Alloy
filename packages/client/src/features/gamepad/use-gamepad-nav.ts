@@ -130,8 +130,8 @@ const groupFocus = new WeakMap<Element, HTMLElement>();
  * Run each frame: while the pad has the input lock, a focus that isn't on a
  * visible control in the current scope (it unmounted, or a scope opened) goes
  * back to the scope's last focused control, else the one nearest where it
- * was (in its pane, if any is left there), else its `[data-pad-first]`, else the first. Under the keys or the
- * mouse the focus is left alone.
+ * was (in its pane, if any is left there), else its `[data-pad-first]`, else
+ * the first. Under the keys or the mouse the focus is left alone.
  * It never scrolls: a sheet still sliding in would drag the page under it.
  */
 export function keepFocus(): void {

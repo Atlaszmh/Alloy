@@ -91,14 +91,28 @@ function renderPage() {
 }
 const isPaused = () => live.paused.at(-1);
 const dock = () => screen.getByTestId('training-panel').parentElement!;
+/** Controls with no box (jsdom lays nothing out): the pad's candidates skip them. */
+const boxless = new Set<string>();
 
 describe('DelveTraining', () => {
   beforeEach(() => {
     live.calls.length = 0;
     live.paused.length = 0;
     useInputDeviceStore.setState({ device: 'keyboard' });
+    boxless.clear();
+    // A box for everything (the pad's candidates are what shows), none for a label starting with one in `boxless`.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const label = this.getAttribute('aria-label') ?? this.textContent ?? '';
+      const size = [...boxless].some((b) => label.startsWith(b)) ? 0 : 10;
+      return { left: 0, top: 0, width: size, height: size, right: size, bottom: size } as DOMRect;
+    });
   });
-  afterEach(() => useInputDeviceStore.setState({ device: 'keyboard' }));
+  afterEach(() => {
+    useInputDeviceStore.setState({ device: 'keyboard' });
+    vi.restoreAllMocks();
+  });
 
   it('lays the Training bar, the 400 px dock (open on entry) and the skill dock on the HUD grid', () => {
     renderPage();
@@ -144,6 +158,15 @@ describe('DelveTraining', () => {
     expect(screen.getByTestId('training-panel')).toBeInTheDocument();
     expect(isPaused()).toBe(false);
     expect(live.calls.at(-1)).toBe(true);
+  });
+
+  it("the dock's focus passes over a control that isn't showing", () => {
+    renderPage();
+    boxless.add('Socket 1');
+    useInputDeviceStore.setState({ device: 'gamepad' });
+    fireEvent.click(screen.getByTestId('training-panel-toggle'));
+    expect(screen.getByRole('button', { name: 'Socket 1' })).not.toHaveFocus();
+    expect(dock().contains(document.activeElement)).toBe(true);
   });
 
   it('View again, or Esc, hands the pad back too; Menu opens the menu over the focused dock', () => {
