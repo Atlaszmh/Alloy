@@ -63,6 +63,15 @@ export const STEPS: TutorialStep[] = [
     trigger: { type: 'forge', count: 1 },
   },
   {
+    id: 'board',
+    where: 'anvil',
+    line: 'Contracts come and go.',
+    objective: 'Continue',
+    highlight: 'quests.board',
+    beat: true,
+    trigger: { type: 'ack', count: 1 },
+  },
+  {
     id: 'raise',
     where: 'training',
     line: 'Raise your Defensive.',

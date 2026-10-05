@@ -69,14 +69,19 @@ describe('GuidedChoice', () => {
     expect(startTutorial).toHaveBeenCalledTimes(1);
     expect(useDelveStore.getState().profile.tutorial).toEqual(at('welcome'));
     expect(screen.queryByTestId('guided-choice')).toBeNull();
+    // jsdom lays nothing out: every element gets a box, so the hub is the topmost visible scope.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }),
+    );
     fireEvent.click(screen.getByTestId('mana-choice-fire'));
     // Hesta in place of How to delve.
     expect(screen.queryByTestId('delve-howto')).toBeNull();
     const panel = screen.getByTestId('tutorial-panel');
     expect(panel).toHaveTextContent('Welcome to the Anvil.');
-    // In the hub's own pad scope, focused on Continue.
+    // In the hub's own pad scope; a beat with nothing to point at hands Continue the focus.
     expect(panel.closest('[data-pad-scope]')).toBe(screen.getByTestId('hub-anvil'));
     expect(screen.getByTestId('tutorial-continue')).toHaveFocus();
+    expect(screen.getByTestId('tutorial-continue')).not.toHaveAttribute('data-pad-first');
     fireEvent.click(screen.getByTestId('tutorial-continue'));
     expect(applyTutorialEvents).toHaveBeenCalledWith(expect.anything(), expect.anything(), [
       { type: 'ack' },

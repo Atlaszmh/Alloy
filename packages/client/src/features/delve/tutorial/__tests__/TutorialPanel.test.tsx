@@ -219,3 +219,109 @@ describe("the strip's hold on a finished step", () => {
     }
   });
 });
+
+describe("a beat's Continue and the focus", () => {
+  let frames: FrameRequestCallback[] = [];
+  const nextFrame = () => act(() => frames.splice(0).forEach((f) => f(0)));
+  const go = () => screen.getByTestId('tutorial-continue');
+  /** The hub at the `board` beat: the Quests tab (open while the board shows), and a menu over it while `menu`. */
+  const hub = (board: boolean, menu = false) => (
+    <>
+      <div data-pad-scope>
+        <button role="tab" aria-selected={board} data-tutorial="hub.tab.quests">
+          Quests
+        </button>
+        {board && <div data-tutorial="quests.board">The board</div>}
+        {strip('board', { where: SHOWN_AT.anvil, place: 'anvil' })}
+      </div>
+      {menu && (
+        <div data-pad-scope>
+          <button>Resume</button>
+        </div>
+      )}
+    </>
+  );
+
+  beforeEach(() => {
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    // jsdom lays nothing out: every element gets a box, so scopes and controls are visible.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('with nothing to point at, takes the focus at once; it is no data-pad-first', () => {
+    render(strip('listen'));
+    expect(go()).toHaveFocus();
+    expect(go()).not.toHaveAttribute('data-pad-first');
+  });
+
+  it("waits until the step's highlight is on screen: a way to it is not enough", () => {
+    const { rerender } = render(hub(false));
+    nextFrame();
+    expect(go()).not.toHaveFocus();
+    rerender(hub(true));
+    nextFrame();
+    expect(go()).toHaveFocus();
+  });
+
+  it('waits while another scope is topmost, and moves once the strip’s own is', () => {
+    const { rerender } = render(hub(true, true));
+    nextFrame();
+    expect(go()).not.toHaveFocus();
+    rerender(hub(true));
+    nextFrame();
+    expect(go()).toHaveFocus();
+  });
+
+  it('takes it once: a focus moved away is left alone', () => {
+    render(
+      <>
+        <button data-testid="other">Other</button>
+        {strip('listen')}
+      </>,
+    );
+    expect(go()).toHaveFocus();
+    act(() => screen.getByTestId('other').focus());
+    nextFrame();
+    expect(screen.getByTestId('other')).toHaveFocus();
+  });
+
+  it('when the beat ends, gives the focus back to the control it came from', () => {
+    render(<button data-testid="other">Other</button>);
+    const other = screen.getByTestId('other');
+    other.focus();
+    const { rerender } = render(strip('listen'));
+    expect(go()).toHaveFocus();
+    rerender(strip('cast'));
+    expect(other).toHaveFocus();
+  });
+
+  it('gives nothing back to a control the D-pad cannot reach, or over a focus the player moved', () => {
+    render(
+      <>
+        <span data-pad-skip>
+          <button data-testid="skipped">Skipped</button>
+        </span>
+        <button data-testid="third">Third</button>
+      </>,
+    );
+    screen.getByTestId('skipped').focus();
+    const first = render(strip('listen'));
+    expect(go()).toHaveFocus();
+    first.rerender(strip('cast'));
+    expect(screen.getByTestId('skipped')).not.toHaveFocus();
+    first.unmount();
+
+    screen.getByTestId('third').focus();
+    const second = render(strip('listen'));
+    expect(go()).toHaveFocus();
+    render(<button data-testid="fourth">Fourth</button>);
+    act(() => screen.getByTestId('fourth').focus());
+    second.rerender(strip('cast'));
+    expect(screen.getByTestId('fourth')).toHaveFocus();
+  });
+});

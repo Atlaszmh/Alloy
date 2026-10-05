@@ -13,6 +13,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { keyLabel } from '@/features/controls/controls';
+import { isCandidate } from '@/features/gamepad/use-gamepad-nav';
 import { playSound } from '@/shared/utils/sound-manager';
 import {
   Button,
@@ -21,11 +22,13 @@ import {
   Keycap,
   PixelSprite,
   reducedMotion,
+  topScope,
   usePrompts,
   type Binding,
 } from '../kit';
 import { bindingOf } from '../arena/hud/SkillDock';
 import { getDelveRegistry } from '../registry';
+import { findMarked } from './marked';
 import { stepIn } from './tutorial-view';
 
 /** An input a line names, for the device in hand: the moving and aiming sticks or keys, else the action's binding. */
@@ -118,7 +121,11 @@ export interface TutorialPanelProps {
  * `LINE_MS` after a step begins (it stays in the DOM) but for a beat; at the stop and the Anvil
  * it always shows. A reading beat has Continue (A on the pad, and Enter in the screen's pad
  * scope), the strip's only D-pad stop; the strip is never a scope of its own, so the screen's
- * tabs, prompts and Menu keep working. When `tutorialSkippable` allows it, "Skip this step" is
+ * tabs, prompts and Menu keep working. Continue takes the focus once: when the marker has
+ * nothing left to lead to (`findMarked` gives nothing, or the step's own `highlight` on screen,
+ * not a way to it) and the strip's scope is the topmost; when the beat ends the focus goes back
+ * to the control it came from, if the D-pad can still reach it and the player has not moved it
+ * since. When `tutorialSkippable` allows it, "Skip this step" is
  * a mouse button the D-pad passes by, beside the way to it from the Menu. When the step changes
  * the strip holds the finished objective for `STEP_HOLD_MS` with a tick and a chime (`useHeld`),
  * then the current step pops in; a count going up pulses; under reduced motion nothing moves.
@@ -174,6 +181,36 @@ export function TutorialPanel({
       counter.current?.animate?.(PULSE, { duration: 200, easing: 'ease-out' });
     counted.current = state.count;
   }, [state.count]);
+  // A beat's Continue takes the focus once, by its rule, and gives it back when the beat ends.
+  useEffect(() => {
+    if (!beat || !step) return;
+    const button = root.current?.querySelector<HTMLElement>('[data-testid="tutorial-continue"]');
+    if (!button) return;
+    const scope = button.closest<HTMLElement>('[data-pad-scope]') ?? document;
+    /** Where the focus was when Continue took it. */
+    let before: HTMLElement | null = null;
+    let took = false;
+    let raf = 0;
+    const frame = () => {
+      const marked = findMarked(step);
+      if (topScope() !== scope || (marked && marked.id !== step.highlight)) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+      const active = document.activeElement;
+      before = active instanceof HTMLElement && active !== document.body ? active : null;
+      took = true;
+      button.focus({ preventScroll: true });
+    };
+    frame();
+    return () => {
+      cancelAnimationFrame(raf);
+      const active = document.activeElement;
+      const moved = active !== button && active !== document.body && active !== null;
+      if (took && !moved && before?.isConnected && isCandidate(before))
+        before.focus({ preventScroll: true });
+    };
+  }, [beat, step]);
   if (!step || !shown) return null;
   const giver = registry.getQuestsData().giver;
   const text = tutorialText(registry, profile, shown.id, world);
@@ -258,8 +295,6 @@ export function TutorialPanel({
               variant="primary"
               binding={{ key: 'Enter', pad: 'a' }}
               onClick={() => onEvent({ type: 'ack' })}
-              autoFocus
-              data-pad-first
               testId="tutorial-continue"
             >
               Continue
