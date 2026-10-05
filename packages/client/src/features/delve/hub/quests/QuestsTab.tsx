@@ -57,7 +57,8 @@ const GIVER_NUDGE: Record<string, number> = { hesta: 3 };
  * collapsed Done), the open quest (Hesta, her line, the objectives) and its rewards with Claim,
  * Track and a contract's Reroll. Opening a quest marks it seen; the engine prices and refuses.
  * It opens on the first quest that waits to be claimed, and the pad lands on its row: A on it
- * claims (never while a dive is open), and the next quest that waits opens and takes the focus.
+ * claims (never while a dive is open), and the next quest that waits opens and takes the focus;
+ * while two or more wait, Claim all in the journal's head takes them all, in order.
  */
 export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
@@ -116,6 +117,30 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
   };
   /** A press of a row: under the pad the open, complete one claims; any other opens. */
   const onRow = (id: string) => (rowClaims && id === quest?.id ? onClaim() : open(id));
+  /** The quests waiting to be claimed, in the journal's order. */
+  const waiting = quests.filter((q) => q.status === 'complete');
+  const claimAll = !diving && waiting.length >= 2;
+  /** Claim every waiting quest in order; a refusal stops it and is shown after what went. */
+  const onClaimAll = () => {
+    const names: string[] = [];
+    let refusal: string | null = null;
+    for (const q of waiting) {
+      const res = useDelveStore.getState().claimQuest(q.id);
+      if (!res.ok) {
+        refusal = res.reason ?? '';
+        break;
+      }
+      names.push(q.name);
+    }
+    playSound(names.length > 0 ? 'upgradeTier' : 'combineFail');
+    if (names.length > 0) vibrate('success');
+    const claimed = `Claimed ${names.length} quest${names.length === 1 ? '' : 's'}: ${names.join(', ')}`;
+    setMessage(
+      names.length === 0
+        ? { good: false, text: refusal ?? '' }
+        : { good: true, text: refusal ? `${claimed} · ${refusal}` : claimed },
+    );
+  };
   const onReroll = () => {
     if (slot < 0) return;
     const res = useDelveStore.getState().rerollContract(slot);
@@ -196,6 +221,8 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
             board={board}
             open={quest.id}
             onOpen={onRow}
+            onClaimAll={claimAll ? onClaimAll : undefined}
+            waitingCount={waiting.length}
             tracked={trackedCount}
             maxTracked={maxTracked}
           />
@@ -223,6 +250,8 @@ function Journal({
   board,
   open,
   onOpen,
+  onClaimAll,
+  waitingCount,
   tracked,
   maxTracked,
 }: {
@@ -230,6 +259,9 @@ function Journal({
   board: (Contract | null)[];
   open: string;
   onOpen: (id: string) => void;
+  /** Claim all, in the head, while two or more quests wait and no dive is open. */
+  onClaimAll?: () => void;
+  waitingCount: number;
   tracked: number;
   maxTracked: number;
 }) {
@@ -244,7 +276,7 @@ function Journal({
       key={q.id}
       quest={q}
       on={q.id === open}
-      first={q.id === open}
+      first={!onClaimAll && q.id === open}
       waiting={q.id === waiting}
       onOpen={onOpen}
     />
@@ -254,8 +286,21 @@ function Journal({
       title="Journal"
       testId="quest-journal"
       aside={
-        <span className="k-caption" data-testid="quests-tracked">
-          {tracked} tracked of {maxTracked}
+        <span className="flex items-center gap-3">
+          {onClaimAll && (
+            <Button
+              variant="go"
+              size="sm"
+              onClick={onClaimAll}
+              data-pad-first=""
+              testId="quest-claim-all"
+            >
+              Claim all {waitingCount}
+            </Button>
+          )}
+          <span className="k-caption" data-testid="quests-tracked">
+            {tracked} tracked of {maxTracked}
+          </span>
         </span>
       }
     >

@@ -359,6 +359,58 @@ describe('QuestsTab', () => {
     expect(document.activeElement).not.toBe(screen.getByTestId(`quest-${KINDLING.id}`));
   });
 
+  describe('Claim all', () => {
+    const two = () => [
+      { ...MAIN, status: 'complete' as const },
+      DEEP_ROOTS,
+      { ...KINDLING, status: 'complete' as const },
+    ];
+
+    it("shows while two or more quests wait, as the tab's data-pad-first", () => {
+      shown.quests = [{ ...MAIN, status: 'complete' }, DEEP_ROOTS];
+      const { unmount } = renderTab();
+      expect(screen.queryByTestId('quest-claim-all')).toBeNull();
+      unmount();
+
+      shown.quests = two();
+      renderTab();
+      const all = screen.getByTestId('quest-claim-all');
+      expect(all).toHaveTextContent('Claim all 2');
+      expect([...document.querySelectorAll('[data-pad-first]')]).toEqual([all]);
+    });
+
+    it("claims each in the journal's order and says what it claimed", () => {
+      shown.quests = two();
+      renderTab();
+      fireEvent.click(screen.getByTestId('quest-claim-all'));
+      expect(vi.mocked(useDelveStore.getState().claimQuest).mock.calls.map(([id]) => id)).toEqual(
+        [MAIN.id, KINDLING.id],
+      );
+      expect(screen.getByTestId('quest-message')).toHaveTextContent(
+        `Claimed 2 quests: ${MAIN.name}, ${KINDLING.name}`,
+      );
+    });
+
+    it("stops at a refusal and shows the engine's reason", () => {
+      shown.quests = two();
+      vi.mocked(useDelveStore.getState().claimQuest)
+        .mockReturnValueOnce(ok())
+        .mockReturnValueOnce(ok({ ok: false, reason: 'The pouch is full' }));
+      renderTab();
+      fireEvent.click(screen.getByTestId('quest-claim-all'));
+      expect(useDelveStore.getState().claimQuest).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('quest-message')).toHaveTextContent(
+        `Claimed 1 quest: ${MAIN.name} · The pouch is full`,
+      );
+    });
+
+    it('is absent while a dive is open', () => {
+      shown.quests = two();
+      renderTab(undefined, 'pause');
+      expect(screen.queryByTestId('quest-claim-all')).toBeNull();
+    });
+  });
+
   it('the Contract board: its slots in order, empty ones waiting for the next dive', () => {
     shown.quests = [MAIN, RAT_CATCHER];
     renderTab();
