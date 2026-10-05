@@ -158,9 +158,8 @@ async function tapAndReadCharges(page: Page, button: number): Promise<string | n
 
 /**
  * By D-pad to the control `id`: each press toward it, along the axis it lies further on, or
- * the other axis when that press was already made from here. The pad's nearest-in-direction
- * rule decides each step (right from the lane's last card meets the header's tabs before the
- * inspector), so the walk takes what the rule gives.
+ * the other axis when that press was already made from here. The pad's rule decides each step
+ * (inside a pane while it can, then into the pane that way), so the walk takes what the rule gives.
  */
 async function padWalk(page: Page, id: string): Promise<void> {
   const tried = new Set<string>();
