@@ -214,6 +214,57 @@ describe('findMarked', () => {
     expect(at(findMarked(FORGE))).toEqual(['forge.bench', 'bench']);
   });
 
+  const ROWS = step({
+    highlight: 'hub.tab.forge',
+    trail: ['forge.pattern:cuirass', 'forge.bar', 'forge.flux', 'forge.shard', 'forge.go'],
+  });
+  /** The Forge bench in rows: the steppers say they are done from the bench's state. */
+  const rows = (o: { bar: boolean; flux: boolean }) =>
+    page(`<div data-pad-scope>
+      <button id="tab" role="tab" aria-selected="true" data-tutorial="hub.tab.forge"></button>
+      <button id="pattern" aria-pressed="true" data-tutorial="forge.pattern:cuirass"></button>
+      <div id="flux" role="spinbutton" tabindex="0" data-pad-step
+        data-tutorial="forge.flux" data-tutorial-done="${o.flux}"></div>
+      <div id="bar" role="spinbutton" tabindex="0" data-pad-step
+        data-tutorial="forge.bar" data-tutorial-done="${o.bar}"></div>
+      <div id="lines" data-tutorial="forge.shard" data-tutorial-done="false"></div>
+      <button id="go" data-tutorial="forge.go"></button>
+    </div>`);
+
+  it("walks the bench's stepper rows by their done rule: the bar held, then the flux chosen, then the lines", () => {
+    rows({ bar: true, flux: false });
+    expect(at(findMarked(ROWS))).toEqual(['forge.flux', 'flux']);
+    rows({ bar: true, flux: true });
+    expect(at(findMarked(ROWS))).toEqual(['forge.shard', 'lines']);
+    // No bar held: the Metal row is the line that says where bars drop, and it is marked.
+    rows({ bar: false, flux: false });
+    expect(at(findMarked(ROWS))).toEqual(['forge.bar', 'bar']);
+  });
+
+  it("under the pad a footer prompt is a marked target: the plain target's last match, after the pane's button", () => {
+    page(`<div data-pad-scope>
+      <main><button id="pane" data-tutorial="loadout.equip"></button></main>
+      <footer><span id="prompt" class="k-prompt" data-tutorial="loadout.equip"></span></footer>
+    </div>`);
+    expect(at(findMarked(step({ trail: ['loadout.equip'] })))).toEqual(['loadout.equip', 'prompt']);
+  });
+
+  it("lesson 2's Hone row, disabled for want of scrap, is still marked: the way to the line pick", () => {
+    // Temper's list with Hone unaffordable (its reason beside it): the entry itself is passed
+    // over, but `temper.line` is not on screen and its way is the Hone row, so the marker stays
+    // on Hone and its reason; the strip offers "Skip this step" when nothing worn can pay.
+    page(`<div data-pad-scope>
+      <button id="tab" role="tab" aria-selected="true" data-tutorial="hub.tab.forge"></button>
+      <button id="temper" role="tab" aria-selected="true" data-tutorial="forge.temper"></button>
+      <button id="hone" disabled data-tutorial="temper.hone"></button>
+    </div>`);
+    const hone = step({
+      highlight: 'temper.hone',
+      trail: ['temper.hone', 'temper.line', 'temper.go'],
+    });
+    expect(at(findMarked(hone))).toEqual(['temper.hone', 'hone']);
+  });
+
   it('with no trail marks the highlight, as before; with neither, nothing', () => {
     bench();
     expect(at(findMarked(step({ highlight: 'forge.go' })))).toEqual(['forge.go', 'go']);
