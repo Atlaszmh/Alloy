@@ -234,7 +234,7 @@
       "slowMult": 0.6, "bossSlowMult": 0.8, "foliageSight": 2.5, "foliageDepth": 1.5, "searchTime": 3, "leashMargin": 4,
       "structureLife": 60, "slamDamage": 0.5, "slamStagger": 0.6,
       "propLife": 1, "propDrops": { "chance": 0.35, "material": 0.4 },
-      "hazardDamage": 1.5, "fuse": 0.6, "recharge": 15, "hazardOffElement": 0.2
+      "hazardDamage": 1.5, "hazardFoeMult": 4, "fuse": 0.6, "recharge": 15, "hazardOffElement": 0.2
     },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8 }
   }

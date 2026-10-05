@@ -112,7 +112,7 @@ function prime(ctx: SimCtx, hz: HazardEntity): void {
  * sees, for `terrain.hazardDamage` × the depth's foe damage (`depthGrowth`):
  * the hero takes the damage only (`noPerfect`: a dodge's i-frames avoid it, but
  * it is never a perfect dodge); each foe takes it as nobody's hit (source
- * `hazard`: no crit, none of the hero's element power) with its element's
+ * `hazard`: × `terrain.hazardFoeMult`, no crit, none of the hero's element power) with its element's
  * stacks as a heavy blow brings them, reactions as usual. It wears crumbling
  * cover, sets off the hazards and breaks the props it reaches (a chain), and
  * is dormant for `terrain.recharge`.
@@ -130,7 +130,7 @@ function burst(ctx: SimCtx, hz: HazardEntity): void {
   if (reaches(world.hero)) hurtHero(ctx, damage, element, null, { noPerfect: true });
   for (const m of world.monsters)
     if (!m.dead && reaches(m))
-      hitMonster(ctx, m, damage, element, {
+      hitMonster(ctx, m, damage * bal.terrain.hazardFoeMult, element, {
         source: 'hazard',
         applies: [BASIC_STATUS[element]],
         stacks: bal.stacks.basicByKind.heavy,
