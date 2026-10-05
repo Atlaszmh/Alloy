@@ -210,6 +210,15 @@ test.describe('Delve guided start', () => {
     await expect(summary).toContainText('EXTRACTED');
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
+    // A step completes by what holds, so an Iron bar from the floors (a bar's chance of the next
+    // metal) would pass the refine unplayed: the save drops any, and the refine is always played.
+    await page.evaluate((key) => {
+      const save = JSON.parse(localStorage.getItem(key)!);
+      save.materials.metals.iron = 0;
+      localStorage.setItem(key, JSON.stringify(save));
+    }, SAVE_KEY);
+    await page.reload();
+    await expect(page.getByTestId('delve-camp')).toBeVisible();
 
     // Anvil lesson 1: the Depart sheet's Delve waits for it, saying why.
     await expectDiveHeld(page, true);
@@ -276,18 +285,14 @@ test.describe('Delve guided start', () => {
     await page.locator('[data-testid="bag-item"][aria-label*="Sword, common"]').first().click();
     await expect(page.getByTestId('item-sheet')).toContainText('Common Rusty Sword');
     await page.getByTestId('salvage-button').click();
-    await expect.poll(() => step(page)).not.toBe('l1-salvage');
+    await expect.poll(() => step(page)).toBe('l1-refine');
     await expectDiveHeld(page, true);
-    // A step completes by what holds: an Iron bar from the floors (a bar's chance of the next
-    // metal) passes the refine at once.
-    if ((await step(page)) === 'l1-refine') {
-      await page.getByTestId('tab-forge').click();
-      // The Materials bench is the way to the refine: its sub tab is marked first.
-      await marked('forge.materials');
-      await page.getByTestId('bench-materials').click();
-      await marked('forge.refine:rusty');
-      await page.getByTestId('refine-metal-rusty').click();
-    }
+    await page.getByTestId('tab-forge').click();
+    // The Materials bench is the way to the refine: its sub tab is marked first.
+    await marked('forge.materials');
+    await page.getByTestId('bench-materials').click();
+    await marked('forge.refine:rusty');
+    await page.getByTestId('refine-metal-rusty').click();
     await expect.poll(() => step(page)).toBe('l1-claim2');
     await claimAll(page);
 
