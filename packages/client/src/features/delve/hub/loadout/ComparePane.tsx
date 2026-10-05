@@ -212,7 +212,8 @@ export function ComparePane({
           </p>
         )}
         <span className="k-label">{heading}</span>
-        <div className="flex">
+        {/* The header's tile is a picture here, never a D-pad stop. */}
+        <div className="flex" data-pad-skip="">
           <ItemHeader item={item} size="lg" />
         </div>
 

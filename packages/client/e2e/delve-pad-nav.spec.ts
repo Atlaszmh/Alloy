@@ -32,6 +32,8 @@ type Dir = 'up' | 'down' | 'left' | 'right';
 const ALLOW: Record<string, [number, number]> = {
   loadout: [11, 7],
   'loadout-item': [11, 7],
+  'junk-sheet': [0, 0],
+  help: [0, 0],
   skills: [2, 4],
   forge: [0, 0],
   'forge-pattern': [0, 0],
@@ -53,6 +55,19 @@ const ALLOW: Record<string, [number, number]> = {
  * doors and Extract (the seeded hero's life is full: no potion).
  */
 const CEILING: Record<string, number> = {
+  // The audit's save: the doll's 7 slots, the bag's 12 tiles and its sort, Equip best, Salvage
+  // junk, Auto-salvage and Delve (one stop a bag item: above the spec's 21 by its tiles alone).
+  loadout: 24,
+  'loadout-item': 24,
+  // The junk sheet's Back, its 8 candidates and Salvage.
+  'junk-sheet': 10,
+  // Help's Back: its topics are a kit tab list, off the D-pad.
+  help: 1,
+  // The 9 learned patterns and Delve; with a pattern open, its Flux, Metal and Element rows and Forge.
+  forge: 10,
+  'forge-pattern': 14,
+  // The 19 gear rows, the one operation the worn weapon can take, and Delve (one stop a gear row).
+  temper: 21,
   // The audit's save: the shard bench's stepper and Buy, its Refines, and Delve.
   materials: 5,
   'stop-powerup': 4,
@@ -227,13 +242,13 @@ async function audit(page: Page): Promise<Report> {
 }
 
 /** Audit the screen now showing as `name` and hold it to the rules. */
-async function check(page: Page, name: string): Promise<void> {
+async function check(page: Page, name: string, min = 2): Promise<void> {
   await page.waitForTimeout(300);
   const r = await audit(page);
   const wide = test.info().project.name === 'desktop-1080' ? 1 : 0;
   if (process.env.NAV_REPORT)
     console.log(`${name} (${test.info().project.name}): ${r.stops} stops, ${r.unreversed.length} unreversed\n  ${r.unreversed.join('\n  ')}`);
-  expect(r.stops, `${name} has stops`).toBeGreaterThan(1);
+  expect(r.stops, `${name} has stops`).toBeGreaterThanOrEqual(min);
   expect(r.unreachable, `${name}: every stop is reachable`).toEqual([]);
   expect(r.clipped, `${name}: no move lands on a row scrolled out of another list`).toEqual([]);
   expect(r.unreversed.length, `${name}: moves inside a pane that don't reverse\n${r.unreversed.join('\n')}`).toBeLessThanOrEqual(ALLOW[name][wide]);
@@ -299,6 +314,11 @@ test.describe('Delve pad navigation', () => {
     await check(page, 'loadout');
     await click(page, 'bag-item');
     await check(page, 'loadout-item');
+    await click(page, 'salvage-junk');
+    await expect(page.getByTestId('junk-sheet')).toBeVisible();
+    await check(page, 'junk-sheet');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('junk-sheet')).toHaveCount(0);
     await click(page, 'tab-skills');
     await check(page, 'skills');
     await click(page, 'tab-forge');
@@ -321,6 +341,12 @@ test.describe('Delve pad navigation', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('open-settings')).toBeVisible();
     await check(page, 'system-menu');
+    await click(page, 'open-help');
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    // Help's one stop is its Back: the topics are a kit tab list, off the D-pad.
+    await check(page, 'help', 1);
+    await page.keyboard.press('Escape'); // back to the menu
+    await expect(page.getByTestId('open-settings')).toBeVisible();
     await click(page, 'open-settings');
     await check(page, 'settings');
   });
