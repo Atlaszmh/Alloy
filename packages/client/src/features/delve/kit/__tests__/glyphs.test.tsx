@@ -114,6 +114,20 @@ describe('the kit glyphs', () => {
     expect(onPress).toHaveBeenCalledOnce();
   });
 
+  it('draws its prompts in the grammar order whatever order the screen gives', () => {
+    render(
+      <PromptBar
+        prompts={[
+          { id: 'back', label: 'Back', binding: { pad: 'b' } },
+          { id: 'lock', label: 'Lock', binding: { pad: 'y' } },
+          { id: 'equip', label: 'Equip', binding: { pad: 'a' } },
+        ]}
+      />,
+    );
+    const labels = [...document.querySelectorAll('.k-prompt')].map((el) => el.textContent);
+    expect(labels.map((t) => t?.replace(/^.*?(Equip|Lock|Back)$/, '$1'))).toEqual(['Equip', 'Lock', 'Back']);
+  });
+
   it('a prompt button lets go of focus after a mouse click, so Enter reaches the screen', () => {
     const menu: Prompt = {
       id: 'menu',

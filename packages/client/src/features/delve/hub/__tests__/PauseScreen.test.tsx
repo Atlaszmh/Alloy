@@ -83,14 +83,14 @@ describe('PauseScreen', () => {
     expect(header).not.toHaveTextContent('foes left');
   });
 
-  it('the footer: Inspect, Full compare and Tabs, then Controls, Settings, Anvil, Abandon and Resume', () => {
+  it('the footer: Inspect, Tabs and Full compare (the grammar order), then Controls, Settings, Anvil, Abandon and Resume', () => {
     const on = renderPause();
     const footer = screen.getByTestId('pause-screen').querySelector('footer')!;
     const text = footer.textContent!;
     const order = [
       'Inspect',
-      'Full compare',
       'Tabs',
+      'Full compare',
       'Controls',
       'Settings',
       'Anvil · floor restarts',

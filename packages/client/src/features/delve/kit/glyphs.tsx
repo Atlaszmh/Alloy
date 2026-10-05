@@ -4,6 +4,7 @@ import type { PadButton } from '@/features/gamepad/gamepad';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { blurAfterMouse } from './controls';
 import { GLYPH_ART, pixelRuns } from './glyph-art';
+import { orderPrompts } from './prompts';
 import type { Binding, GlyphId, Prompt } from './types';
 
 type GlyphSize = 'sm' | 'md';
@@ -178,7 +179,7 @@ export function Price({
   );
 }
 
-/** Prompts in a row: a glyph and a label each. Draws only; the screen binds them with usePrompts. */
+/** Prompts in a row, in the grammar's order (`orderPrompts`): a glyph and a label each. Draws only; the screen binds them with usePrompts. */
 export function PromptBar({
   prompts,
   className = '',
@@ -188,7 +189,7 @@ export function PromptBar({
 }): ReactElement {
   return (
     <div className={`k-promptbar ${className}`}>
-      {prompts.map((p) =>
+      {orderPrompts(prompts).map((p) =>
         p.asButton ? (
           <button
             key={p.id}

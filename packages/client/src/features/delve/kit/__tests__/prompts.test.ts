@@ -5,6 +5,7 @@ import {
   captureNav,
   hudScaleFor,
   navCapture,
+  orderPrompts,
   padPrompts,
   scopedLast,
   topScope,
@@ -431,5 +432,43 @@ describe('the UI scale', () => {
       useUIStore.getState().setHudScale(1);
     });
     localStorage.removeItem('alloy:delve:hudScale');
+  });
+});
+
+describe('orderPrompts', () => {
+  const p = (id: string, binding: Prompt['binding']): Prompt => ({ id, label: id, binding });
+
+  it('sorts by the pad button: A, X, Y, the bumpers, the triggers, the sticks, View, Menu, then B', () => {
+    const mixed = [
+      p('back', { pad: 'b' }),
+      p('menu', { key: 'Escape', pad: 'menu' }),
+      p('filter', { pad: 'rt' }),
+      p('lock', { key: 'KeyL', pad: 'y' }),
+      p('tabs', { pad: 'lb' }),
+      p('salvage', { key: 'Delete', pad: 'x' }),
+      p('depart', { pad: 'view' }),
+      p('scroll', { pad: 'rs' }),
+      p('equip', { pad: 'a' }),
+    ];
+    expect(orderPrompts(mixed).map((x) => x.id)).toEqual([
+      'equip', 'salvage', 'lock', 'tabs', 'filter', 'scroll', 'depart', 'menu', 'back',
+    ]);
+  });
+
+  it('keeps the given order among prompts of one button, and puts a prompt with no pad button before B', () => {
+    const list = [
+      p('back', { pad: 'b' }),
+      p('keys-only', { key: 'KeyT' }),
+      p('select', { mouse: 'click', pad: 'a' }),
+      p('equip', { mouse: 'rmb', pad: 'a' }),
+    ];
+    expect(orderPrompts(list).map((x) => x.id)).toEqual(['select', 'equip', 'keys-only', 'back']);
+  });
+
+  it('returns a new array and leaves its input alone', () => {
+    const list = [p('back', { pad: 'b' }), p('equip', { pad: 'a' })];
+    const out = orderPrompts(list);
+    expect(out).not.toBe(list);
+    expect(list.map((x) => x.id)).toEqual(['back', 'equip']);
   });
 });

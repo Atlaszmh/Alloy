@@ -66,6 +66,28 @@ function activePrompts(): Prompt[] {
     .filter((p) => !p.disabled && (p.onPress || p.onHold));
 }
 
+// ── Order ─────────────────────────────────────────────────────────────────
+
+/** The one order every footer draws its prompts in (the pad-first spec's grammar, rule 3). */
+const PAD_ORDER: readonly PadButton[] = [
+  'a', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'ls', 'rs', 'view', 'menu', 'b',
+];
+/** A prompt with no pad button, or one on the D-pad (keys or the mouse alone; a carry), sits after Menu and before B. */
+const NO_PAD_RANK = PAD_ORDER.indexOf('b') - 0.5;
+
+/**
+ * `prompts` in the grammar's order: by pad button (A, X, Y, LB/RB, LT/RT, the sticks, View,
+ * Menu, B), those of one button in the order given. The same order for every device, so the
+ * keys' prompts sit where the pad's do.
+ */
+export function orderPrompts(prompts: Prompt[]): Prompt[] {
+  const rank = (p: Prompt) => {
+    const i = p.binding.pad ? PAD_ORDER.indexOf(p.binding.pad) : -1;
+    return i < 0 ? NO_PAD_RANK : i;
+  };
+  return [...prompts].sort((a, b) => rank(a) - rank(b));
+}
+
 // ── Keys ──────────────────────────────────────────────────────────────────
 
 const MODIFIER = /^(Alt|Control|Shift|Meta)/;
