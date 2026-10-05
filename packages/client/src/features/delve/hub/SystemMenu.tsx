@@ -33,12 +33,14 @@ export function SystemMenu({
 }) {
   const navigate = useNavigate();
   const unsocket = useDelveStore((s) => s.unsocket);
-  const profile = useDelveStore((s) => s.profile);
-  const guided = profile.tutorial !== null;
-  const skippable =
-    !!profile.tutorial &&
-    !!stepIn(getDelveRegistry(), profile.tutorial, SHOWN_AT.anvil) &&
-    tutorialSkippable(getDelveRegistry(), profile, profile.tutorial);
+  const guided = useDelveStore((s) => s.profile.tutorial !== null);
+  // The skip rule reads much of the save (what the step's op needs and costs): select its answer.
+  const skippable = useDelveStore(
+    ({ profile: p }) =>
+      !!p.tutorial &&
+      !!stepIn(getDelveRegistry(), p.tutorial, SHOWN_AT.anvil) &&
+      tutorialSkippable(getDelveRegistry(), p, p.tutorial),
+  );
   const [view, setView] = useState<'menu' | 'controls' | 'settings' | 'skip'>('menu');
   const [confirmRestart, setConfirmRestart] = useState(false);
   // Dev builds: what pulling a rune does here (the balance's rule until the chip picks one).
