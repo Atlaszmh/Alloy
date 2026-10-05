@@ -17,7 +17,7 @@ import { SAVE_KEY } from './fixtures/delve';
  * three walks with a fake pad through the screens that felt worst.
  */
 
-const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, rt: 7, up: 12, down: 13, left: 14, right: 15 } as const;
+const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, up: 12, down: 13, left: 14, right: 15 } as const;
 type Dir = 'up' | 'down' | 'left' | 'right';
 
 /**
@@ -35,6 +35,7 @@ const ALLOW: Record<string, [number, number]> = {
   temper: [18, 18],
   codex: [0, 0],
   quests: [0, 0],
+  depart: [0, 0],
   'system-menu': [0, 0],
   settings: [0, 0],
 };
@@ -278,6 +279,11 @@ test.describe('Delve pad navigation', () => {
     await check(page, 'codex');
     await click(page, 'tab-quests');
     await check(page, 'quests');
+    await click(page, 'depart-button');
+    await expect(page.getByTestId('depart-sheet')).toBeVisible();
+    await check(page, 'depart');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('depart-sheet')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('open-settings')).toBeVisible();
     await check(page, 'system-menu');
@@ -353,5 +359,42 @@ test.describe('Delve pad navigation', () => {
     const at = await where(page);
     expect(at.tab).toBe(false);
     expect(at.foot).toBe(false);
+  });
+
+  test('PN05: Menu opens the system menu, whose list wraps; View opens the Depart sheet and A dives', async ({ page }) => {
+    await seed(page);
+    await page.goto('/delve');
+    await expect(page.getByTestId('depart-button')).toBeVisible();
+    await tap(page, BUTTON.up); // the pad takes the input lock
+
+    await tap(page, BUTTON.menu);
+    await expect(page.getByTestId('system-menu')).toBeVisible();
+    expect((await where(page)).id).toBe('menu-resume');
+    // Down from Resume comes back round to it (the dev chips and Back are on the way).
+    let presses = 0;
+    do {
+      await tap(page, BUTTON.down);
+      presses++;
+    } while ((await where(page)).id !== 'menu-resume' && presses < 12);
+    expect((await where(page)).id).toBe('menu-resume');
+    expect(presses).toBeGreaterThan(3);
+    // And B closes it: no dive began.
+    await tap(page, BUTTON.b);
+    await expect(page.getByTestId('system-menu')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/delve$/);
+
+    // B at the root does nothing (on the bag: the compare pane's own B, Back to bag, would act).
+    await page.getByTestId('bag-item').first().focus();
+    await tap(page, BUTTON.b);
+    await page.waitForTimeout(200);
+    await expect(page.getByTestId('system-menu')).toHaveCount(0);
+    await expect(page.getByTestId('depart-sheet')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/delve$/);
+
+    await tap(page, BUTTON.view);
+    await expect(page.getByTestId('depart-sheet')).toBeVisible();
+    expect((await where(page)).id).toBe('delve-button');
+    await tap(page, BUTTON.a);
+    await expect(page).toHaveURL(/\/delve\/run$/);
   });
 });
