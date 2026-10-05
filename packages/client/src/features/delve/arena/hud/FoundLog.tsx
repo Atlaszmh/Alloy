@@ -92,6 +92,11 @@ function HaulFeedRow({ row, testId, color }: { row: HaulRow; testId: string; col
   );
 }
 
+/** How many of `items` are upgrades as they come (▲): what waits to be equipped at the Anvil. */
+export function countUpgrades(items: readonly { asIs: number | null }[]): number {
+  return items.filter((r) => r.asIs !== null && r.asIs > UPGRADE_EPSILON).length;
+}
+
 /**
  * "Found this floor": each pickup since the floor began, as many as fit, then "+n more": the
  * materials in the floor's haul grouped ("Iron bar ×3"), the items newest first, the essences in
@@ -129,7 +134,7 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
   }, []);
 
   const up = (d: number | null) => d !== null && d > UPGRADE_EPSILON;
-  const upgrades = items.filter((r) => up(r.asIs)).length;
+  const upgrades = countUpgrades(items);
   const potential = items.filter((r) => up(r.delta) && !up(r.asIs)).length;
 
   const rows = [

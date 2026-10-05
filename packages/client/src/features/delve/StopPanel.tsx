@@ -148,6 +148,7 @@ export function StopPanel({ stop, ops = STOP_OPS }: { stop: DiveStop; ops?: Stop
                 setOpen(kind);
               }}
               data-pad-first={i === 0 || undefined}
+              data-primary-action={i === 0 ? 'powerup' : undefined}
               data-testid={`stop-${kind}`}
               data-tutorial={`stop.card:${kind}`}
             >

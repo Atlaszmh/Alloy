@@ -353,7 +353,7 @@ describe('DelveRun', () => {
     });
     renderRun();
     const stop = screen.getByTestId('door-choice');
-    expect(screen.getByTestId('door-winding')).toBeInTheDocument();
+    expect(within(stop).getByTestId('stop-equip')).toBeInTheDocument();
     expect(screen.queryByTestId('skill-bar')).toBeNull();
     fireEvent.click(within(stop).getByRole('button', { name: 'Menu' }));
     const pause = screen.getByTestId('pause-stub');
@@ -363,6 +363,8 @@ describe('DelveRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
     expect(screen.queryByTestId('pause-stub')).toBeNull();
     expect(screen.getByTestId('door-choice')).toBeInTheDocument();
+    // The step survives the pause: the stop stays mounted under it.
+    expect(within(screen.getByTestId('door-choice')).getByTestId('stop-equip')).toBeInTheDocument();
   });
 
   it('the pause makes the stop and the HUD behind it inert, and the stop the HUD: Tab stays in the top screen', () => {

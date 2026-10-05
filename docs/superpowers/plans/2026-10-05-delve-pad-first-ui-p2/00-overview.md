@@ -47,6 +47,8 @@ The engine is not edited in this phase (no data, no types: every guided-start ta
 
 **Baseline.** Before Task 1 of plan 01, on `padui/p2` fresh from `padui/main`, run `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)` and write the file and test counts into this section ("Baseline (recorded <date> on `padui/main` at `<sha>`): `tsc` clean; `vitest run` N files, M tests, all passing"). Every later "all green" compares to it. If the baseline is not green, stop: phase 1 did not close.
 
+Baseline (recorded 2026-10-05 on `padui/main` at `02290b16`): `tsc` clean; `vitest run` 133 files, 1194 tests, all passing.
+
 ## Conventions
 
 - Match the surrounding code: a doc comment on every export in the project's plain voice, kebab-case files for modules (`gain-feed.ts`), PascalCase for components, `UPPER_SNAKE_CASE` constants.
