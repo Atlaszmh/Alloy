@@ -7,7 +7,12 @@ import { tutorialDoorCount, tutorialFloorProblems } from '../src/data/tutorial-f
 import { TutorialDataSchema } from '../src/data/tutorial-schema.js';
 import rawTutorial from '../src/data/tutorial.json';
 import { MANA_TYPES } from '../src/types/mana.js';
-import type { TutorialData, TutorialStep } from '../src/types/tutorial.js';
+import type { StopKind } from '../src/types/delve.js';
+import {
+  TUTORIAL_KEYED_TARGETS,
+  type TutorialData,
+  type TutorialStep,
+} from '../src/types/tutorial.js';
 import type { TutorialFloorDef } from '../src/types/tutorial-floor.js';
 
 // See the tutorial spec: "The script" and "Hand-built floors" (Phase A's skeleton).
@@ -170,5 +175,57 @@ describe('tutorialFloorProblems', () => {
     expect(floor({ spawns, drops: gear('sword', 'secondary') })).toEqual([
       "d1-1: drop g: dive 1's gear is in the primary",
     ]);
+  });
+});
+
+// See the pad navigation and guidance spec, 2.3: a step's trail, carried and checked.
+describe('trails', () => {
+  /** An Anvil step with `trail` (any strings: the checks name the bad ones). */
+  const anvil = (...trail: string[]): TutorialStep => ({
+    id: 'forge',
+    where: 'anvil',
+    line: 'Forge it.',
+    objective: 'Forge',
+    trigger: { type: 'forge', count: 1 },
+    trail: trail as TutorialStep['trail'],
+  });
+  /** A stop step offering `kinds`, with `trail`. */
+  const atStop = (kinds: StopKind[], ...trail: string[]): TutorialStep => ({
+    ...STEP,
+    where: 'stop',
+    marker: undefined,
+    gate: undefined,
+    stop: { kinds, doors: ['winding'], extract: false },
+    trail: trail as TutorialStep['trail'],
+  });
+
+  it('the schema takes a trail of names (never an empty one), and the new targets as highlights', () => {
+    const step = (s: object) => ok({ ...rawTutorial, steps: [{ ...STEP, ...s }] });
+    expect(step({ trail: ['quests.done', 'forge.pattern:cuirass'] })).toBe(true);
+    expect(step({ trail: [] })).toBe(false);
+    expect(step({ trail: [''] })).toBe(false);
+    expect(step({ trail: 'quests.done' })).toBe(false);
+    for (const t of [
+      'quests.done',
+      'mana.confirm',
+      'skills.rune',
+      'forge.bench',
+      'temper.line',
+      'temper.go',
+      'stop.pick',
+    ])
+      expect(step({ highlight: t })).toBe(true);
+    // One control among several is never a highlight.
+    for (const t of ['loadout.bag', 'skills.card', 'stop.card'])
+      expect(step({ highlight: t })).toBe(false);
+    expect(TUTORIAL_KEYED_TARGETS).toEqual({
+      'forge.pattern': 'base',
+      'forge.bar': 'metal',
+      'forge.flux': 'flux',
+      'forge.refine': 'metal',
+      'loadout.bag': 'slotRarity',
+      'skills.card': 'end',
+      'stop.card': 'stopKind',
+    });
   });
 });

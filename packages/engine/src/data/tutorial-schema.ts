@@ -18,6 +18,8 @@ export const TutorialStepSchema = z
     line: z.string().min(1),
     objective: z.string().min(1),
     highlight: z.enum(TUTORIAL_TARGETS).optional(),
+    // Each entry's target and key are `tutorialDataProblems`'.
+    trail: z.array(z.string().min(1)).min(1).optional(),
     beat: z.boolean().optional(),
     trigger: z.object({
       type: z.enum(TUTORIAL_TRIGGERS),

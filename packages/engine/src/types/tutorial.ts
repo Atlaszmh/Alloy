@@ -120,6 +120,7 @@ export const TUTORIAL_TARGETS = [
   'stop.doors',
   'stop.extract',
   'stop.risk',
+  'stop.pick',
   'hub.tab.loadout',
   'hub.tab.skills',
   'hub.tab.forge',
@@ -135,20 +136,46 @@ export const TUTORIAL_TARGETS = [
   'forge.flux',
   'forge.shard',
   'forge.go',
+  'forge.bench',
   'forge.temper',
   'forge.refine',
   'temper.hone',
+  'temper.line',
+  'temper.go',
   'skills.mana',
   'mana.bind',
+  'mana.confirm',
   'skills.primary',
   'skills.addSlot',
   'skills.elements',
   'skills.socket',
+  'skills.rune',
   'skills.apply',
+  'quests.done',
   'quests.claim',
   'quests.board',
 ] as const;
 export type TutorialTarget = (typeof TUTORIAL_TARGETS)[number];
+
+/**
+ * The targets that are one control among several, named `<target>:<key>`, and
+ * what each key is: a gear base's id, a metal's id, a flux grade,
+ * `<slot>.<rarity>`, `first` or `last`, or a stop's power-up kind
+ * (`tutorialDataProblems` checks each against the data).
+ */
+export const TUTORIAL_KEYED_TARGETS = {
+  'forge.pattern': 'base',
+  'forge.bar': 'metal',
+  'forge.flux': 'flux',
+  'forge.refine': 'metal',
+  'loadout.bag': 'slotRarity',
+  'skills.card': 'end',
+  'stop.card': 'stopKind',
+} as const;
+export type TutorialKeyedTarget = keyof typeof TUTORIAL_KEYED_TARGETS;
+
+/** An entry of a step's trail: a target, or one control of a keyed target (`forge.pattern:cuirass`). */
+export type TutorialTrailTarget = TutorialTarget | `${TutorialKeyedTarget}:${string}`;
 
 /** The inputs a line's `{input:<action>}` names: the client draws each as its binding's glyph. */
 export const TUTORIAL_INPUTS = [
@@ -187,6 +214,12 @@ export interface TutorialStep {
   line: string;
   objective: string;
   highlight?: TutorialTarget;
+  /**
+   * The clicks of an Anvil, Training or stop step, in order: the client marks
+   * the first still to do, then the `highlight`. Carried and checked only: no
+   * rule reads it.
+   */
+  trail?: TutorialTrailTarget[];
   /** A reading beat: the arena pauses until Continue (`ack`). */
   beat?: boolean;
   trigger: TutorialTrigger;
