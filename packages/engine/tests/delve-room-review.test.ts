@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
-import { isWalkable } from '../src/arpg/grid.js';
+import { isWalkable, moveCircle } from '../src/arpg/grid.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { createFloorWorld } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
@@ -79,5 +79,28 @@ describe('a hero hiding in foliage', () => {
         hitMonster(makeCtx(registry, w, []), w.monsters[0], 50, 'fire', { source: 'skill' });
     }
     expect(hurt).toBeGreaterThan(0);
+  });
+});
+
+describe('a generated floor', () => {
+  it('spawns no foe wedged where it cannot move', { timeout: 60_000 }, () => {
+    const wedged: string[] = [];
+    for (let depth = 1; depth <= 30; depth++)
+      for (let seed = 1; seed <= 20; seed++) {
+        const w = floor(depth, seed);
+        for (const m of w.monsters) {
+          const moved = [
+            [0.2, 0],
+            [-0.2, 0],
+            [0, 0.2],
+            [0, -0.2],
+          ].map(([dx, dy]) => {
+            const p = moveCircle(w.map, m, m.radius, dx, dy);
+            return Math.hypot(p.x - m.x, p.y - m.y);
+          });
+          if (Math.max(...moved) < 1e-6) wedged.push(`d${depth} s${seed} ${m.defId} r ${m.radius}`);
+        }
+      }
+    expect(wedged).toEqual([]);
   });
 });

@@ -25,6 +25,7 @@ import {
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
+import { clearanceOf } from './flow.js';
 import { dist } from './geometry.js';
 import { openRoom, snapToWalkable, solid } from './grid.js';
 import { footprintsOf } from './layout/furnish.js';
@@ -648,15 +649,21 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
       const def = biome.monsters[spawnRng.nextInt(0, biome.monsters.length - 1)];
       const x = cx + Math.cos(angle) * r;
       const y = cy + Math.sin(angle) * r;
+      const m = spawn(def, i === 0 && elitePack ? 'elite' : 'normal', x, y, packId, roomId);
+      // A foe wider than a cell stands at the centre of an open 3 × 3, never wedged in cover.
+      const large = clearanceOf(m) !== 'small';
+      const stand = (a: number, b: number) => open(a, b) && (!large || block(a - 1, b - 1, free));
       // Hidden foes spread over the patch's cells, one a cell while they last.
       const at = !plan
         ? snapToWalkable(map, x, y)
         : ambush
           ? (spawnAt(map, x, y, (a, b) => hidden(a, b) && !used.has(b * width + a)) ??
             spawnAt(map, x, y, hidden)!)
-          : (spawnAt(map, x, y, open) ?? snapToWalkable(map, x, y));
+          : (spawnAt(map, x, y, stand) ?? snapToWalkable(map, x, y));
+      if (plan && large)
+        Object.assign(at, { x: Math.floor(at.x) + 0.5, y: Math.floor(at.y) + 0.5 });
       used.add(Math.floor(at.y) * width + Math.floor(at.x));
-      const m = spawn(def, i === 0 && elitePack ? 'elite' : 'normal', at.x, at.y, packId, roomId);
+      Object.assign(m, { x: at.x, y: at.y });
       m.ambush = ambush;
     }
   };
