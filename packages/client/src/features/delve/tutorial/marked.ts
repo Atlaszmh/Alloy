@@ -110,7 +110,34 @@ export function findWay(target: TutorialTrailTarget): Marked | null {
   return null;
 }
 
-/** The step's marked control: its `highlight`, by `findWay`. (Task 6 gives it the trail and the way out.) */
+/**
+ * The way out of a view or picker left open inside the screen: the topmost scope's
+ * `[data-pad-back]`, when that scope is nested in another (the Mana view, a rune or shard
+ * picker, a stop card's picker). A kit dialog or the pause is not nested: the player opened it
+ * on purpose, and it gets no marker.
+ */
+function wayOut(): Marked | null {
+  const scope = topScope();
+  if (!(scope instanceof HTMLElement) || !scope.parentElement?.closest('[data-pad-scope]'))
+    return null;
+  const el = scopedLast('[data-pad-back]');
+  return el && onScreen(el) ? { el, id: 'back' } : null;
+}
+
+/**
+ * The step's marked control. Its trail is walked in order: an entry on screen that is done
+ * (`isDone`) or disabled is passed over; the first one on screen, enabled and not done is
+ * marked; one that is not on screen is marked by its way (`findWay`), or passed over when no way
+ * shows. After the trail, the step's `highlight` (by `findWay`, as ever). When none of that gives
+ * anything in the topmost scope, the way out of it (`wayOut`).
+ */
 export function findMarked(step: TutorialStep): Marked | null {
-  return step.highlight ? findWay(step.highlight) : null;
+  for (const entry of step.trail ?? []) {
+    const el = findTarget(entry);
+    if (el && (isDone(el) || el.matches(':disabled, [aria-disabled="true"]'))) continue;
+    const marked = el ? { el, id: entry } : findWay(entry);
+    if (marked) return marked;
+  }
+  const own = step.highlight ? findWay(step.highlight) : null;
+  return own ?? (step.trail || step.highlight ? wayOut() : null);
 }

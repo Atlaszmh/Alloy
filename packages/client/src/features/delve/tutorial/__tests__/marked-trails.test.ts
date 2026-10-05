@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { findTarget, findWay, isDone, type Marked } from '../marked';
+import type { TutorialStep } from '@alloy/engine';
+import { findMarked, findTarget, findWay, isDone, type Marked } from '../marked';
 
 // See the pad navigation and guidance spec, 2.3: keyed targets, done, the ways, the trail and
 // the way out. The rule reads the DOM alone, so each test writes the page it needs.
@@ -124,5 +125,111 @@ describe('findWay', () => {
     // The Forge bench open already: its sub tab is done, and so is the tab.
     forge('forge');
     expect(findWay('forge.go')).toBeNull();
+  });
+});
+
+describe('findMarked', () => {
+  const step = (over: Partial<TutorialStep> = {}): TutorialStep => ({
+    id: 'lesson',
+    where: 'anvil',
+    line: 'A line.',
+    objective: 'Do it',
+    trigger: { type: 'ack', count: 1 },
+    ...over,
+  });
+  const FORGE = step({
+    highlight: 'hub.tab.forge',
+    trail: ['forge.pattern:cuirass', 'forge.flux:uncommon', 'forge.go'],
+  });
+  /** The Forge bench: the pattern picked or not, the flux chosen, off or neither, Forge on or off. */
+  const bench = (o: { pattern?: boolean; flux?: boolean | 'off'; go?: 'off' } = {}) =>
+    page(`<div data-pad-scope>
+      <button id="tab" role="tab" aria-selected="true" data-tutorial="hub.tab.forge"></button>
+      <button id="pattern" aria-pressed="${!!o.pattern}"
+        data-tutorial="forge.pattern:cuirass"></button>
+      <button id="flux" role="radio" aria-checked="${o.flux === true}"
+        ${o.flux === 'off' ? 'disabled' : ''} data-tutorial="forge.flux:uncommon"></button>
+      <button id="go" ${o.go ? 'disabled' : ''} data-tutorial="forge.go"></button>
+    </div>`);
+
+  it('marks the first entry of the trail still to do, a done one passed over', () => {
+    bench();
+    expect(at(findMarked(FORGE))).toEqual(['forge.pattern:cuirass', 'pattern']);
+    bench({ pattern: true });
+    expect(at(findMarked(FORGE))).toEqual(['forge.flux:uncommon', 'flux']);
+    bench({ pattern: true, flux: true });
+    expect(at(findMarked(FORGE))).toEqual(['forge.go', 'go']);
+  });
+
+  it('passes over a disabled entry', () => {
+    bench({ pattern: true, flux: 'off' });
+    expect(at(findMarked(FORGE))).toEqual(['forge.go', 'go']);
+  });
+
+  it("marks the step's highlight once the trail is done or passed over", () => {
+    bench({ pattern: true, flux: true, go: 'off' });
+    expect(at(findMarked(FORGE))).toEqual(['hub.tab.forge', 'tab']);
+  });
+
+  it('marks an entry that is not on screen by its way, and passes it over when no way shows', () => {
+    // On another tab: the way to the first entry is the Forge tab.
+    page(`<div data-pad-scope>
+      <button id="tab" role="tab" aria-selected="false" data-tutorial="hub.tab.forge"></button>
+    </div>`);
+    expect(at(findMarked(FORGE))).toEqual(['hub.tab.forge', 'tab']);
+    // On the tab, the pattern row not showing: its way is open, so the walk goes on to the flux.
+    page(`<div data-pad-scope>
+      <button id="tab" role="tab" aria-selected="true" data-tutorial="hub.tab.forge"></button>
+      <button id="flux" role="radio" aria-checked="false"
+        data-tutorial="forge.flux:uncommon"></button>
+    </div>`);
+    expect(at(findMarked(FORGE))).toEqual(['forge.flux:uncommon', 'flux']);
+  });
+
+  it('with the Temper bench open, marks the Forge sub tab: the way to every entry of the forge', () => {
+    page(`<div data-pad-scope>
+      <button id="tab" role="tab" aria-selected="true" data-tutorial="hub.tab.forge"></button>
+      <button id="bench" role="tab" aria-selected="false" data-tutorial="forge.bench"></button>
+      <button id="temper" role="tab" aria-selected="true" data-tutorial="forge.temper"></button>
+    </div>`);
+    expect(at(findMarked(FORGE))).toEqual(['forge.bench', 'bench']);
+  });
+
+  it('with no trail marks the highlight, as before; with neither, nothing', () => {
+    bench();
+    expect(at(findMarked(step({ highlight: 'forge.go' })))).toEqual(['forge.go', 'go']);
+    expect(findMarked(step())).toBeNull();
+  });
+
+  describe('the way out', () => {
+    const SKILLS = step({
+      highlight: 'skills.addSlot',
+      trail: ['skills.primary', 'skills.addSlot'],
+    });
+    /** The Skills tab with a view nested in it, holding `inside`. */
+    const nested = (inside: string) =>
+      page(`<div data-pad-scope>
+        <button id="primary" role="tab" aria-selected="true" data-tutorial="skills.primary"></button>
+        <button id="slot" data-tutorial="skills.addSlot"></button>
+        <aside data-pad-scope><button id="back" data-pad-back></button>${inside}</aside>
+      </div>`);
+
+    it("marks the Back of a view nested in the screen that holds none of the step's controls", () => {
+      nested('');
+      expect(at(findMarked(SKILLS))).toEqual(['back', 'back']);
+    });
+
+    it("marks an entry the nested view does hold (a picker carries its field's target)", () => {
+      nested('<div id="list" data-tutorial="skills.addSlot"></div>');
+      expect(at(findMarked(SKILLS))).toEqual(['skills.addSlot', 'list']);
+    });
+
+    it('never out of a dialog (a scope not nested in another), nor for a step that marks nothing', () => {
+      page(`<div data-pad-scope><button id="slot" data-tutorial="skills.addSlot"></button></div>
+        <div data-pad-scope><button id="back" data-pad-back></button></div>`);
+      expect(findMarked(SKILLS)).toBeNull();
+      nested('');
+      expect(findMarked(step())).toBeNull();
+    });
   });
 });
