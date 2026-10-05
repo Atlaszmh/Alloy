@@ -6,6 +6,7 @@ import {
   isCandidate,
   keepFocus,
   moveFocus,
+  nextFocus,
   useGamepadNav,
 } from '../use-gamepad-nav';
 import type { GamepadLike } from '../gamepad';
@@ -151,6 +152,84 @@ describe('candidates: a control scrolled out of its list', () => {
 
 const device = () => useInputDeviceStore.getState().device;
 const setDevice = (d: InputDevice) => useInputDeviceStore.getState().setDevice(d);
+
+describe('groups: the focus stays in a pane while it can, and comes back to where it left', () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+    setDevice('keyboard');
+  });
+  const at = <T extends HTMLElement>(el: T, left: number, top: number, w = 10, h = 10): T => {
+    el.getBoundingClientRect = () =>
+      ({ left, top, width: w, height: h, right: left + w, bottom: top + h }) as DOMRect;
+    return el;
+  };
+  /** A pane (a group) 100 × 200 at `left`, 0. */
+  const pane = (left: number) => {
+    const p = at(document.body.appendChild(document.createElement('div')), left, 0, 100, 200);
+    p.setAttribute('data-pad-group', '');
+    return p;
+  };
+  const button = (parent: HTMLElement, left: number, top: number) =>
+    at(parent.appendChild(document.createElement('button')), left, top);
+  /** Two panes side by side: `a1` above `a2` on the left; `b1` far down on the right, `b2` level with `a1`. */
+  const scene = () => {
+    const [a, b] = [pane(0), pane(200)];
+    const [a1, a2] = [button(a, 80, 0), button(a, 80, 100)];
+    const [b1, b2] = [button(b, 200, 180), button(b, 200, 0)];
+    return { a1, a2, b1, b2 };
+  };
+
+  it('picks inside the group first: a nearer control in the next pane waits', () => {
+    const { a1, a2, b1 } = scene();
+    // b1 is nearer a2's row than a1 is, but down from a1 stays in the pane.
+    expect(nextFocus(a1, 'down')).toBe(a2);
+    expect(nextFocus(b1, 'up')).not.toBe(a2);
+  });
+
+  it('crosses to the pane that lies that way, even when none of its controls lines up', () => {
+    const { a2, b1, b2 } = scene();
+    // Nothing of the right pane is in a2's row or its cone; the pane's box is.
+    b2.remove();
+    expect(nextFocus(a2, 'right')).toBe(b1);
+  });
+
+  it('enters a pane at the control in line, and with a memory at the one it last held', () => {
+    const { a1, a2, b1, b2 } = scene();
+    expect(nextFocus(a1, 'right')).toBe(b2);
+    // The player was on b1, then went left and comes back.
+    b1.focus();
+    keepFocus();
+    a1.focus();
+    keepFocus();
+    expect(nextFocus(a1, 'right')).toBe(b1);
+    expect(nextFocus(a1, 'right', { memory: false })).toBe(b2);
+    // And the way back lands on a1, whatever lies level with b1.
+    b1.focus();
+    moveFocus('left');
+    expect(document.activeElement).toBe(a1);
+    expect(nextFocus(b1, 'left', { memory: false })).toBe(a2);
+  });
+
+  it('a control in no group is a group of one', () => {
+    const lone = at(document.body.appendChild(document.createElement('button')), 400, 0);
+    const { b2 } = scene();
+    expect(nextFocus(b2, 'right')).toBe(lone);
+    expect(nextFocus(lone, 'left')).toBe(b2);
+  });
+
+  it('under the pad, a vanished control passes the focus to the nearest one in its pane', () => {
+    setDevice('gamepad');
+    const { a1, a2, b2 } = scene();
+    // With a2 moved to the pane's foot, b2 (120 px from a1) is nearer than a2 (190 px): the pane still wins.
+    at(a2, 80, 190);
+    a1.focus();
+    keepFocus();
+    a1.remove();
+    keepFocus();
+    expect(document.activeElement).toBe(a2);
+    expect(document.activeElement).not.toBe(b2);
+  });
+});
 
 describe('keys, the mouse and touch claim the input lock', () => {
   let stop = () => {};

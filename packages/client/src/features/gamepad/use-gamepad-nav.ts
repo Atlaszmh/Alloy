@@ -7,8 +7,10 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
 
 /**
  * Controller navigation for every screen outside live combat: D-pad (or a
- * left-stick flick) moves focus to the nearest control in that direction
- * (left/right adjust a focused slider or list), A presses it. Every other
+ * left-stick flick) moves focus to the control lying that way (`nextFocus`:
+ * inside its `[data-pad-group]` pane while one does, else into the pane that
+ * way, at the control it last held; never onto one scrolled out of its list;
+ * left/right adjust a focused slider or list), A presses it. Every other
  * button goes to the screen's prompts first (`padPrompts`, which also times
  * the holds); one no prompt takes does its default: B presses the topmost
  * scope's `[data-pad-back]`, Menu its `[data-pad-menu]` (else its back),
@@ -108,14 +110,24 @@ export function isCandidate(el: HTMLElement): boolean {
   return candidates().includes(el);
 }
 
-/** The focus last seen in each scope, and where it was (it may have gone since). */
-const lastFocus = new WeakMap<HTMLElement | Document, { el: HTMLElement; at: DOMRect }>();
+/** A control's group: its nearest `[data-pad-group]` (a pane), else itself, a group of one. */
+function groupOf(el: HTMLElement): Element {
+  return el.closest('[data-pad-group]') ?? el;
+}
+
+/** The focus last seen in each scope, where it was and in which group (it may have gone since). */
+const lastFocus = new WeakMap<
+  HTMLElement | Document,
+  { el: HTMLElement; at: DOMRect; group: Element }
+>();
+/** The control each group last held: coming back into a pane lands where it was left. */
+const groupFocus = new WeakMap<Element, HTMLElement>();
 
 /**
  * Run each frame: while the pad has the input lock, a focus that isn't on a
  * visible control in the current scope (it unmounted, or a scope opened) goes
  * back to the scope's last focused control, else the one nearest where it
- * was, else its `[data-pad-first]`, else the first. Under the keys or the
+ * was (in its pane, if any is left there), else its `[data-pad-first]`, else the first. Under the keys or the
  * mouse the focus is left alone.
  * It never scrolls: a sheet still sliding in would drag the page under it.
  */
@@ -128,7 +140,9 @@ export function keepFocus(): void {
     active.matches(FOCUSABLE) &&
     visible(active)
   ) {
-    lastFocus.set(s, { el: active, at: active.getBoundingClientRect() });
+    const group = groupOf(active);
+    lastFocus.set(s, { el: active, at: active.getBoundingClientRect(), group });
+    groupFocus.set(group, active);
     return;
   }
   if (useInputDeviceStore.getState().device !== 'gamepad') return;
@@ -144,12 +158,51 @@ export function keepFocus(): void {
     const c = centre(el.getBoundingClientRect());
     return Math.hypot(c.x - was.x, c.y - was.y);
   };
-  focus(els.reduce((best, el) => (dist(el) < dist(best) ? el : best)));
+  // Its own pane first: a row that went leaves the focus on its neighbour, not across the screen.
+  const near = els.filter((el) => groupOf(el) === last.group);
+  focus((near.length ? near : els).reduce((best, el) => (dist(el) < dist(best) ? el : best)));
 }
 
-function rectOf(el: HTMLElement, i: number): NavRect {
+function rectOf(el: Element, i: number): NavRect {
   const r = el.getBoundingClientRect();
   return { id: String(i), x: r.left, y: r.top, w: r.width, h: r.height };
+}
+
+/** The gap between two boxes (0 when they touch or overlap). */
+function gapBetween(a: DOMRect, b: DOMRect): number {
+  const dx = Math.max(0, Math.max(a.left, b.left) - Math.min(a.right, b.right));
+  const dy = Math.max(0, Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom));
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * The control a press of `dir` on `el` would focus, or null at an edge. Inside `el`'s group
+ * while one of its controls lies that way (`pickNext`); else in the group whose box lies that
+ * way, at the control it last held, else at the pick among its controls, else at its nearest.
+ * `memory: false` leaves the last-held control out: the picks alone (tests, the audit).
+ */
+export function nextFocus(
+  el: HTMLElement,
+  dir: NavDir,
+  { memory = true }: { memory?: boolean } = {},
+): HTMLElement | null {
+  const els = candidates(el).filter((c) => c !== el);
+  const from = rectOf(el, -1);
+  const pick = <T extends Element>(pool: T[]): T | null => {
+    const next = pickNext(from, pool.map(rectOf), dir);
+    return next ? pool[Number(next.id)] : null;
+  };
+  const home = groupOf(el);
+  const inside = pick(els.filter((c) => groupOf(c) === home));
+  if (inside) return inside;
+  const group = pick([...new Set(els.filter((c) => groupOf(c) !== home).map(groupOf))]);
+  if (!group) return null;
+  const members = els.filter((c) => groupOf(c) === group);
+  const held = memory ? groupFocus.get(group) : undefined;
+  if (held && members.includes(held)) return held;
+  const here = el.getBoundingClientRect();
+  const gap = (c: HTMLElement) => gapBetween(here, c.getBoundingClientRect());
+  return pick(members) ?? members.reduce((best, c) => (gap(c) < gap(best) ? c : best));
 }
 
 function focus(el: HTMLElement): void {
@@ -192,11 +245,9 @@ export function moveFocus(dir: NavDir): void {
   }
   const els = candidates();
   if (els.length === 0) return;
-  const idx = els.indexOf(document.activeElement as HTMLElement);
-  if (idx < 0) return focus(els[0]);
-  const rects = els.map(rectOf);
-  const next = pickNext(rects[idx], rects, dir);
-  if (next) focus(els[Number(next.id)]);
+  if (!(active instanceof HTMLElement) || !els.includes(active)) return focus(els[0]);
+  const next = nextFocus(active, dir);
+  if (next) focus(next);
 }
 
 const TAB_LISTS = {
