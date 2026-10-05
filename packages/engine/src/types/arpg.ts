@@ -287,6 +287,8 @@ export interface Projectile {
   knobs?: Knobs;
   /** An Echo's basic shot: it sets no room object off (an ability's says so on `ability.replay`). */
   replay?: boolean;
+  /** A heavy or hold basic shot: it wears crumbling cover where it bursts or stops at a wall. */
+  wears?: boolean;
   dead: boolean;
 }
 

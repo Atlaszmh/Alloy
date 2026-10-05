@@ -5,7 +5,8 @@ import { executeForm } from '../src/arpg/abilities/forms.js';
 import { impact } from '../src/arpg/abilities/impact.js';
 import type { ObjectHitSource, RoomObject } from '../src/arpg/objects.js';
 import type { ArpgWorld, PropEntity, Projectile, Vec } from '../src/types/arpg.js';
-import { arena, dummy, press, registry, run, STEP } from './fixtures/arena.js';
+import { arena, dummy, gear, press, registry, run, STEP } from './fixtures/arena.js';
+import { onMap, WALL_30 } from './fixtures/maps.js';
 
 // See the room objects spec: each hit site tests its own shape against the props and hazards it
 // reaches and calls `hitObject` for each (a shot ends at one when it says so); heavy and hold
@@ -108,6 +109,40 @@ describe("the hero's hits", () => {
     };
     expect(flight(true)).toEqual([1, true]);
     expect(flight(false)).toEqual([1, false]);
+  });
+});
+
+describe('heavy and hold hits at range', () => {
+  const up = { x: 0, y: -1 };
+  /** Whether a blow of `kind` from a `baseId` weapon, shot at the wall above, wears cover. */
+  const wears = (baseId: string, kind: 'light' | 'heavy' | 'hold') => {
+    hooks.structures = [];
+    const equipped = { weapon: gear('fire', 'weapon', baseId) };
+    const w = onMap(arena([], { noBasic: true, equipped }), WALL_30);
+    landBlow(makeCtx(registry, w, []), w.hero.stats.weapon.blows[0], kind, up, 1);
+    run(w, 1);
+    return hooks.structures.length > 0;
+  };
+
+  it('a heavy or hold shot wears cover where it stops at a wall or bursts; a light one never', () => {
+    expect([wears('wand', 'heavy'), wears('wand', 'hold'), wears('wand', 'light')]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    expect([wears('staff', 'heavy'), wears('staff', 'light')]).toEqual([true, false]);
+  });
+
+  it("a heavy or hold Strike wears cover in its arc; a Lance's beam never", () => {
+    const struck = (form: 'strike' | 'lance', kind: 'medium' | 'heavy') => {
+      hooks.structures = [];
+      const w = arena([], { noBasic: true, primary: { form, kind } });
+      const ab = w.hero.chains[0]!.moves[0];
+      executeForm(makeCtx(registry, w, []), ab, { x: 13, y: 20 });
+      return hooks.structures.length > 0;
+    };
+    expect([struck('strike', 'heavy'), struck('strike', 'medium')]).toEqual([true, false]);
+    expect(struck('lance', 'heavy')).toBe(false);
   });
 });
 

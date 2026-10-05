@@ -66,7 +66,7 @@ import {
   objectsTick,
   objectsTouching,
 } from './objects.js';
-import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
+import { groundSpeed, hitStructures, terrainTick, wallSlam } from './terrain.js';
 import { directorTick, goalWay, laneOpen } from './pack.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
@@ -495,6 +495,8 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           heft: p.heft,
         });
       } else if (!p.ability && p.explodeRadius > 0) burstShot(ctx, p);
+      // A heavy or hold basic shot stopped at a wall wears the cover there.
+      else if (wall && p.wears) hitStructures(ctx, p, p.radius, p.damage);
     }
   }
 }

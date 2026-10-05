@@ -406,6 +406,8 @@ export function landBlow(
         noReact: !main,
         ...(main ? { knobs: k } : {}),
         ...(o.echo ? { replay: true } : {}),
+        // A heavy or hold shot wears crumbling cover where it bursts or stops at it.
+        ...(main && !o.echo && (kind === 'heavy' || kind === 'hold') ? { wears: true } : {}),
       });
     }
   }
@@ -535,5 +537,6 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
   }
   if (!p.replay)
     for (const obj of objectsIn(ctx.world, p, p.explodeRadius)) hitObject(ctx, obj, 'hero');
+  if (p.wears) hitStructures(ctx, p, p.explodeRadius, p.damage);
   if (p.knobs && hit.length > 0) shotLands(ctx, p, hit);
 }
