@@ -34,8 +34,8 @@ vi.mock('@alloy/engine', async (importOriginal) => ({
 
 const renderTab = (link?: HubLink, mode: HubMode = 'anvil') => {
   const props = { setPrompts: vi.fn(), setFooterAction: vi.fn(), go: vi.fn(), onDelve: vi.fn() };
-  render(<QuestsTab mode={mode} link={link} {...props} />);
-  return props;
+  const { unmount } = render(<QuestsTab mode={mode} link={link} {...props} />);
+  return { ...props, unmount };
 };
 /** The prompts the tab last handed the hub. */
 const lastPrompts = (setPrompts: ReturnType<typeof vi.fn>): Prompt[] =>
@@ -83,6 +83,36 @@ describe('QuestsTab', () => {
     fireEvent.click(screen.getByTestId('quest-rat-catcher'));
     expect(screen.getByTestId('quest-detail')).toHaveTextContent('Slay mine rats');
     expect(screen.getByTestId('quest-rewards')).toHaveTextContent('200 scrap');
+  });
+
+  it('opens on the first quest that waits to be claimed', () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }, DEEP_ROOTS];
+    renderTab();
+    expect(screen.getByTestId(`quest-${KINDLING.id}`)).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('opens on the first quest not yet claimed when none waits, else the first', () => {
+    shown.quests = [{ ...MAIN, status: 'claimed' }, KINDLING];
+    const { unmount } = renderTab();
+    expect(screen.getByTestId(`quest-${KINDLING.id}`)).toHaveAttribute('aria-current', 'true');
+    unmount();
+
+    shown.quests = [{ ...MAIN, status: 'claimed' }];
+    renderTab();
+    expect(screen.getByTestId('quest-detail')).toHaveTextContent(MAIN.name);
+  });
+
+  it('a link still opens its quest over the default', () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }];
+    renderTab({ tab: 'quests', questId: MAIN.id });
+    expect(screen.getByTestId(`quest-${MAIN.id}`)).toHaveAttribute('aria-current', 'true');
+  });
+
+  it("the open quest's row is the tab's data-pad-first, and only it", () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }, DEEP_ROOTS];
+    renderTab();
+    const first = [...document.querySelectorAll('[data-pad-first]')];
+    expect(first).toEqual([screen.getByTestId(`quest-${KINDLING.id}`)]);
   });
 
   it('tracks on the HUD from the button and from G / Y, three at most', () => {
@@ -154,7 +184,8 @@ describe('QuestsTab', () => {
       { ...KINDLING, status: 'complete' },
       { ...DEEP_ROOTS, status: 'complete' },
     ];
-    renderTab();
+    // Another quest opened by a link: the row that waits is not the open one yet.
+    renderTab({ tab: 'quests', questId: MAIN.id });
     const row = screen.getByTestId('quest-kindling');
     expect(row).toHaveAttribute('data-tutorial', 'quests.done');
     expect(row).toHaveAttribute('data-tutorial-done', 'false');
@@ -163,6 +194,13 @@ describe('QuestsTab', () => {
     expect(screen.getByTestId('quest-frozen-foreman')).not.toHaveAttribute('data-tutorial');
     fireEvent.click(row);
     expect(row).toHaveAttribute('data-tutorial-done', 'true');
+    expect(screen.getByTestId('quest-claim')).toHaveAttribute('data-tutorial', 'quests.claim');
+  });
+
+  it('with no link the row that waits is open, so the guided start goes straight to Claim', () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }];
+    renderTab();
+    expect(screen.getByTestId('quest-kindling')).toHaveAttribute('data-tutorial-done', 'true');
     expect(screen.getByTestId('quest-claim')).toHaveAttribute('data-tutorial', 'quests.claim');
   });
 

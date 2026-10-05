@@ -56,6 +56,7 @@ const GIVER_NUDGE: Record<string, number> = { hesta: 3 };
  * The Quests tab: the journal (Main, Side, the Contract board, and the claimed ones under a
  * collapsed Done), the open quest (Hesta, her line, the objectives) and its rewards with Claim,
  * Track and a contract's Reroll. Opening a quest marks it seen; the engine prices and refuses.
+ * It opens on the first quest that waits to be claimed, and the pad lands on its row.
  */
 export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
@@ -67,7 +68,12 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const [openId, setOpenId] = useState(link?.tab === 'quests' ? link.questId : undefined);
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
-  const quest = quests.find((q) => q.id === openId) ?? quests[0];
+  // With nothing chosen: the first quest waiting to be claimed, else the first still to do.
+  const quest =
+    quests.find((q) => q.id === openId) ??
+    quests.find((q) => q.status === 'complete') ??
+    quests.find((q) => q.status !== 'claimed') ??
+    quests[0];
   const { maxTracked, contracts } = registry.getDelveBalance().quests;
   const trackedCount = quests.filter((q) => q.tracked).length;
   const canTrack = !!quest && (quest.tracked || trackedCount < maxTracked);
@@ -210,7 +216,14 @@ function Journal({
   // The guided start's `quests.done`: the first row that waits to be claimed, in the journal's order.
   const waiting = quests.find((q) => q.status === 'complete')?.id;
   const row = (q: QuestView) => (
-    <QuestRow key={q.id} quest={q} on={q.id === open} waiting={q.id === waiting} onOpen={onOpen} />
+    <QuestRow
+      key={q.id}
+      quest={q}
+      on={q.id === open}
+      first={q.id === open}
+      waiting={q.id === waiting}
+      onOpen={onOpen}
+    />
   );
   return (
     <Panel
@@ -300,11 +313,14 @@ function Group({
 function QuestRow({
   quest: q,
   on,
+  first,
   waiting,
   onOpen,
 }: {
   quest: QuestView;
   on: boolean;
+  /** The tab's first focus for the pad: the open quest's row, unless Claim all shows. */
+  first: boolean;
   /** The journal's first quest that waits to be claimed: the guided start's `quests.done`. */
   waiting: boolean;
   onOpen: (id: string) => void;
@@ -315,6 +331,7 @@ function QuestRow({
       onClick={() => onOpen(q.id)}
       aria-current={on}
       data-testid={`quest-${q.id}`}
+      data-pad-first={first ? '' : undefined}
       data-tutorial={waiting ? 'quests.done' : undefined}
       data-tutorial-done={waiting ? on : undefined}
       className="flex items-center gap-3 px-[14px] py-3 text-left"
