@@ -10,7 +10,7 @@ import {
   type GearSlot,
   type Rarity,
 } from '@alloy/engine';
-import { partsText, useDelveStore } from '@/stores/delveStore';
+import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -18,7 +18,8 @@ import { showToast } from '@/components/Toast';
 import { Button, Chip, Glyph, Panel, Segmented, Tabs } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { ItemTile, deltaMark } from '../../ItemTile';
-import { RARITY_COLOR, RARITY_LABEL, UPGRADE_EPSILON, formatNumber } from '../../format';
+import { RARITY_COLOR, RARITY_LABEL, UPGRADE_EPSILON } from '../../format';
+import { JunkSheet } from './JunkSheet';
 import type { BagFilter } from '../types';
 
 type Sort = 'power' | 'rarity' | 'slot' | 'newest';
@@ -65,7 +66,7 @@ const AUTO_RARITIES: Rarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic'];
  * The Loadout's bag: its count, the filter tabs (LT/RT, `filter` is the Loadout's, so the hub
  * remembers it) and the sort chip, eight columns of tiles (▲ better as it
  * is, ◇ better only with your moveset moved onto it, ▼ worse, NEW, the lock), and the footer:
- * Equip best, Salvage junk and auto-salvage. A click selects a tile for the compare pane and a
+ * Equip best, Salvage junk (it opens the review sheet, `JunkSheet`) and auto-salvage. A click selects a tile for the compare pane and a
  * right-click equips it; under the pad, focus selects and A takes it (`onTake`: equips, or asks how
  * to take a weapon that can take your moveset). The selected tile, else the first, is the pad's
  * first focus (`data-pad-first`).
@@ -96,6 +97,8 @@ export function BagPane({
   const newUids = useDelveStore((s) => s.newUids);
   const [sort, setSort] = useState(0);
   const [choosing, setChoosing] = useState(false);
+  // Salvage junk's review sheet, on the candidates as they were when it opened.
+  const [reviewing, setReviewing] = useState<string[] | null>(null);
   const bagSize = registry.getDelveBalance().loot.bagSize;
   const { bag, equipped, pair, autoSalvage } = profile;
   const depth = referenceDepth(profile);
@@ -136,20 +139,6 @@ export function BagPane({
       playSound('orbConfirm');
       vibrate('success');
       showToast(`Equipped ${done.length} upgrade${done.length > 1 ? 's' : ''}`);
-    }
-  };
-
-  const onSalvageJunk = () => {
-    const { scrap, dust, links, runes, destroyed } = useDelveStore.getState().salvage(junk);
-    if (scrap > 0) {
-      playSound('gemScatter');
-      vibrate('medium');
-      const dustText = dust > 0 ? ` · +${formatNumber(dust)} Mana Dust` : '';
-      const linkText = links > 0 ? ` · +${links} Link${links > 1 ? 's' : ''}` : '';
-      const parts = partsText(registry, runes, destroyed);
-      showToast(
-        `Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap${dustText}${linkText}${parts ? ` · ${parts}` : ''}`,
-      );
     }
   };
 
@@ -276,7 +265,7 @@ export function BagPane({
         </Button>
         <Button
           disabled={junk.length === 0 || locked}
-          onClick={onSalvageJunk}
+          onClick={() => setReviewing(junk)}
           testId="salvage-junk"
         >
           {locked
@@ -309,6 +298,7 @@ export function BagPane({
           ]}
         />
       )}
+      {reviewing && <JunkSheet uids={reviewing} onClose={() => setReviewing(null)} />}
     </Panel>
   );
 }

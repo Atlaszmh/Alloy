@@ -291,7 +291,11 @@ describe('LoadoutTab', () => {
       binding: { key: 'KeyZ', ctrl: true, pad: 'b' },
     });
     act(() => prompt(props, 'undo').onPress!());
-    expect(store().profile.bag.map((i) => i.uid).sort()).toEqual(['h1', 'r1']);
+    expect(
+      store()
+        .profile.bag.map((i) => i.uid)
+        .sort(),
+    ).toEqual(['h1', 'r1']);
     expect(screen.getByText('Salvage undone')).toBeInTheDocument();
     expect(prompts(props).some((x) => x.id === 'undo')).toBe(false);
     // Again, and let the time run out.

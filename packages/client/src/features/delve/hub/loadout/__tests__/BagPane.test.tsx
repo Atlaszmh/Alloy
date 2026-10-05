@@ -227,7 +227,7 @@ describe('the bag pane', () => {
     expect(store().profile.pair.secondary).toBeNull();
   });
 
-  it('Salvage junk melts what is worse, never a weapon holding runes', () => {
+  it('Salvage junk opens the review sheet on what is worse, never a weapon holding runes', () => {
     const p = store().profile;
     const worn = p.equipped.weapon!;
     const chain = worn.moveset!.chains.primary!;
@@ -248,7 +248,12 @@ describe('the bag pane', () => {
     open();
     expect(screen.getByTestId('salvage-junk')).toHaveTextContent('Salvage junk (1)');
     fireEvent.click(screen.getByTestId('salvage-junk'));
+    expect(screen.getAllByTestId('junk-row').map((r) => r.dataset.uid)).toEqual(['h1']);
+    // Nothing melts until the sheet's Salvage.
+    expect(store().profile.bag.map((i) => i.uid)).toEqual(['h1', 'w2']);
+    fireEvent.click(screen.getByTestId('junk-salvage'));
     expect(store().profile.bag.map((i) => i.uid)).toEqual(['w2']);
+    expect(screen.queryByTestId('junk-sheet')).toBeNull();
   });
 
   it('auto-salvage takes every rarity up to the one chosen', () => {
