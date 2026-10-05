@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { isDiveActive, startDepthOptions } from '@alloy/engine';
 import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { useControlsStore } from '@/stores/controlsStore';
@@ -151,8 +151,11 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
     vibrate('medium');
     navigate('/delve/run');
   };
+  // A link the route brings (Try in Training's way back), read once.
+  const location = useLocation();
+  const [initial] = useState(() => (location.state as { link?: HubLink } | null)?.link);
   // Every Delve button at the Anvil (the footer's, the Skills tab's) opens the sheet.
-  const hub = useHubTabs(mode, openDepart);
+  const hub = useHubTabs(mode, openDepart, initial);
 
   // The footer's prompts: the tab's, then the hub's Menu (Esc, or Menu on the pad: B does
   // nothing at the root). The hub also binds View to the Depart sheet (the footer's button

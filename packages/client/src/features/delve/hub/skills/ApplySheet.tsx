@@ -1,22 +1,27 @@
 import { useEffect, useId, useRef } from 'react';
+import { useNavigate } from 'react-router';
 import { heroChains, type ChainSkill } from '@alloy/engine';
 import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
+import { useSandboxStore } from '@/stores/sandboxStore';
 import { Button, Dialog } from '@/features/delve/kit';
 import { getDelveRegistry } from '../../registry';
 import { SKILL_NAME } from '../../chains/chain-text';
 import { DraftPriceText, applyChains } from './ApplyBar';
 import { draftLines } from './draft-lines';
-import { useAnvilChains } from './useAnvilChains';
+import type { HubLink } from '../types';
+import { draftEquipped, useAnvilChains } from './useAnvilChains';
 
 /**
  * The Apply sheet (the pad-first spec, 5; rule 1: a priced action gets a sheet): each skill the
  * draft changes, its chain before and after and its notes; the price and what it destroys; and,
  * when the engine would refuse it, why. Apply (A; the first focus when it can) applies it, all or
  * nothing; Back (B) returns with the draft as it was; Discard changes reverts it. Y, Ctrl+Enter
- * and the footer's Apply open it, for every device. `skill` is the chosen skill. It closes itself
- * when the draft empties under it.
+ * and the footer's Apply open it, for every device. Try in Training loads the draft, unapplied,
+ * into the Training Grounds (replacing the sandbox's loadout, as Load my build does), whose way
+ * back opens Skills on `skill`, the chosen one. It closes itself when the draft empties under it.
  */
-export function ApplySheet({ onClose: close }: { skill: ChainSkill; onClose: () => void }) {
+export function ApplySheet({ skill, onClose: close }: { skill: ChainSkill; onClose: () => void }) {
+  const navigate = useNavigate();
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const view = useDelveStore(selectDraftApply);
@@ -87,6 +92,23 @@ export function ApplySheet({ onClose: close }: { skill: ChainSkill; onClose: () 
           <Button
             variant="secondary"
             onClick={() => {
+              const s = useDelveStore.getState();
+              useSandboxStore.getState().loadMyBuild({
+                pair: s.profile.pair,
+                equipped: draftEquipped(registry, s.profile.equipped, editor.chains),
+              });
+              onClose();
+              const back: HubLink = { tab: 'skills', skill };
+              navigate('/delve/training', { state: { back } });
+            }}
+            title="Loads this build into the Training Grounds, unapplied"
+            testId="apply-sheet-try"
+          >
+            Try in Training
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
               useDelveStore.getState().revertDraft();
               onClose();
             }}
@@ -95,6 +117,9 @@ export function ApplySheet({ onClose: close }: { skill: ChainSkill; onClose: () 
             Discard changes
           </Button>
         </div>
+        <span className="text-[14px] text-[var(--k-text-3)]">
+          Try in Training loads this build into the Training Grounds without applying it.
+        </span>
       </div>
     </Dialog>
   );

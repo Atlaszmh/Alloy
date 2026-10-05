@@ -257,6 +257,18 @@ describe('AnvilHub', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/delve/training');
   });
 
+  it("opens on the tab the router state's link names (the way back from Try in Training)", () => {
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: '/delve', state: { link: { tab: 'skills', skill: 'basic' } } }]}
+      >
+        <AnvilHub mode="anvil" />
+      </MemoryRouter>,
+    );
+    expect(selected()).toEqual(['tab-skills']);
+    expect(screen.getByTestId('chain-skill-basic')).toHaveAttribute('aria-selected', 'true');
+  });
+
   it("a disabled tab's digit does nothing: the pause hub's Forge", () => {
     render(
       <MemoryRouter>
