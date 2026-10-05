@@ -184,23 +184,21 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
         }
       >
         <div ref={mainRef} className="flex h-full min-h-0 flex-col">
-          <div className="min-h-0 flex-1">{hub.view}</div>
-          {/* Hesta's lesson, docked bottom right under the tab, so it covers none of it; she
-              speaks once the mana is chosen. */}
+          {/* Hesta's strip, a row between the band and the tab's panes, which give up that row
+              and nothing else; she speaks once the mana is chosen. */}
           {profile.tutorial &&
             profile.pair.primary !== null &&
             stepIn(getDelveRegistry(), profile.tutorial, SHOWN_AT.anvil) && (
-              <div className="flex justify-end px-8 pb-4">
-                <div className="w-[640px]">
-                  <TutorialPanel
-                    state={profile.tutorial}
-                    where={SHOWN_AT.anvil}
-                    place="anvil"
-                    onEvent={(e) => useDelveStore.getState().tutorialEvents([e])}
-                  />
-                </div>
+              <div className="flex-none px-8 pt-4">
+                <TutorialPanel
+                  state={profile.tutorial}
+                  where={SHOWN_AT.anvil}
+                  place="anvil"
+                  onEvent={(e) => useDelveStore.getState().tutorialEvents([e])}
+                />
               </div>
             )}
+          <div className="min-h-0 flex-1">{hub.view}</div>
         </div>
       </Screen>
       {menuOpen && <SystemMenu onClose={() => setMenuOpen(false)} />}

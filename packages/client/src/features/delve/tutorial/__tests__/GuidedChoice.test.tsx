@@ -78,6 +78,16 @@ describe('GuidedChoice', () => {
     expect(screen.queryByTestId('delve-howto')).toBeNull();
     const panel = screen.getByTestId('tutorial-panel');
     expect(panel).toHaveTextContent('Welcome to the Anvil.');
+    // One row above the tab's panes, in the screen's main.
+    expect(panel).toHaveAttribute('data-place', 'anvil');
+    expect(panel.closest('[data-screen-section]')).toHaveAttribute(
+      'data-screen-section',
+      'screen-main',
+    );
+    expect(
+      panel.compareDocumentPosition(screen.getByTestId('paper-doll')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     // In the hub's own pad scope; a beat with nothing to point at hands Continue the focus.
     expect(panel.closest('[data-pad-scope]')).toBe(screen.getByTestId('hub-anvil'));
     expect(screen.getByTestId('tutorial-continue')).toHaveFocus();
