@@ -13,7 +13,17 @@ import { useDelveStore } from '@/stores/delveStore';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { keyLabel } from '@/features/controls/controls';
-import { Button, InputGlyph, Keycap, PixelSprite, usePrompts, type Binding } from '../kit';
+import { playSound } from '@/shared/utils/sound-manager';
+import {
+  Button,
+  Glyph,
+  InputGlyph,
+  Keycap,
+  PixelSprite,
+  reducedMotion,
+  usePrompts,
+  type Binding,
+} from '../kit';
 import { bindingOf } from '../arena/hud/SkillDock';
 import { getDelveRegistry } from '../registry';
 import { stepIn } from './tutorial-view';
@@ -56,6 +66,37 @@ export type TutorialPlace = 'hud' | 'stop' | 'anvil';
 
 /** How long the HUD's strip shows Hesta's line after a step begins, before it folds away. */
 export const LINE_MS = 8000;
+/** How long the strip holds a finished objective, ticked, before it shows the current step. */
+export const STEP_HOLD_MS = 700;
+
+/** The current step arriving after a hold, and a count going up. */
+const POP: Keyframe[] = [
+  { transform: 'scale(1.15)', opacity: 0.3 },
+  { transform: 'scale(1)', opacity: 1 },
+];
+const PULSE: Keyframe[] = [{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }];
+
+/**
+ * The finished step the strip is holding, or null. A change of step holds the one before it for
+ * `STEP_HOLD_MS`, with a chime; steps that pass meanwhile are not held in their turn, and a screen
+ * with no step to show drops the hold. Display only: the engine has already moved on.
+ */
+function useHeld(id: string | undefined): string | null {
+  const [prev, setPrev] = useState(id);
+  const [held, setHeld] = useState<string | null>(null);
+  if (prev !== id) {
+    setPrev(id);
+    if (!id) setHeld(null);
+    else if (prev && !held) setHeld(prev);
+  }
+  useEffect(() => {
+    if (!held) return;
+    playSound('orbConfirm');
+    const t = setTimeout(() => setHeld(null), STEP_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [held]);
+  return held;
+}
 
 export interface TutorialPanelProps {
   /** The state to show: a floor's `world.tutorial` while it is fought, else the save's. */
@@ -78,7 +119,9 @@ export interface TutorialPanelProps {
  * it always shows. A reading beat has Continue (A on the pad, and Enter in the screen's pad
  * scope), the strip's only D-pad stop; the strip is never a scope of its own, so the screen's
  * tabs, prompts and Menu keep working. When `tutorialSkippable` allows it, "Skip this step" is
- * a mouse button the D-pad passes by, beside the way to it from the Menu.
+ * a mouse button the D-pad passes by, beside the way to it from the Menu. When the step changes
+ * the strip holds the finished objective for `STEP_HOLD_MS` with a tick and a chime (`useHeld`),
+ * then the current step pops in; a count going up pulses; under reduced motion nothing moves.
  */
 export function TutorialPanel({
   state,
@@ -91,10 +134,13 @@ export function TutorialPanel({
   const profile = useDelveStore((s) => s.profile);
   const config = useControlsStore((s) => s.config);
   const root = useRef<HTMLElement>(null);
+  const objective = useRef<HTMLParagraphElement>(null);
+  const counter = useRef<HTMLSpanElement>(null);
   const step = stepIn(registry, state, where);
-  /** The step on show, and whether its Continue is. */
-  const shown = step;
-  const beat = !!step?.beat;
+  const held = useHeld(step?.id);
+  /** The step on show (the one just finished while its hold runs), and whether its Continue is. */
+  const shown = (held && registry.getTutorialData().steps.find((s) => s.id === held)) || step;
+  const beat = !!step?.beat && !held;
   // Enter continues a beat, in whatever scope holds the strip (a focused control keeps its own).
   usePrompts(
     [
@@ -115,10 +161,23 @@ export function TutorialPanel({
     const t = setTimeout(() => setFoldedId(shown.id), LINE_MS);
     return () => clearTimeout(t);
   }, [place, shown]);
+  // The step on show arrives with a pop (not the first one), and a count going up pulses.
+  const popped = useRef(shown?.id);
+  useEffect(() => {
+    if (popped.current === shown?.id) return;
+    popped.current = shown?.id;
+    if (!reducedMotion()) objective.current?.animate?.(POP, { duration: 220, easing: 'ease-out' });
+  }, [shown]);
+  const counted = useRef(state.count);
+  useEffect(() => {
+    if (state.count > counted.current && !reducedMotion())
+      counter.current?.animate?.(PULSE, { duration: 200, easing: 'ease-out' });
+    counted.current = state.count;
+  }, [state.count]);
   if (!step || !shown) return null;
   const giver = registry.getQuestsData().giver;
   const text = tutorialText(registry, profile, shown.id, world);
-  const skippable = tutorialSkippable(registry, profile, state, world);
+  const skippable = !held && tutorialSkippable(registry, profile, state, world);
   const need = shown.trigger.count;
   /** How the Menu that holds "Skip this step" opens here: the Anvil's system menu, else the menu binding. */
   const menu: Binding =
@@ -149,14 +208,23 @@ export function TutorialPanel({
         className={`flex min-w-0 flex-1 ${place === 'anvil' ? 'items-center gap-6' : 'flex-col gap-1'}`}
       >
         <p
+          ref={objective}
           className="m-0 flex origin-left flex-wrap items-center gap-x-2 gap-y-1 text-[28px] leading-none text-[var(--k-hot-hi)] [font-family:var(--k-font-display)]"
           data-testid="tutorial-objective"
         >
           <TutorialParts parts={text.objective} />
-          {need > 1 && (
-            <span className="inline-block text-[var(--k-text-2)]" data-testid="tutorial-count">
-              {Math.min(state.count, need)} / {need}
-            </span>
+          {held ? (
+            <Glyph id="check" size={22} title="Done" />
+          ) : (
+            need > 1 && (
+              <span
+                ref={counter}
+                className="inline-block text-[var(--k-text-2)]"
+                data-testid="tutorial-count"
+              >
+                {Math.min(state.count, need)} / {need}
+              </span>
+            )
           )}
         </p>
         <p

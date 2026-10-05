@@ -96,7 +96,7 @@ describe('GuidedChoice', () => {
         s.setProfile({ ...s.profile, tutorial: at(id) });
       });
     step('raise');
-    expect(screen.getByTestId('tutorial-panel')).toHaveTextContent('Raise your Defensive.');
+    expect(screen.getByTestId('tutorial-panel')).toHaveAttribute('data-step', 'raise');
     step('cast');
     expect(screen.queryByTestId('tutorial-panel')).toBeNull();
   });

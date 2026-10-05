@@ -169,7 +169,7 @@ describe('DelveRun: the guided start', () => {
     expect(applyTutorialEvents).not.toHaveBeenCalled();
     expect(seen.paused.at(-1)).toBe(false);
     expect(seen.live.at(-1)).toBe(true);
-    expect(screen.getByTestId('tutorial-panel')).toHaveTextContent('Cast your Primary.');
+    expect(screen.getByTestId('tutorial-panel')).toHaveAttribute('data-step', 'cast');
   });
 
   it("at a stop the save's step shows over the stop, and its events go to the save", () => {

@@ -3,7 +3,8 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { tutorialSkippable, tutorialText, type TutorialWhere } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
-import { LINE_MS, TutorialPanel, type TutorialPlace } from '../TutorialPanel';
+import { playSound } from '@/shared/utils/sound-manager';
+import { STEP_HOLD_MS, LINE_MS, TutorialPanel, type TutorialPlace } from '../TutorialPanel';
 import { SHOWN_AT } from '../tutorial-view';
 import { at, fakeText, withSteps } from './tutorial-fixture';
 
@@ -15,6 +16,8 @@ vi.mock('@alloy/engine', async (orig) => ({
   tutorialText: vi.fn(),
   tutorialSkippable: vi.fn(),
 }));
+
+vi.mock('@/shared/utils/sound-manager', () => ({ playSound: vi.fn() }));
 
 const onEvent = vi.fn();
 /** The strip at `step`: in the HUD, showing the dive's steps, unless `over` says otherwise. */
@@ -35,6 +38,7 @@ beforeEach(() => {
   vi.mocked(tutorialText).mockImplementation(fakeText);
   vi.mocked(tutorialSkippable).mockReturnValue(false);
   onEvent.mockReset();
+  vi.mocked(playSound).mockClear();
   useDelveStore.getState().resetProfile(1234, 'fire');
   useInputDeviceStore.setState({ device: 'keyboard' });
 });
@@ -137,5 +141,81 @@ describe('TutorialPanel (the objective strip)', () => {
     );
     fireEvent.click(skip);
     expect(onEvent).toHaveBeenCalledWith({ type: 'skipStep' });
+  });
+});
+
+describe("the strip's hold on a finished step", () => {
+  beforeEach(() => vi.useFakeTimers());
+  const objective = () => screen.getByTestId('tutorial-objective');
+
+  it('holds the finished objective, ticked, for STEP_HOLD_MS with a chime; then the current step, the ones passed meanwhile not replayed', () => {
+    const { rerender } = render(strip('cast', { count: 1 }));
+    expect(playSound).not.toHaveBeenCalled();
+    rerender(strip('listen'));
+    expect(screen.getByTestId('tutorial-panel')).toHaveAttribute('data-step', 'listen');
+    expect(objective()).toHaveTextContent('Cast with Q');
+    expect(within(objective()).getByRole('img', { name: 'Done' })).toBeInTheDocument();
+    expect(objective()).not.toHaveTextContent('/ 2');
+    expect(playSound).toHaveBeenCalledExactlyOnceWith('orbConfirm');
+    act(() => vi.advanceTimersByTime(STEP_HOLD_MS - 100));
+    rerender(strip('walk'));
+    expect(objective()).toHaveTextContent('Cast with Q');
+    act(() => vi.advanceTimersByTime(100));
+    expect(objective()).toHaveTextContent('Walk with WASD');
+    expect(within(objective()).queryByRole('img', { name: 'Done' })).toBeNull();
+    expect(playSound).toHaveBeenCalledTimes(1);
+  });
+
+  it('a beat shows Continue only after the hold, and Enter waits with it', () => {
+    const { rerender } = render(strip('cast'));
+    rerender(strip('listen'));
+    expect(screen.queryByTestId('tutorial-continue')).toBeNull();
+    fireEvent.keyDown(document.body, { code: 'Enter' });
+    expect(onEvent).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(STEP_HOLD_MS));
+    expect(screen.getByTestId('tutorial-continue')).toBeInTheDocument();
+  });
+
+  it('Skip this step waits out the hold too', () => {
+    vi.mocked(tutorialSkippable).mockReturnValue(true);
+    const { rerender } = render(strip('cast'));
+    rerender(strip('walk'));
+    expect(screen.queryByTestId('tutorial-skip-step')).toBeNull();
+    act(() => vi.advanceTimersByTime(STEP_HOLD_MS));
+    expect(screen.getByTestId('tutorial-skip-step')).toBeInTheDocument();
+  });
+
+  it("a screen change drops the hold: the screen's next step shows at once", () => {
+    const { rerender } = render(strip('cast'));
+    rerender(strip('forge')); // the Anvil's step: this screen shows nothing
+    expect(screen.queryByTestId('tutorial-panel')).toBeNull();
+    rerender(strip('walk'));
+    expect(objective()).toHaveTextContent('Walk with WASD');
+    expect(playSound).not.toHaveBeenCalled();
+  });
+
+  it('pops the current step in and pulses a count going up; under reduced motion neither moves', () => {
+    const animate = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    try {
+      const { rerender } = render(strip('cast'));
+      expect(animate).not.toHaveBeenCalled();
+      rerender(strip('cast', { count: 1 }));
+      expect(animate).toHaveBeenCalledTimes(1);
+      expect(animate.mock.contexts[0]).toBe(screen.getByTestId('tutorial-count'));
+      rerender(strip('walk'));
+      expect(animate).toHaveBeenCalledTimes(1);
+      act(() => vi.advanceTimersByTime(STEP_HOLD_MS));
+      expect(animate).toHaveBeenCalledTimes(2);
+      expect(animate.mock.contexts[1]).toBe(objective());
+      vi.stubGlobal('matchMedia', () => ({ matches: true }));
+      rerender(strip('cast'));
+      act(() => vi.advanceTimersByTime(STEP_HOLD_MS));
+      expect(objective()).toHaveTextContent('Cast with Q');
+      expect(animate).toHaveBeenCalledTimes(2);
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate;
+      vi.unstubAllGlobals();
+    }
   });
 });
