@@ -314,6 +314,50 @@ describe('the floor follows the map', { timeout: 20000 }, () => {
     spy.mockRestore();
     floor.destroy();
   });
+
+  it('falls back from a lost worker to a floor that still shows what crumbled', () => {
+    const map = furnished();
+    const world = onMap(map);
+    const workers: { onmessage: (e: unknown) => void; onerror: () => void }[] = [];
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage = () => {};
+        onerror = () => {};
+        constructor() {
+          workers.push(this);
+        }
+        postMessage() {}
+        terminate() {}
+      },
+    );
+    const sent: FloorFrame[] = [];
+    const spy = vi.spyOn(FloorEngine.prototype, 'frame').mockImplementation((f) => {
+      sent.push(f);
+      return null;
+    });
+    const floor = new PixelFloor(floorInit(world));
+    const view = { left: 20, top: 20, right: 40, bottom: 34 };
+    floor.update(0.1, world, view);
+    workers[0].onmessage({ data: { type: 'spare', buffer: null } });
+    for (const { x, y } of map.structures[0].cells) {
+      map.cells[at(x, y)] = CELL.slow;
+      map.look[at(x, y)] = LOOK.rubble;
+    }
+    map.structures[0].life = 0;
+    map.version++;
+    // The crumble goes to the worker, which then fails: the floor falls back in this thread.
+    floor.update(0.1, world, view);
+    workers[0].onerror();
+    floor.update(0.1, world, view);
+    expect(sent[0].cells).toEqual(
+      [at(34, 24), at(35, 24), at(34, 25), at(35, 25)].flatMap((c) => [c, CELL.slow, LOOK.rubble]),
+    );
+    expect(sent[0].cracks).toEqual([1]);
+    vi.unstubAllGlobals();
+    spy.mockRestore();
+    floor.destroy();
+  });
 });
 
 describe("the foliage's canopy", { timeout: 20000 }, () => {
