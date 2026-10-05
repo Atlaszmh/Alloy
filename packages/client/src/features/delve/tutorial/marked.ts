@@ -28,6 +28,8 @@ const bare = (target: string): Bare => target.split(':')[0] as Bare;
  * (`skills.card:last`: the card to select).
  */
 export const WAY_TO: Partial<Record<Bare, TutorialTrailTarget>> = {
+  // Training lives in the Depart sheet, which the footer's Delve opens.
+  'hub.training': 'hub.delve',
   'loadout.bag': 'hub.tab.loadout',
   'loadout.equip': 'hub.tab.loadout',
   'loadout.salvage': 'hub.tab.loadout',

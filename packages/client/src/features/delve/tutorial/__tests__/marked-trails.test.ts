@@ -126,6 +126,19 @@ describe('findWay', () => {
     forge('forge');
     expect(findWay('forge.go')).toBeNull();
   });
+
+  it("Training's way is the footer's Delve while the Depart sheet is shut, and Training itself once it is open", () => {
+    const hub = `<div data-pad-scope><button id="depart" data-tutorial="hub.delve"></button></div>`;
+    page(hub);
+    expect(at(findWay('hub.training'))).toEqual(['hub.delve', 'depart']);
+    // The sheet over the hub, its own scope: its Delve and its Training.
+    page(`${hub}<div data-pad-scope>
+      <button id="delve" data-tutorial="hub.delve"></button>
+      <button id="training" data-tutorial="hub.training"></button>
+    </div>`);
+    expect(at(findWay('hub.training'))).toEqual(['hub.training', 'training']);
+    expect(at(findWay('hub.delve'))).toEqual(['hub.delve', 'delve']);
+  });
 });
 
 describe('findMarked', () => {
