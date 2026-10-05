@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, screen, fireEvent, within } from '@testing-library/react';
 import {
+  carriedByText,
   defaultMoveset,
   heroChains,
   pouchCount,
@@ -95,7 +96,8 @@ describe('SkillsTab', () => {
       ['defensive', 'Carried by rare weapons and better'],
       ['ultimate', 'Carried by epic weapons and better, or an awakened rare'],
     ]) {
-      expect(screen.getByTestId(`chain-skill-${skill}`)).toHaveTextContent('Locked');
+      // The tab's own line says what carries it.
+      expect(screen.getByTestId(`chain-skill-${skill}`)).toHaveTextContent(text);
       fireEvent.click(screen.getByTestId(`chain-skill-${skill}`));
       expect(screen.getByTestId('abilities-summary')).toHaveTextContent(text);
       expect(screen.queryByTestId('move-0')).toBeNull();
@@ -108,8 +110,8 @@ describe('SkillsTab', () => {
     store().unequip('weapon');
     renderSkills();
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
-    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('Locked');
-    expect(screen.getByTestId('chain-skill-defensive')).toHaveTextContent('Locked');
+    for (const s of ['primary', 'defensive'] as const)
+      expect(screen.getByTestId(`chain-skill-${s}`)).toHaveTextContent(carriedByText(registry, s));
   });
 
   it('edits a draft: Apply commits it, free before the first dive, and Revert drops it', () => {
