@@ -256,26 +256,23 @@ function cellIndex(map: FloorMap, p: Vec): number {
  * which the fog, a foe's aggro and sight, `nearestMonster`, auto-aim and the
  * bot's targeting ask. Solid cells block it as they block `sees`, and foliage
  * twice: what stands in foliage (either end) is perceived only within
- * `terrain.foliageSight`, and a line running through more than
- * `terrain.foliageDepth` of foliage (its ends' own cells left out) is blocked.
+ * `terrain.foliageSight` (that alone decides it), and between two ends outside
+ * foliage a line running through more than `terrain.foliageDepth` of it is
+ * blocked.
  * A map with no terrain bound (`bindTerrain`) has no foliage rules.
  */
 export function perceives(map: FloorMap, a: Vec, b: Vec): boolean {
   if (!sees(map, a, b)) return false;
   const t = terrains.get(map);
   if (map.open || !t) return true;
-  const ia = cellIndex(map, a);
-  const ib = cellIndex(map, b);
-  const leafy = map.cells[ia] === CELL.foliage || map.cells[ib] === CELL.foliage;
-  if (leafy && Math.hypot(b.x - a.x, b.y - a.y) > t.foliageSight) return false;
-  return foliageAlong(map, a, b, ia, ib) <= t.foliageDepth;
+  const leafy =
+    map.cells[cellIndex(map, a)] === CELL.foliage || map.cells[cellIndex(map, b)] === CELL.foliage;
+  if (leafy) return Math.hypot(b.x - a.x, b.y - a.y) <= t.foliageSight;
+  return foliageAlong(map, a, b) <= t.foliageDepth;
 }
 
-/**
- * How far the segment from `a` to `b` runs through foliage, leaving out the
- * cells `ia` and `ib` (its ends'): the DDA walk `lineOfSight` takes.
- */
-function foliageAlong(map: FloorMap, a: Vec, b: Vec, ia: number, ib: number): number {
+/** How far the segment from `a` to `b` runs through foliage: the DDA walk `lineOfSight` takes. */
+function foliageAlong(map: FloorMap, a: Vec, b: Vec): number {
   let cx = cellOf(a.x, map.width);
   let cy = cellOf(a.y, map.height);
   const dx = b.x - a.x;
@@ -292,7 +289,7 @@ function foliageAlong(map: FloorMap, a: Vec, b: Vec, ia: number, ib: number): nu
     const y = ty();
     const to = Math.min(x, y, 1);
     const i = cy * map.width + cx;
-    if (i !== ia && i !== ib && map.cells[i] === CELL.foliage) sum += (to - from) * len;
+    if (map.cells[i] === CELL.foliage) sum += (to - from) * len;
     if (to >= 1) return sum;
     from = to;
     if (x <= y) cx += sx;

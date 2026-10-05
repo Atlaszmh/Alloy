@@ -45,6 +45,15 @@ describe('perceives in foliage', () => {
       }
   });
 
+  it('inside a patch, any two points within foliageSight perceive each other, however much between', () => {
+    const map = leafy(PATCH);
+    // 2.2 apart, two whole cells (8 and 9) of foliage between their own.
+    expect(perceives(map, { x: 7.9, y: 11.5 }, { x: 10.1, y: 11.5 })).toBe(true);
+    expect(perceives(map, { x: 10.1, y: 11.5 }, { x: 10.1 - foliageSight - 0.1, y: 11.5 })).toBe(
+      false,
+    );
+  });
+
   it('a line through more than foliageDepth of foliage is blocked, its ends outside', () => {
     expect(foliageDepth).toBeGreaterThanOrEqual(1);
     expect(foliageDepth).toBeLessThan(2);
