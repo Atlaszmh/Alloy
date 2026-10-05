@@ -72,15 +72,14 @@ describe('Delve ARPG pacing (autopilot)', () => {
     }
   });
 
-  // B4 (the pack director, 05-director.md) moved this rail; B5 re-bands it (06-bot-pacing.md).
-  // Flankers slow the rush (26.4 → 29.7 s a floor): a clear (36.3) is under 1.25 × a rush.
-  it.fails('floors are a snackable length: a full clear takes longer than a rush to the exit', () => {
+  // The room objects spec's bands (bigger, furnished rooms): a clear 40–75 s a floor, a rush 25–55 s.
+  it('floors are a snackable length: a full clear takes longer than a rush to the exit', () => {
     const clear = avg(runs.flatMap(perFloor));
     const rush = avg(rushRuns.flatMap(perFloor));
-    expect(clear).toBeGreaterThan(30);
-    expect(clear).toBeLessThan(60);
-    expect(rush).toBeGreaterThan(20);
-    expect(rush).toBeLessThan(45);
+    expect(clear).toBeGreaterThan(40);
+    expect(clear).toBeLessThan(75);
+    expect(rush).toBeGreaterThan(25);
+    expect(rush).toBeLessThan(55);
     expect(clear).toBeGreaterThan(1.25 * rush);
   });
 
@@ -105,13 +104,15 @@ describe('Delve crafting pacing targets (economySim)', () => {
       expect(first, `seed ${SEEDS[i]}`).toEqual({ opened: true, kitAlone: false, withDive1: true, forged: true });
   });
 
+  // Re-banded (06-bot-pacing.md): on the room objects' floors a seed's first epic spreads about
+  // ±1.6 dives round a mean of 4.8 (16 seeds), so four seeds' mean is held to 5.5, each still by 6.
   it('a first epic (or a legendary) is forged by about dive 5', () => {
     const first = economies.map(firstEpicDive);
     for (const [i, dive] of first.entries()) {
       expect(dive, `seed ${SEEDS[i]}`).toBeGreaterThan(0);
       expect(dive, `seed ${SEEDS[i]}`).toBeLessThanOrEqual(6);
     }
-    expect(avg(first)).toBeLessThanOrEqual(5);
+    expect(avg(first)).toBeLessThanOrEqual(5.5);
   });
 
   // The tutorial spec's target: no essence comes before drops.essenceMinDepth (20).

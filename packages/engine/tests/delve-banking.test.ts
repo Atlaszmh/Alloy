@@ -303,7 +303,7 @@ describe('the first boss, and when pickups bank', () => {
 
   it('when pickups bank never changes the outcome: every frame or only at the end, at 60 and 20 frames a second', () => {
     for (const [seed, depth] of [
-      [61, 1], // taken to the exit, with two pieces of elites' gear
+      [64, 1], // taken to the exit, with two pieces of elites' gear
       [3, 5], // the first boss, which kills the starter hero: the floor's haul is lost
     ])
       for (const fps of [60, 20]) {
@@ -318,8 +318,8 @@ describe('the first boss, and when pickups bank', () => {
 });
 
 describe('the E2E dives', () => {
-  it("seed 39's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
-    const p = startDive(registry, createDelveProfile(registry, 39, { primary: 'fire' }), 1);
+  it("seed 55's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
+    const p = startDive(registry, createDelveProfile(registry, 55, { primary: 'fire' }), 1);
     for (const fps of [60, 45, 30, 20]) {
       const world = beginFloor(registry, p);
       const items: unknown[] = [];
