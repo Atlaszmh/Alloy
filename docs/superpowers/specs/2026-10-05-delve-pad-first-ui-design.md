@@ -15,7 +15,7 @@ A scripted pad on the pad-nav spec's seeded mid-game save, at 1920×1080 (v0.64.
 | Screen | D-pad stops on screen | Target |
 |---|---|---|
 | Loadout (12 bag items) | 35 | 24 measured at v0.67.0 (about 21 asked): the 7 worn slots, the 12 tiles (one stop a bag item), the bag's sort, Equip best, Salvage junk, Auto-salvage and Delve |
-| Skills, a move selected | 25 | about 10 |
+| Skills, a move selected | 25 | about 10; measured at v0.68.0: Skills (strip and chain) 5, the move editor 5, the form grid 5, the Apply sheet 4 |
 | Forge, a pattern open | 26 | 14 measured at v0.67.0 (about 14 asked) |
 | Temper | 25 | 21 measured at v0.67.0 (about 15 asked): the gear rows (one stop a gear row; 19 on this save), the operations that can be done (the rest are disabled, never stops) and Delve |
 | Quests | 14 | 14 (no cross-pane trip to claim) |
@@ -68,7 +68,7 @@ One job a button, on every Delve screen outside the fight. Each phase brings its
 
 Rules:
 
-1. **No menu action needs a hold.** A destructive one gets an Undo, a priced one a sheet that shows its price. (Charging a hold move in the fight is a mechanic, not a menu hold; phase 5 gives it a press-to-toggle option.)
+1. **No menu action needs a hold.** A destructive one gets an Undo, a priced one a sheet that shows its price. (Charging a hold move in the fight is a mechanic, not a menu hold; phase 5 gives it a press-to-toggle option. Phase 4 retired the prompt runtime's hold (`padHold`): no menu prompt uses one.)
 2. **A button never has two meanings by press count or length.** Today's tap-Y Remove and hold-Y Apply goes in phase 4.
 3. **Prompts keep one order** in every footer: A, X, Y, LB/RB, LT/RT, the sticks, View, Menu, B. The kit sorts them (2.5).
 4. **A combat binding's glyph never labels a menu control.** The Skills list's RB / RT / LB / LT go in phase 4.
@@ -164,11 +164,14 @@ Each item's plan starts by reading its screen's code; what follows is the design
 ## 5. Phase 4: Skills (v0.68.0)
 
 - The skills step on LT/RT as a strip (Basic, Primary, Defensive, Ultimate; a skill the weapon doesn't carry dimmed with its "carried by" line); the left pane and its combat glyphs go; the mana pair moves into the strip.
-- The chain's cards are the home row. A opens the focused move's editor: rows for Kind, Form, Elements, each socket, and Position. Kind, Elements, Position and the chain's Payment are steppers; Form and a socket open a grid of what fits, each option with its line and what it does to the chain's damage. Every change shows in the chain's numbers at once.
+- The chain's cards are the home row. A opens the focused move's editor: rows for Kind, Form, Elements, each socket, and Position. Kind, Elements, Position and the chain's Payment are steppers; Form and a socket open a grid of what fits, each option with its line and what it does to the chain's damage a second (`chainCycle`'s damage over its seconds, so a Quick rune counts); a basic blow's options show none. Every change shows in the chain's numbers at once.
+- The editor is the move pane's nested view (B, or Esc, closes it onto its card); with the editor shut the pane is the focused move's detail and has no stops. The Form and socket grids are views nested in it. Mid-dive (the pause) A only selects: nothing opens.
+- Elements steps through every set the move may take: each element of the pair (and its own off-pair one), then each ordered pair, main element first ("Fire + Frost", "Frost + Fire"); the swap button goes.
 - X removes the move; Y opens the **Apply sheet** (each change, the price, what is destroyed; A applies, B returns). No hold. Position replaces the pad's carried reorder (`captureNav` goes if nothing else uses it).
-- **Try in Training**: the builder's button loads the draft into the sandbox and returns to the builder with the draft intact.
+- Every device opens the Apply sheet (Y, Ctrl+Enter, the footer's Apply); it opens whenever the draft holds a change, its Apply disabled with the engine's reason when it would be refused. It also offers Try in Training and Discard changes (which reverts the draft). The footer's Revert and Apply stay for the mouse, off the D-pad.
+- **Try in Training**: the Apply sheet's Try in Training loads the draft into the sandbox as Load my build loads your build (the sandbox's own loadout is replaced), and the Training Grounds' way back opens Skills on the same skill with the draft as it was.
 - The guided start's lesson 1 trail (`skills.*`) is rewritten for the editor; TU01 and the tutorial bot's client path follow.
-- **Close:** the audit; version 0.68.0.
+- **Close:** the audit; version 0.68.0. Measured on the audit's save at both sizes: Skills (the strip and chain) 5 stops, the move editor 5, the form grid 5 (its short last row two unreversed moves), the Apply sheet 4; the press budget (PN07): change a move's element and apply 3 D-pad presses (0 to the card, 2 to Elements, 1 step).
 
 ## 6. Phase 5: reading and options (v0.69.0)
 
@@ -180,7 +183,7 @@ Each item's plan starts by reading its screen's code; what follows is the design
 
 ## Measures
 
-Each phase is held by `e2e/delve-pad-nav.spec.ts`: the stop allowances it already ratchets, plus a ceiling on stops per screen (the Evidence table's targets as each screen is rebuilt) and, from phase 3, a press budget for five everyday tasks (equip an upgrade, salvage an item, change a move's element and apply, forge an item, claim a quest), each at most six D-pad presses plus its face buttons.
+Each phase is held by `e2e/delve-pad-nav.spec.ts`: the stop allowances it already ratchets, plus a ceiling on stops per screen (the Evidence table's targets as each screen is rebuilt) and, from phase 3, a press budget for five everyday tasks (equip an upgrade, salvage an item, change a move's element and apply, forge an item, claim a quest), each at most six D-pad presses plus its face buttons. Change a move's element and apply measured 3 at v0.68.0.
 
 ## Out of scope
 
