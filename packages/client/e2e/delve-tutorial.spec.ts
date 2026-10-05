@@ -10,7 +10,6 @@ import {
 import {
   ARENA_READY,
   SAVE_KEY,
-  applyDraft,
   armed,
   seedProfile,
   startDive,
@@ -275,17 +274,33 @@ test.describe('Delve guided start', () => {
     await expect.poll(() => step(page)).toBe('l1-skills');
     await page.getByTestId('mana-back').click();
 
-    // The Primary: a slot, the new move in frost, a socket on the first move and the rune; Apply.
-    await page.getByTestId('chain-skill-primary').click();
+    // The Primary: the marker leads through the editor, entry by entry: the slot, the new move
+    // in frost, the way out; the first move's socket and its rune, the way out; Apply, then the
+    // sheet's Apply.
+    await marked('skills.addSlot');
     await page.getByTestId('add-slot').click();
+    await marked('skills.card:last');
     await page.getByTestId('move-2').click();
+    await marked('skills.elements');
     await stepTo(page, 'move-elements', /^Frost$/);
+    await marked('back');
     await page.getByTestId('move-editor-back').click();
+    await marked('skills.card:first');
     await page.getByTestId('move-0').click();
+    await marked('skills.socket');
     await page.getByTestId('socket-open').click();
+    await marked('skills.rune');
     await page.getByTestId('inspect-socket-0').click();
+    await expect(page.getByTestId('rune-picker')).toBeVisible();
+    await marked('skills.rune');
     await page.getByTestId('rune-picker').locator('[data-testid^="rune-pick-"]').first().click();
-    await applyDraft(page);
+    await marked('back');
+    await page.getByTestId('move-editor-back').click();
+    await marked('skills.apply');
+    await page.getByTestId('chain-apply').click();
+    await expect(page.getByTestId('apply-sheet')).toBeVisible();
+    await marked('skills.apply');
+    await page.getByTestId('apply-sheet-confirm').click();
     await expect.poll(() => step(page)).toBe('l1-salvage');
 
     // Salvage the old common sword, refine three Rusty bars into Iron.
