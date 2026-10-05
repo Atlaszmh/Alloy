@@ -285,6 +285,8 @@ export interface Projectile {
   noReact?: boolean;
   /** A basic shot's blow knobs (its runes'; see the runes spec). */
   knobs?: Knobs;
+  /** An Echo's basic shot: it sets no room object off (an ability's says so on `ability.replay`). */
+  replay?: boolean;
   dead: boolean;
 }
 

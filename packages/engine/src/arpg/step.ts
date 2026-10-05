@@ -415,10 +415,14 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
     // A wall stops it at its face (where a bolt bursts); off the map ends it too.
     const wall = !sees(world.map, before, p);
     if (wall) Object.assign(p, clipSight(world.map, before, p));
-    // A prop or a hazard it meets is hit, and (as `hitObject` says) stops it there as a wall does.
+    // A prop or a hazard it meets is hit, and (as `hitObject` says) stops it there as a wall does;
+    // an Echo's shot only stops there, setting nothing off.
     let stopped = false;
     for (const o of objectsTouching(world, p)) {
-      stopped = hitObject(ctx, o, p.owner === 'hero' ? 'hero' : 'foe');
+      stopped =
+        p.replay || p.ability?.replay
+          ? true
+          : hitObject(ctx, o, p.owner === 'hero' ? 'hero' : 'foe');
       if (stopped) break;
     }
     const outside = wall || stopped || !isWalkable(world.map, p.x, p.y);

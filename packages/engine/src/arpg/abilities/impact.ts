@@ -254,9 +254,9 @@ export function impact(
   );
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
-  // Its area reaches props, hazards and crumbling cover; a tick's and an Echo's never do (see the
-  // room objects spec).
-  if (!o.tick && !ab.replay) {
+  // Its area reaches props, hazards and crumbling cover; a tick's, an Echo's and a Pierce shot's
+  // past its first foe never do (see the room objects spec).
+  if (!o.tick && !ab.replay && !o.through) {
     for (const obj of objectsIn(world, { x, y }, radius)) hitObject(ctx, obj, 'hero');
     hitStructures(ctx, { x, y }, radius, damage);
   }

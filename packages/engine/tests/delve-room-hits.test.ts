@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { burstShot, landBlow } from '../src/arpg/basic.js';
 import { makeCtx } from '../src/arpg/combat.js';
+import { executeForm } from '../src/arpg/abilities/forms.js';
 import { impact } from '../src/arpg/abilities/impact.js';
 import type { ObjectHitSource, RoomObject } from '../src/arpg/objects.js';
 import type { ArpgWorld, PropEntity, Projectile, Vec } from '../src/types/arpg.js';
@@ -107,6 +108,64 @@ describe("the hero's hits", () => {
     };
     expect(flight(true)).toEqual([1, true]);
     expect(flight(false)).toEqual([1, false]);
+  });
+});
+
+describe('Echoes and Pierce', () => {
+  it("an Echo's Lance and Strike set nothing off", () => {
+    for (const form of ['lance', 'strike'] as const) {
+      const w = withProps(arena([], { noBasic: true, primary: { form } }), prop(1, 13, 32));
+      const ab = { ...w.hero.chains[0]!.moves[0], replay: true };
+      executeForm(makeCtx(registry, w, []), ab, { x: 13, y: 20 });
+    }
+    expect(hooks.hits).toEqual([]);
+  });
+
+  it("a blow's Echo sets nothing off and wears no cover", () => {
+    const w = withProps(arena([], { noBasic: true }), prop(1, 13, 35));
+    const blow = w.hero.stats.weapon.blows[0];
+    landBlow(makeCtx(registry, w, []), blow, 'heavy', { x: 0, y: -1 }, 1, { echo: true });
+    expect([hooks.hits, hooks.structures]).toEqual([[], []]);
+  });
+
+  it("an Echo's shot ends at an object without setting it off", () => {
+    hooks.stops = true;
+    const w = withProps(arena([], { noBasic: true }), prop(1, 13, 30));
+    const ab = { ...w.hero.chains[0]!.moves[0], replay: true };
+    const shot = (o: Partial<Projectile>): Projectile => ({
+      id: 60,
+      owner: 'hero',
+      form: null,
+      ability: null,
+      homingId: null,
+      x: 13,
+      y: 30.9,
+      vx: 0,
+      vy: -8,
+      radius: 0.3,
+      damage: 5,
+      element: 'fire',
+      pierce: false,
+      pierceLeft: 0,
+      hitIds: [],
+      maxDist: 10,
+      traveled: 0,
+      explodeRadius: 0,
+      applies: [],
+      knockback: 0,
+      dead: false,
+      ...o,
+    });
+    w.projectiles.push(shot({ replay: true }), shot({ id: 61, form: 'bolt', ability: ab }));
+    run(w, STEP);
+    expect([hooks.hits, w.projectiles]).toEqual([[], []]);
+  });
+
+  it('a Pierce shot past its first foe sets nothing off and wears no cover', () => {
+    const w = withProps(arena([], { noBasic: true }), prop(1, 13, 30));
+    const ab = w.hero.chains[0]!.moves[0];
+    impact(makeCtx(registry, w, []), ab, 13, 31, 1.5, 10, { through: true });
+    expect([hooks.hits, hooks.structures]).toEqual([[], []]);
   });
 });
 
