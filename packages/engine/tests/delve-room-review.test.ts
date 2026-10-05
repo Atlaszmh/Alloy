@@ -4,7 +4,7 @@ import { aimPoint, nearestMonster } from '../src/arpg/abilities/targeting.js';
 import { botInput } from '../src/arpg/bot.js';
 import { UNREACHED } from '../src/arpg/flow.js';
 import { planFloor } from '../src/arpg/layout/generate.js';
-import { isWalkable, moveCircle } from '../src/arpg/grid.js';
+import { isWalkable, moveCircle, terrainOf } from '../src/arpg/grid.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { createFloorWorld } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
@@ -240,4 +240,10 @@ describe('a den', () => {
       expect(den).toBeGreaterThan(1.5 * combat);
     },
   );
+});
+
+describe('a new floor', () => {
+  it("has the terrain's numbers bound from the start, before any step or look", () => {
+    expect(terrainOf(floor(16, 5).map)).toBe(bal.terrain);
+  });
 });

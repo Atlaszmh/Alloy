@@ -27,7 +27,7 @@ import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { clearanceOf } from './flow.js';
 import { dist } from './geometry.js';
-import { openRoom, snapToWalkable, solid } from './grid.js';
+import { bindTerrain, openRoom, snapToWalkable, solid } from './grid.js';
 import { footprintsOf } from './layout/furnish.js';
 import { floorPacks, planFloor } from './layout/generate.js';
 import { placeObjects } from './objects-base.js';
@@ -480,6 +480,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
   const map = built
     ? tutorialFloorMap(registry, built, opts.depth)
     : (plan?.map ?? openRoom(bal.arena.width, bal.arena.height));
+  // Its terrain's numbers from the start: the bot may look before the first `terrainTick`.
+  if (!map.open) bindTerrain(map, bal.terrain);
   for (const room of map.rooms)
     if (room.interactable && opts.used?.includes(room.interactable.id))
       room.interactable.used = true;
