@@ -43,6 +43,20 @@ describe('SettingsPanel', () => {
     expect(screen.getByTestId('hud-scale-value')).toHaveTextContent('110%');
   });
 
+  it('chooses the HUD, Lean (the default) or Full, kept on this device', () => {
+    useUIStore.setState({ hudMode: 'lean' });
+    render(<SettingsPanel onClose={() => {}} />);
+    const lean = screen.getByTestId('hud-mode-lean');
+    const full = screen.getByTestId('hud-mode-full');
+    expect(lean).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(full);
+    expect(useUIStore.getState().hudMode).toBe('full');
+    expect(full).toHaveAttribute('aria-checked', 'true');
+    expect(localStorage.getItem('alloy:delve:hud')).toBe('full');
+    fireEvent.click(lean);
+    expect(useUIStore.getState().hudMode).toBe('lean');
+  });
+
   it('sets View distance from 20 to 30 units, showing the zoom it gives in this window', () => {
     vi.stubGlobal('innerHeight', 1080);
     render(<SettingsPanel onClose={() => {}} />);

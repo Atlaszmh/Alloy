@@ -19,8 +19,8 @@ const HUD_PERCENT = HUD_SCALE_RANGE.map((v) => Math.round(v * 100));
 
 /**
  * The Delve's Settings (from the system menu): the same `uiStore` fields as
- * the classic drawer (volumes, mute, colorblind mode), the HUD scale, View
- * distance, and the version, which the Delve has no TabBar to show.
+ * the classic drawer (volumes, mute, colorblind mode), the HUD (Lean or Full),
+ * the HUD scale, View distance, and the version, which the Delve has no TabBar to show.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const ui = useUIStore();
@@ -73,6 +73,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
         </Section>
         <Section title="Display">
+          <div className="flex items-center gap-4">
+            <span className="w-48 shrink-0 text-[var(--k-text)]">HUD</span>
+            <Segmented
+              aria-label="HUD"
+              columns={2}
+              value={ui.hudMode}
+              onChange={(mode) => ui.setHudMode(mode)}
+              options={[
+                { id: 'lean', label: 'Lean', testId: 'hud-mode-lean' },
+                { id: 'full', label: 'Full', testId: 'hud-mode-full' },
+              ]}
+            />
+          </div>
+          <p className="text-[14px] text-[var(--k-text-3)]">
+            Lean: the map, one objective and what you pick up; peek for the rest. Full: the purse,
+            the floor and its finds always on screen.
+          </p>
           <Slider
             id="hud-scale"
             label="HUD scale"

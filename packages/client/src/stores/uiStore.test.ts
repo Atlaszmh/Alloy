@@ -15,7 +15,7 @@ describe('uiStore', () => {
   });
 
   describe('Delve UI scale fields', () => {
-    const KEYS = ['alloy:delve:hudScale', 'alloy:delve:viewUnits'];
+    const KEYS = ['alloy:delve:hudScale', 'alloy:delve:viewUnits', 'alloy:delve:hud'];
     const fresh = async () => {
       (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.clear();
       vi.resetModules();
@@ -43,6 +43,16 @@ describe('uiStore', () => {
       localStorage.setItem('alloy:delve:viewUnits', '');
       const s = (await fresh()).getState();
       expect([s.hudScale, s.arenaViewUnits]).toEqual([1, 27]);
+    });
+
+    it('the HUD is lean by default, persists a choice of full, and reads anything else as lean', async () => {
+      const store = await fresh();
+      expect(store.getState().hudMode).toBe('lean');
+      store.getState().setHudMode('full');
+      expect(localStorage.getItem('alloy:delve:hud')).toBe('full');
+      expect((await fresh()).getState().hudMode).toBe('full');
+      localStorage.setItem('alloy:delve:hud', 'banana');
+      expect((await fresh()).getState().hudMode).toBe('lean');
     });
 
     it('clamps hudScale to 0.8–1.25 and arenaViewUnits to 20–30, loaded or set', async () => {

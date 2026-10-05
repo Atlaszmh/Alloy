@@ -12,6 +12,9 @@ function loadVolume(key: string, fallback: number): number {
   }
 }
 
+/** Delve UI: the dive's HUD, Lean (a gain feed, the map and one objective) or Full (the purse bar, the floor column, the Found log). */
+export type HudMode = 'lean' | 'full';
+
 interface UIStore {
   isMuted: boolean;
   masterVolume: number;
@@ -24,6 +27,8 @@ interface UIStore {
   hudScale: number;
   /** Delve UI: Settings → View distance, the arena's target view height in units, 20 to 30 (`alloy:delve:viewUnits`). */
   arenaViewUnits: number;
+  /** Delve UI: Settings → HUD, 'lean' by default (`alloy:delve:hud`). */
+  hudMode: HudMode;
 
   toggleMute: () => void;
   setVolume: (category: 'master' | SoundCategory, value: number) => void;
@@ -31,6 +36,7 @@ interface UIStore {
   setUiScale: (scale: number) => void;
   setHudScale: (scale: number) => void;
   setArenaViewUnits: (units: number) => void;
+  setHudMode: (mode: HudMode) => void;
 }
 
 /** Settings → HUD scale's range (the spec's 80 to 125%). */
@@ -58,6 +64,13 @@ export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
   uiScale: 1,
   hudScale: loadNumber('alloy:delve:hudScale', 1, HUD_SCALE_RANGE),
   arenaViewUnits: loadNumber('alloy:delve:viewUnits', 27, VIEW_UNITS_RANGE),
+  hudMode: (() => {
+    try {
+      return localStorage.getItem('alloy:delve:hud') === 'full' ? 'full' : 'lean';
+    } catch {
+      return 'lean';
+    }
+  })() as HudMode,
 
   toggleMute: () => set((s) => {
     const next = !s.isMuted;
@@ -93,5 +106,9 @@ export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
     const units = clamp(value, VIEW_UNITS_RANGE);
     try { localStorage.setItem('alloy:delve:viewUnits', String(units)); } catch { /* noop */ }
     set({ arenaViewUnits: units });
+  },
+  setHudMode: (mode) => {
+    try { localStorage.setItem('alloy:delve:hud', mode); } catch { /* noop */ }
+    set({ hudMode: mode });
   },
 }));
