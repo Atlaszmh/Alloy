@@ -18,7 +18,11 @@ const EPS = 0.5;
 interface Lay {
   /** The gap between the two boxes along the press (0 when they overlap). */
   along: number;
-  /** Where the box ends along the press, from the focused box's edge. */
+  /**
+   * How far the box reaches along the press: its gap plus its whole length. A box overlapping
+   * the focused one along the press (a tile under a chip) counts all of it, so it never passes
+   * for a nearer row than a control straight ahead.
+   */
   far: number;
   /** The gap between them across the press (0 in the beam). */
   across: number;

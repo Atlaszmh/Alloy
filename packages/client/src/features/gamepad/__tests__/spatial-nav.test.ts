@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickNext, type NavRect } from '../spatial-nav';
+import { CONE, pickNext, type NavRect } from '../spatial-nav';
 
 /** A box `w` × `h` at `x`, `y`. */
 const box = (id: string, x: number, y: number, w = 10, h = 10): NavRect => ({ id, x, y, w, h });
@@ -40,6 +40,23 @@ describe('pickNext', () => {
     expect(pick(from, [box('near-line', 100, 30)], 'right')).toBe('near-line');
     // 20 px on and 90 px aside: a different row, not "to the right".
     expect(pick(from, [box('below', 20, 100)], 'right')).toBeNull();
+  });
+
+  it('pins the cone at CONE: a gap across of half the distance along, and no more', () => {
+    expect(CONE).toBe(0.5);
+    const from = box('from', 0, 0);
+    // Centres 100 px apart along the press: a gap across of 49.5 px is in, 50.5 px is out.
+    expect(pick(from, [box('inside', 100, 59.5)], 'right')).toBe('inside');
+    expect(pick(from, [box('outside', 100, 60.5)], 'right')).toBeNull();
+  });
+
+  it('a box overlapping the focused one along the press never passes for a nearer row', () => {
+    // The hub's bag at 1080p: right from a filter chip, the sort button lies straight ahead; a
+    // tile under the chip's right end ends before it, but it is below the chip, not beside it.
+    const chip = box('chip', 1097, 124, 136, 38);
+    const sort = box('sort', 1295, 125, 71, 37);
+    const tile = box('tile', 1200, 178, 84, 84);
+    expect(pick(chip, [tile, sort], 'right')).toBe('sort');
   });
 
   it('steps a ragged, wrapped grid row by row', () => {

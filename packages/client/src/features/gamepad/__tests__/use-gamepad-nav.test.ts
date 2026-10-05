@@ -181,10 +181,10 @@ describe('groups: the focus stays in a pane while it can, and comes back to wher
   };
 
   it('picks inside the group first: a nearer control in the next pane waits', () => {
-    const { a1, a2, b1 } = scene();
+    const { a1, a2, b1, b2 } = scene();
     // b1 is nearer a2's row than a1 is, but down from a1 stays in the pane.
     expect(nextFocus(a1, 'down')).toBe(a2);
-    expect(nextFocus(b1, 'up')).not.toBe(a2);
+    expect(nextFocus(b1, 'up')).toBe(b2);
   });
 
   it('crosses to the pane that lies that way, even when none of its controls lines up', () => {
@@ -483,6 +483,8 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     const sub = list({ 'data-pad-tabs': 'sub' }, ['basic', 'primary', 'defensive']);
     tap(PAD.rb);
     expect(top()).toBe('forge');
+    // A tab list the D-pad can reach (not the kit's): the stepped tab takes the focus.
+    expect(document.activeElement?.id).toBe('forge');
     tap(PAD.rb);
     expect(top()).toBe('loadout');
     tap(PAD.lb);
@@ -490,6 +492,7 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     expect(sub()).toBe('basic');
     tap(PAD.rt);
     expect(sub()).toBe('primary');
+    expect(document.activeElement?.id).toBe('primary');
     tap(PAD.lt);
     tap(PAD.lt);
     expect(sub()).toBe('defensive');
