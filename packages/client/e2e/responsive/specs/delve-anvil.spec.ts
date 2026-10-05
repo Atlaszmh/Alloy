@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures/responsive-fixture';
 import { PC_VIEWPORTS } from '../viewports';
-import { seedProfile } from '../../fixtures/delve';
+import { seedProfile, stepTo } from '../../fixtures/delve';
 import {
   applyQuestEvents,
   claimQuest,
@@ -55,7 +55,7 @@ for (const vp of PC_VIEWPORTS) {
         await expect(page.getByTestId('materials-pane')).toBeVisible();
       } else {
         await page.getByTestId('pattern-cuirass').click();
-        await page.getByTestId('flux-uncommon').click();
+        await stepTo(page, 'forge-flux', /^Uncommon/);
         await expect(page.getByTestId('forge-title')).toHaveText('Uncommon Cuirass');
       }
       await runProbes(`delve-anvil-${bench}`, vp, { delve: {} });

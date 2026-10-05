@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { ARENA_READY, SAVE_KEY, seedProfile, startDive } from './fixtures/delve';
+import { ARENA_READY, SAVE_KEY, seedProfile, startDive, stepTo } from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
@@ -214,9 +214,9 @@ test.describe('Delve guided start', () => {
     await page.getByTestId('tab-forge').click();
     await marked('forge.pattern:cuirass');
     await page.getByTestId('pattern-cuirass').click();
-    // The Rusty bar is the bench's own first pick, done already: on to the flux.
-    await marked('forge.flux:uncommon');
-    await page.getByTestId('flux-uncommon').click();
+    // The Rusty bar is the bench's own first pick, done already: on to the flux row.
+    await marked('forge.flux');
+    await stepTo(page, 'forge-flux', /^Uncommon/);
     await marked('forge.shard');
     await page.getByTestId('shard-slot-0').click();
     // In the shard picker's own scope the picker is the target (the chest's Max Life shard).
@@ -354,7 +354,7 @@ test.describe('Delve guided start', () => {
     // The kit forges an uncommon sword: worn, it carries the Primary.
     await page.getByTestId('tab-forge').click();
     await page.getByTestId('pattern-sword').click();
-    await page.getByTestId('flux-uncommon').click();
+    await stepTo(page, 'forge-flux', /^Uncommon/);
     await page.getByTestId('forge-button').click();
     await expect(page.getByTestId('forge-bench').getByRole('status')).toContainText('Forged');
     await page.getByTestId('tab-loadout').click();

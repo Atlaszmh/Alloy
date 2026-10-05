@@ -34,7 +34,7 @@ const ALLOW: Record<string, [number, number]> = {
   'loadout-item': [11, 7],
   skills: [2, 4],
   forge: [0, 0],
-  'forge-pattern': [6, 6],
+  'forge-pattern': [0, 0],
   temper: [0, 0],
   materials: [0, 0],
   codex: [0, 0],
@@ -364,32 +364,36 @@ test.describe('Delve pad navigation', () => {
     await back(page, 'left', 'row');
   });
 
-  test('PN04: Forge and Temper: pattern, bench and back; LT/RT lands in the bench', async ({ page }) => {
+  test('PN04: Forge by the pad: A on a pattern lands on the Flux row, right steps a row, down reaches Forge and left the patterns; RT goes to Temper, then Materials', async ({ page }) => {
     await seed(page);
     await page.goto('/delve');
     await click(page, 'tab-forge');
-    await click(page, 'pattern-cuirass');
     await page.getByTestId('pattern-cuirass').focus();
     await tap(page, BUTTON.up); // the pad takes the input lock (and moves within the list)
     await page.getByTestId('pattern-cuirass').focus();
-    // Materials is a bench of its own now: the Forge bench's right is its (empty) preview column.
-    await leave(page, 'right', 'pattern');
-    await back(page, 'left', 'pattern');
-    // RT steps to Temper: the pattern list goes, and the focus lands on a control of the bench.
+    await mark(page, 'pattern');
+    await tap(page, BUTTON.a);
+    expect((await where(page)).id).toBe('forge-flux');
+    // The save holds no flux (None alone): down to the Metal row, whose right steps Rusty to Iron.
+    await tap(page, BUTTON.down);
+    expect((await where(page)).id).toBe('forge-metal');
+    const metal = page.getByTestId('forge-metal');
+    await expect(metal).toHaveAttribute('aria-valuetext', /^Rusty bar/);
+    await tap(page, BUTTON.right);
+    expect((await where(page)).id).toBe('forge-metal'); // a step never moves the focus
+    await expect(metal).toHaveAttribute('aria-valuetext', /^Iron bar/);
+    // Down the rows to Forge, then left: back to the patterns.
+    let presses = 0;
+    while ((await where(page)).id !== 'forge-button' && presses++ < 8) await tap(page, BUTTON.down);
+    expect((await where(page)).id).toBe('forge-button');
+    await tap(page, BUTTON.left);
+    expect((await where(page)).group).toBe('pattern-list');
+    // RT steps to Temper: the focus lands on its gear list, then on to Materials.
     await tap(page, BUTTON.rt);
-    await expect(page.getByRole('tab', { name: /Temper/ })).toHaveAttribute('aria-selected', 'true');
-    // The pattern list's focus went with it: the bench's first control takes it.
-    const first = await page.evaluate(async () => {
-      const nav = await import('/src/features/gamepad/use-gamepad-nav.ts' as string);
-      const list = document.querySelector('[data-pad-tabs="sub"]')!;
-      const el = (nav.candidates(null) as HTMLElement[]).find(
-        (c) =>
-          list.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING &&
-          !c.closest('[data-screen-section="screen-foot"]'),
-      );
-      return el === document.activeElement;
-    });
-    expect(first, "the focus is on the Temper bench's first control").toBe(true);
+    await expect(page.getByTestId('bench-temper')).toHaveAttribute('aria-selected', 'true');
+    expect((await where(page)).id).toBe('temper-row');
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('bench-materials')).toHaveAttribute('aria-selected', 'true');
     const at = await where(page);
     expect(at.tab).toBe(false);
     expect(at.foot).toBe(false);

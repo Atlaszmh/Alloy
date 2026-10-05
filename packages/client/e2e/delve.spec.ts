@@ -4,6 +4,7 @@ import {
   FLOOR_CLEAR,
   seedProfile,
   startDive,
+  stepTo,
   toRoad,
   useFullHud,
 } from './fixtures/delve';
@@ -367,13 +368,12 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('bench-forge')).toHaveAttribute('aria-selected', 'true');
     await page.getByTestId('pattern-cuirass').click();
-    await page.getByTestId('flux-uncommon').click();
+    await stepTo(page, 'forge-flux', /^Uncommon/);
     await expect(page.getByTestId('forge-title')).toHaveText('Uncommon Cuirass');
     await expect(page.getByTestId('forge-refused')).toHaveCount(0);
     await page.getByTestId('forge-button').click();
     await expect(page.getByTestId('forge-bench').getByRole('status')).toContainText('Forged');
-    await page.getByTestId('bench-materials').click();
-    await expect(page.getByTestId('material-metal-rusty')).toContainText('Rusty bar ×4');
+    await expect(page.getByTestId('forge-metal')).toHaveAttribute('aria-valuetext', 'Rusty bar ×4');
     await page.getByTestId('tab-loadout').click();
     await expect(page.getByTestId('tab-loadout')).toContainText('NEW 1');
   });

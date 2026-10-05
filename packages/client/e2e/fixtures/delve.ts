@@ -63,6 +63,16 @@ export async function useFullHud(page: Page): Promise<void> {
   await page.addInitScript(() => localStorage.setItem('alloy:delve:hud', 'full'));
 }
 
+/** Step a kit Stepper (`role="spinbutton"`) with the arrow keys until its value reads `value`. */
+export async function stepTo(page: Page, testId: string, value: RegExp): Promise<void> {
+  const el = page.getByTestId(testId);
+  for (let i = 0; i < 12; i++) {
+    if (value.test((await el.getAttribute('aria-valuetext')) ?? '')) return;
+    await el.press('ArrowRight');
+  }
+  await expect(el).toHaveAttribute('aria-valuetext', value);
+}
+
 /** From the Anvil: the footer's Delve opens the Depart sheet, whose Delve starts (or resumes) the dive. */
 export async function startDive(page: Page): Promise<void> {
   await page.getByTestId('depart-button').click();
