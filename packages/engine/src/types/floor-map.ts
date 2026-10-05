@@ -49,6 +49,9 @@ export const LOOK_IDS = [
   'mud',
   'ash',
   'rubble',
+  'fungus',
+  'frost_fern',
+  'cobweb',
 ] as const;
 export type LookId = (typeof LOOK_IDS)[number];
 
@@ -397,6 +400,8 @@ export interface TerrainBalance {
   propDrops: { chance: number; material: number };
   /** A hazard's burst: × the depth's foe damage growth (`depthGrowth`). */
   hazardDamage: number;
+  /** A burst on a foe: × the hero's (so luring a pack onto a hazard pays). */
+  hazardFoeMult: number;
   /** Seconds from a hazard set off to its burst, and from its burst to ready again. */
   fuse: number;
   recharge: number;

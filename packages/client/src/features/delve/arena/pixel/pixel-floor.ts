@@ -78,7 +78,15 @@ export class PixelFloor {
     this.worker?.terminate();
     this.worker = null;
     this.inFlight = false;
-    this.engine ??= new FloorEngine(this.init);
+    if (this.engine) return;
+    this.engine = new FloorEngine(this.init);
+    // The new floor starts from the plan: what was sent the worker goes again.
+    if (this.init.plan) {
+      this.cells?.set(this.init.plan.cells);
+      this.looks?.set(this.init.plan.look);
+    }
+    this.version = -1;
+    this.cracks = '';
   }
 
   handleEvents(events: readonly ArpgEvent[]): void {
@@ -124,7 +132,7 @@ export class PixelFloor {
         }
       if (cells.length) out = { cells };
     }
-    // By id: a crumbled structure may leave the list.
+    // By id (a crumbled structure stays on the list, fully worn).
     const cracks: number[] = [];
     for (const s of map.structures)
       cracks[s.id] =

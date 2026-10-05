@@ -66,7 +66,7 @@ import {
   objectsTick,
   objectsTouching,
 } from './objects.js';
-import { groundSpeed, terrainTick, wallSlam } from './terrain.js';
+import { groundSpeed, hitStructures, terrainTick, wallSlam } from './terrain.js';
 import { directorTick, goalWay, laneOpen } from './pack.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
@@ -382,13 +382,22 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
 
 // ── Projectiles ────────────────────────────────────────────────────────────
 
-/** Volley darts turn toward their foe while they perceive it (else the next nearest they do). */
+/**
+ * Volley darts turn toward their foe while they perceive it with no prop or hazard in the way
+ * (else the next nearest such).
+ */
 function steer(ctx: SimCtx, p: Projectile, dt: number): void {
-  const map = ctx.world.map;
+  const { world } = ctx;
   let target =
-    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && perceives(map, p, m)) ?? null;
+    world.monsters.find(
+      (m) =>
+        m.id === p.homingId &&
+        !m.dead &&
+        perceives(world.map, p, m) &&
+        objectsOnBeam(world, p, m, p.radius).length === 0,
+    ) ?? null;
   if (!target) {
-    target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds));
+    target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds), p.radius);
     p.homingId = target?.id ?? null;
     if (!target) return;
   }
@@ -415,10 +424,14 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
     // A wall stops it at its face (where a bolt bursts); off the map ends it too.
     const wall = !sees(world.map, before, p);
     if (wall) Object.assign(p, clipSight(world.map, before, p));
-    // A prop or a hazard it meets is hit, and (as `hitObject` says) stops it there as a wall does.
+    // A prop or a hazard it meets is hit, and (as `hitObject` says) stops it there as a wall does;
+    // an Echo's shot only stops there, setting nothing off.
     let stopped = false;
     for (const o of objectsTouching(world, p)) {
-      stopped = hitObject(ctx, o, p.owner === 'hero' ? 'hero' : 'foe');
+      stopped =
+        p.replay || p.ability?.replay
+          ? true
+          : hitObject(ctx, o, p.owner === 'hero' ? 'hero' : 'foe');
       if (stopped) break;
     }
     const outside = wall || stopped || !isWalkable(world.map, p.x, p.y);
@@ -491,6 +504,8 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           heft: p.heft,
         });
       } else if (!p.ability && p.explodeRadius > 0) burstShot(ctx, p);
+      // A heavy or hold basic shot stopped at a wall wears the cover there.
+      else if (wall && p.wears) hitStructures(ctx, p, p.radius, p.damage);
     }
   }
 }
@@ -609,7 +624,7 @@ function pursue(
 ): void {
   const { world } = ctx;
   if (world.map.open || direct) return moveMonster(ctx, m, toTarget, speed, dt);
-  const field = clearanceOf(m) === 'large' ? world.flow.large : world.flow.small;
+  const field = world.flow[clearanceOf(m)];
   const way = field && downhill(world.map, field, m, world.hero);
   if (way) moveMonster(ctx, m, way, speed, dt);
 }
@@ -897,7 +912,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
         // A ranged foe in cover walks to its spot (`goalWay`); else it keeps its distance.
         const way = goalWay(ctx, m, seen);
         if (way) moveMonster(ctx, m, way, speed, dt);
-        else if (gap > 7 || !seen) pursue(ctx, m, toTarget, seen, speed, dt);
+        else if (gap > 7 || !seen) pursue(ctx, m, toTarget, near, speed, dt);
         else if (gap < 3.5) moveMonster(ctx, m, toTarget, -speed * 0.7, dt);
         if (seen && gap <= 8 && world.t >= m.nextAttackAt) {
           m.windupStart = world.t;

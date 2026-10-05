@@ -13,6 +13,7 @@ import {
   type SetPiece,
 } from '../../types/floor-map.js';
 import type { ManaType } from '../../types/mana.js';
+import { clearanceCells, squareFits } from '../flow.js';
 import { dist } from '../geometry.js';
 import { solid } from '../grid.js';
 import { footprint } from '../objects-base.js';
@@ -24,8 +25,11 @@ export interface Furnishing {
   hazards: { kind: string; element: ManaType; x: number; y: number }[];
 }
 
-/** Tries a room makes for each piece its budget holds. */
+/** Tries a room makes for each piece its budget holds (a den, dense cover, more). */
 const TRIES = 4;
+const DEN_TRIES = 12;
+/** How much likelier a den takes a piece with cover or crumbling cover. */
+const DEN_COVER = 3;
 /** How far round a room's centre, the start and an interactable the floor stays clear, in cells (a 5 × 5). */
 const CLEAR = 2;
 /** The legend's cells that the furnisher writes, by the cell code and the palette's look kind. */
@@ -110,14 +114,17 @@ function furnishRoom(
       (!has(p, 'c') || budget.crumbling),
   );
   if (want === 0 || usable.length === 0) return;
+  const den = room.kind === 'den';
 
   // Kept clear: two cells in front of each door, and round the room's centre (where its
   // interactable stands and its foes walk home), the start and the interactable.
   const doors = map.doors.filter((d) => d.rooms[0] === room.id);
   const kept = new Set<number>();
-  const shun: Vec[] = [
+  // What hazards keep their burst and a cell from (`pad` more: an interactable's use reach).
+  const reach = bal.ai.interactRadius;
+  const shun: (Vec & { pad?: number })[] = [
     map.start,
-    ...map.rooms.flatMap((r) => (r.interactable ? [r.interactable] : [])),
+    ...map.rooms.flatMap((r) => (r.interactable ? [{ ...r.interactable, pad: reach }] : [])),
   ];
   for (const d of doors)
     for (const c of d.cells) {
@@ -140,9 +147,14 @@ function furnishRoom(
   const others = data.hazards.filter((h) =>
     palette.hazards.every((id) => data.hazards.find((d) => d.id === id)!.element !== h.element),
   );
-  for (let t = 0, placed = 0; t < want * TRIES && placed < want; t++) {
+  const tries = want * (den ? DEN_TRIES : TRIES);
+  for (let t = 0, placed = 0; t < tries && placed < want; t++) {
     // The piece, where it stands and which way it faces.
-    const piece = weightedPick(usable, (p) => p.weight, rng);
+    const piece = weightedPick(
+      usable,
+      (p) => p.weight * (den && (has(p, '#') || has(p, 'c')) ? DEN_COVER : 1),
+      rng,
+    );
     const tag = piece.tags[rng.nextInt(0, piece.tags.length - 1)];
     const flip = piece.turns && rng.next() < 0.5;
     const face = piece.turns ? rng.nextInt(0, 3) : 0;
@@ -204,13 +216,17 @@ function furnishRoom(
       }
     if (!fits) continue;
 
-    // Hazards keep their burst and a cell from the doors, their fronts, the start and every interactable.
+    // Hazards keep their burst and a cell from the doors, their fronts, the start and every
+    // interactable (and where the hero stands to use it).
     const at = (i: number) => ({ x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5 });
     const burst = (id: string) => data.hazards.find((h) => h.id === id)!.burst;
     if (
       spots.some(
         (s) =>
-          s.hazard && shun.some((p) => dist(p.x, p.y, at(s.i).x, at(s.i).y) < burst(s.hazard!) + 1),
+          s.hazard &&
+          shun.some(
+            (p) => dist(p.x, p.y, at(s.i).x, at(s.i).y) < burst(s.hazard!) + 1 + (p.pad ?? 0),
+          ),
       )
     )
       continue;
@@ -296,25 +312,30 @@ function sound(map: FloorMap, room: Room, taken: Set<number>, structures: number
     .filter((d) => d.rooms[0] === room.id)
     .map((d) => d.cells[1] ?? d.cells[0])
     .map((c) => (c.y - y0) * gw + c.x - x0);
+  // A boss room: its boss (a huge foe, a 5 × 5) reaches every walkable cell from the centre too.
+  const centre = (Math.floor(ry + rh / 2) - y0) * gw + Math.floor(rx + rw / 2) - x0;
+  const huge = Math.floor(clearanceCells('huge', 0) / 2);
   return [[], ...structures].every((cells) => {
     const grid = base.slice();
     for (const k of cells) grid[(Math.floor(k / W) - y0) * gw + (k % W) - x0] = 1;
-    return reached(grid, gw, gh, doors);
+    return (
+      reached(grid, gw, gh, doors, 1) &&
+      (room.kind !== 'boss' || reached(grid, gw, gh, [centre], huge))
+    );
   });
 }
 
 /**
- * On a room's grid (see `sound`): whether a large foe (a 3 × 3) reaches every door from the
- * first, and every walkable cell of the room lies in a 3 × 3 it reaches.
+ * On a room's grid (see `sound`): whether a foe filling the odd square `half` cells round its
+ * cell (1: a large foe's 3 × 3) reaches every one of `doors` from the first, and every
+ * walkable cell of the room lies in a square it reaches.
  */
-function reached(grid: Uint8Array, gw: number, gh: number, doors: number[]): boolean {
+function reached(grid: Uint8Array, gw: number, gh: number, doors: number[], half: number): boolean {
+  const open = (i: number, j: number) =>
+    i >= 0 && j >= 0 && i < gw && j < gh && grid[j * gw + i] === 1;
   const fits = new Uint8Array(gw * gh);
-  for (let j = 1; j < gh - 1; j++)
-    for (let i = 1; i < gw - 1; i++) {
-      let all = 1;
-      for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) all &= grid[(j + b) * gw + i + a];
-      fits[j * gw + i] = all;
-    }
+  for (let j = 0; j < gh; j++)
+    for (let i = 0; i < gw; i++) fits[j * gw + i] = squareFits(open, i, j, half) ? 1 : 0;
   if (!fits[doors[0]]) return false;
   const seen = new Uint8Array(gw * gh);
   seen[doors[0]] = 1;
@@ -330,8 +351,8 @@ function reached(grid: Uint8Array, gw: number, gh: number, doors: number[]): boo
     for (let i = 2; i < gw - 2; i++) {
       if (!grid[j * gw + i]) continue;
       let near = 0;
-      for (let b = -1; b <= 1; b++)
-        for (let a = -1; a <= 1; a++) near |= seen[(j + b) * gw + i + a];
+      for (let b = -half; b <= half; b++)
+        for (let a = -half; a <= half; a++) near |= seen[(j + b) * gw + i + a];
       if (!near) return false;
     }
   return true;

@@ -20,7 +20,7 @@ import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
-import { clipSight, sees, snapToWalkable } from './grid.js';
+import { clipSight, perceives, sees, snapToWalkable } from './grid.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -513,6 +513,22 @@ function react(
  * Deal damage to a monster: resistances, crits, statuses, elemental reactions,
  * lifesteal, knockback and death. Returns the damage dealt.
  */
+/**
+ * A hero's hit gives the hero away (see `terrainTick`): when no member of the
+ * foe's pack perceives the hero, the pack (awake, not going home, one that
+ * searches: a room, no boss) searches where the hero stands now, its clock
+ * started afresh, so a hero hidden in foliage can't keep hitting it unfound.
+ */
+function givenAway(ctx: SimCtx, m: MonsterEntity): void {
+  const { world, bal } = ctx;
+  const { map, hero: h } = world;
+  if (map.open || m.roomId === null || m.dummy) return;
+  const pack = world.monsters.filter((o) => o.packId === m.packId && !o.dead);
+  if (pack.some((o) => o.kind === 'boss' || perceives(map, o, h))) return;
+  const search = { at: { x: h.x, y: h.y }, until: world.t + bal.terrain.searchTime };
+  for (const o of pack) if (o.aggro && !o.goingHome) Object.assign(o, { search, goal: search.at });
+}
+
 export function hitMonster(
   ctx: SimCtx,
   m: MonsterEntity,
@@ -579,6 +595,7 @@ export function hitMonster(
   if (!m.aggro) aggroPack(ctx, m);
   // A leashed foe walking home turns back on whoever hits it, its leash counted afresh.
   if (m.goingHome) Object.assign(m, { goingHome: false, farSince: null });
+  if (opts.source === 'basic' || opts.source === 'skill') givenAway(ctx, m);
   ctx.events.push({
     kind: 'hit',
     id: m.id,

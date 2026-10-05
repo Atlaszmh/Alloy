@@ -11,7 +11,7 @@ import { holdFull } from './abilities/resolve.js';
 import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
-import { alive, muzzle, nearestMonster, spawnProjectile } from './abilities/targeting.js';
+import { alive, muzzle, nearestMonster, SHOT, spawnProjectile } from './abilities/targeting.js';
 import { hitObject, objectsIn } from './objects.js';
 import { hitStructures } from './terrain.js';
 
@@ -58,7 +58,8 @@ function swingReach(w: HeroWeapon, s: ComboStepDef, manual: boolean) {
 /** Toward `aim` if given, else toward the nearest foe within `acquire`, else along `fallback`. */
 function aimAt(ctx: SimCtx, aim: Vec | null, acquire: number, fallback: Vec) {
   const h = ctx.world.hero;
-  const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire);
+  const shot = h.stats.weapon.kind === 'melee' ? undefined : SHOT;
+  const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire, undefined, shot);
   const to = aim ?? target;
   const dir = to ? dirTo(h.x, h.y, to.x, to.y) : fallback;
   return { target, dir: dir.x === 0 && dir.y === 0 ? fallback : dir };
@@ -278,8 +279,10 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
  * blow hits every foe the hero sees in its reach (× its `area`) and arc, the
  * swing's `targetId` whatever its angle, with one crit roll; a shot blow fires its shot.
  * Every hit carries the blow's knobs (`knobHitOpts`). `twin`: Twin Fang's share
- * on the chain's last blow (its extra hit or shot carries no runes). Returns
- * whether it landed: a melee blow that connected, or a shot with a foe in range.
+ * on the chain's last blow (its extra hit or shot carries no runes). `echo`: an
+ * Echo's blow, which sets no room object off and wears no cover (its shots
+ * marked `replay`). Returns whether it landed: a melee blow that connected, or a
+ * shot with a foe in range.
  */
 export function landBlow(
   ctx: SimCtx,
@@ -287,7 +290,7 @@ export function landBlow(
   kind: MoveKind,
   dir: Vec,
   powerMult: number,
-  o: { twin?: number; targetId?: number | null } = {},
+  o: { twin?: number; targetId?: number | null; echo?: boolean } = {},
 ): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
@@ -353,8 +356,10 @@ export function landBlow(
     }
     // The swing reaches the props and hazards in its arc; a heavy or hold blow wears crumbling
     // cover too (see the room objects spec).
-    for (const obj of objectsIn(world, h, reach, dir, arc)) hitObject(ctx, obj, 'hero');
-    if (kind === 'heavy' || kind === 'hold') hitStructures(ctx, h, reach, base, dir, arc);
+    if (!o.echo) {
+      for (const obj of objectsIn(world, h, reach, dir, arc)) hitObject(ctx, obj, 'hero');
+      if (kind === 'heavy' || kind === 'hold') hitStructures(ctx, h, reach, base, dir, arc);
+    }
     // Chain: jumps from the first foe struck. Linger: a zone ahead, at half the reach.
     if (first) {
       const jump = { source: 'basic' as const, canCrit: true, applies, rattles, ...knobbed };
@@ -401,6 +406,9 @@ export function landBlow(
         stacks: main ? stacks : 0,
         noReact: !main,
         ...(main ? { knobs: k } : {}),
+        ...(o.echo ? { replay: true } : {}),
+        // A heavy or hold shot wears crumbling cover where it bursts or stops at it.
+        ...(main && !o.echo && (kind === 'heavy' || kind === 'hold') ? { wears: true } : {}),
       });
     }
   }
@@ -528,6 +536,8 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       ...(p.knobs ? knobHitOpts(p.knobs) : {}),
     });
   }
-  for (const obj of objectsIn(ctx.world, p, p.explodeRadius)) hitObject(ctx, obj, 'hero');
+  if (!p.replay)
+    for (const obj of objectsIn(ctx.world, p, p.explodeRadius)) hitObject(ctx, obj, 'hero');
+  if (p.wears) hitStructures(ctx, p, p.explodeRadius, p.damage);
   if (p.knobs && hit.length > 0) shotLands(ctx, p, hit);
 }

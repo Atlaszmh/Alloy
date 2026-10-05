@@ -20,6 +20,16 @@ describe('delve.terrain and delve.ai.pack', () => {
     expect(bal.ai.pack).toMatchObject({ directorEvery: 0.25, ring: { on: true } });
   });
 
+  it("make a burst worth luring a pack onto: 40–50% of a normal foe's life at depth 1, resisted", () => {
+    const g = depthGrowth(registry, 1);
+    const { hazardDamage, hazardFoeMult } = bal.terrain;
+    const burst = hazardDamage * bal.monster.baseDmg * g.dmg * g.ramp * hazardFoeMult;
+    const life = bal.monster.baseHp * g.hp * g.ramp;
+    const share = (burst * (1 - bal.monster.resist)) / life;
+    expect(share).toBeGreaterThanOrEqual(0.4);
+    expect(share).toBeLessThanOrEqual(0.5);
+  });
+
   it('refuse a misspelled number and a slow ground that speeds up', () => {
     expect(TerrainBalanceSchema.safeParse({ ...raw.terrain, slowMul: 0.6 }).success).toBe(false);
     expect(TerrainBalanceSchema.safeParse({ ...raw.terrain, slowMult: 1.2 }).success).toBe(false);

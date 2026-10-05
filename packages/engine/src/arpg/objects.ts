@@ -2,7 +2,7 @@ import type { ArpgWorld, HazardEntity, PropEntity, Vec } from '../types/arpg.js'
 import { BASIC_STATUS, hitMonster, hurtHero, killScrap, spawnDrop, type SimCtx } from './combat.js';
 import { isDashing } from './dodge.js';
 import { roomAt } from './fog.js';
-import { angleBetween, dirTo, dist, distToSegment } from './geometry.js';
+import { angleBetween, dirTo, dist } from './geometry.js';
 import { sees, shift, snapToWalkable } from './grid.js';
 import { rollMetal } from './material-drops.js';
 import { standing } from './objects-base.js';
@@ -47,12 +47,7 @@ export function objectsIn(
   );
 }
 
-/** What a beam from `a` to `b`, `width` either side, reaches: what `a` sees. */
-export function objectsOnBeam(world: ArpgWorld, a: Vec, b: Vec, width: number): RoomObject[] {
-  return standing(world).filter(
-    (o) => distToSegment(o.x, o.y, a.x, a.y, b.x, b.y) <= width + o.radius && sees(world.map, a, o),
-  );
-}
+export { objectsOnBeam } from './objects-base.js';
 
 /** What a body touches: a shot's contact, a charger's dash. */
 export function objectsTouching(
@@ -116,9 +111,10 @@ function prime(ctx: SimCtx, hz: HazardEntity): void {
  * A primed hazard bursts (`hazardBurst`) on everyone within its `burst` that it
  * sees, for `terrain.hazardDamage` × the depth's foe damage (`depthGrowth`):
  * the hero takes the damage only (`noPerfect`: a dodge's i-frames avoid it, but
- * it is never a perfect dodge); each foe takes it as nobody's hit (source
- * `hazard`: no crit, none of the hero's element power) with its element's
- * stacks as a heavy blow brings them, reactions as usual. It wears crumbling
+ * it is never a perfect dodge); each foe takes it × `terrain.hazardFoeMult` as
+ * nobody's hit (source `hazard`: no crit, none of the hero's element power)
+ * with its element's stacks as a heavy blow brings them, reactions as usual.
+ * It wears crumbling
  * cover, sets off the hazards and breaks the props it reaches (a chain), and
  * is dormant for `terrain.recharge`.
  */
@@ -135,7 +131,7 @@ function burst(ctx: SimCtx, hz: HazardEntity): void {
   if (reaches(world.hero)) hurtHero(ctx, damage, element, null, { noPerfect: true });
   for (const m of world.monsters)
     if (!m.dead && reaches(m))
-      hitMonster(ctx, m, damage, element, {
+      hitMonster(ctx, m, damage * bal.terrain.hazardFoeMult, element, {
         source: 'hazard',
         applies: [BASIC_STATUS[element]],
         stacks: bal.stacks.basicByKind.heavy,

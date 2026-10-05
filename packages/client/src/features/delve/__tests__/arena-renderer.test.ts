@@ -867,4 +867,18 @@ describe("the foliage's canopy", () => {
     expect(canopyIndex).toBeGreaterThan(floorIndex);
     expect(canopyIndex).toBeGreaterThan(entitiesIndex);
   });
+
+  it('leaves the telegraphs, zones, ground marks and drops above it', () => {
+    const { r } = stage();
+    show(r, onMap(ringMap()));
+    const { root, pixelFloor, groundFx, dropLayer } = r as unknown as {
+      root: Container;
+      pixelFloor: { canopy: Sprite };
+      groundFx: { sprite: Sprite };
+      dropLayer: Container;
+    };
+    const canopy = root.getChildIndex(pixelFloor.canopy);
+    expect(root.getChildIndex(groundFx.sprite)).toBeGreaterThan(canopy);
+    expect(root.getChildIndex(dropLayer)).toBeGreaterThan(canopy);
+  });
 });

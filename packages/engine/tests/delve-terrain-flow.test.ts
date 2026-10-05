@@ -50,7 +50,7 @@ describe('flowField', () => {
     expect([field[5 * 12 + 5], field[6 * 12 + 7], field[8 * 12 + 8]]).toEqual([
       UNREACHED,
       UNREACHED,
-      12,
+      11, // from (3, 3), a step off: its square holds the target's cell
     ]);
   });
 });

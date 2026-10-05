@@ -725,6 +725,7 @@ export const TerrainBalanceSchema = z
       .object({ chance: z.number().min(0).max(1), material: z.number().min(0).max(1) })
       .strict(),
     hazardDamage: z.number().min(0),
+    hazardFoeMult: z.number().min(0),
     fuse: z.number().min(0),
     recharge: z.number().min(0),
     hazardOffElement: z.number().min(0).max(1),

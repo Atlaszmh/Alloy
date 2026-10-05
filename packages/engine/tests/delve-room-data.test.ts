@@ -51,13 +51,15 @@ describe('setpieces.json', () => {
       ...d.setPieces,
       palettes: {
         ...palettes,
-        moon: { ...palettes.frostvault, props: ['vase'], hazards: ['geyser'] },
+        moon: { ...palettes.storm_foundry, props: ['vase'], hazards: ['geyser'] },
       },
       pieces: [{ ...d.setPieces.pieces[0], biomes: ['moon'] }],
     };
     expect(setPiecesProblems(new DataRegistry({ ...d, setPieces: odd }))).toEqual([
       'no palette for cinder_mines',
+      'palette frostvault: no foliage 3 thick to hide in',
       'palette sunken_quarry: no foliage 3 thick to hide in',
+      'palette bone_crypts: no foliage 3 thick to hide in',
       'palette moon: no such biome',
       'palette moon: no prop vase',
       'palette moon: no hazard geyser',

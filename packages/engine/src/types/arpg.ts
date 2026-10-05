@@ -285,6 +285,10 @@ export interface Projectile {
   noReact?: boolean;
   /** A basic shot's blow knobs (its runes'; see the runes spec). */
   knobs?: Knobs;
+  /** An Echo's basic shot: it sets no room object off (an ability's says so on `ability.replay`). */
+  replay?: boolean;
+  /** A heavy or hold basic shot: it wears crumbling cover where it bursts or stops at a wall. */
+  wears?: boolean;
   dead: boolean;
 }
 
@@ -883,9 +887,15 @@ export interface ArpgWorld {
   exitHinted: boolean;
   /**
    * The flow fields toward the hero (`flowTick`), one per clearance class (`large`:
-   * big foes'): steps by cell, null until built; rebuilt at `nextAt`.
+   * big foes', `huge`: a boss's, built only while one stands): steps by cell, null until
+   * built; rebuilt at `nextAt`.
    */
-  flow: { small: Uint16Array | null; large: Uint16Array | null; nextAt: number };
+  flow: {
+    small: Uint16Array | null;
+    large: Uint16Array | null;
+    huge: Uint16Array | null;
+    nextAt: number;
+  };
   /** The room whose doors are closing, since when (they wait `ai.sealGrace` for the doorway), or null. */
   sealing: { roomId: number; since: number } | null;
   /** A shrine's prayer under way (`interactTick`): its interactable, where and when it began, its end. */

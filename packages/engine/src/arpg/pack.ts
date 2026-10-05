@@ -3,7 +3,7 @@ import { CELL, type FloorMap, type PackAiBalance, type Rect } from '../types/flo
 import type { SimCtx } from './combat.js';
 import { clamp, dirTo, dist } from './geometry.js';
 import { isWalkable, perceives, sees, snapToWalkable, solid } from './grid.js';
-import { clearanceOf, downhill, flowField } from './flow.js';
+import { clearanceCells, clearanceOf, downhill, flowField } from './flow.js';
 import { objectsOnBeam, objectsTouching } from './objects.js';
 import { footprints } from './objects-base.js';
 
@@ -49,7 +49,7 @@ interface DirectorState {
   /** Per foe pressed against something: where it stood, since when. */
   pressed: Map<number, { at: Vec; since: number }>;
   /** Per foe that was pinned: the point beside the obstacle it steps to, until when. */
-  detour: Map<number, { at: Vec; until: number }>;
+  detour: Map<number, { at: Vec; until: number; straight: boolean }>;
   /** Goal fields built since the last pass, by the map's version, the goal's cell and a clearance. */
   fields: Map<string, Uint16Array>;
 }
@@ -178,17 +178,16 @@ function ringSlots(world: ArpgWorld, ring: MonsterEntity[]): void {
   }
 }
 
-/** A foe's clearance in cells, as the flow fields count it (`flow.ts`'s large class). */
-function clearanceCells(ctx: SimCtx, m: MonsterEntity): number {
-  // ponytail: mirrors flow.ts's private LARGE (2); export it there if it ever changes.
-  return clearanceOf(m) === 'large' ? Math.min(2, ctx.bal.layout.hallWidth) : 1;
+/** A foe's clearance in cells, as the flow fields count it. */
+function clearanceOfFoe(ctx: SimCtx, m: MonsterEntity): number {
+  return clearanceCells(clearanceOf(m), ctx.bal.layout.hallWidth);
 }
 
 /** The field toward `goal` for `m`'s clearance, within `ai.pack.flowRadius`: built once a pass. */
 function goalField(ctx: SimCtx, m: MonsterEntity, goal: Vec): Uint16Array {
   const { world, bal } = ctx;
   const { map } = world;
-  const clear = clearanceCells(ctx, m);
+  const clear = clearanceOfFoe(ctx, m);
   const cell = Math.floor(goal.y) * map.width + Math.floor(goal.x);
   const key = `${map.version}:${cell}:${clear}`;
   const fields = stateOf(world).fields;
@@ -236,7 +235,7 @@ function coverSpot(ctx: SimCtx, st: DirectorState, m: MonsterEntity): Vec | null
   let fire = st.cover.get(m.id);
   if (fire === undefined || !serves(fire)) {
     fire = undefined;
-    const steps = flowField(map, m, coverSearch, clearanceCells(ctx, m), footprints(ctx.world));
+    const steps = flowField(map, m, coverSearch, clearanceOfFoe(ctx, m), footprints(ctx.world));
     const cx = Math.floor(m.x);
     const cy = Math.floor(m.y);
     for (
@@ -323,13 +322,17 @@ function unpin(ctx: SimCtx, st: DirectorState, led: MonsterEntity[]): void {
     else if (!p || dist(m.x, m.y, p.at.x, p.at.y) > PINNED)
       st.pressed.set(m.id, { at: { x: m.x, y: m.y }, since: world.t });
     else if (world.t - p.since >= stuckTime - 2 * directorEvery - 1e-9) {
-      // Round it on the side the hero is: the tangent nearer the way to the hero.
+      // Round it on the side the hero is (the tangent nearer the way to the hero), else the
+      // other, straight where its lane is open, else down its field to the hero's side.
       const n = dirTo(o.x, o.y, m.x, m.y);
       const want = dirTo(m.x, m.y, h.x, h.y);
       const side = -n.y * want.x + n.x * want.y >= 0 ? 1 : -1;
       const reach = o.radius + m.radius + 0.6;
-      const at = snapToWalkable(world.map, o.x - n.y * side * reach, o.y + n.x * side * reach);
-      st.detour.set(m.id, { at, until: world.t + stuckTime });
+      const round = (s: number) =>
+        snapToWalkable(world.map, o.x - n.y * s * reach, o.y + n.x * s * reach);
+      const lane = [side, -side].map(round).find((at) => laneOpen(world.map, m, at, m.radius));
+      const at = lane ?? round(side);
+      st.detour.set(m.id, { at, until: world.t + stuckTime, straight: lane !== undefined });
       st.pressed.delete(m.id);
     }
     const detour = st.detour.get(m.id);
@@ -346,16 +349,23 @@ function unpin(ctx: SimCtx, st: DirectorState, led: MonsterEntity[]): void {
  * in `ai.directRange`) and a flanker turns on the hero there; any other goal
  * (a search's, an intercept) is walked straight when in reach and sight with
  * no prop or hazard in the way, else down its field; a reached goal holds. A
- * pinned foe's step round its obstacle (`unpin`) goes straight.
+ * pinned foe's step round its obstacle (`unpin`) goes straight where its
+ * lane is open, else down its field.
  */
 export function goalWay(ctx: SimCtx, m: MonsterEntity, near: boolean): Vec | null {
   const goal = m.goal;
   if (!goal) return null;
   const { world, bal } = ctx;
   const d = dist(m.x, m.y, goal.x, goal.y);
-  // A pinned foe's step round its obstacle: straight there, then on as before.
-  if (goal === stateOf(world).detour.get(m.id)?.at)
-    return d > REACHED ? dirTo(m.x, m.y, goal.x, goal.y) : null;
+  // A pinned foe's step round its obstacle: there (straight where its lane is open, else down
+  // its field), then on as before.
+  const detour = stateOf(world).detour.get(m.id);
+  if (goal === detour?.at) {
+    if (d <= REACHED) return null;
+    return detour.straight
+      ? dirTo(m.x, m.y, goal.x, goal.y)
+      : downhill(world.map, goalField(ctx, m, goal), m, goal);
+  }
   if (!m.search) {
     if (m.job === 'ring') return near && d > REACHED ? dirTo(m.x, m.y, goal.x, goal.y) : null;
     if (m.job === 'flank' && near) return null;

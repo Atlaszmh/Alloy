@@ -80,6 +80,33 @@ const SLOW_TONES: Record<number, readonly [RGB, RGB]> = {
   ],
 };
 
+/** A foliage look's own three tones (dark, mid, light), else the biome theme's `bush`. */
+const FOLIAGE_TONES: Record<number, readonly RGB[]> = {
+  // The Mines' fungus beds: mauve caps.
+  [LOOK.fungus]: [
+    [52, 30, 46],
+    [86, 48, 70],
+    [150, 92, 104],
+  ],
+  // The Frostvault's frost ferns: pale teal.
+  [LOOK.frost_fern]: [
+    [30, 74, 84],
+    [54, 118, 124],
+    [120, 186, 190],
+  ],
+  // The Crypts' cobwebs: grey shrouds.
+  [LOOK.cobweb]: [
+    [96, 96, 104],
+    [140, 140, 148],
+    [200, 200, 208],
+  ],
+};
+
+/** The leaf tones of foliage cell `i`: its look's own, else the theme's. */
+function bushTones(pw: PixelWorld, i: number): readonly RGB[] {
+  return FOLIAGE_TONES[pw.lookAt(i)] ?? pw.theme.bush;
+}
+
 /** A theme green pushed greener, for the nature growth. */
 function greener(c: RGB): RGB {
   return [c[0] * 0.6, Math.min(255, c[1] * 1.3 + 24), c[2] * 0.6];
@@ -278,12 +305,14 @@ function fillBase(pw: PixelWorld, S: WorldScratch, i: number): void {
       g = c[1];
       b = c[2];
       break;
-    case MAT.BUSH:
-      c = n > 0.66 ? th.bush[2] : n > 0.22 ? th.bush[1] : th.bush[0];
+    case MAT.BUSH: {
+      const bush = bushTones(pw, i);
+      c = n > 0.66 ? bush[2] : n > 0.22 ? bush[1] : bush[0];
       r = c[0];
       g = c[1];
       b = c[2];
       break;
+    }
     case MAT.SOIL:
       c = th.soil[Math.min(2, tone)];
       r = c[0] + (n > 0.95 ? 18 : 0);
@@ -877,7 +906,6 @@ function passFoliage(F: Frame): void {
   }
   const g3 = th.grass[3];
   const gt = th.grassTip;
-  const b2 = th.bush[2];
   for (let y = y0; y < y0 + vh; y++) {
     for (let x = x0; x < x0 + vw; x++) {
       const i = y * W + x;
@@ -903,6 +931,7 @@ function passFoliage(F: Frame): void {
         tb = 255;
       } else if (bush) {
         const lift = 1.12 + ti * 0.18;
+        const b2 = bushTones(pw, i)[2];
         tr = b2[0] * lift;
         tg = b2[1] * lift;
         tb = b2[2] * lift;
@@ -1212,8 +1241,7 @@ function passCanopy(F: Frame): void {
   const { sway, sw: sgw, tint, bushBlade, bladeThr } = S;
   const LF = V.lightF;
   const see = pw.seeThrough;
-  const leaf = pw.theme.bush[2];
-  const vine = greener(leaf);
+  const vine = greener(pw.theme.bush[2]);
   for (let y = y0; y < y0 + vh; y++) {
     for (let x = x0; x < x0 + vw; x++) {
       const i = y * W + x;
@@ -1224,7 +1252,8 @@ function passCanopy(F: Frame): void {
         if (d < 1) a *= 0.15 + 0.85 * d * d;
       }
       if (a < 0.02) continue;
-      const c: RGB = frost[i] > 0.2 ? [230, 242, 255] : pw.lookAt(i) === LOOK.vines ? vine : leaf;
+      const c: RGB =
+        frost[i] > 0.2 ? [230, 242, 255] : pw.lookAt(i) === LOOK.vines ? vine : bushTones(pw, i)[2];
       const lift = (1.12 + tint[i] * 0.18) * a;
       const kc = ((y - y0) * vw + (x - x0)) * 3;
       const r = c[0] * lift * LF[kc];

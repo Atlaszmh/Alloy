@@ -22,6 +22,9 @@ describe('the set pieces', () => {
       expect(data.pieces.filter((p) => p.biomes?.includes(b)).length, b).toBeGreaterThanOrEqual(2);
       for (const ch of ['#', 'c', '~', 'u', 'h']) expect(holds(b, ch), `${b} ${ch}`).toBe(true);
       expect(data.palettes[b].props.length, b).toBeGreaterThanOrEqual(2);
+      // A hazard piece of its own (the Mines' hazard is the brazier pair's).
+      const own = data.pieces.some((p) => p.biomes?.includes(b) && p.rows.join('').includes('h'));
+      expect(own || data.palettes[b].hazards.includes('brazier'), `${b} h`).toBe(true);
     }
   });
 
@@ -37,16 +40,16 @@ describe('the set pieces', () => {
     }
   });
 
-  it('grow foliage only in the Sunken Quarry, at least 3 thick, so its packs can hide', () => {
+  it('grow foliage in four biomes, at least 3 thick, so their packs can hide', () => {
     const leafy = biomes.filter((b) => data.palettes[b].looks.foliage.length > 0);
-    expect(leafy).toEqual(['sunken_quarry']);
+    expect(leafy).toEqual(['cinder_mines', 'frostvault', 'sunken_quarry', 'bone_crypts']);
     for (const b of leafy)
       expect(
         piecesOf(b).some((p) => hidesPack(p.rows)),
         b,
       ).toBe(true);
     for (const p of data.pieces.filter((p) => p.rows.join('').includes('f')))
-      expect(p.biomes, p.id).toEqual(['sunken_quarry']);
+      for (const b of p.biomes!) expect(leafy, p.id).toContain(b);
   });
 
   it('draw crumbling cover as a statue or a cracked wall (the looks that show cracks)', () => {
@@ -68,7 +71,10 @@ describe('the set pieces', () => {
     expect(
       setPiecesProblems(new DataRegistry({ ...d, setPieces: { ...d.setPieces, pieces } as never })),
     ).toEqual([
+      'palette cinder_mines: no foliage 3 thick to hide in',
+      'palette frostvault: no foliage 3 thick to hide in',
       'palette sunken_quarry: no foliage 3 thick to hide in',
+      'palette bone_crypts: no foliage 3 thick to hide in',
       'piece hedge: foliage under 3 thick',
     ]);
   });

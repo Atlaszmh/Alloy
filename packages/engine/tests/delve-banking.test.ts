@@ -318,8 +318,8 @@ describe('the first boss, and when pickups bank', () => {
 });
 
 describe('the E2E dives', () => {
-  it("seed 55's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
-    const p = startDive(registry, createDelveProfile(registry, 55, { primary: 'fire' }), 1);
+  it("seed 50's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
+    const p = startDive(registry, createDelveProfile(registry, 50, { primary: 'fire' }), 1);
     for (const fps of [60, 45, 30, 20]) {
       const world = beginFloor(registry, p);
       const items: unknown[] = [];

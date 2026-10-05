@@ -210,6 +210,29 @@ describe("a floor painted from its map's cells", { timeout: 20000 }, () => {
     const ground = colour(30, 27);
     expect(Math.max(...mud.map((v, k) => Math.abs(v - ground[k])))).toBeGreaterThan(15);
   });
+
+  it("grows each foliage look in its own colours: the Crypts' cobwebs grey, not the theme's leaves", () => {
+    const paint = (look: LookId) => {
+      const map = furnished();
+      for (let y = 30; y <= 32; y++)
+        for (let x = 26; x <= 28; x++) map.look[y * map.width + x] = LOOK_IDS.indexOf(look);
+      const pw = floor(map, PIXEL_THEMES.bone_crypts);
+      const out = new Uint8ClampedArray(pw.size * 4);
+      renderPixelWorld(pw, out, 1);
+      return [0, 1, 2].map(
+        (k) => cellsOf(pw, 27, 31).reduce((s, i) => s + out[i * 4 + k], 0) / PPU ** 2,
+      );
+    };
+    const leaves = paint('undergrowth');
+    const webs = paint('cobweb');
+    // Grey under the Crypts' cold light: as much red as green, and far brighter than leaves.
+    expect(Math.abs(webs[0] - webs[1])).toBeLessThan(10);
+    expect(webs[0] + webs[1] + webs[2]).toBeGreaterThan(leaves[0] + leaves[1] + leaves[2] + 60);
+    const fern = paint('frost_fern');
+    const fungus = paint('fungus');
+    expect(Math.max(...fern.map((v, k) => Math.abs(v - leaves[k])))).toBeGreaterThan(15);
+    expect(Math.max(...fungus.map((v, k) => Math.abs(v - leaves[k])))).toBeGreaterThan(15);
+  });
 });
 
 describe('crumbling cover on the pixel floor', { timeout: 20000 }, () => {
@@ -311,6 +334,50 @@ describe('the floor follows the map', { timeout: 20000 }, () => {
     expect(sent[3].cracks).toEqual([1]);
     floor.update(0.1, world, view);
     expect(sent[4].cells).toBeUndefined();
+    spy.mockRestore();
+    floor.destroy();
+  });
+
+  it('falls back from a lost worker to a floor that still shows what crumbled', () => {
+    const map = furnished();
+    const world = onMap(map);
+    const workers: { onmessage: (e: unknown) => void; onerror: () => void }[] = [];
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage = () => {};
+        onerror = () => {};
+        constructor() {
+          workers.push(this);
+        }
+        postMessage() {}
+        terminate() {}
+      },
+    );
+    const sent: FloorFrame[] = [];
+    const spy = vi.spyOn(FloorEngine.prototype, 'frame').mockImplementation((f) => {
+      sent.push(f);
+      return null;
+    });
+    const floor = new PixelFloor(floorInit(world));
+    const view = { left: 20, top: 20, right: 40, bottom: 34 };
+    floor.update(0.1, world, view);
+    workers[0].onmessage({ data: { type: 'spare', buffer: null } });
+    for (const { x, y } of map.structures[0].cells) {
+      map.cells[at(x, y)] = CELL.slow;
+      map.look[at(x, y)] = LOOK.rubble;
+    }
+    map.structures[0].life = 0;
+    map.version++;
+    // The crumble goes to the worker, which then fails: the floor falls back in this thread.
+    floor.update(0.1, world, view);
+    workers[0].onerror();
+    floor.update(0.1, world, view);
+    expect(sent[0].cells).toEqual(
+      [at(34, 24), at(35, 24), at(34, 25), at(35, 25)].flatMap((c) => [c, CELL.slow, LOOK.rubble]),
+    );
+    expect(sent[0].cracks).toEqual([1]);
+    vi.unstubAllGlobals();
     spy.mockRestore();
     floor.destroy();
   });

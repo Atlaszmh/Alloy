@@ -120,7 +120,7 @@ describe('setting one off', () => {
 });
 
 describe('the burst', () => {
-  it("hits each foe it reaches and sees for the depth's foe damage as is, with its element's stacks (source `hazard`), and wears crumbling cover", () => {
+  it("hits each foe it reaches and sees for the depth's foe damage × hazardFoeMult, with its element's stacks (source `hazard`), and wears crumbling cover", () => {
     // A wall at x = 12 stands between the coil at (10.5, 10.5) and the foe at (13.2, 10.5).
     const w = onMap(
       arena([dummy(11.5, 12, { traits: ['spiked'] }), dummy(10.5, 14.5), dummy(13.2, 10.5)]),
@@ -136,7 +136,8 @@ describe('the burst', () => {
     const hp = w.hero.hp;
     const events = setOff(w);
     const damage = burstDamage(w);
-    expect(hits(events)).toEqual([{ id: 1000, amount: damage, source: 'hazard' }]);
+    const amount = damage * bal.terrain.hazardFoeMult;
+    expect(hits(events)).toEqual([{ id: 1000, amount, source: 'hazard' }]);
     expect(w.monsters.map((m) => m.status.stacks.storm)).toEqual([
       bal.stacks.basicByKind.heavy,
       0,

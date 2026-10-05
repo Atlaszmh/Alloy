@@ -25,8 +25,9 @@ import {
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
+import { clearanceOf } from './flow.js';
 import { dist } from './geometry.js';
-import { openRoom, snapToWalkable, solid } from './grid.js';
+import { bindTerrain, openRoom, snapToWalkable, solid } from './grid.js';
 import { footprintsOf } from './layout/furnish.js';
 import { floorPacks, planFloor } from './layout/generate.js';
 import { placeObjects } from './objects-base.js';
@@ -479,6 +480,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
   const map = built
     ? tutorialFloorMap(registry, built, opts.depth)
     : (plan?.map ?? openRoom(bal.arena.width, bal.arena.height));
+  // Its terrain's numbers from the start: the bot may look before the first `terrainTick`.
+  if (!map.open) bindTerrain(map, bal.terrain);
   for (const room of map.rooms)
     if (room.interactable && opts.used?.includes(room.interactable.id))
       room.interactable.used = true;
@@ -506,7 +509,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     fogVersion: 0,
     fogAt: 0,
     exitHinted: false,
-    flow: { small: null, large: null, nextAt: 0 },
+    flow: { small: null, large: null, huge: null, nextAt: 0 },
     sealing: null,
     channel: null,
     exited: false,
@@ -603,6 +606,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     packId: number,
     roomId: number | null,
     elite = false,
+    used = new Set<number>(),
   ) => {
     const inArea = (i: number, j: number) =>
       i >= area.x && j >= area.y && i < area.x + area.w && j < area.y + area.h;
@@ -641,22 +645,31 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     centers.push({ x: cx, y: cy });
     const size = spawnRng.nextInt(bal.dive.packSize[0], bal.dive.packSize[1]);
     const elitePack = spawnRng.next() < eliteChance || elite;
-    const used = new Set<number>();
+    const mine = new Set<number>();
     for (let i = 0; i < size; i++) {
       const angle = (Math.PI * 2 * i) / size + spawnRng.next() * 0.6;
       const r = i === 0 && elitePack ? 0 : bal.arena.packSpacing * (0.7 + spawnRng.next() * 0.6);
       const def = biome.monsters[spawnRng.nextInt(0, biome.monsters.length - 1)];
       const x = cx + Math.cos(angle) * r;
       const y = cy + Math.sin(angle) * r;
-      // Hidden foes spread over the patch's cells, one a cell while they last.
+      const m = spawn(def, i === 0 && elitePack ? 'elite' : 'normal', x, y, packId, roomId);
+      // A foe wider than a cell stands at the centre of an open 3 × 3, never wedged in cover.
+      const large = clearanceOf(m) !== 'small';
+      const stand = (a: number, b: number) => open(a, b) && (!large || block(a - 1, b - 1, free));
+      // Hidden foes spread over the patch's cells, one a cell while they last, then share their
+      // own pack's (never another's).
       const at = !plan
         ? snapToWalkable(map, x, y)
         : ambush
           ? (spawnAt(map, x, y, (a, b) => hidden(a, b) && !used.has(b * width + a)) ??
+            spawnAt(map, x, y, (a, b) => hidden(a, b) && mine.has(b * width + a)) ??
             spawnAt(map, x, y, hidden)!)
-          : (spawnAt(map, x, y, open) ?? snapToWalkable(map, x, y));
+          : (spawnAt(map, x, y, stand) ?? snapToWalkable(map, x, y));
+      if (plan && large)
+        Object.assign(at, { x: Math.floor(at.x) + 0.5, y: Math.floor(at.y) + 0.5 });
       used.add(Math.floor(at.y) * width + Math.floor(at.x));
-      const m = spawn(def, i === 0 && elitePack ? 'elite' : 'normal', at.x, at.y, packId, roomId);
+      mine.add(Math.floor(at.y) * width + Math.floor(at.x));
+      Object.assign(m, { x: at.x, y: at.y });
       m.ambush = ambush;
     }
   };
@@ -707,8 +720,10 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
         world.bossId = spawn(biome.boss, 'boss', at.x, at.y, 0, room.id).id;
       }
       const centers: Vec[] = [];
+      // The cells its foes stand on, shared by the room's packs: two never hide on the same.
+      const used = new Set<number>();
       for (let p = 0; p < plan.packs[room.id]; p++)
-        pack(room.rect, centers, ++packId, room.id, room.kind === 'den');
+        pack(room.rect, centers, ++packId, room.id, room.kind === 'den', used);
     }
     // Its furnishing's props and hazards, their ids after the foes'.
     placeObjects(registry, world, plan.furnishing);
