@@ -5,8 +5,8 @@ import type { ArenaHud } from '../useArena';
 const BOSS_LIFE = 'repeating-linear-gradient(90deg, #e43b44 0 12px, #a22633 12px 14px)';
 
 /**
- * The boss's name and life, only while a boss lives: a `HudGrid` child, under the top bar and
- * centred in the middle column.
+ * The boss's name and life, only while a boss lives: in `HudGrid`'s centre slot, which lays it
+ * under the top bar (and under Hesta's strip), centred in the middle column.
  */
 export function BossBar({ hud }: { hud: ArenaHud | null }) {
   if (!hud?.boss) return null;
@@ -14,7 +14,6 @@ export function BossBar({ hud }: { hud: ArenaHud | null }) {
   return (
     <div
       className="flex w-[420px] flex-col gap-2"
-      style={{ gridColumn: 2, gridRow: 2, alignSelf: 'start', justifySelf: 'center' }}
       data-testid="boss-bar"
     >
       <div className="k-disp flex items-center justify-center gap-2 text-[22px] text-[var(--k-bad-text)]">

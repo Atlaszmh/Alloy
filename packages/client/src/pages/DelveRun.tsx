@@ -400,9 +400,8 @@ export function DelveRun() {
             </>
           )
         }
-      >
-        <BossBar hud={arena.hud} />
-      </HudGrid>
+        centre={<BossBar hud={arena.hud} />}
+      />
 
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 

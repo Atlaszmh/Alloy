@@ -47,16 +47,29 @@ describe('HudGrid', () => {
       top={<div />}
       right={<div />}
       dock={life && <div data-testid="hero-hp" />}
-    >
-      <span data-testid="overlay" />
-    </HudGrid>
+      centre={<span data-testid="overlay" />}
+    />
   );
 
-  it('is the zoomed HUD root, laying its children on the grid', () => {
+  it('is the zoomed HUD root, with a centre slot under the top bar in the middle column', () => {
     render(grid(() => {}));
     const root = screen.getByTestId('hud');
     expect(root).toHaveClass('delve-ui', 'delve-hud-zoom', 'pointer-events-none');
-    expect(screen.getByTestId('overlay').parentElement).toBe(root);
+    const centre = screen.getByTestId('overlay').parentElement!;
+    expect(centre).toHaveAttribute('data-hud', 'centre');
+    expect(centre.parentElement).toBe(root);
+    expect(centre.getAttribute('style')).toContain('grid-column: 2');
+  });
+
+  it('hidden (under the stop), it is not drawn but still laid out', () => {
+    const { rerender } = render(grid(() => {}));
+    const root = screen.getByTestId('hud');
+    expect(root).not.toHaveStyle({ visibility: 'hidden' });
+    rerender(
+      <HudGrid onInsets={() => {}} testId="hud" top={<div />} right={<div />} dock={null} hidden />,
+    );
+    expect(root).toHaveStyle({ visibility: 'hidden' });
+    expect(root).toHaveClass('grid');
   });
 
   it('sizes its right column: 340 px, or `rightWidth` (the Training dock)', () => {

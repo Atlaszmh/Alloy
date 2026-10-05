@@ -222,9 +222,8 @@ export function DelveTraining() {
             manualAttack={manualAttack}
           />
         }
-      >
-        <BossBar hud={arena.hud} />
-      </HudGrid>
+        centre={<BossBar hud={arena.hud} />}
+      />
 
       {menuOpen && (
         <SystemMenu
