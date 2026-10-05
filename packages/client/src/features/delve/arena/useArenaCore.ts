@@ -46,6 +46,7 @@ import {
   labelsHeld,
   pressJournal,
   pressMenu,
+  pressPeek,
   type Aiming,
   type ArenaInput,
 } from './input';
@@ -637,7 +638,7 @@ export function useArenaCore(
 
     /**
      * The controller's part of this frame (see gamepad-hub), or null with none
-     * or while paused; Menu opens the dive menu and View the journal.
+     * or while paused; Menu opens the dive menu, View the journal and D-pad up the peek.
      * `frameInput` turns it into the step's input (a press, a hold's release,
      * `holding`: see `padFrameCast`).
      */
@@ -647,6 +648,7 @@ export function useArenaCore(
       const acts = padToArena(state, takeArenaPresses(), useControlsStore.getState().config);
       if (acts.menu) pressMenu();
       if (acts.journal) pressJournal();
+      if (acts.peek) pressPeek();
       return acts;
     }
 

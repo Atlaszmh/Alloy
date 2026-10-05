@@ -107,6 +107,7 @@ describe('padToArena (triggers fire, bumpers support)', () => {
     expect(act([6, 4, 7]).held).toEqual([0, 1, 2]);
     expect(act([5]).attackHeld).toBe(true); // RB
     expect(act([13]).potion).toBe(true); // D-pad down
+    expect(act([12]).peek).toBe(true); // D-pad up
     expect(act([9]).menu).toBe(true);
     // A (interact), X and Y fight nothing; B is the dodge.
     for (const face of [0, 2, 3]) {

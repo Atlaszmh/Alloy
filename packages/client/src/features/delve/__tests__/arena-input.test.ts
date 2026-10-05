@@ -23,6 +23,7 @@ import {
   holdingSlot,
   labelsHeld,
   pressJournal,
+  pressPeek,
   pressMenu,
 } from '../arena/input';
 import { TAP_MS } from '../arena/aim';
@@ -261,6 +262,24 @@ describe('loot labels and the journal', () => {
     expect(opened).toBe(2);
   });
 
+  it("M and the pad's D-pad up press the topmost scope's Map (the peek), only while the fight is live", () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const map = document.body.appendChild(document.createElement('button'));
+    map.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 });
+    map.setAttribute('data-pad-peek', '');
+    let peeks = 0;
+    map.addEventListener('click', () => peeks++);
+    key('keydown', 'KeyM');
+    expect(peeks).toBe(1);
+    pressPeek(); // useArenaCore's padFrame, on the pad's D-pad up
+    expect(peeks).toBe(2);
+    detach();
+    detach = attachKeyboard(createArenaInput(), () => false); // paused
+    key('keydown', 'KeyM');
+    expect(peeks).toBe(2);
+  });
+
   it("the labels follow the input lock: the keys' Alt under the keys, the pad's L3 under the pad", () => {
     const input = createArenaInput();
     const l3 = { labels: true } as ArenaPadActions;
@@ -271,7 +290,7 @@ describe('loot labels and the journal', () => {
     expect(labelsHeld('gamepad', input, l3)).toBe(true);
   });
 
-  it('the pad reports L3 held as labels and a View press as the journal', () => {
+  it('the pad reports L3 held as labels, a View press as the journal and D-pad up as the peek', () => {
     const state = (...held: PadButton[]) => ({
       left: { x: 0, y: 0 },
       right: { x: 0, y: 0 },
@@ -285,6 +304,8 @@ describe('loot labels and the journal', () => {
       labels: false,
       journal: true,
     });
+    expect(padToArena(state('up'), new Set(['up']))).toMatchObject({ peek: true, potion: false });
+    expect(padToArena(state('down'), new Set(['down']))).toMatchObject({ peek: false, potion: true });
   });
 });
 
@@ -397,6 +418,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     menu: false,
     labels: false,
     journal: false,
+    peek: false,
     ...over,
   });
   /** Screen px to world units: a tenth. */

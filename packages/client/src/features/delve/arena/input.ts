@@ -265,6 +265,11 @@ export function pressJournal(): void {
   scopedLast('[data-pad-journal]')?.click();
 }
 
+/** The peek, from its key or the pad's button: the topmost scope's `[data-pad-peek]` (the HUD's Map). */
+export function pressPeek(): void {
+  scopedLast('[data-pad-peek]')?.click();
+}
+
 /** Text entry keeps every key, the menu key included. */
 function isText(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && t.type !== 'range');
@@ -349,6 +354,8 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       input.attackAim = input.mouse;
     } else if (action === 'journal') {
       pressJournal();
+    } else if (action === 'peek') {
+      pressPeek();
     }
   };
   /** Cast the key-held ability: a tap auto-aims, a hold aims at the mouse. */
