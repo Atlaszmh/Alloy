@@ -142,10 +142,9 @@ describe('AnvilHub', () => {
     expect(hub).toHaveTextContent('Deepest 0 · 0 of 12 legendaries');
   });
 
-  it('shows each tab: Loadout with the how-to, Skills, Forge, Codex and Quests', () => {
+  it('shows each tab: Loadout, Skills, Forge, Codex and Quests', () => {
     shown.quests = SAMPLE_QUESTS;
     renderHub();
-    expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
     expect(screen.getByTestId('paper-doll')).toBeInTheDocument();
     expect(screen.getByTestId('bag-panel')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('tab-skills'));
@@ -161,14 +160,8 @@ describe('AnvilHub', () => {
     expect(screen.getByTestId('quest-journal')).toBeInTheDocument();
   });
 
-  it("the Loadout's attunement line opens Skills, and the how-to goes after the first lessons", () => {
-    act(() => {
-      const p = useDelveStore.getState().profile;
-      const quests = { ...p.quests, claimed: [...p.quests.claimed, 'strike_the_anvil' as const] };
-      useDelveStore.getState().setProfile({ ...p, stats: { ...p.stats, dives: 1 }, quests });
-    });
+  it("the Loadout's attunement line opens Skills", () => {
     renderHub();
-    expect(screen.queryByTestId('delve-howto')).toBeNull();
     const strip = screen.getByTestId('mana-strip');
     expect(strip).toHaveTextContent('Skills ›');
     fireEvent.click(strip);
@@ -229,10 +222,8 @@ describe('AnvilHub', () => {
       useDelveStore.getState().setProfile({ ...p, bag: [] });
     });
     fireEvent.click(screen.getByTestId('tab-loadout'));
-    // The salvaged tile is forgotten: nothing is selected (this new save still shows the how-to;
-    // plan 03 flips this line to the worn weapon's compare).
-    expect(screen.queryByTestId('item-sheet')).toBeNull();
-    expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
+    // The salvaged tile is forgotten: nothing is selected, so the pane shows the worn weapon.
+    expect(screen.getByTestId('item-sheet')).toHaveTextContent('Your weapon');
   });
 
   it("the footer draws the tab's prompts before the hub's Menu", () => {

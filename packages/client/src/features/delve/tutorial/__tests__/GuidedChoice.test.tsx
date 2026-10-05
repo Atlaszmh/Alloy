@@ -60,7 +60,14 @@ describe('GuidedChoice', () => {
     expect(useDelveStore.getState().profile.tutorial).toBeNull();
     expect(screen.queryByTestId('guided-choice')).toBeNull();
     fireEvent.click(screen.getByTestId('mana-choice-fire'));
-    expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
+    // Jump in promised How to delve: Help opens once, on its first topic.
+    expect(screen.getByTestId('help-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('delve-howto')).toHaveAttribute('data-topic', 'controls');
+    // Closed, it stays closed: nothing more reopens it.
+    fireEvent.click(within(screen.getByTestId('help-dialog')).getByRole('button', { name: /back/i }));
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
+    act(() => useDelveStore.getState().setProfile({ ...useDelveStore.getState().profile }));
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
   });
 
   it("Guided start starts the tutorial, then the mana choice; then Hesta's beat waits for Continue", () => {
@@ -75,7 +82,7 @@ describe('GuidedChoice', () => {
     );
     fireEvent.click(screen.getByTestId('mana-choice-fire'));
     // Hesta in place of How to delve.
-    expect(screen.queryByTestId('delve-howto')).toBeNull();
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
     const panel = screen.getByTestId('tutorial-panel');
     expect(panel).toHaveTextContent('Welcome to the Anvil.');
     // One row above the tab's panes, in the screen's main.

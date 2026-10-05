@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { heroChains, settleDive } from '@alloy/engine';
 import { DelveCamp } from '../DelveCamp';
@@ -193,6 +193,20 @@ describe('DelveCamp', () => {
     const chains = p.equipped.weapon!.moveset!.chains;
     expect(chains.basic!.map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
     expect(Object.keys(chains)).toEqual(['basic']);
+    // Jump in promised How to delve: Help opens once; closed, the hub is the player's.
+    fireEvent.click(within(screen.getByTestId('help-dialog')).getByRole('button', { name: /back/i }));
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
+    expect(screen.getByTestId('depart-button').closest('[inert]')).toBeNull();
+  });
+
+  it('a save with its mana already chosen never meets Help on its own', () => {
+    useDelveStore.getState().resetProfile(99, 'fire');
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
   });
 
   it('shows the Links beside the scrap', () => {

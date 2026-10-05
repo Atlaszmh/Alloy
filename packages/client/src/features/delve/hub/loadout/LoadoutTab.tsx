@@ -7,7 +7,6 @@ import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
 import type { Prompt } from '../../kit';
 import { getDelveRegistry } from '../../registry';
-import { HowTo } from '../HowTo';
 import type { BagFilter, HubTabProps } from '../types';
 import { EquippedPane } from './EquippedPane';
 import { BagPane } from './BagPane';
@@ -18,7 +17,7 @@ import { TakeSheet, canTake } from './TakeSheet';
 /**
  * The Anvil's Loadout tab: the equipped pane, the bag and the compare pane (430 / flexible / 470
  * px). The compare pane shows the last hovered bag item (keys and mouse), else the selected or
- * focused one (a worn one too), else the worn weapon (the how-to, on a first save). The footer's
+ * focused one (a worn one too), else the worn weapon (How to delve is Help now). The footer's
  * prompts act on that item: A equips (under the pad, A on a bag weapon that can take your moveset
  * opens the take sheet; on a worn tile A only selects), X salvages a bag item and unequips a worn
  * one, Y locks, R3 or Shift toggles Full compare. Under the pad A and X carry the guided start's
@@ -47,10 +46,6 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
   const has = (uid: string | null): uid is string => !!uid && !!findItem(profile, uid);
   // Under the pad only the focus (the selection) counts: a mouse hover left behind never does.
   const target = !pad && has(hovered) ? hovered : has(selected) ? selected : null;
-  // How to delve is for Jump in (and a skipped guided start) until its first lessons are behind it
-  // (Strike the Anvil claimed): a guided save has Hesta (see the tutorial spec).
-  const howTo =
-    !target && !profile.tutorial && !profile.quests.claimed.includes('strike_the_anvil');
   const found = target ? findItem(profile, target) : null;
   const worn = found?.where === 'equipped';
   const targetLocked = !!found?.item.locked;
@@ -216,21 +211,15 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
         onEquip={actions.equip}
         onTake={take}
       />
-      {howTo ? (
-        <div className="k-scroll min-h-0">
-          <HowTo />
-        </div>
-      ) : (
-        <ComparePane
-          uid={target ?? profile.equipped.weapon?.uid ?? null}
-          source={!target ? 'worn' : target === hovered ? 'hovered' : 'selected'}
-          full={full}
-          locked={locked}
-          asked={asked}
-          actions={actions}
-          go={go}
-        />
-      )}
+      <ComparePane
+        uid={target ?? profile.equipped.weapon?.uid ?? null}
+        source={!target ? 'worn' : target === hovered ? 'hovered' : 'selected'}
+        full={full}
+        locked={locked}
+        asked={asked}
+        actions={actions}
+        go={go}
+      />
       {taking && <TakeSheet uid={taking} onClose={() => setTaking(null)} />}
     </div>
   );

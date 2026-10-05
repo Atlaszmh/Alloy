@@ -5,11 +5,12 @@ import { useDelveNotices } from '@/features/delve/useDelveNotices';
 import { ManaChoice } from '@/features/delve/ManaChoice';
 import { GuidedChoice } from '@/features/delve/tutorial/GuidedChoice';
 import { AnvilHub } from '@/features/delve/hub/AnvilHub';
+import { HelpDialog } from '@/features/delve/hub/help/HelpDialog';
 import '@/features/delve/delve.css';
 
 /**
  * The Anvil (`/delve`): the hub, and on a new save first Guided start or Jump in (see the tutorial
- * spec), then the mana choice, over it.
+ * spec), then the mana choice, over it; after a Jump in, Help once its mana is chosen.
  */
 export function DelveCamp() {
   const phase = useDelveStore((s) => s.profile.dive?.phase);
@@ -18,6 +19,8 @@ export function DelveCamp() {
   const guided = useDelveStore((s) => s.profile.tutorial !== null);
   // Jump in is this visit's answer only: a reload before the mana is chosen asks again.
   const [jumped, setJumped] = useState(false);
+  // Jump in promises How to delve: it opens once, as the mana is chosen (this visit's answer).
+  const [helpDue, setHelpDue] = useState(false);
   useDelveNotices();
 
   // A finished dive's summary was shown on the run screen — clear it here (an abandoned one
@@ -33,7 +36,17 @@ export function DelveCamp() {
         <AnvilHub mode="anvil" />
       </div>
       {choosing &&
-        (guided || jumped ? <ManaChoice /> : <GuidedChoice onJumpIn={() => setJumped(true)} />)}
+        (guided || jumped ? (
+          <ManaChoice />
+        ) : (
+          <GuidedChoice
+            onJumpIn={() => {
+              setJumped(true);
+              setHelpDue(true);
+            }}
+          />
+        ))}
+      {helpDue && !choosing && <HelpDialog onClose={() => setHelpDue(false)} />}
       <ToastContainer />
     </div>
   );

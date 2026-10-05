@@ -89,10 +89,12 @@ describe('LoadoutTab', () => {
     expect(screen.getByTestId('bag-panel')).toBeInTheDocument();
   });
 
-  it('the compare pane shows the hovered item, else the selected one, else the how-to on a first save, else the worn weapon', () => {
+  it('the compare pane shows the hovered item, else the selected one, else the worn weapon', () => {
     put(gear('h1', 'helm'), gear('r1', 'ring'));
     open();
-    expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
+    // A first save too: How to delve is Help now (the menu, the pause, the Codex).
+    expect(screen.getByTestId('item-sheet')).toHaveTextContent('Your weapon');
+    expect(screen.queryByTestId('delve-howto')).toBeNull();
     fireEvent.click(tile('h1'));
     expect(screen.getByTestId('item-sheet')).toHaveTextContent(
       'Selected · compared with your helm',
@@ -106,27 +108,12 @@ describe('LoadoutTab', () => {
     expect(screen.getByTestId('item-sheet')).toHaveTextContent(
       'Selected · compared with your helm',
     );
-    act(() => {
-      const p = store().profile;
-      // Past the first lessons (Strike the Anvil claimed), how to delve gives way.
-      const quests = { ...p.quests, claimed: [...p.quests.claimed, 'strike_the_anvil' as const] };
-      store().setProfile({ ...p, bag: [], stats: { ...p.stats, dives: 1 }, quests });
-    });
+    // The bag emptied, nothing is targeted: the worn weapon again.
+    act(() => store().setProfile({ ...store().profile, bag: [] }));
     expect(screen.getByTestId('item-sheet')).toHaveTextContent('Your weapon');
     fireEvent.click(screen.getByTestId('slot-weapon'));
     expect(screen.getByTestId('item-sheet')).toHaveTextContent('Equipped · your weapon');
     expect(screen.getByTestId('item-mana')).toHaveTextContent('Fire');
-  });
-
-  it('how to delve stays for a save that skipped the tutorial mid-dive, never for a guided one', () => {
-    act(() => {
-      const p = store().profile;
-      store().setProfile({ ...p, stats: { ...p.stats, dives: 1 } });
-    });
-    open();
-    expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
-    act(() => store().startTutorial());
-    expect(screen.queryByTestId('delve-howto')).toBeNull();
   });
 
   it('a right-click equips; gear outside the pair asks first, with the focus on Bind', () => {
