@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { isWalkable } from '../src/arpg/grid.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { createFloorWorld } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
-import { bal, gear, registry, STEP } from './fixtures/arena.js';
+import { CELL } from '../src/types/floor-map.js';
+import { bal, dummy, gear, registry, STEP } from './fixtures/arena.js';
+import { floorWorld } from './fixtures/flow-map.js';
+import { block, walledMap } from './fixtures/maps.js';
 
 // The room objects' whole-feature review: each finding's guard.
 
@@ -53,5 +57,27 @@ describe('a furnished boss room', () => {
         }
       }
     expect(misses).toEqual([]);
+  });
+});
+
+describe('a hero hiding in foliage', () => {
+  it('is found by the pack it keeps hitting from four cells deep', () => {
+    const map = walledMap(30, 14, []);
+    map.rooms[0].rect = { x: 0, y: 0, w: 30, h: 14 };
+    for (const [x, y] of block(18, 3, 25, 10)) map.cells[y * 30 + x] = CELL.foliage;
+    map.start = { x: 14.5, y: 6.5 };
+    const foe = { roomId: 0, packId: 1, aggro: true, speed: 2.6, hp: 5000, maxHp: 5000, damage: 5 };
+    const w = floorWorld(map, [dummy(8, 6, foe), dummy(8, 7.5, foe)]);
+    w.hero.hp = w.hero.stats.maxHp = 1e9;
+    for (let i = 0; i < 10; i++) stepWorld(registry, w, still, STEP);
+    Object.assign(w.hero, { x: 22.5, y: 6.5 });
+    let hurt = 0;
+    for (let i = 0; i < 30 * 20 && hurt === 0; i++) {
+      const events = stepWorld(registry, w, still, STEP);
+      hurt += events.filter((e) => e.kind === 'heroHit' && e.amount > 0).length;
+      if (i % 15 === 0)
+        hitMonster(makeCtx(registry, w, []), w.monsters[0], 50, 'fire', { source: 'skill' });
+    }
+    expect(hurt).toBeGreaterThan(0);
   });
 });
