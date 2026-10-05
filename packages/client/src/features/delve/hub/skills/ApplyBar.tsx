@@ -1,9 +1,10 @@
 import { Fragment, useId } from 'react';
-import { isDiveActive, tutorialBlocksDive } from '@alloy/engine';
+import { isDiveActive } from '@alloy/engine';
 import { applyLabel, runeNames, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Price, type Binding } from '@/features/delve/kit';
 import { getDelveRegistry } from '../../registry';
+import { DEPART_BINDING } from '../HubFooter';
 import { sayRefusal } from './useAnvilChains';
 
 /** Apply's inputs: Ctrl+Enter, or Y held on the pad. */
@@ -20,8 +21,8 @@ export function applyChains() {
 /**
  * The Skills tab's footer group (`chain-draft`, always shown): "n unapplied changes · price"
  * (or "No changes"), Revert, Apply with its price (off with the engine's reason while it would
- * be refused), and a compact Delve button (the hub's `onDelve`, at the footer's start depth),
- * which waits while changes are unapplied.
+ * be refused), and a compact Delve (the hub's `onDelve`), which opens the Depart sheet (the sheet
+ * says what holds a dive, so the button never waits).
  */
 export function ApplyBar({ onDelve }: { onDelve: () => void }) {
   const registry = getDelveRegistry();
@@ -30,8 +31,6 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
   const id = useId();
   const n = Object.keys(view.changes).length;
   const active = isDiveActive(profile);
-  // A guided start's Anvil lesson holds a new dive (its reason on the button's tooltip).
-  const lesson = active ? null : tutorialBlocksDive(registry, profile);
   const { price, refused, dry } = view;
   const applyWhy = dry && !dry.ok ? dry.reason : null;
   // Unpriced, the price says why; Apply's own reason shows only when it says something else.
@@ -115,14 +114,11 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
       <Button
         size="sm"
         onClick={onDelve}
-        disabled={(n > 0 && !active) || !!lesson}
-        aria-describedby={n > 0 && !active ? `${id}-price` : undefined}
-        title={lesson ?? undefined}
-        binding={{ key: 'Enter', pad: 'menu' }}
+        binding={DEPART_BINDING}
         data-pad-menu
         data-primary-action="delve"
         data-tutorial="hub.delve"
-        testId="delve-button"
+        testId="depart-button"
       >
         {active ? 'Resume' : 'Delve'}
       </Button>

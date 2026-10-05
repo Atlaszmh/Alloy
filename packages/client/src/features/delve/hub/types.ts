@@ -21,10 +21,10 @@ export interface HubTabProps {
   mode: HubMode;
   /** The tab's prompts. The hub draws them in its Footer and passes them to usePrompts. (revision) */
   setPrompts: (prompts: Prompt[]) => void;
-  /** Replaces the footer's right-hand group while set (Skills: the Apply bar and a compact Delve button); null restores Training / start / Delve. */
+  /** Replaces the footer's Delve button while set (Skills: the Apply bar and a compact Delve button); null restores it. */
   setFooterAction: (node: ReactNode | null) => void;
   go: (to: HubLink) => void;
   link?: HubLink;
-  /** Start (or resume) the dive at the footer's chosen start depth: the hub's one Delve. */
+  /** The hub's Delve: at the Anvil it opens the Depart sheet; in the pause it resumes the dive. */
   onDelve: () => void;
 }

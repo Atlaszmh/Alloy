@@ -50,7 +50,7 @@ describe('GuidedChoice', () => {
     expect(screen.getByTestId('guided-start')).toHaveFocus();
     expect(screen.getByTestId('guided-start')).toHaveTextContent('Recommended for new players');
     expect(screen.queryByTestId('mana-choice')).toBeNull();
-    expect(screen.getByTestId('delve-button').closest('[inert]')).not.toBeNull();
+    expect(screen.getByTestId('depart-button').closest('[inert]')).not.toBeNull();
   });
 
   it('Jump in leaves the save as it is and goes on to the mana choice, then How to delve', () => {

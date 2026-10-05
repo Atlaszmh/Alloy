@@ -40,8 +40,8 @@ describe('ApplyBar', () => {
     expect(price()).toHaveTextContent('No changes');
     expect(screen.getByTestId('chain-revert')).toBeDisabled();
     expect(screen.getByTestId('chain-apply')).toBeDisabled();
-    expect(screen.getByTestId('delve-button')).toBeEnabled();
-    expect(screen.getByTestId('delve-button')).toHaveAttribute('data-pad-menu');
+    expect(screen.getByTestId('depart-button')).toBeEnabled();
+    expect(screen.getByTestId('depart-button')).toHaveAttribute('data-pad-menu');
   });
 
   it('counts the unapplied changes with their price; Revert drops them and Apply applies them', () => {
@@ -57,14 +57,17 @@ describe('ApplyBar', () => {
     expect(price()).toHaveTextContent('No changes');
   });
 
-  it("the compact Delve waits while changes are unapplied, else is the hub's Delve", () => {
+  it("the compact Delve is the hub's (it opens the Depart sheet), unapplied changes or not", () => {
     renderBar();
     draftLance();
-    const delve = screen.getByTestId('delve-button');
-    expect(delve).toBeDisabled();
-    expect(delve).toHaveAttribute('aria-describedby', price().id);
-    fireEvent.click(screen.getByTestId('chain-revert'));
-    fireEvent.click(screen.getByTestId('delve-button'));
+    // The sheet says what holds a dive: the button itself never waits.
+    const delve = screen.getByTestId('depart-button');
+    expect(delve).toBeEnabled();
+    expect(delve).not.toHaveAttribute('aria-describedby');
+    fireEvent.click(delve);
     expect(onDelve).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByTestId('chain-revert'));
+    fireEvent.click(screen.getByTestId('depart-button'));
+    expect(onDelve).toHaveBeenCalledTimes(2);
   });
 });
