@@ -216,14 +216,14 @@ test.describe('Delve with a controller', () => {
     await expect(pause).toBeHidden();
   });
 
-  test('G02: LT dodges, and the hints switch to the controller', async ({ page }) => {
+  test('G02: B dodges, and the hints switch to the controller', async ({ page }) => {
     await setup(page, false);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     const dodge = page.getByTestId('dodge-button');
     await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
-    expect(await tapAndReadCharges(page, BUTTON.lt)).toBe('1');
-    await expect(dodge).toContainText('LT');
+    expect(await tapAndReadCharges(page, BUTTON.b)).toBe('1');
+    await expect(dodge).toContainText('B');
     // The Primary's slot names its pad button too.
     await expect(page.getByTestId('ability-0')).toContainText('RT');
   });

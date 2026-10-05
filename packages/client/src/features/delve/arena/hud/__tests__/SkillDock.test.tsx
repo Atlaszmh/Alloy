@@ -273,7 +273,7 @@ describe('the skill dock', () => {
     act(() => useInputDeviceStore.setState({ device: 'gamepad' }));
     rerender(dock({ abilities: [BOLT] }));
     expect(screen.getByTestId('ability-0')).toHaveTextContent('RT');
-    expect(screen.getByTestId('dodge-button')).toHaveTextContent('LT');
+    expect(screen.getByTestId('dodge-button')).toHaveTextContent('B');
   });
 
   it('fills a cooling slot from the bottom with its seconds, and a beat without', () => {

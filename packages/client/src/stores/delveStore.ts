@@ -88,9 +88,10 @@ export const UNSOCKET_KEY = 'alloy:delve:unsocket';
 
 function loadManualAttack(): boolean {
   try {
-    return localStorage.getItem(MANUAL_ATTACK_KEY) === '1';
+    // Manual by default: auto only once chosen.
+    return localStorage.getItem(MANUAL_ATTACK_KEY) !== '0';
   } catch {
-    return false;
+    return true;
   }
 }
 

@@ -137,7 +137,7 @@ describe('PauseScreen', () => {
   it('Controls and Settings open over the pause, and Esc closes only them', () => {
     const on = renderPause();
     fireEvent.click(screen.getByTestId('open-controls'));
-    expect(screen.getByTestId('attack-mode-toggle')).toHaveTextContent('Basic attack: Auto');
+    expect(screen.getByTestId('attack-mode-toggle')).toHaveTextContent('Basic attack: Manual');
     press('Escape');
     expect(screen.queryByTestId('controls-panel')).toBeNull();
     fireEvent.click(screen.getByTestId('open-settings'));

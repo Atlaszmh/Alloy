@@ -218,7 +218,7 @@ test.describe('Delve loot loop', () => {
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
   });
 
-  test("D05: basic attacks switch between auto and manual from the pause's Controls", async ({
+  test("D05: basic attacks are manual by default and switch to auto from the pause's Controls", async ({
     page,
   }) => {
     await seedProfile(page);
@@ -228,14 +228,15 @@ test.describe('Delve loot loop', () => {
     await page.getByRole('button', { name: 'Dive menu' }).click();
     await page.getByTestId('open-controls').click();
     const toggle = page.getByTestId('attack-mode-toggle');
+    // Manual by default.
+    await expect(toggle).toContainText('Manual');
+    await toggle.click();
     await expect(toggle).toContainText('Auto');
+    // The dock's Attack slot shows in both modes.
+    await expect(page.getByTestId('attack-button')).toHaveAttribute('data-mode', 'auto');
     await toggle.click();
     await expect(toggle).toContainText('Manual');
-    // The dock's Attack slot shows in both modes.
     await expect(page.getByTestId('attack-button')).toHaveAttribute('data-mode', 'manual');
-    await toggle.click();
-    await expect(toggle).toContainText('Auto');
-    await expect(page.getByTestId('attack-button')).toHaveAttribute('data-mode', 'auto');
   });
 
   test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {

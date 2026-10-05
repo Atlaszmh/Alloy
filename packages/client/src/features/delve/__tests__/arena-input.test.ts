@@ -29,7 +29,7 @@ import { TAP_MS } from '../arena/aim';
 import { aimView } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
 import { armed } from './armed';
-import { padMemory, padToArena, type ArenaPadActions } from '@/features/gamepad/arena-pad';
+import { padMemory, padToArena, REPEAT_DELAY, type ArenaPadActions } from '@/features/gamepad/arena-pad';
 import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { useControlsStore } from '@/stores/controlsStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
@@ -568,6 +568,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     const frame = (acts: Partial<ArenaPadActions>) =>
       frameInput(registry, w, input, pad(acts), mem, opts).cast;
     expect(frame({ cast: [1], held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null });
+    w.t += REPEAT_DELAY;
     expect(frame({ held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null, repeat: true });
   });
 

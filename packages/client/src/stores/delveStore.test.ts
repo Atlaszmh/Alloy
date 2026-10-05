@@ -137,8 +137,10 @@ describe('delveStore', () => {
     expect(res.reason).toMatch(/scrap/i);
   });
 
-  it('remembers the basic attack mode on this device', () => {
-    expect(useDelveStore.getState().manualAttack).toBe(false);
+  it('remembers the basic attack mode on this device, manual by default', () => {
+    expect(useDelveStore.getState().manualAttack).toBe(true);
+    useDelveStore.getState().setManualAttack(false);
+    expect(localStorage.getItem(MANUAL_ATTACK_KEY)).toBe('0');
     useDelveStore.getState().setManualAttack(true);
     expect(useDelveStore.getState().manualAttack).toBe(true);
     expect(localStorage.getItem(MANUAL_ATTACK_KEY)).toBe('1');

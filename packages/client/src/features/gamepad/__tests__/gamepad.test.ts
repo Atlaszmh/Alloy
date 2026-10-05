@@ -21,6 +21,7 @@ import {
   padFrameCast,
   padMemory,
   padToArena,
+  REPEAT_DELAY,
   stickAimPoint,
   type PadMemory,
 } from '../arena-pad';
@@ -86,13 +87,13 @@ describe('edges', () => {
 });
 
 describe('padToArena (triggers fire, bumpers support)', () => {
-  it('keeps both thumbs on the sticks: every action is a shoulder, a stick click or the D-pad', () => {
+  it('maps the default bindings: B dodges, the triggers and LB cast, RB attacks', () => {
     const prev = readPad(fakePad());
     const act = (held: number[]) => {
       const next = readPad(fakePad(held));
       return padToArena(next, edges(prev, next));
     };
-    expect(act([6]).dodge).toBe(true); // LT
+    expect(act([1]).dodge).toBe(true); // B
     expect(act([7]).cast).toEqual([0]); // RT press
     expect(act([7]).held).toEqual([0]); // held (a hold move charges)
     expect(act([7]).repeat).toEqual([0]); // with hold-to-repeat on
@@ -100,14 +101,15 @@ describe('padToArena (triggers fire, bumpers support)', () => {
     expect(act([4]).repeat).toEqual([]);
     expect(act([]).held).toEqual([]);
     expect(act([4]).cast).toEqual([1]); // LB
-    expect(act([11]).cast).toEqual([2]); // R3
+    expect(act([6]).cast).toEqual([2]); // LT
     // Every button pressed and held, in slot order.
-    expect(act([11, 4]).cast).toEqual([1, 2]);
-    expect(act([11, 4, 7]).held).toEqual([0, 1, 2]);
+    expect(act([6, 4]).cast).toEqual([1, 2]);
+    expect(act([6, 4, 7]).held).toEqual([0, 1, 2]);
     expect(act([5]).attackHeld).toBe(true); // RB
     expect(act([13]).potion).toBe(true); // D-pad down
     expect(act([9]).menu).toBe(true);
-    for (const face of [0, 1, 2, 3]) {
+    // A (interact), X and Y fight nothing; B is the dodge.
+    for (const face of [0, 2, 3]) {
       const a = act([face]);
       expect([a.cast, a.dodge, a.potion, a.attackHeld]).toEqual([[], false, false, false]);
     }
@@ -332,17 +334,33 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
   it('hold-to-repeat follows the latest held repeat button, falling back to an earlier one still held', () => {
     const w = arena();
     const mem = padMemory();
-    // Each frame's cast without stepping, so nothing waits: RT streams, LB (repeat off) is
-    // pressed once, and RT streams on while LB is held and after.
+    // Each frame's cast without stepping, so nothing waits: RT streams once held past the
+    // repeat delay, LB (repeat off) is pressed once, and RT streams on while LB is held and after.
     const cast = (pressed: number[], held: number[], repeat: number[]) =>
       padFrameCast(registry, w, { cast: pressed, held, repeat }, mem).cast;
     expect(cast([0], [0], [0])).toEqual(pressOf(0));
+    w.t += REPEAT_DELAY;
     expect(cast([], [0], [0])).toEqual(repeatOf(0));
     expect(cast([1], [0, 1], [0])).toEqual(pressOf(1));
     expect(cast([], [0, 1], [0])).toEqual(repeatOf(0));
-    // With LB's repeat on too, the latest streams; let go, RT again.
+    // With LB's repeat on too, the latest held past the delay streams; let go, RT again.
+    w.t += REPEAT_DELAY;
     expect(cast([], [0, 1], [0, 1])).toEqual(repeatOf(1));
     expect(cast([], [0], [0])).toEqual(repeatOf(0));
+  });
+
+  it('a trigger pull of an ordinary length casts one move: repeat waits REPEAT_DELAY', () => {
+    // A two-move light chain: a 0.25 s pull must not run into the second move.
+    const light = one('light', 'bolt');
+    const w = arena({ primary: { ...light, moves: [light.moves[0], light.moves[0]] } });
+    const mem = padMemory();
+    const pull = Math.round(0.25 / STEP);
+    const frames = [frame(w, mem, [0], [0], [0])];
+    for (let i = 1; i < pull; i++) frames.push(frame(w, mem, [], [0], [0]));
+    for (let i = 0; i < 60; i++) frames.push(frame(w, mem, [], [], [])); // let go
+    expect(frames.flatMap((f) => f.casts)).toEqual([0]);
+    expect(frames.some((f) => f.repeat)).toBe(false);
+    expect(0.25).toBeLessThan(REPEAT_DELAY);
   });
 
   it('a repeat button already held when the pad first sees it (pressed in a menu) repeats, but holds nothing', () => {
@@ -352,24 +370,26 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     expect(f).toEqual({ cast: repeatOf(0), holding: null });
   });
 
-  it("repeat presses early: during a wind-up, and the press waits out the landing's beat", () => {
+  it("repeat presses once held past REPEAT_DELAY, and the press waits out the landing's beat", () => {
     const w = arena();
     const mem = padMemory();
     const rt = () => frame(w, mem, [], [0], [0]);
     frame(w, mem, [0], [0], [0]);
     expect(w.hero.windup?.slot).toBe(0);
-    // During the wind-up, a marked press goes out and waits.
+    // Until the delay, nothing repeats; then a marked press goes out and waits.
+    const before = Array.from({ length: Math.ceil(REPEAT_DELAY / STEP) - 1 }, rt);
+    expect(before.some((f) => f.repeat)).toBe(false);
     const during = rt();
     expect(during.repeat).toBe(true);
-    expect(w.queuedCasts.map((q) => q.cast)).toEqual([{ slot: 0, aim: null, repeat: true }]);
-    // It waits through the landing and the beat, and fires at the beat's end.
-    let end = 0;
-    for (let i = 0; i < 60 && !inBeat(w.hero, 0, w.t); i++) rt();
-    end = w.hero.beatUntil[0];
-    expect(w.queuedCasts).toHaveLength(1);
-    for (let i = 0; i < 60 && !w.hero.windup; i++) rt();
-    expect(w.t).toBeGreaterThanOrEqual(end - 1e-6);
-    expect(w.t).toBeLessThan(end + 2 * STEP);
+    const pressedAt = w.t;
+    // The second move winds up only once the first's beat has ended and the repeat went out.
+    const first = w.hero.beatUntil[0];
+    for (let i = 0; i < 90 && !(w.hero.windup && w.t > first); i++) rt();
+    expect(w.hero.windup?.slot).toBe(0);
+    const due = Math.max(first, pressedAt);
+    expect(w.t).toBeGreaterThanOrEqual(due - 1e-6);
+    expect(w.t).toBeLessThan(due + 2 * STEP);
+    expect(inBeat(w.hero, 0, w.t)).toBe(false);
   });
 
   it('RT held through a light-then-hold chain charges the hold', () => {

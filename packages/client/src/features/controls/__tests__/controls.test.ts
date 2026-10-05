@@ -14,7 +14,7 @@ describe('controls config', () => {
     const c = bindPad(DEFAULT_CONTROLS, 'dodge', 'rt');
     expect(c.pad.dodge).toBe('rt');
     expect(c.pad.primary).toBe(DEFAULT_CONTROLS.pad.dodge);
-    expect(DEFAULT_CONTROLS.pad.dodge).toBe('lt');
+    expect(DEFAULT_CONTROLS.pad.dodge).toBe('b');
   });
 
   it('binding a key swaps too, including move keys', () => {

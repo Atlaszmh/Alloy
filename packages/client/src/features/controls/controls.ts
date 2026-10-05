@@ -47,8 +47,8 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
   pad: {
     primary: 'rt',
     defensive: 'lb',
-    ultimate: 'rs',
-    dodge: 'lt',
+    ultimate: 'lt',
+    dodge: 'b',
     attack: 'rb',
     potion: 'down',
     // The rooms' chests, shrines, alcoves and the gate (see the floor maps spec).

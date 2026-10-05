@@ -5,7 +5,7 @@ import { DEFAULT_CONTROLS, type ControlsConfig } from '@/features/controls/contr
 /**
  * What the controller asks of the arena this frame, from the player's
  * bindings (`ControlsConfig.pad`; the default keeps both thumbs on the
- * sticks: RT Primary, LT dodge, LB Defensive, R3 Ultimate, RB manual attack,
+ * sticks: RT Primary, B dodge, LB Defensive, LT Ultimate, RB manual attack,
  * D-pad down potion, A interact, L3 held every loot label, View the journal).
  */
 export interface ArenaPadActions {
@@ -118,6 +118,12 @@ export function padCast(
     : null;
 }
 
+/**
+ * How long (sim seconds) a button is held before hold-to-repeat presses again, as a key's
+ * auto-repeat waits: an ordinary trigger pull casts one move, never two.
+ */
+export const REPEAT_DELAY = 0.35;
+
 /** What the pad remembers from the frame before. */
 export interface PadMemory {
   /**
@@ -142,10 +148,12 @@ export interface PadMemory {
    * the tick that strikes it still aims with the stick.
    */
   attackHeld: boolean;
+  /** When each held ability button went down (`world.t`); one held before the pad saw it, never. */
+  downAt: Record<number, number>;
 }
 
 export function padMemory(): PadMemory {
-  return { holding: null, order: [], carried: [], sent: null, attackHeld: false };
+  return { holding: null, order: [], carried: [], sent: null, attackHeld: false, downAt: {} };
 }
 
 /** The controller's part of a frame's input: its cast (`padCast`), and the slot it is holding. */
@@ -166,7 +174,7 @@ export interface PadFrame {
  * `holding`: its press casts unless its next move is a hold (the button
  * charges it). A button whose press cast lets go quietly (`sent`), unless its
  * hold charges: a quick tap never casts twice. Hold-to-repeat streams the
- * latest held repeat button, falling back to an earlier one still held.
+ * latest held repeat button held past `REPEAT_DELAY`, falling back to an earlier one still held.
  */
 export function padFrameCast(
   registry: DataRegistry,
@@ -193,7 +201,13 @@ export function padFrameCast(
   // The presses waiting go first, then this frame's in slot order; a slot pressed again goes last.
   const queue = [...mem.carried.filter((s) => !pressed.includes(s)), ...pressed];
   const press = queue.length > 0 ? queue[0] : null;
-  const castHeld = [...mem.order].reverse().find((s) => acts.repeat.includes(s)) ?? null;
+  for (const s of unseen) mem.downAt[s] = -Infinity;
+  for (const s of pressed) mem.downAt[s] = world.t;
+  // Repeat only once held past REPEAT_DELAY: an ordinary pull casts one move.
+  const castHeld =
+    [...mem.order]
+      .reverse()
+      .find((s) => acts.repeat.includes(s) && world.t - mem.downAt[s] >= REPEAT_DELAY) ?? null;
   // A press whose button isn't `holding` can't cast on its release: it taps, as a key does.
   const cast = padCast(registry, world, { cast: press, castHeld }, released, press !== holding);
   if (press !== null)
