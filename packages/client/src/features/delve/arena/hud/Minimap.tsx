@@ -38,12 +38,13 @@ export function minimapScale(map: { width: number; height: number }, w: number, 
  * A generated floor's fog layer at `s` device px a cell: each cell that isn't solid
  * (`solidCode`) the hero has seen, those in sight now brighter, and the cover it has seen. The
  * minimap keeps it and redraws it only when the fog or the map moves (`fogVersion`, `version`).
+ * Returns how many cover cells it drew (the canvas's `data-cover`, for E2E).
  */
 export function drawFog(
   ctx: CanvasRenderingContext2D,
   floor: NonNullable<HudMap['floor']>,
   s: number,
-): void {
+): number {
   ctx.clearRect(0, 0, floor.width * s, floor.height * s);
   for (const [level, color] of [
     [1, SEEN],
@@ -56,11 +57,15 @@ export function drawFog(
     });
   }
   ctx.fillStyle = COVER;
+  let cover = 0;
   floor.fog.forEach((f, i) => {
     const c = floor.cells[i];
-    if (f > 0 && (c === CELL.cover || c === CELL.crumbling))
+    if (f > 0 && (c === CELL.cover || c === CELL.crumbling)) {
       ctx.fillRect((i % floor.width) * s, Math.floor(i / floor.width) * s, s, s);
+      cover++;
+    }
   });
+  return cover;
 }
 
 /**
@@ -151,8 +156,13 @@ export function Minimap({ map }: { map: HudMap | null }): ReactElement {
   const ref = useRef<HTMLCanvasElement>(null);
   const { hud } = useUiScale();
   const [size, setSize] = useState({ w: 0, h: 0 });
-  /** The fog layer, with the fog, version and scale it was drawn at. */
-  const fogRef = useRef<{ canvas: HTMLCanvasElement; fog: Uint8Array; key: string } | null>(null);
+  /** The fog layer, with the fog, version and scale it was drawn at, and the cover cells it drew. */
+  const fogRef = useRef<{
+    canvas: HTMLCanvasElement;
+    fog: Uint8Array;
+    key: string;
+    cover: number;
+  } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -187,11 +197,15 @@ export function Minimap({ map }: { map: HudMap | null }): ReactElement {
       canvas.width = floor.width * s;
       canvas.height = floor.height * s;
       const fctx = canvas.getContext('2d');
-      if (fctx) drawFog(fctx, floor, s);
-      fogRef.current = { canvas, fog: floor.fog, key };
+      const cover = fctx ? drawFog(fctx, floor, s) : 0;
+      fogRef.current = { canvas, fog: floor.fog, key, cover };
       return canvas;
     };
     drawMinimap(ctx, map, size.w, size.h, map.floor && fogLayer(map.floor));
+    // What it shows of the room objects, for E2E: the cover cells and the hazards dotted.
+    const el = ref.current!;
+    el.dataset.cover = String(map.floor ? (fogRef.current?.cover ?? 0) : 0);
+    el.dataset.hazards = String(map.floor?.hazards.length ?? 0);
   }, [map, size]);
 
   return (
