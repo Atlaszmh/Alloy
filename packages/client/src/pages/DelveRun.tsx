@@ -43,6 +43,7 @@ import { BossBar } from '@/features/delve/arena/hud/BossBar';
 import { FloorColumn } from '@/features/delve/arena/hud/FloorColumn';
 import { GainFeed } from '@/features/delve/arena/hud/GainFeed';
 import { LeanCorner } from '@/features/delve/arena/hud/LeanCorner';
+import { PeekOverlay } from '@/features/delve/arena/hud/PeekOverlay';
 import { useQuests } from '@/features/delve/quests/useQuests';
 import { StopScreen } from '@/features/delve/stop/StopScreen';
 import { TutorialPanel } from '@/features/delve/tutorial/TutorialPanel';
@@ -119,6 +120,9 @@ export function DelveRun() {
   const [alcove, setAlcove] = useState<StopKind[] | null>(null);
   /** A fall while the guided start runs: the retry screen, in place of the summary. */
   const [fallen, setFallen] = useState(false);
+  /** The peek (D-pad up, M, the HUD's Map): the large map, the purse and the finds over the fight. */
+  const [peek, setPeek] = useState(false);
+  const togglePeek = useCallback(() => setPeek((p) => !p), []);
   /** Reads the floor's tutorial again at once, after the page sends it an event. */
   const [, bump] = useReducer((n: number) => n + 1, 0);
   const bannerId = useRef(0);
@@ -206,6 +210,10 @@ export function DelveRun() {
   useLayoutEffect(() => {
     setArenaLive(!paused);
     return () => setArenaLive(false);
+  }, [paused]);
+  // Anything that stops the fight (the pause, the stop, a dialog, a beat) closes the peek.
+  useEffect(() => {
+    if (paused) setPeek(false);
   }, [paused]);
   // Hesta's strip in the HUD: a floor's steps only (the stop shows its own), never under the retry screen.
   const guidedFloor = !fallen && !!stepIn(registry, tutorial, SHOWN_AT.floor);
@@ -368,7 +376,7 @@ export function DelveRun() {
             // While the fight is live every toast is a line of the feed (`routeToasts`).
             <GainFeed live={!paused} />
           ) : (
-            <PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />
+            <PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} onPeek={togglePeek} />
           )
         }
         right={
@@ -381,6 +389,7 @@ export function DelveRun() {
               map={arena.hud?.map ?? null}
               onMenu={openMenu}
               onJournal={openJournal}
+              onPeek={togglePeek}
             />
           ) : (
             <FloorColumn
@@ -424,6 +433,8 @@ export function DelveRun() {
           </>
         }
       />
+
+      {peek && !paused && <PeekOverlay dive={dive} map={arena.hud?.map ?? null} lean={lean} />}
 
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 

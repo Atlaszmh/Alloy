@@ -213,6 +213,16 @@ describe('Minimap', () => {
     expect(clear).toHaveBeenCalledTimes(2);
   });
 
+  it("large, it is the peek's map: its own test id, no guided-start target, and taller", () => {
+    const { rerender } = render(<Minimap map={MAP} />);
+    expect(screen.getByTestId('minimap')).toHaveClass('h-[150px]');
+    rerender(<Minimap map={MAP} large />);
+    const canvas = screen.getByTestId('peek-map');
+    expect(canvas).not.toHaveAttribute('data-tutorial');
+    expect(canvas).toHaveClass('h-[640px]');
+    expect(canvas).not.toHaveClass('h-[150px]');
+  });
+
   it("keeps the fog layer while the fog stands still, and redraws it when fogVersion or the map's version moves", () => {
     const { ctx, fills, image } = fakeContext();
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as never);

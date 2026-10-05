@@ -15,7 +15,7 @@ describe('LeanCorner', () => {
   });
 
   const corner = (quests = SAMPLE_QUESTS) => {
-    const on = { onMenu: vi.fn(), onJournal: vi.fn() };
+    const on = { onMenu: vi.fn(), onJournal: vi.fn(), onPeek: vi.fn() };
     const dive = store().profile.dive!;
     render(
       <LeanCorner
@@ -47,7 +47,7 @@ describe('LeanCorner', () => {
     expect(screen.queryByTestId('quest-tracker')).toBeNull();
   });
 
-  it("Journal and Menu for the mouse, the pad's and the keys' targets in the fight", () => {
+  it("Journal, Menu and Map for the mouse, the pad's and the keys' targets in the fight", () => {
     const on = corner();
     const journal = screen.getByTestId('lean-corner').querySelector<HTMLElement>('[data-pad-journal]')!;
     fireEvent.click(journal);
@@ -56,5 +56,9 @@ describe('LeanCorner', () => {
     expect(menu).toHaveAttribute('data-pad-menu');
     fireEvent.click(menu);
     expect(on.onMenu).toHaveBeenCalledOnce();
+    const map = screen.getByTestId('peek-button');
+    expect(map).toHaveAttribute('data-pad-peek');
+    fireEvent.click(map);
+    expect(on.onPeek).toHaveBeenCalledOnce();
   });
 });

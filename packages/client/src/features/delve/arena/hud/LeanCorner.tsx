@@ -10,9 +10,10 @@ import { noFocus } from './SkillSlot';
 
 /**
  * The lean HUD's top right (the pad-first spec, 3): the depth and biome, the minimap, the first
- * tracked quest's next objective on one line, and small buttons for the mouse: Journal
- * (`data-pad-journal`) and Menu ("Dive menu", `data-pad-menu`), which the fight's View and Menu
- * press. The camera takes no inset for it (`HudGrid`'s `insetRight`).
+ * tracked quest's next objective on one line, and small buttons for the mouse: Map
+ * (`data-pad-peek`, the peek, which the fight's D-pad up presses), Journal (`data-pad-journal`)
+ * and Menu ("Dive menu", `data-pad-menu`), which the fight's View and Menu press. The camera
+ * takes no inset for it (`HudGrid`'s `insetRight`).
  */
 export function LeanCorner({
   dive,
@@ -21,6 +22,7 @@ export function LeanCorner({
   map,
   onMenu,
   onJournal,
+  onPeek,
 }: {
   dive: DiveState;
   biome: BiomeDef;
@@ -28,6 +30,7 @@ export function LeanCorner({
   map: HudMap | null;
   onMenu: () => void;
   onJournal: () => void;
+  onPeek: () => void;
 }): ReactElement {
   const config = useControlsStore((s) => s.config);
   const small = 'flex min-h-8 items-center gap-[6px]';
@@ -46,12 +49,29 @@ export function LeanCorner({
           <button
             type="button"
             className={small}
+            data-pad-peek
+            onMouseDown={noFocus}
+            onClick={onPeek}
+            data-testid="peek-button"
+          >
+            <InputGlyph
+              binding={{ key: config.keys.peek ?? undefined, pad: config.pad.peek ?? undefined }}
+              size="sm"
+            />
+            Map
+          </button>
+          <button
+            type="button"
+            className={small}
             data-pad-journal
             onMouseDown={noFocus}
             onClick={onJournal}
           >
             <InputGlyph
-              binding={{ key: config.keys.journal ?? undefined, pad: config.pad.journal ?? undefined }}
+              binding={{
+                key: config.keys.journal ?? undefined,
+                pad: config.pad.journal ?? undefined,
+              }}
               size="sm"
             />
             Journal

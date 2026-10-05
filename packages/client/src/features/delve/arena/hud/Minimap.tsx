@@ -150,9 +150,16 @@ export function drawMinimap(
 /**
  * The floor panel's map: a 2D canvas whose backing store is its zoomed box × devicePixelRatio
  * (re-measured on resize and on a HUD scale change), redrawn whenever `map` changes; a generated
- * floor's fog layer is kept on its own canvas until the fog moves.
+ * floor's fog layer is kept on its own canvas until the fog moves. Large, it is the peek's map
+ * (`peek-map`).
  */
-export function Minimap({ map }: { map: HudMap | null }): ReactElement {
+export function Minimap({
+  map,
+  large = false,
+}: {
+  map: HudMap | null;
+  large?: boolean;
+}): ReactElement {
   const ref = useRef<HTMLCanvasElement>(null);
   const { hud } = useUiScale();
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -215,9 +222,9 @@ export function Minimap({ map }: { map: HudMap | null }): ReactElement {
       height={size.h}
       role="img"
       aria-label="Minimap"
-      data-testid="minimap"
-      data-tutorial="hud.minimap"
-      className="block h-[150px] w-full bg-[var(--k-well)] shadow-[inset_0_0_0_2px_var(--k-steel-1)]"
+      data-testid={large ? 'peek-map' : 'minimap'}
+      data-tutorial={large ? undefined : 'hud.minimap'}
+      className={`block ${large ? 'h-[640px]' : 'h-[150px]'} w-full bg-[var(--k-well)] shadow-[inset_0_0_0_2px_var(--k-steel-1)]`}
     />
   );
 }

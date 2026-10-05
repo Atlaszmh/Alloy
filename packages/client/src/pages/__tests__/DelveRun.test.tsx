@@ -460,6 +460,7 @@ describe('DelveRun (the lean HUD, the default)', () => {
   beforeEach(() => {
     seen.pause.length = 0;
     seen.paused.length = 0;
+    seen.live.length = 0;
     seen.insets.length = 0;
     vi.mocked(questStates).mockImplementation(() => []);
     useUIStore.setState({ hudMode: 'lean' });
@@ -502,5 +503,45 @@ describe('DelveRun (the lean HUD, the default)', () => {
     renderRun();
     act(() => seen.onUi!({ kind: 'patterns', ids: ['maul'] }));
     expect(within(screen.getByTestId('gain-feed')).getByText('Pattern learned: Maul')).toBeInTheDocument();
+  });
+
+  it('the Map button (the peek) toggles the large map, the purse and the finds over the running fight, taking no pointer', () => {
+    renderRun();
+    expect(screen.queryByTestId('peek-overlay')).toBeNull();
+    const map = screen.getByTestId('peek-button');
+    expect(map).toHaveAttribute('data-pad-peek');
+    fireEvent.click(map);
+    const peek = screen.getByTestId('peek-overlay');
+    expect(within(peek).getByTestId('peek-map')).toBeInTheDocument();
+    expect(within(peek).getByTestId('purse-bar')).toBeInTheDocument();
+    expect(within(peek).getByTestId('pickup-feed')).toBeInTheDocument();
+    expect(peek).toHaveAttribute('inert');
+    expect(peek).toHaveClass('delve-peek');
+    // Its purse has no buttons: the HUD's Journal, Menu and Map stay the only targets.
+    expect(peek.querySelector('[data-pad-menu], [data-pad-journal], [data-pad-peek]')).toBeNull();
+    // The fight runs on.
+    expect(seen.paused.at(-1)).toBe(false);
+    expect(seen.live.at(-1)).toBe(true);
+    fireEvent.click(map);
+    expect(screen.queryByTestId('peek-overlay')).toBeNull();
+  });
+
+  it('the pause closes the peek, and it stays closed on Resume', () => {
+    renderRun();
+    fireEvent.click(screen.getByTestId('peek-button'));
+    fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
+    expect(screen.queryByTestId('peek-overlay')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(screen.queryByTestId('peek-overlay')).toBeNull();
+  });
+
+  it('under the full HUD the peek is the large map alone (the purse and the finds are on screen)', () => {
+    act(() => useUIStore.setState({ hudMode: 'full' }));
+    renderRun();
+    fireEvent.click(within(screen.getByTestId('purse-bar')).getByTestId('peek-button'));
+    const peek = screen.getByTestId('peek-overlay');
+    expect(within(peek).getByTestId('peek-map')).toBeInTheDocument();
+    expect(within(peek).queryByTestId('purse-bar')).toBeNull();
+    expect(within(peek).queryByTestId('pickup-feed')).toBeNull();
   });
 });

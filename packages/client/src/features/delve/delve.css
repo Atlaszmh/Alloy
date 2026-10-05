@@ -426,3 +426,11 @@
   color: var(--k-wood-text);
   text-shadow: 2px 2px 0 var(--k-well);
 }
+
+/* ── The peek (arena/hud/PeekOverlay.tsx) ── */
+
+/* The peek takes no pointer: its panels' own pointer-events-auto included. */
+.delve-peek,
+.delve-peek * {
+  pointer-events: none !important;
+}
