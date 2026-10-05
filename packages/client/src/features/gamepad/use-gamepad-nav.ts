@@ -236,21 +236,24 @@ function stepSelect(el: HTMLSelectElement, dir: NavDir): void {
 }
 
 /**
- * At an edge (nothing lies that way), up and down wrap inside a `[data-pad-wrap]` list: to its
- * topmost candidate from the bottom, its lowest from the top. Null outside such a list, for a
- * sideways press, or when `el` is the list's only candidate.
+ * Where nothing lies that way, up and down go on round a `[data-pad-wrap]` list: to its next
+ * candidate that way by height (a control out of line, such as a dialog's Back off to the side
+ * of its column, still steps on), and at its end to its topmost candidate from the bottom, its
+ * lowest from the top. Null outside such a list, for a sideways press, or when `el` is the
+ * list's only candidate.
  */
 function wrapFocus(el: HTMLElement, dir: NavDir, els: HTMLElement[]): HTMLElement | null {
   if (dir !== 'up' && dir !== 'down') return null;
   const list = el.closest('[data-pad-wrap]');
   if (!list) return null;
   const top = (c: HTMLElement) => c.getBoundingClientRect().top;
-  const further = (c: HTMLElement, best: HTMLElement) =>
-    dir === 'down' ? top(c) < top(best) : top(c) > top(best);
-  const end = els
-    .filter((c) => list.contains(c))
-    .reduce((best, c) => (further(c, best) ? c : best), el);
-  return end === el ? null : end;
+  const sign = dir === 'down' ? 1 : -1;
+  const ahead = (c: HTMLElement) => sign * (top(c) - top(el));
+  const rest = els.filter((c) => c !== el && list.contains(c));
+  if (rest.length === 0) return null;
+  const on = rest.filter((c) => ahead(c) > 0);
+  // The nearest ahead, else (at the end) the furthest behind: round to the other end.
+  return (on.length ? on : rest).reduce((best, c) => (ahead(c) < ahead(best) ? c : best));
 }
 
 const OPPOSITE: Record<NavDir, NavDir> = { up: 'down', down: 'up', left: 'right', right: 'left' };

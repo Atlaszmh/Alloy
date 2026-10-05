@@ -167,6 +167,23 @@ describe('moveFocus in a wrapping list', () => {
     expect(document.activeElement).toBe(below);
   });
 
+  it('steps on round a control out of line (a dialog header Back above the column, off to the side)', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const back = list.appendChild(document.createElement('button'));
+    back.getBoundingClientRect = () => DOMRect.fromRect({ x: 900, y: -60, width: 60, height: 30 });
+    const rows = column(list, 3);
+    rows[2].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(back);
+    moveFocus('down');
+    expect(document.activeElement).toBe(rows[0]);
+    moveFocus('up');
+    expect(document.activeElement).toBe(back);
+    moveFocus('up');
+    expect(document.activeElement).toBe(rows[2]);
+  });
+
   it('leaves nextFocus alone: the audit sees an edge', () => {
     const list = boxed(document.body.appendChild(document.createElement('div')));
     list.setAttribute('data-pad-wrap', '');
