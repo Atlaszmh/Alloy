@@ -90,6 +90,8 @@ test.describe('Delve guided start', () => {
     await page.getByTestId('mana-choice-fire').click();
     const panel = page.getByTestId('tutorial-panel');
     const highlight = page.getByTestId('tutorial-highlight');
+    /** The marker is on `target`: a trail's entry, a way to it, or the step's highlight. */
+    const marked = (target: string) => expect(highlight).toHaveAttribute('data-target', target);
     await expect(panel.getByTestId('tutorial-line')).toContainText('new hand');
     // One objective strip: at the Anvil, the row under the header band.
     await expect(panel).toHaveCount(1);
@@ -130,8 +132,10 @@ test.describe('Delve guided start', () => {
           await expect(door.getByTestId('roads-held')).toBeVisible();
           await expect(roads.first()).toBeDisabled();
           await expect(door.getByTestId('extract-button')).toHaveCount(0);
-          await expect(highlight).toBeVisible();
+          // The marker leads both clicks: the card, then its picker.
+          await marked('stop.card:equip');
           await door.getByTestId('stop-equip').click();
+          await marked('stop.pick');
           await door.getByTestId('stop-equip-item').first().click();
           await expect(door.getByTestId('stop-taken')).toBeVisible();
           await expect(roads.first()).toBeEnabled();
@@ -139,7 +143,9 @@ test.describe('Delve guided start', () => {
         } else if (stops === 2) {
           // Stop 2: Adjust a move, paid with the chest's Mana Dust.
           await expect(roads.first()).toBeDisabled();
+          await marked('stop.card:move');
           await door.getByTestId('stop-move').click();
+          await marked('stop.pick');
           const picker = door.getByTestId('stop-picker');
           await adjustMove(picker);
           await picker.getByTestId('stop-move-take').click();
@@ -183,16 +189,36 @@ test.describe('Delve guided start', () => {
     expect(await step(page)).toBe('l1-claim');
     await claimAll(page);
 
-    // Forge an uncommon cuirass and wear it.
+    // Forge an uncommon cuirass: the marker leads every click of the trail.
     await expect.poll(() => step(page)).toBe('l1-forge');
+    await marked('hub.tab.forge');
     await page.getByTestId('tab-forge').click();
+    await marked('forge.pattern:cuirass');
     await page.getByTestId('pattern-cuirass').click();
+    // The Rusty bar is the bench's own first pick, done already: on to the flux.
+    await marked('forge.flux:uncommon');
     await page.getByTestId('flux-uncommon').click();
+    await marked('forge.shard');
+    await page.getByTestId('shard-slot-0').click();
+    // In the shard picker's own scope the picker is the target (the chest's Max Life shard).
+    await expect(page.getByTestId('shard-picker')).toBeVisible();
+    await marked('forge.shard');
+    await page.getByTestId('shard-pick-maxHp-1').click();
+    await marked('forge.go');
     await page.getByTestId('forge-button').click();
+
+    // Wear it, by the pad: LB steps to the Loadout (the first press takes the input lock). The
+    // marker's focus lands on the cuirass, a focused tile is selected, so that entry is done and
+    // the marker and the focus move on to Equip; A equips.
     await expect.poll(() => step(page)).toBe('l1-equip');
-    await page.getByTestId('tab-loadout').click();
-    await page.locator('[data-testid="bag-item"][aria-label*="Cuirass"]').first().click();
-    await page.getByTestId('equip-button').click();
+    await marked('hub.tab.loadout');
+    await tap(page, BUTTON.lb);
+    await tap(page, BUTTON.lb);
+    await expect(page.getByTestId('loadout-tab')).toBeVisible();
+    await marked('loadout.equip');
+    await expect(page.getByTestId('item-sheet')).toContainText('Cuirass');
+    await expect(page.getByTestId('equip-button')).toBeFocused();
+    await tap(page, BUTTON.a);
 
     // Bind the second element (Hesta's partner for fire is frost).
     await expect.poll(() => step(page)).toBe('l1-bind');
