@@ -35,8 +35,16 @@ function Hub({ mode, link }: { mode: HubMode; link?: HubLink }) {
   );
 }
 
-export function renderSkills(opts: { mode?: HubMode; link?: HubLink } = {}): RenderResult {
-  return render(<Hub mode={opts.mode ?? 'anvil'} link={opts.link} />);
+/**
+ * Render the Skills tab in the stand-in hub. With `scoped`, inside a pad scope of its own, as the
+ * Anvil's `Screen` is, so the move editor is a nested scope with a way out (the harness's prompts
+ * are then inert: they bind document-wide).
+ */
+export function renderSkills(
+  opts: { mode?: HubMode; link?: HubLink; scoped?: boolean } = {},
+): RenderResult {
+  const hub = <Hub mode={opts.mode ?? 'anvil'} link={opts.link} />;
+  return render(opts.scoped ? <div data-pad-scope>{hub}</div> : hub);
 }
 
 /** The Skills panes over any chains (no store draft, nothing to buy), as the Anvil draws them. */

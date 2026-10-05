@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, within } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { screen, fireEvent } from '@testing-library/react';
 import { defaultMoveset } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
+import { findMarked, type Marked } from '../../../tutorial/marked';
 import { edit, renderSkills, stepTo } from './harness';
 
 vi.mock('react-router', async () => {
@@ -11,14 +12,12 @@ vi.mock('react-router', async () => {
   return { ...actual, useNavigate: () => vi.fn() };
 });
 
-// See the pad navigation and guidance spec, 2.3: the lesson's Primary (`l1-skills`), click by
-// click, on the real engine: add a slot, the new move in the secondary, a socket on the first
-// move, the rune, Apply.
+// See the pad navigation and guidance spec, 2.3 and 5: the lesson's Primary (`l1-skills`), marker
+// by marker, on the real engine: add a slot, the new move in the secondary through its editor,
+// the way out, a socket and its rune on the first move, the way out, Apply and the sheet's Apply.
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
-const target = (t: string) => document.querySelector<HTMLElement>(`[data-tutorial="${t}"]`);
-const done = (t: string) => target(t)?.getAttribute('data-tutorial-done');
 
 /** The hero at `l1-skills`: an uncommon sword whose Primary holds two moves, frost bound, Links, scrap and a rune in hand. */
 function lesson() {
@@ -36,86 +35,87 @@ function lesson() {
   });
 }
 
+const STEP = registry.getTutorialData().steps.find((s) => s.id === 'l1-skills')!;
+/** What the marker points at: its target, and the marked control's test id (or its nearest). */
+const at = (m: Marked | null) =>
+  m && [m.id, m.el.closest('[data-testid]')?.getAttribute('data-testid') ?? null];
+const marker = () => at(findMarked(STEP));
+
 describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
     lesson();
-  });
-
-  it("the lane: the first and last cards are keyed, Add slot is done at the lesson's moves, the first move's Open a socket row until it has one", () => {
-    renderSkills();
-    expect(screen.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('move-0')).toHaveAttribute('data-tutorial', 'skills.card:first');
-    expect(screen.getByTestId('move-1')).toHaveAttribute('data-tutorial', 'skills.card:last');
-    // Two moves of the lesson's three.
-    expect(done('skills.addSlot')).toBe('false');
-    fireEvent.click(screen.getByTestId('add-slot'));
-    expect(done('skills.addSlot')).toBe('true');
-    expect(screen.getByTestId('move-1')).not.toHaveAttribute('data-tutorial');
-    expect(screen.getByTestId('move-2')).toHaveAttribute('data-tutorial', 'skills.card:last');
-    // The first move's editor: its "Open a socket" row, done once one is open.
-    expect(target('skills.socket')).toBeNull();
-    edit(0);
-    expect(target('skills.socket')).toBe(screen.getByTestId('socket-open'));
-    expect(done('skills.socket')).toBe('false');
-    fireEvent.click(screen.getByTestId('socket-open'));
-    // At the uncommon sword's cap the row goes; the socket's rune row takes the trail on.
-    expect(target('skills.socket')).toBeNull();
-    expect(target('skills.rune')).toBe(screen.getByTestId('inspect-socket-0'));
-    // Another skill's cards and Add slot are no targets.
-    fireEvent.click(screen.getByTestId('chain-skill-basic'));
-    expect(target('skills.card:first')).toBeNull();
-    expect(target('skills.addSlot')).toBeNull();
-  });
-
-  it('the inspector: the elements are a target on the last move only, done in the secondary; the socket row and its picker are skills.rune', () => {
-    renderSkills();
-    // Move 1 of 2 is selected: its elements are not the lesson's.
-    expect(target('skills.elements')).toBeNull();
-    edit(1);
-    expect(target('skills.elements')).toBe(screen.getByTestId('move-elements'));
-    expect(done('skills.elements')).toBe('false');
-    stepTo('move-elements', 'Frost');
-    expect(done('skills.elements')).toBe('true');
-    // The first move's socket row, once it has a socket.
-    edit(0);
-    expect(target('skills.elements')).toBeNull();
-    expect(target('skills.rune')).toBeNull();
-    fireEvent.click(screen.getByTestId('socket-open'));
-    expect(target('skills.rune')).toBe(screen.getByTestId('inspect-socket-0'));
-    expect(done('skills.rune')).toBe('false');
-    // Its picker, a scope of its own, carries the same target on its list of runes.
-    fireEvent.click(screen.getByTestId('inspect-socket-0'));
-    const list = screen
-      .getByTestId('rune-picker')
-      .querySelector<HTMLElement>('[data-tutorial="skills.rune"]')!;
-    fireEvent.click(within(list).getByTestId('rune-pick-quick'));
-    expect(screen.queryByTestId('rune-picker')).toBeNull();
-    expect(done('skills.rune')).toBe('true');
-    expect(screen.getByTestId('chain-apply')).toHaveAttribute('data-tutorial', 'skills.apply');
-    expect(screen.getByTestId('chain-apply')).toBeEnabled();
-    // It opens the Apply sheet, whose Apply carries the target too.
-    fireEvent.click(screen.getByTestId('chain-apply'));
-    expect(screen.getByTestId('apply-sheet-confirm')).toHaveAttribute(
-      'data-tutorial',
-      'skills.apply',
+    // jsdom has no layout: every element a box on screen, so the scopes and targets are seen.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }),
     );
   });
+  afterEach(() => vi.restoreAllMocks());
 
-  it('a card is done as a way once its move holds what selecting it is for: the last the secondary, the first a rune', () => {
-    renderSkills();
-    expect(done('skills.card:last')).toBe('false');
-    edit(1);
+  it('the trail is the one this walk follows', () => {
+    expect(STEP.trail).toEqual([
+      'skills.primary', 'skills.addSlot', 'skills.elements', 'skills.socket', 'skills.rune', 'skills.apply',
+    ]);
+  });
+
+  it('leads through the editor in order: the slot, the last move in the secondary, out, the first move’s socket and rune, out, Apply, the sheet’s Apply', () => {
+    renderSkills({ scoped: true });
+    // The Primary is the chosen skill: its tab is done, and Add slot is first.
+    expect(screen.getByTestId('chain-skill-primary')).toHaveAttribute('data-tutorial', 'skills.primary');
+    expect(marker()).toEqual(['skills.addSlot', 'add-slot']);
+    fireEvent.click(screen.getByTestId('add-slot'));
+    expect(screen.getByTestId('add-slot')).toHaveAttribute('data-tutorial-done', 'true');
+
+    // The new last move: its card, then its editor's Elements row.
+    expect(marker()).toEqual(['skills.card:last', 'move-2']);
+    edit(2);
+    expect(marker()).toEqual(['skills.elements', 'move-elements']);
+    expect(screen.getByTestId('move-elements')).toHaveAttribute('data-tutorial-done', 'false');
     stepTo('move-elements', 'Frost');
-    expect(done('skills.card:last')).toBe('true');
-    expect(done('skills.card:first')).toBe('false');
+    expect(screen.getByTestId('move-elements')).toHaveAttribute('data-tutorial-done', 'true');
+    // Nothing more of the step in this editor: its way out.
+    expect(marker()).toEqual(['back', 'move-editor-back']);
+    fireEvent.click(screen.getByTestId('move-editor-back'));
+
+    // The first move: its card, its Open a socket row, its socket row, the rune grid.
+    expect(screen.getByTestId('move-2')).toHaveAttribute('data-tutorial-done', 'true');
+    expect(marker()).toEqual(['skills.card:first', 'move-0']);
     edit(0);
+    expect(marker()).toEqual(['skills.socket', 'socket-open']);
     fireEvent.click(screen.getByTestId('socket-open'));
-    // An open, empty socket is not yet what the card is for.
-    expect(done('skills.card:first')).toBe('false');
+    expect(marker()).toEqual(['skills.rune', 'inspect-socket-0']);
+    // A click focuses what it presses, as a browser does: the picker's opener, which it refocuses.
+    screen.getByTestId('inspect-socket-0').focus();
     fireEvent.click(screen.getByTestId('inspect-socket-0'));
+    expect(marker()).toEqual(['skills.rune', 'rune-picker']);
     fireEvent.click(screen.getByTestId('rune-pick-quick'));
-    expect(done('skills.card:first')).toBe('true');
+    expect(marker()).toEqual(['back', 'move-editor-back']);
+    fireEvent.click(screen.getByTestId('move-editor-back'));
+
+    // Apply: the footer's, then the sheet's.
+    expect(screen.getByTestId('move-0')).toHaveAttribute('data-tutorial-done', 'true');
+    expect(marker()).toEqual(['skills.apply', 'chain-apply']);
+    fireEvent.click(screen.getByTestId('chain-apply'));
+    expect(marker()).toEqual(['skills.apply', 'apply-sheet-confirm']);
+    fireEvent.click(screen.getByTestId('apply-sheet-confirm'));
+    expect(store().profile.tutorial?.step).not.toBe('l1-skills');
+  });
+
+  it("the editor's lesson targets sit on the Primary's moves only: another move's editor, or another skill's, carries none", () => {
+    renderSkills({ scoped: true });
+    edit(0);
+    expect(document.querySelector('[data-tutorial="skills.elements"]')).toBeNull(); // not the last move
+    fireEvent.click(screen.getByTestId('move-editor-back'));
+    edit(1);
+    expect(document.querySelector('[data-tutorial="skills.socket"]')).toBeNull(); // not the first
+    fireEvent.click(screen.getByTestId('move-editor-back'));
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
+    edit(0);
+    expect(
+      document.querySelector(
+        '[data-tutorial^="skills."]:not([data-tutorial="skills.primary"]):not([data-tutorial="skills.mana"]):not([data-tutorial="skills.apply"])',
+      ),
+    ).toBeNull();
   });
 });
