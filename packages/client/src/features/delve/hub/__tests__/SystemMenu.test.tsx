@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { skipTutorial, type DelveProfile } from '@alloy/engine';
+import {
+  applyTutorialEvents,
+  skipTutorial,
+  tutorialSkippable,
+  type DelveProfile,
+} from '@alloy/engine';
 import { SystemMenu } from '../SystemMenu';
 import { UNSOCKET_KEY, useDelveStore } from '@/stores/delveStore';
 
@@ -9,6 +14,9 @@ import { UNSOCKET_KEY, useDelveStore } from '@/stores/delveStore';
 vi.mock('@alloy/engine', async (orig) => ({
   ...(await orig<typeof import('@alloy/engine')>()),
   skipTutorial: vi.fn((p: DelveProfile) => ({ ...p, tutorial: null })),
+  // The skip rule and the runner are B1's too: each test says whether the step may be skipped.
+  tutorialSkippable: vi.fn(),
+  applyTutorialEvents: vi.fn((_r: unknown, p: DelveProfile) => p),
 }));
 
 const mockNavigate = vi.fn();
@@ -28,6 +36,8 @@ describe('SystemMenu', () => {
   beforeEach(() => {
     localStorage.clear();
     mockNavigate.mockReset();
+    vi.mocked(tutorialSkippable).mockReturnValue(false);
+    vi.mocked(applyTutorialEvents).mockClear();
     useDelveStore.getState().resetProfile(1234, 'fire');
   });
 
@@ -93,6 +103,28 @@ describe('SystemMenu', () => {
   it('an ordinary save has no Skip tutorial', () => {
     renderMenu();
     expect(screen.queryByTestId('menu-skip-tutorial')).toBeNull();
+  });
+
+  it('Skip this step shows only while the engine allows it, for an Anvil or Training step, and skips through the save', () => {
+    const on = (step: string) =>
+      act(() => {
+        const s = useDelveStore.getState();
+        s.setProfile({ ...s.profile, tutorial: { step, count: 0, misses: 0 } });
+      });
+    on('l1-forge');
+    const onClose = vi.fn();
+    renderMenu({ onClose });
+    expect(screen.queryByTestId('menu-skip-step')).toBeNull();
+    vi.mocked(tutorialSkippable).mockReturnValue(true);
+    // A floor's step is the dive's to skip (the pause), never this menu's.
+    on('d1-rats');
+    expect(screen.queryByTestId('menu-skip-step')).toBeNull();
+    on('l1-forge');
+    fireEvent.click(screen.getByTestId('menu-skip-step'));
+    expect(applyTutorialEvents).toHaveBeenCalledWith(expect.anything(), expect.anything(), [
+      { type: 'skipStep' },
+    ]);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('Restart Delve (dev) wipes the save on a second press, and closes the menu', () => {

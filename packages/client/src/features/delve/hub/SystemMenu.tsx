@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { unsocketMode } from '@alloy/engine';
+import { tutorialSkippable, unsocketMode } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { Button, Chip, Dialog, Glyph } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
 import { SkipTutorialConfirm } from '../tutorial/SkipTutorial';
+import { SHOWN_AT, stepIn } from '../tutorial/tutorial-view';
 import { SettingsPanel } from './SettingsPanel';
 
 /** An entry a screen adds to the menu, above Title screen (the Training Grounds' "Anvil", 3F). */
@@ -17,9 +18,11 @@ export interface SystemMenuEntry {
 
 /**
  * The one Esc / B menu: Resume, Controls, Settings, any `extra` entries, Skip
- * tutorial while the guided start runs, and Title screen, plus Restart and the
- * pull rule in dev builds. Controls, Settings and Skip tutorial's confirm open
- * in its place, and their Back returns to it.
+ * this step (while the engine allows it for an Anvil or Training step: the
+ * pad's way to it, as the pause has it in a dive) and Skip tutorial while the
+ * guided start runs, and Title screen, plus Restart and the pull rule in dev
+ * builds. Controls, Settings and Skip tutorial's confirm open in its place,
+ * and their Back returns to it.
  */
 export function SystemMenu({
   onClose,
@@ -30,7 +33,12 @@ export function SystemMenu({
 }) {
   const navigate = useNavigate();
   const unsocket = useDelveStore((s) => s.unsocket);
-  const guided = useDelveStore((s) => s.profile.tutorial !== null);
+  const profile = useDelveStore((s) => s.profile);
+  const guided = profile.tutorial !== null;
+  const skippable =
+    !!profile.tutorial &&
+    !!stepIn(getDelveRegistry(), profile.tutorial, SHOWN_AT.anvil) &&
+    tutorialSkippable(getDelveRegistry(), profile, profile.tutorial);
   const [view, setView] = useState<'menu' | 'controls' | 'settings' | 'skip'>('menu');
   const [confirmRestart, setConfirmRestart] = useState(false);
   // Dev builds: what pulling a rune does here (the balance's rule until the chip picks one).
@@ -65,6 +73,17 @@ export function SystemMenu({
             {e.label}
           </Button>
         ))}
+        {skippable && (
+          <Button
+            onClick={() => {
+              useDelveStore.getState().tutorialEvents([{ type: 'skipStep' }]);
+              onClose();
+            }}
+            testId="menu-skip-step"
+          >
+            Skip this step
+          </Button>
+        )}
         {guided && (
           <Button onClick={() => setView('skip')} testId="menu-skip-tutorial">
             Skip tutorial
