@@ -47,6 +47,7 @@ export function Tile({
       aria-label={[label, ...states].join(', ')}
       aria-pressed={selected}
       data-rarity={rarity ?? undefined}
+      data-delta={delta ?? undefined}
       data-testid={testId}
       onPointerUp={(e) => {
         onPointerUp?.(e);

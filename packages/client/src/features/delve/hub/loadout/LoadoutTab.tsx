@@ -8,7 +8,7 @@ import { showToast } from '@/components/Toast';
 import type { Prompt } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { HowTo } from '../HowTo';
-import type { HubTabProps } from '../types';
+import type { BagFilter, HubTabProps } from '../types';
 import { EquippedPane } from './EquippedPane';
 import { BagPane } from './BagPane';
 import { ComparePane, type LoadoutActions } from './ComparePane';
@@ -24,12 +24,17 @@ const ARMED_MS = 2000;
  * (a click, or the pad's focus), else the worn weapon (the how-to, on a first save). The tab's
  * prompts: Select, Equip, Full compare (hold Shift / LT), Salvage (Del / X) and Lock (L / Y),
  * which act on the hovered or selected item; under the pad, RT jumps to the compare pane's first
- * action and B from there goes back. In `mode: 'pause'` the item actions give way to notes.
+ * action and B from there goes back. In `mode: 'pause'` the item actions give way to notes. Its
+ * tile and filter live in the hub's memory.
  */
-export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactElement {
+export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const [selected, setSelected] = useState<string | null>(null);
+  const kept = memory?.loadout;
+  const [selected, setSelected] = useState<string | null>(
+    link?.tab === 'loadout' && link.uid ? link.uid : (kept?.uid ?? null),
+  );
+  const [filter, setFilter] = useState<BagFilter>(kept?.filter ?? 'all');
   const [hovered, setHovered] = useState<string | null>(null);
   const [full, setFull] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
@@ -109,6 +114,11 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
   useEffect(() => {
     if (link?.tab === 'loadout' && link.uid) setSelected(link.uid);
   }, [link]);
+
+  // The hub keeps the tile and the filter while the tab is away.
+  useEffect(() => {
+    if (memory) memory.loadout = { uid: selected, filter };
+  }, [memory, selected, filter]);
 
   // Where the focus is (a removed button's focus, put back by the pad's nav, never blurs).
   useEffect(() => {
@@ -193,6 +203,8 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
       <BagPane
         locked={locked}
         selected={selected}
+        filter={filter}
+        onFilter={setFilter}
         onSelect={select}
         onHover={setHovered}
         onEquip={actions.equip}

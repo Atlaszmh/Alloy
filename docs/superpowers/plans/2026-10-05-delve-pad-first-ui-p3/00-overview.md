@@ -65,7 +65,7 @@ If Playwright says port 5199 is in use: `netstat -ano | grep ":5199" | grep LIST
 
 and write both counts into this section ("Baseline (recorded <date> on `padui/main` at `<sha>`): engine `tsc` clean, `vitest run` N files, M tests; client `tsc` clean, `vitest run` N files, M tests; all passing"). Phase 2 closed at client 133 + its own files; read the real numbers, don't assume them. Every later "all green" compares to it. If the baseline is not green, stop: phase 2 did not close. The engine's run includes the long pacing and tutorial-bot files: run it in the background and read the report.
 
-Baseline (recorded … on `padui/main` at `…`): …
+Baseline (recorded 2026-10-05 on `padui/main` at `5abdaded`): engine `tsc` clean, `vitest run` 130 files (1 skipped), 1696 tests (5 skipped); client `tsc` clean, `vitest run` 136 files, 1234 tests; all passing.
 
 ## Conventions
 

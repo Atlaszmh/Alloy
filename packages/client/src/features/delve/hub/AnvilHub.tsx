@@ -19,7 +19,7 @@ import { QuestsTab } from './quests/QuestsTab';
 import { useQuests } from '../quests/useQuests';
 import { TutorialPanel } from '../tutorial/TutorialPanel';
 import { SHOWN_AT, stepIn } from '../tutorial/tutorial-view';
-import type { HubLink, HubMode, HubTab, HubTabProps } from './types';
+import type { HubLink, HubMemory, HubMode, HubTab, HubTabProps } from './types';
 
 const TABS: { id: HubTab; label: string }[] = [
   { id: 'loadout', label: 'Loadout' },
@@ -43,7 +43,8 @@ const TAB_VIEWS: Record<HubTab, (props: HubTabProps) => ReactNode> = {
  * open tab's view (`view`) and the digit keys (`digits`, for the screen's usePrompts). In
  * `mode: 'pause'` the Forge is disabled ("Forge at the Anvil"): LB/RB and the digits skip it.
  * The Quests tab's pip counts the quests waiting to be claimed (`claimable`). `onDelve` is every
- * tab's Delve: at the Anvil it opens the Depart sheet, in the pause it resumes.
+ * tab's Delve: at the Anvil it opens the Depart sheet, in the pause it resumes. Each tab's
+ * selection lives in `memory` across its remounts.
  */
 export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink) {
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
@@ -54,6 +55,7 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
   const [link, setLink] = useState<HubLink | undefined>(initial);
   const [tabPrompts, setTabPrompts] = useState<Prompt[]>([]);
   const [footerAction, setFooterAction] = useState<ReactNode>(null);
+  const memory = useRef<HubMemory>({}).current;
   const tabs = TABS.map((t) => {
     const locked = mode === 'pause' && t.id === 'forge';
     return { ...t, disabled: locked, title: locked ? 'Forge at the Anvil' : undefined };
@@ -113,6 +115,7 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
       go={go}
       link={link?.tab === tab ? link : undefined}
       onDelve={onDelve}
+      memory={memory}
     />
   );
   return { nav, view, tabPrompts, footerAction, digits, claimable, go };

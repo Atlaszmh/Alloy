@@ -15,12 +15,12 @@ import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
-import { Button, Chip, Glyph, Panel, Segmented } from '../../kit';
+import { Button, Chip, Glyph, Panel, Segmented, Tabs } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { ItemTile, deltaMark } from '../../ItemTile';
 import { RARITY_COLOR, RARITY_LABEL, UPGRADE_EPSILON, formatNumber } from '../../format';
+import type { BagFilter } from '../types';
 
-type Filter = 'all' | 'weapons' | 'armor' | 'jewelry' | 'upgrades';
 type Sort = 'power' | 'rarity' | 'slot' | 'newest';
 type AutoSalvage = Rarity | 'off';
 
@@ -34,7 +34,7 @@ interface Row {
   asIs: number;
 }
 
-const KIND: Record<Exclude<Filter, 'all' | 'upgrades'>, readonly GearSlot[]> = {
+const KIND: Record<Exclude<BagFilter, 'all' | 'upgrades'>, readonly GearSlot[]> = {
   weapons: ['weapon'],
   armor: ['helm', 'chest', 'gloves', 'boots'],
   jewelry: ['amulet', 'ring'],
@@ -62,14 +62,18 @@ const SORTS: { id: Sort; label: string; by: (a: Row, b: Row) => number }[] = [
 const AUTO_RARITIES: Rarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic'];
 
 /**
- * The Loadout's bag: its count, filter and sort chips, eight columns of tiles (▲ better as it
+ * The Loadout's bag: its count, the filter tabs (LT/RT, `filter` is the Loadout's, so the hub
+ * remembers it) and the sort chip, eight columns of tiles (▲ better as it
  * is, ◇ better only with your moveset moved onto it, ▼ worse, NEW, the lock), and the footer:
  * Equip best, Salvage junk and auto-salvage. A click selects a tile for the compare pane and a
- * right-click equips it; under the pad, focus selects and A equips (spec, decided item 36).
+ * right-click equips it; under the pad, focus selects and A equips (spec, decided item 36). The
+ * selected tile, else the first, is the pad's first focus (`data-pad-first`).
  */
 export function BagPane({
   locked,
   selected,
+  filter,
+  onFilter,
   onSelect,
   onHover,
   onEquip,
@@ -77,6 +81,8 @@ export function BagPane({
   /** Mid-dive or paused: Equip best, Salvage junk and auto-salvage wait for the Anvil. */
   locked: boolean;
   selected: string | null;
+  filter: BagFilter;
+  onFilter: (f: BagFilter) => void;
   onSelect: (uid: string) => void;
   onHover: (uid: string | null) => void;
   onEquip: (uid: string) => void;
@@ -84,7 +90,6 @@ export function BagPane({
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const newUids = useDelveStore((s) => s.newUids);
-  const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState(0);
   const [choosing, setChoosing] = useState(false);
   const bagSize = registry.getDelveBalance().loot.bagSize;
@@ -152,12 +157,6 @@ export function BagPane({
     setChoosing(false);
   };
 
-  const chip = (id: Filter, label: ReactElement | string) => (
-    <Chip pressed={filter === id} onClick={() => setFilter(id)} testId={`bag-filter-${id}`}>
-      {label}
-    </Chip>
-  );
-
   return (
     <Panel
       scroll={false}
@@ -176,19 +175,32 @@ export function BagPane({
       }
       aside={
         <div className="flex flex-wrap items-center gap-2.5">
-          {chip('all', 'All')}
-          {chip('weapons', 'Weapons')}
-          {chip('armor', 'Armor')}
-          {chip('jewelry', 'Jewelry')}
-          {chip(
-            'upgrades',
-            <span className="flex items-center gap-1.5">
-              <span className="k-well inline-flex px-1 py-0.5">
-                <Glyph id="up" size={14} />
-              </span>
-              Upgrades {upgrades}
-            </span>,
-          )}
+          <Tabs
+            aria-label="Bag filter"
+            level="sub"
+            size="md"
+            glyphs
+            value={filter}
+            onChange={(f) => {
+              playSound('buttonClick');
+              onFilter(f);
+            }}
+            tabs={[
+              { id: 'all', label: 'All', testId: 'bag-filter-all' },
+              { id: 'weapons', label: 'Weapons', testId: 'bag-filter-weapons' },
+              { id: 'armor', label: 'Armor', testId: 'bag-filter-armor' },
+              { id: 'jewelry', label: 'Jewelry', testId: 'bag-filter-jewelry' },
+              {
+                id: 'upgrades',
+                label: (
+                  <span className="flex items-center gap-1.5">
+                    <Glyph id="up" size={14} /> Upgrades {upgrades}
+                  </span>
+                ),
+                testId: 'bag-filter-upgrades',
+              },
+            ]}
+          />
           <span className="k-caption ml-2">Sort</span>
           <Chip
             onClick={() => setSort((sort + 1) % SORTS.length)}
@@ -213,7 +225,7 @@ export function BagPane({
             className="grid content-start gap-[14px]"
             style={{ gridTemplateColumns: 'repeat(8, minmax(56px, 84px))' }}
           >
-            {shown.map(({ item, delta, asIs }) => (
+            {shown.map(({ item, delta, asIs }, i) => (
               <ItemTile
                 key={item.uid}
                 item={item}
@@ -224,6 +236,8 @@ export function BagPane({
                 isNew={newUids[item.uid]}
                 selected={selected === item.uid}
                 testId="bag-item"
+                data-uid={item.uid}
+                data-pad-first={(selected ? item.uid === selected : i === 0) || undefined}
                 data-tutorial={`loadout.bag:${item.slot}.${item.rarity}`}
                 onClick={() => {
                   if (useInputDeviceStore.getState().device === 'gamepad') onEquip(item.uid);

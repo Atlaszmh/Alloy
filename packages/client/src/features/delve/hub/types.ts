@@ -6,10 +6,25 @@ import type { Prompt } from '../kit/types';
 
 export type HubMode = 'anvil' | 'pause';
 export type HubTab = 'loadout' | 'skills' | 'forge' | 'codex' | 'quests';
+/** The bag's filters (the Loadout's LT/RT). */
+export type BagFilter = 'all' | 'weapons' | 'armor' | 'jewelry' | 'upgrades';
+/** The Forge tab's benches (LT/RT). */
+export type ForgeBenchId = 'forge' | 'temper' | 'materials';
+
+/**
+ * What each tab last had selected, kept by the hub while its tab views remount (the pad-first
+ * spec, 4: "each tab restores its selection"). A mutable box the hub holds in a ref: a tab reads
+ * its entry as it mounts and writes it as its selection changes; a link it is opened by wins.
+ */
+export interface HubMemory {
+  loadout?: { uid: string | null; filter: BagFilter };
+  forge?: { bench: ForgeBenchId; baseId: string | null; uid: string | null };
+}
+
 export type HubLink =
   | { tab: 'loadout'; uid?: string }
   | { tab: 'skills'; skill?: ChainSkill; view?: 'mana' }
-  | { tab: 'forge'; uid?: string; bench?: 'forge' | 'temper' }
+  | { tab: 'forge'; uid?: string; bench?: ForgeBenchId }
   | {
       tab: 'codex';
       section?: 'legendaries' | 'reactions' | 'patterns' | 'essences' | 'records';
@@ -27,4 +42,6 @@ export interface HubTabProps {
   link?: HubLink;
   /** The hub's Delve: at the Anvil it opens the Depart sheet; in the pause it resumes the dive. */
   onDelve: () => void;
+  /** The hub's memory of each tab's selection (absent: none, as in a tab's own tests). */
+  memory?: HubMemory;
 }

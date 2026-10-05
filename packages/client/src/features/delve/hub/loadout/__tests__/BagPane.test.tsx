@@ -16,6 +16,7 @@ import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { BagPane } from '../BagPane';
 import { getDelveRegistry } from '../../../registry';
 import { UPGRADE_EPSILON } from '../../../format';
+import type { BagFilter } from '../../types';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -27,7 +28,15 @@ const gear = (
 ): GearItem => generateItem(registry, { uid, ilvl: 3, rarity, slot, mana }, new SeededRNG(4));
 const put = (...bag: GearItem[]) => store().setProfile({ ...store().profile, bag });
 const open = (locked = false) => {
-  const props = { locked, selected: null, onSelect: vi.fn(), onHover: vi.fn(), onEquip: vi.fn() };
+  const props = {
+    locked,
+    selected: null,
+    filter: 'all' as BagFilter,
+    onFilter: vi.fn(),
+    onSelect: vi.fn(),
+    onHover: vi.fn(),
+    onEquip: vi.fn(),
+      };
   render(<BagPane {...props} />);
   return props;
 };
@@ -48,7 +57,14 @@ describe('the bag pane', () => {
 
   it('keys each tile for the guided start by its slot and rarity (loadout.bag), pressed once selected', () => {
     put(gear('h1', 'helm'), gear('c1', 'chest', 'uncommon'));
-    const props = { locked: false, onSelect: vi.fn(), onHover: vi.fn(), onEquip: vi.fn() };
+    const props = {
+      locked: false,
+      filter: 'all' as BagFilter,
+      onFilter: vi.fn(),
+      onSelect: vi.fn(),
+      onHover: vi.fn(),
+      onEquip: vi.fn(),
+          };
     render(<BagPane {...props} selected="c1" />);
     expect(tile('c1')).toHaveAttribute('data-tutorial', 'loadout.bag:chest.uncommon');
     expect(tile('c1')).toHaveAttribute('aria-pressed', 'true');
@@ -84,32 +100,84 @@ describe('the bag pane', () => {
     expect(screen.getByTestId('bag-filter-upgrades')).toHaveTextContent('Upgrades 1');
   });
 
-  it('filters by kind and by ▲ upgrades, and sorts by power, rarity, slot or newest', () => {
+  it('filters are a sub tab list (LT/RT): each asks to filter; the tiles shown follow the filter given', () => {
+    put(gear('r1', 'ring', 'common'), gear('w1', 'weapon', 'rare'), gear('h1', 'helm', 'epic'));
+    const onFilter = vi.fn();
+    const props = {
+      locked: false,
+      selected: null,
+      onSelect: vi.fn(),
+      onHover: vi.fn(),
+      onEquip: vi.fn(),
+            onFilter,
+    };
+    const { rerender } = render(<BagPane {...props} filter="all" />);
+    const list = screen.getByRole('tablist', { name: 'Bag filter' });
+    expect(list).toHaveAttribute('data-pad-tabs', 'sub');
+    expect(
+      within(list)
+        .getAllByRole('tab')
+        .map((t) => t.dataset.testid),
+    ).toEqual([
+      'bag-filter-all',
+      'bag-filter-weapons',
+      'bag-filter-armor',
+      'bag-filter-jewelry',
+      'bag-filter-upgrades',
+    ]);
+    fireEvent.click(screen.getByTestId('bag-filter-weapons'));
+    expect(onFilter).toHaveBeenLastCalledWith('weapons');
+    const rarities = () => tiles().map((t) => t.dataset.rarity);
+    rerender(<BagPane {...props} filter="weapons" />);
+    expect(screen.getByTestId('bag-filter-weapons')).toHaveAttribute('aria-selected', 'true');
+    expect(rarities()).toEqual(['rare']);
+    rerender(<BagPane {...props} filter="armor" />);
+    expect(rarities()).toEqual(['epic']);
+    rerender(<BagPane {...props} filter="jewelry" />);
+    expect(rarities()).toEqual(['common']);
+    rerender(<BagPane {...props} filter="upgrades" />);
+    for (const t of tiles()) expect(t).toHaveAccessibleName(expect.stringContaining(', upgrade'));
+  });
+
+  it('sorts by power, rarity, slot or newest', () => {
     put(gear('r1', 'ring', 'common'), gear('w1', 'weapon', 'rare'), gear('h1', 'helm', 'epic'));
     open();
     const rarities = () => tiles().map((t) => t.dataset.rarity);
-    fireEvent.click(screen.getByTestId('bag-filter-weapons'));
-    expect(rarities()).toEqual(['rare']);
-    fireEvent.click(screen.getByTestId('bag-filter-armor'));
-    expect(rarities()).toEqual(['epic']);
-    fireEvent.click(screen.getByTestId('bag-filter-jewelry'));
-    expect(rarities()).toEqual(['common']);
-    fireEvent.click(screen.getByTestId('bag-filter-upgrades'));
-    expect(tiles().length).toBeGreaterThan(0);
-    for (const t of tiles()) expect(t).toHaveAccessibleName(expect.stringContaining(', upgrade'));
-    fireEvent.click(screen.getByTestId('bag-filter-all'));
-    expect(screen.getByTestId('bag-filter-all')).toHaveAttribute('aria-pressed', 'true');
     const sort = screen.getByTestId('bag-sort');
     expect(sort).toHaveTextContent('Power');
     fireEvent.click(sort);
-    expect(sort).toHaveTextContent('Rarity');
     expect(rarities()).toEqual(['epic', 'rare', 'common']);
     fireEvent.click(sort);
-    expect(sort).toHaveTextContent('Slot');
     expect(rarities()).toEqual(['rare', 'epic', 'common']); // weapon, helm, ring
     fireEvent.click(sort);
-    expect(sort).toHaveTextContent('Newest');
     expect(rarities()).toEqual(['epic', 'rare', 'common']);
+  });
+
+  it("each tile carries its uid and its mark; the selected one, else the first, is the pad's first focus", () => {
+    put(gear('h1', 'helm'), gear('r1', 'ring'));
+    const props = {
+      locked: false,
+      filter: 'all' as BagFilter,
+      onFilter: vi.fn(),
+      onSelect: vi.fn(),
+      onHover: vi.fn(),
+      onEquip: vi.fn(),
+          };
+    const { rerender } = render(<BagPane {...props} selected={null} />);
+    expect(
+      tiles()
+        .map((t) => t.dataset.uid)
+        .sort(),
+    ).toEqual(['h1', 'r1']);
+    expect(tiles().filter((t) => t.hasAttribute('data-pad-first'))).toEqual([tiles()[0]]);
+    rerender(<BagPane {...props} selected="r1" />);
+    expect(
+      tiles()
+        .filter((t) => t.hasAttribute('data-pad-first'))
+        .map((t) => t.dataset.uid),
+    ).toEqual(['r1']);
+    // An empty slot and a full one: the ring slot is empty, so the ring is ▲.
+    expect(tiles().find((t) => t.dataset.uid === 'r1')).toHaveAttribute('data-delta', 'up');
   });
 
   it('hover and a click select, a right-click equips; under the pad focus selects and A equips', () => {

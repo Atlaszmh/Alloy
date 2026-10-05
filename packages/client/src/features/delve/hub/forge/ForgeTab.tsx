@@ -13,8 +13,10 @@ type Bench = 'forge' | 'temper';
 
 const forgeLink = (l?: HubLink) => (l?.tab === 'forge' ? l : null);
 /** A link's bench: its own, else Temper for an item ("Forge it ›" from the Loadout), else the Forge. */
-const benchOf = (l?: HubLink): Bench =>
-  forgeLink(l)?.bench ?? (forgeLink(l)?.uid ? 'temper' : 'forge');
+const benchOf = (l?: HubLink): Bench => {
+  const b = forgeLink(l)?.bench;
+  return b === 'forge' || b === 'temper' ? b : forgeLink(l)?.uid ? 'temper' : 'forge';
+};
 
 /**
  * The Forge tab: two benches (a sub tab, LT/RT), each in three panes. The Forge

@@ -10,6 +10,8 @@ import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { padPrompts } from '@/features/delve/kit/prompts';
 import { SAMPLE_QUESTS } from '../../quests/__tests__/quest-fixture';
 import type { QuestView } from '../../quests/types';
+import { generateItem, SeededRNG } from '@alloy/engine';
+import { getDelveRegistry } from '../../registry';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -175,6 +177,62 @@ describe('AnvilHub', () => {
     fireEvent.click(screen.getByTestId('tab-loadout'));
     fireEvent.click(screen.getByTestId('tab-skills'));
     expect(screen.queryByTestId('mana-view')).toBeNull(); // a plain tab change carries no link
+  });
+
+  it('each tab comes back to its selection: the bag tile and its filter', () => {
+    const registry = getDelveRegistry();
+    const ring = generateItem(
+      registry,
+      { uid: 'r1', ilvl: 3, rarity: 'magic', slot: 'ring', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    const helm = generateItem(
+      registry,
+      { uid: 'h1', ilvl: 3, rarity: 'magic', slot: 'helm', mana: 'fire' },
+      new SeededRNG(5),
+    );
+    act(() => {
+      const p = useDelveStore.getState().profile;
+      useDelveStore.getState().setProfile({ ...p, bag: [helm, ring] });
+    });
+    renderHub();
+    fireEvent.click(screen.getByTestId('bag-filter-jewelry'));
+    const ringTile = () => screen.getAllByTestId('bag-item').find((t) => t.dataset.uid === 'r1')!;
+    fireEvent.click(ringTile());
+    expect(screen.getByTestId('item-sheet')).toHaveTextContent('compared with your ring');
+    // Away and back: the tab view remounts, the hub kept its selection and filter.
+    fireEvent.click(screen.getByTestId('tab-skills'));
+    fireEvent.click(screen.getByTestId('tab-loadout'));
+    expect(screen.getByTestId('bag-filter-jewelry')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByTestId('bag-item').map((t) => t.dataset.uid)).toEqual(['r1']);
+    expect(screen.getByTestId('item-sheet')).toHaveTextContent('compared with your ring');
+    // The pad lands on it: the remembered tile is the tab's first focus.
+    expect(ringTile()).toHaveAttribute('data-pad-first');
+  });
+
+  it('a link wins over the memory, and a salvaged tile is forgotten', () => {
+    const registry = getDelveRegistry();
+    const helm = generateItem(
+      registry,
+      { uid: 'h1', ilvl: 3, rarity: 'magic', slot: 'helm', mana: 'fire' },
+      new SeededRNG(5),
+    );
+    act(() => {
+      const p = useDelveStore.getState().profile;
+      useDelveStore.getState().setProfile({ ...p, bag: [helm] });
+    });
+    renderHub();
+    fireEvent.click(screen.getAllByTestId('bag-item')[0]);
+    fireEvent.click(screen.getByTestId('tab-skills'));
+    act(() => {
+      const p = useDelveStore.getState().profile;
+      useDelveStore.getState().setProfile({ ...p, bag: [] });
+    });
+    fireEvent.click(screen.getByTestId('tab-loadout'));
+    // The salvaged tile is forgotten: nothing is selected (this new save still shows the how-to;
+    // plan 03 flips this line to the worn weapon's compare).
+    expect(screen.queryByTestId('item-sheet')).toBeNull();
+    expect(screen.getByTestId('delve-howto')).toBeInTheDocument();
   });
 
   it("the footer draws the tab's prompts before the hub's Menu", () => {
