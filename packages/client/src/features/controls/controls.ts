@@ -17,6 +17,7 @@ export const CONTROL_ACTIONS = [
   'menu',
   'labels',
   'journal',
+  'peek',
 ] as const;
 export type ControlAction = (typeof CONTROL_ACTIONS)[number];
 
@@ -56,6 +57,8 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
     menu: 'menu',
     labels: 'ls',
     journal: 'view',
+    // The fight's map, purse and finds (the pad-first spec, 3): the D-pad is free in the fight but for the potion.
+    peek: 'up',
   },
   keys: {
     primary: 'KeyQ',
@@ -68,6 +71,7 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
     menu: 'Escape',
     labels: 'AltLeft',
     journal: 'KeyJ',
+    peek: 'KeyM',
     up: 'KeyW',
     down: 'KeyS',
     left: 'KeyA',
@@ -89,6 +93,7 @@ export const ACTION_LABELS: Record<KeyAction, string> = {
   menu: 'Menu',
   labels: 'Show all loot labels (hold)',
   journal: 'Journal',
+  peek: 'Peek: map, purse and finds',
   up: 'Move up',
   down: 'Move down',
   left: 'Move left',

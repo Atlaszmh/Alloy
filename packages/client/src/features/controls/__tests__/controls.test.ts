@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ACTION_LABELS,
   DEFAULT_CONTROLS,
   bindKey,
   bindPad,
@@ -87,5 +88,24 @@ describe('interact', () => {
       keys: { ...keys, potion: 'KeyC' },
     });
     expect([taken.pad.interact, taken.keys.interact]).toEqual([null, null]);
+  });
+});
+
+describe('peek', () => {
+  it('is D-pad up and M, labelled for the editor', () => {
+    expect([DEFAULT_CONTROLS.pad.peek, DEFAULT_CONTROLS.keys.peek]).toEqual(['up', 'KeyM']);
+    expect(ACTION_LABELS.peek).toBe('Peek: map, purse and finds');
+  });
+
+  it('a setup saved before it gains it, unless that setup already uses D-pad up or M: then unbound', () => {
+    const { peek: _p, ...pad } = DEFAULT_CONTROLS.pad;
+    const { peek: _k, ...keys } = DEFAULT_CONTROLS.keys;
+    expect(parseControls({ ...DEFAULT_CONTROLS, pad, keys })).toEqual(DEFAULT_CONTROLS);
+    const taken = parseControls({
+      ...DEFAULT_CONTROLS,
+      pad: { ...pad, potion: 'up' },
+      keys: { ...keys, interact: 'KeyM' },
+    });
+    expect([taken.pad.peek, taken.keys.peek]).toEqual([null, null]);
   });
 });

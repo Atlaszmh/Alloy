@@ -56,6 +56,18 @@ describe('ControlsPanel', () => {
     expect(screen.getByTestId('bind-pad-dodge')).toHaveTextContent('A');
   });
 
+  it('lists the peek, D-pad up and M, and rebinding it swaps on a clash', () => {
+    render(<ControlsPanel onClose={() => {}} />);
+    expect(screen.getByTestId('bind-pad-peek')).toHaveTextContent('D-pad ▲');
+    expect(screen.getByTestId('bind-key-peek')).toHaveTextContent('M');
+    fireEvent.click(screen.getByTestId('bind-pad-peek'));
+    act(() => padCapture!('down'));
+    expect([config().pad.peek, config().pad.potion]).toEqual(['down', 'up']);
+    fireEvent.click(screen.getByTestId('bind-key-peek'));
+    key('KeyF');
+    expect([config().keys.peek, config().keys.potion]).toEqual(['KeyF', 'KeyM']);
+  });
+
   it('toggles hold-to-repeat and tunes the sticks', () => {
     render(<ControlsPanel onClose={() => {}} />);
     fireEvent.click(screen.getByTestId('repeat-defensive'));
