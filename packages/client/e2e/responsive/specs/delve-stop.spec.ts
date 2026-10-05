@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures/responsive-fixture';
 import { PC_VIEWPORTS } from '../viewports';
-import { seedProfile, startDive } from '../../fixtures/delve';
+import { seedProfile, startDive, toRoad } from '../../fixtures/delve';
 
 for (const vp of PC_VIEWPORTS) {
   test(`Delve stop @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
@@ -11,5 +11,7 @@ for (const vp of PC_VIEWPORTS) {
     await startDive(page);
     await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 60_000 });
     await runProbes('delve-stop', vp, { delve: {} });
+    await toRoad(page);
+    await runProbes('delve-stop-road', vp, { delve: {} });
   });
 }

@@ -12,5 +12,8 @@ for (const vp of PC_VIEWPORTS) {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('pause-screen')).toBeVisible();
     await runProbes('delve-pause', vp, { delve: {} });
+    await page.getByTestId('pause-build').click();
+    await expect(page.getByTestId('pause-hub')).toBeVisible();
+    await runProbes('delve-pause-hub', vp, { delve: {} });
   });
 }
