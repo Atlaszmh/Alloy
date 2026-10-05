@@ -20,6 +20,8 @@ import {
   withMove,
   type ChainSkill,
   type Chains,
+  type DataRegistry,
+  type EquippedGear,
   type GearItem,
 } from '@alloy/engine';
 import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
@@ -33,6 +35,24 @@ export const useChainMessage = create<{ text: string | null }>(() => ({ text: nu
 /** Say a builder op's refusal on the lane, or clear it when the op went through. */
 export function sayRefusal(res: { ok: boolean; reason?: string }, fallback: string): void {
   useChainMessage.setState({ text: res.ok ? null : (res.reason ?? fallback) });
+}
+
+/**
+ * The worn gear with the weapon holding `chains` (the builder's: the saved chains with the
+ * draft's over them): what the builder's stats resolve against, and what Try in Training loads
+ * into the sandbox. Unarmed, the gear as worn.
+ */
+export function draftEquipped(
+  registry: DataRegistry,
+  equipped: EquippedGear,
+  chains: Partial<Chains>,
+): EquippedGear {
+  const weapon = equipped.weapon;
+  if (!weapon) return equipped;
+  return {
+    ...equipped,
+    weapon: { ...weapon, moveset: { ...movesetOf(registry, weapon), chains: chains as Chains } },
+  };
 }
 
 /** The Anvil's chain builder: its props, and the slots the equipped weapon sells. */
@@ -77,16 +97,8 @@ export function useAnvilChains(): AnvilChains {
       );
   const stats = useMemo(
     () =>
-      profileStats(registry, {
-        pair,
-        equipped: weapon
-          ? {
-              ...equipped,
-              weapon: { ...weapon, moveset: { ...movesetOf(registry, weapon), chains } },
-            }
-          : equipped,
-      }),
-    [registry, equipped, pair, weapon, chains],
+      profileStats(registry, { pair, equipped: draftEquipped(registry, equipped, chains) }),
+    [registry, equipped, pair, chains],
   );
   const elements = pairElements(pair);
   const applying = view.dry;
