@@ -380,6 +380,16 @@ export function pullText(
   return mode === 'destroy' ? partsText(registry, [], runes) : partsText(registry, runes);
 }
 
+/** How long Salvage's Undo is offered (the pad-first spec, 4). */
+export const UNDO_MS = 5000;
+
+/** A salvage Undo can still take back: the save from before it, the one it made, and the NEW marks it cleared. */
+export interface SalvageUndo {
+  before: DelveProfile;
+  after: DelveProfile;
+  newUids: Record<string, true>;
+}
+
 interface DelveStore {
   profile: DelveProfile;
   /** Items the player hasn't looked at yet (pulse dot). */
@@ -408,6 +418,11 @@ interface DelveStore {
   chainDraft: ChainDraft | null;
   /** Dev builds: the pull rule chosen on the Anvil's chip (null: the balance's). */
   unsocket: UnsocketMode | null;
+  /**
+   * The last salvage, while Undo can take it back: for `UNDO_MS`, and only while the save is still
+   * the one it made (any other commit ends it). Session only.
+   */
+  undo: SalvageUndo | null;
 
   setProfile: (profile: DelveProfile) => void;
   /** A new save; with `primary` its mana is already chosen (tests, E2E). */
@@ -448,6 +463,12 @@ interface DelveStore {
     patterns: string[];
     essences: string[];
   };
+  /**
+   * Take the last salvage back (the pad-first spec, 4): the save as it was before it, whole (its
+   * quest and tutorial progress too), and the NEW marks it cleared. A quest toast it queued stays
+   * shown (a toast can't be unshown; salvaging again queues it again). False once the offer is gone.
+   */
+  undoSalvage: () => boolean;
   equipBest: () => GearItem[];
   upgrade: (uid: string) => ProfileActionResult;
   reforge: (uid: string, affixIndex: number) => ProfileActionResult;
@@ -539,10 +560,12 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       ? questNotices(getDelveRegistry().getQuestsData().quests, prev.profile.quests, profile.quests)
       : [];
     const notices = done.length > 0 ? { notices: [...prev.notices, ...done] } : {};
+    // Salvage's Undo holds only while the save is the one the salvage made.
+    const undo = prev?.undo && prev.undo.after !== profile ? { undo: null } : {};
     set(
       kept
-        ? { profile, ...floor, ...notices }
-        : { profile, ...floor, ...notices, chainDraft: null },
+        ? { profile, ...floor, ...notices, ...undo }
+        : { profile, ...floor, ...notices, ...undo, chainDraft: null },
     );
   };
   const registry = () => getDelveRegistry();
@@ -576,6 +599,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     bindDeclined: [],
     chainDraft: null,
     unsocket: loadUnsocket(),
+    undo: null,
 
     setProfile: (profile) => commit(profile),
 
@@ -592,6 +616,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
         notices: [],
         bindDeclined: [],
         chainDraft: null,
+        undo: null,
       });
     },
 
@@ -652,11 +677,31 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     toggleLock: (uid) => commit(toggleLock(get().profile, uid)),
 
     salvage: (uids) => {
-      const res = salvageItems(registry(), get().profile, uids, pull());
+      const { profile: before, newUids } = get();
+      const res = salvageItems(registry(), before, uids, pull());
       commit(res.profile);
       set({ newUids: withoutUids(get().newUids, uids) });
+      // Something melted: Undo may take it back for UNDO_MS.
+      if (res.profile.bag.length < before.bag.length) {
+        const cleared = Object.fromEntries(
+          uids.filter((u) => newUids[u]).map((u) => [u, true as const]),
+        );
+        const undo: SalvageUndo = { before, after: res.profile, newUids: cleared };
+        set({ undo });
+        setTimeout(() => {
+          if (get().undo === undo) set({ undo: null });
+        }, UNDO_MS);
+      }
       const { scrap, dust, links, runes, destroyed, shards, patterns, essences } = res;
       return { scrap, dust, links, runes, destroyed, shards, patterns, essences };
+    },
+
+    undoSalvage: () => {
+      const { undo, profile } = get();
+      if (!undo || profile !== undo.after) return false;
+      commit(undo.before);
+      set({ newUids: { ...get().newUids, ...undo.newUids }, undo: null });
+      return true;
     },
 
     equipBest: () => {

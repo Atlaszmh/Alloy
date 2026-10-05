@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   defaultMoveset,
   generateItem,
@@ -23,6 +23,7 @@ import {
   loadDelveProfile,
   overtakeNotice,
   UNSOCKET_KEY,
+  UNDO_MS,
   applyLabel,
   draftApply,
   partsText,
@@ -685,5 +686,91 @@ describe("delveStore: the floor's finds", () => {
     s().pushDiveDrops(Array.from({ length: 15 }, (_, i) => `b${i}`));
     expect(s().diveDrops).toHaveLength(60);
     expect(floorDrops()).toEqual(Array.from({ length: 15 }, (_, i) => `b${14 - i}`));
+  });
+});
+
+describe('salvage Undo', () => {
+  const s = () => useDelveStore.getState();
+  const ring = (uid: string) =>
+    generateItem(registry, { uid, ilvl: 3, rarity: 'magic', slot: 'ring' }, new SeededRNG(2));
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    s().resetProfile(1234, 'fire');
+    s().setProfile({ ...armed(s().profile), bag: [ring('u1'), ring('u2')], scrap: 0 });
+    s().markNew(['u1']);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('offers the save from before; Undo restores it whole, the NEW mark too, and saves it', () => {
+    const before = s().profile;
+    s().salvage(['u1']);
+    expect(s().profile.bag.map((i) => i.uid)).toEqual(['u2']);
+    expect(s().profile.scrap).toBeGreaterThan(0);
+    expect(s().newUids.u1).toBeUndefined();
+    expect(s().undo).toMatchObject({ before, after: s().profile });
+    expect(s().undoSalvage()).toBe(true);
+    // The very save from before: its bag, purse, quests and tutorial step, by identity.
+    expect(s().profile).toBe(before);
+    expect(s().newUids.u1).toBe(true);
+    expect(s().undo).toBeNull();
+    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).bag).toHaveLength(2);
+    // Once taken back, there is nothing more to take back.
+    expect(s().undoSalvage()).toBe(false);
+  });
+
+  it('the offer lapses after UNDO_MS', () => {
+    s().salvage(['u1']);
+    vi.advanceTimersByTime(UNDO_MS - 1);
+    expect(s().undo).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(s().undo).toBeNull();
+    expect(s().undoSalvage()).toBe(false);
+    expect(s().profile.bag).toHaveLength(1);
+  });
+
+  it('any other change to the save ends the offer', () => {
+    s().salvage(['u1']);
+    s().toggleLock('u2');
+    expect(s().undo).toBeNull();
+    expect(s().undoSalvage()).toBe(false);
+    expect(s().profile.bag.map((i) => i.uid)).toEqual(['u2']);
+    // A change that saves nothing (a NEW mark seen) leaves it.
+    s().toggleLock('u2');
+    s().salvage(['u2']);
+    s().markSeen(['u1']);
+    expect(s().undo).not.toBeNull();
+  });
+
+  it('a second salvage replaces the offer: Undo takes back the last one only', () => {
+    s().salvage(['u1']);
+    const between = s().profile;
+    s().salvage(['u2']);
+    expect(s().undoSalvage()).toBe(true);
+    expect(s().profile).toBe(between);
+    expect(s().profile.bag.map((i) => i.uid)).toEqual(['u2']);
+  });
+
+  it('a salvage that melts nothing (a locked item, an empty list) offers no Undo', () => {
+    s().toggleLock('u1');
+    s().salvage(['u1']);
+    expect(s().undo).toBeNull();
+    s().salvage([]);
+    expect(s().undo).toBeNull();
+  });
+
+  it("takes back the guided start's step and the quests' progress, since they live in the save", () => {
+    const p = s().profile;
+    const sword = { ...p.equipped.weapon!, uid: 'old', rarity: 'common' as const };
+    s().setProfile({ ...p, bag: [sword], tutorial: { step: 'l1-salvage', count: 0, misses: 0 } });
+    const before = s().profile;
+    s().salvage(['old']);
+    const after = s().profile;
+    expect(after.bag).toHaveLength(0);
+    expect(s().undoSalvage()).toBe(true);
+    expect(s().profile.tutorial).toEqual(before.tutorial);
+    expect(s().profile.quests).toBe(before.quests);
+    expect(s().profile.bag.map((i) => i.uid)).toEqual(['old']);
   });
 });
