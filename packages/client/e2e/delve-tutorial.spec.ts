@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { ARENA_READY, SAVE_KEY } from './fixtures/delve';
+import { ARENA_READY, SAVE_KEY, seedProfile } from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
@@ -234,6 +234,45 @@ test.describe('Delve guided start', () => {
     await expect.poll(() => step(page)).toBe('delve-2');
     await expect(page.getByTestId('lesson-block')).toHaveCount(0);
     await expect(delve).toBeEnabled();
+  });
+
+  test('TU03: a view left open over the next step shows its way out, and the pad follows the marker', async ({
+    page,
+  }) => {
+    // A save at the lesson's bind, with the Links the next step's slot costs.
+    await seedProfile(page, 4242, false, undefined, {
+      links: 3,
+      tutorial: { step: 'l1-bind', count: 0, misses: 0 },
+    });
+    await installPad(page);
+    await page.goto('/delve');
+    const marker = page.getByTestId('tutorial-highlight');
+    const marked = (target: string) => expect(marker).toHaveAttribute('data-target', target);
+
+    // The bind lives in the Skills tab's Mana view: the marker leads there, way by way.
+    await marked('hub.tab.skills');
+    await page.getByTestId('tab-skills').click();
+    await marked('skills.mana');
+    await page.getByTestId('mana-realign').click();
+    await marked('mana.bind');
+    await page.getByTestId('mana-bind-frost').click();
+
+    // The pad takes over on the confirm: A binds, and the step moves on with the view still up.
+    await page.getByTestId('mana-bind-confirm').focus();
+    await tap(page, BUTTON.a);
+    await expect.poll(() => step(page)).toBe('l1-skills');
+    await expect(page.getByTestId('mana-view')).toBeVisible();
+    await expect(page.getByTestId('ability-readout')).toHaveCount(0);
+    // Nothing of the next step is in the view: the marker shows the way out, with the focus on it.
+    await marked('back');
+    await expect(page.getByTestId('mana-back')).toBeFocused();
+
+    // One A later the inspector is back, and the marker and the focus are on Add slot.
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('mana-view')).toHaveCount(0);
+    await expect(page.getByTestId('ability-readout')).toBeVisible();
+    await marked('skills.addSlot');
+    await expect(page.getByTestId('add-slot')).toBeFocused();
   });
 
   test('TU02: a Jump in save has only the Basic until its first forge gives it a Primary', async ({
