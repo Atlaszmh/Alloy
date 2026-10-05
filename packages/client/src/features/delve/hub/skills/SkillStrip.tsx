@@ -24,7 +24,8 @@ export function SkillStrip({
 }) {
   const { chains, caps, absentText } = anvil.editor;
   return (
-    <div className="flex flex-none items-center gap-6" data-testid="skill-strip">
+    // One pad group across the tab's width: up from any card reaches its one stop, Realign.
+    <div className="flex flex-none items-center gap-6" data-pad-group="" data-testid="skill-strip">
       <Tabs
         aria-label="Skills"
         level="sub"
