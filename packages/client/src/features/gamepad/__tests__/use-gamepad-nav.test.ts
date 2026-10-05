@@ -1,6 +1,13 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { claimDevices, keepFocus, moveFocus, useGamepadNav } from '../use-gamepad-nav';
+import {
+  candidates,
+  claimDevices,
+  isCandidate,
+  keepFocus,
+  moveFocus,
+  useGamepadNav,
+} from '../use-gamepad-nav';
 import type { GamepadLike } from '../gamepad';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
 import { captureNav, usePrompts } from '@/features/delve/kit/prompts';
@@ -98,6 +105,47 @@ describe('moveFocus between buttons', () => {
     first.focus();
     moveFocus('right');
     expect(document.activeElement).toBe(last);
+  });
+});
+
+describe('candidates: a control scrolled out of its list', () => {
+  afterEach(() => document.body.replaceChildren());
+  /** `el` with a box `w` × `h` at `left`, `top`. */
+  const at = <T extends HTMLElement>(el: T, left: number, top: number, w = 10, h = 10): T => {
+    el.getBoundingClientRect = () =>
+      ({ left, top, width: w, height: h, right: left + w, bottom: top + h }) as DOMRect;
+    return el;
+  };
+  /**
+   * A scrolling list 100 × 100 at 0, 0 holding a row in view (at its top) and one scrolled below
+   * it, and a button outside, level with the hidden row.
+   */
+  const scene = () => {
+    const list = at(document.body.appendChild(document.createElement('div')), 0, 0, 100, 100);
+    list.style.overflowY = 'auto';
+    const shown = at(list.appendChild(document.createElement('button')), 0, 0);
+    const hidden = at(list.appendChild(document.createElement('button')), 0, 140);
+    const outside = at(document.body.appendChild(document.createElement('button')), 200, 140);
+    return { shown, hidden, outside };
+  };
+
+  it('is no candidate from outside the list, and is one from inside it', () => {
+    const { shown, hidden, outside } = scene();
+    expect(candidates(outside)).toEqual([shown, outside]);
+    expect(candidates(shown)).toEqual([shown, hidden, outside]);
+    expect(candidates(null)).toEqual([shown, outside]);
+  });
+
+  it('is never the D-pad\'s pick from outside, and is the next row from inside', () => {
+    const { shown, hidden, outside } = scene();
+    outside.focus();
+    expect(isCandidate(hidden)).toBe(false);
+    moveFocus('left');
+    // The row scrolled out lies straight to the left: the press finds nothing there.
+    expect(document.activeElement).toBe(outside);
+    shown.focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(hidden);
   });
 });
 

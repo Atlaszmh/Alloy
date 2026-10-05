@@ -22,7 +22,8 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * (`claimDevices`).
  */
 
-const FOCUSABLE =
+/** What the pad's focus can land on. */
+export const FOCUSABLE =
   'button:not(:disabled), a[href], [role="tab"], input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 const REPEAT_DELAY_MS = 350;
 const REPEAT_EVERY_MS = 150;
@@ -67,10 +68,44 @@ export function claimDevices(): () => void {
   };
 }
 
-function candidates(): HTMLElement[] {
-  return [...topScope().querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-    (el) => visible(el) && !el.closest('[data-pad-skip]'),
-  );
+/** The scroll containers around `el` (an ancestor under the body whose overflow is auto or scroll), nearest first. */
+function scrollers(el: Element): Element[] {
+  const out: Element[] = [];
+  const page: Element[] = [document.body, document.documentElement];
+  for (let p = el.parentElement; p && !page.includes(p); p = p.parentElement) {
+    const s = getComputedStyle(p);
+    if (/auto|scroll/.test(s.overflowX + s.overflowY)) out.push(p);
+  }
+  return out;
+}
+
+/** None of `el`'s box shows inside one of the scroll containers `around` it: it is scrolled out of view. */
+function clipped(el: Element, around: Element[]): boolean {
+  const b = el.getBoundingClientRect();
+  return around.some((p) => {
+    const c = p.getBoundingClientRect();
+    return b.right <= c.left || b.left >= c.right || b.bottom <= c.top || b.top >= c.bottom;
+  });
+}
+
+/**
+ * The D-pad's candidates in the topmost scope, as seen from `active`: every visible focusable
+ * control outside `[data-pad-skip]`, but one scrolled out of its list, which counts only from
+ * inside that list (the D-pad walks a list row by row and scrolls it; from outside, its
+ * hidden rows don't exist).
+ */
+export function candidates(active: Element | null = document.activeElement): HTMLElement[] {
+  const home = active ? (scrollers(active)[0] ?? null) : null;
+  return [...topScope().querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => {
+    if (!visible(el) || el.closest('[data-pad-skip]')) return false;
+    const around = scrollers(el);
+    return !clipped(el, around) || (home !== null && around[0] === home);
+  });
+}
+
+/** True when the D-pad could land on `el` now. */
+export function isCandidate(el: HTMLElement): boolean {
+  return candidates().includes(el);
 }
 
 /** The focus last seen in each scope, and where it was (it may have gone since). */
