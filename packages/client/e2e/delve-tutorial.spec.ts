@@ -228,7 +228,8 @@ test.describe('Delve guided start', () => {
 
     // Wear it, by the pad: LB steps to the Loadout (the first press takes the input lock). The
     // marker's focus lands on the cuirass, a focused tile is selected, so that entry is done and
-    // the marker and the focus move on to Equip; A equips.
+    // the marker moves on to Equip: under the pad, the footer's A. The focus stays on the tile,
+    // where A equips.
     await expect.poll(() => step(page)).toBe('l1-equip');
     await marked('hub.tab.loadout');
     await tap(page, BUTTON.lb);
@@ -236,7 +237,7 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('loadout-tab')).toBeVisible();
     await marked('loadout.equip');
     await expect(page.getByTestId('item-sheet')).toContainText('Cuirass');
-    await expect(page.getByTestId('equip-button')).toBeFocused();
+    await expect(page.locator('[data-testid="bag-item"][aria-pressed="true"]')).toBeFocused();
     await tap(page, BUTTON.a);
 
     // Bind the second element (Hesta's partner for fire is frost).

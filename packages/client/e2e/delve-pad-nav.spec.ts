@@ -30,8 +30,8 @@ type Dir = 'up' | 'down' | 'left' | 'right';
  * without reading the new moves (run with NAV_REPORT=1 to print them).
  */
 const ALLOW: Record<string, [number, number]> = {
-  loadout: [14, 12],
-  'loadout-item': [16, 14],
+  loadout: [11, 7],
+  'loadout-item': [11, 7],
   skills: [2, 4],
   forge: [14, 14],
   'forge-pattern': [20, 20],
@@ -317,17 +317,18 @@ test.describe('Delve pad navigation', () => {
     await check(page, 'settings');
   });
 
-  test('PN02: Loadout: out of the bag and back lands on the same tile, by the side and by the footer', async ({ page }) => {
+  test('PN02: Loadout: out of the bag and back lands on the same tile, by the doll and by the footer', async ({ page }) => {
     await seed(page);
     await page.goto('/delve');
     await page.getByTestId('bag-item').nth(4).focus();
     // The pad takes the input lock with a D-pad press (A on a tile would equip it); the press
-    // moves too (tile 4 is on the top row, up goes to the filters), so focus the tile again.
+    // may move too, so focus the tile again.
     await tap(page, BUTTON.up);
     await page.getByTestId('bag-item').nth(4).focus();
-    await leave(page, 'right', 'tile');
+    // The compare pane has no stops: the way out sideways is the doll's.
+    await leave(page, 'left', 'tile');
     expect((await where(page)).foot).toBe(false);
-    await back(page, 'left', 'tile');
+    await back(page, 'right', 'tile');
     const bag = await leave(page, 'down', 'low');
     expect((await where(page)).foot).toBe(true);
     // Down from tile 4's column reaches a footer control under the bag (at both sizes), so up
@@ -409,7 +410,7 @@ test.describe('Delve pad navigation', () => {
     await expect(page.getByTestId('system-menu')).toHaveCount(0);
     await expect(page).toHaveURL(/\/delve$/);
 
-    // B at the root does nothing (on the bag: the compare pane's own B, Back to bag, would act).
+    // B at the root does nothing (on the bag: B is Undo only while a salvage can be taken back).
     await page.getByTestId('bag-item').first().focus();
     await tap(page, BUTTON.b);
     await page.waitForTimeout(200);

@@ -22,6 +22,8 @@ const ARENA_READY = 30_000;
 const BUTTON = {
   a: 0,
   b: 1,
+  x: 2,
+  y: 3,
   lb: 4,
   rb: 5,
   lt: 6,
@@ -403,7 +405,7 @@ test.describe('Delve with a controller', () => {
     await expect.poll(sockets).toEqual([{ id: 'quick', tier: 3 }]);
   });
 
-  test("G08: a bag weapon picked on the pad; RT reaches the compare pane's actions, A transfers and unequips, B goes back", async ({
+  test('G08: a bag weapon by the pad: A opens the take sheet, Transfer wears it with your moveset; X on the worn weapon unequips', async ({
     page,
   }) => {
     await setup(page, false, 1, false, (registry) => {
@@ -422,24 +424,29 @@ test.describe('Delve with a controller', () => {
     await tap(page, BUTTON.down);
     await padWalk(page, 'bag-item');
     await expect(sheet).toContainText('Selected · compared with your weapon');
-    // RT jumps to the pane's first action, the footer says B goes back.
-    await expect(page.locator('.k-prompt', { hasText: 'Actions' })).toBeVisible();
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('transfer-button')).toBeFocused();
-    await expect(page.locator('.k-prompt', { hasText: 'Back to bag' })).toBeVisible();
-    await tap(page, BUTTON.b);
-    await expect(page.getByTestId('bag-item')).toBeFocused();
-    await expect(page.getByTestId('system-menu')).toBeHidden();
-    // Again, and A moves the moveset onto the axe, which is worn now.
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('transfer-button')).toBeFocused();
+    // The verdict leads the pane, and the footer's A says what it does on this weapon.
+    await expect(page.getByTestId('item-verdict')).toBeVisible();
+    await expect(page.locator('.k-prompt', { hasText: 'Equip or transfer' })).toBeVisible();
+    await expect(page.locator('.k-prompt', { hasText: 'Actions' })).toHaveCount(0);
+    // The pane's buttons are the mouse's: right from the bag never lands on them.
+    await tap(page, BUTTON.right);
+    expect(
+      await page.evaluate(
+        () => !!document.activeElement?.closest('[data-testid="compare-actions"]'),
+      ),
+    ).toBe(false);
+    await padWalk(page, 'bag-item');
+    // A opens the take sheet; A on Transfer moves the moveset onto the axe, which is worn now.
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('take-sheet')).toBeVisible();
+    await page.getByTestId('take-transfer').focus();
     await tap(page, BUTTON.a);
     await expect.poll(async () => (await save()).equipped.weapon?.uid).toBe('bag-axe');
+    await expect(page.getByTestId('take-sheet')).toHaveCount(0);
+    // X on the worn weapon unequips it.
+    await page.getByTestId('slot-weapon').focus();
     await expect(sheet).toContainText('Equipped · your weapon');
-    // RT and A unequip it.
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('unequip-button')).toBeFocused();
-    await tap(page, BUTTON.a);
+    await tap(page, BUTTON.x);
     await expect.poll(async () => (await save()).equipped.weapon?.uid).toBeUndefined();
     expect((await save()).bag.map((i: GearItem) => i.uid)).toContain('bag-axe');
   });
