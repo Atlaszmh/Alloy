@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import { generateItem, SeededRNG } from '@alloy/engine';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
+import { addMaterial, emptyHaul, generateItem, SeededRNG } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import type { PadButton } from '@/features/gamepad/gamepad';
+import { attachPromptKeys, padPrompts, scopedLast } from '../../kit/prompts';
+import { SAMPLE_QUESTS } from '../../quests/__tests__/quest-fixture';
 import { getDelveRegistry } from '../../registry';
 import { PauseScreen, type PauseScreenProps } from '../PauseScreen';
 import type { HubLink } from '../types';
@@ -49,7 +52,38 @@ const press = (code: string) => {
   }
 };
 
+/**
+ * A pad button as the nav hears it (use-gamepad-nav.ts): the topmost scope's prompts first, else
+ * its default (B presses the scope's [data-pad-back], Menu its [data-pad-menu] or its back).
+ */
+const padPress = (button: PadButton) => {
+  const box = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
+  try {
+    act(() => {
+      const took = padPrompts(new Set([button]), {} as Record<PadButton, boolean>, 0);
+      if (took.has(button)) return;
+      if (button === 'b') scopedLast('[data-pad-back]')?.click();
+      if (button === 'menu')
+        (scopedLast('[data-pad-menu]') ?? scopedLast('[data-pad-back]'))?.click();
+    });
+  } finally {
+    box.mockRestore();
+  }
+};
+
+/** Open the read-only hub from the list. */
+const toHub = () => fireEvent.click(screen.getByTestId('pause-build'));
+
 describe('PauseScreen', () => {
+  // The Esc rule, as AppShell attaches it on every Delve route: the list binds no prompts of its own.
+  let release: () => void;
+  beforeEach(() => {
+    release = attachPromptKeys();
+  });
+  afterEach(() => release());
+
   beforeEach(() => {
     localStorage.clear();
     // The app makes the UI layer after the root; a layer left by an earlier test would sit before it.
@@ -60,7 +94,8 @@ describe('PauseScreen', () => {
 
   it('is a pad scope: Paused, the floor, the tabs with the Forge locked, and the gear note', () => {
     renderPause();
-    const pause = screen.getByTestId('pause-screen');
+    toHub();
+    const pause = screen.getByTestId('pause-hub');
     expect(pause).toHaveAttribute('data-pad-scope');
     const header = pause.querySelector('header')!;
     expect(header).toHaveTextContent('Paused');
@@ -78,26 +113,36 @@ describe('PauseScreen', () => {
 
   it('over the stop, the floor reads cleared, not its foes', () => {
     renderPause(undefined, true);
-    const header = screen.getByTestId('pause-screen').querySelector('header')!;
+    toHub();
+    const header = screen.getByTestId('pause-hub').querySelector('header')!;
     expect(header).toHaveTextContent(`${registry.getBiomeForDepth(1).name} · Depth 1 cleared`);
     expect(header).not.toHaveTextContent('foes left');
+    padPress('b');
+    expect(screen.queryByText(/foes left/)).toBeNull();
   });
 
-  it('the footer: Inspect, Tabs and Full compare (the grammar order), then Controls, Settings, Anvil, Abandon and Resume', () => {
+  it('the list: Resume (the first focus), Build and quests, Controls, Settings, then the Anvil and Abandon with their stakes', () => {
     const on = renderPause();
-    const footer = screen.getByTestId('pause-screen').querySelector('footer')!;
-    const text = footer.textContent!;
-    const order = [
-      'Inspect',
-      'Tabs',
-      'Full compare',
-      'Controls',
-      'Settings',
-      'Anvil · floor restarts',
-      'Abandon · counts as a death',
-      'Resume',
-    ].map((s) => text.indexOf(s));
-    expect(order.every((at, i) => at > (order[i - 1] ?? -1))).toBe(true);
+    const list = screen.getByTestId('pause-screen');
+    expect(list).toHaveAttribute('role', 'dialog');
+    expect(list).toHaveAttribute('data-pad-wrap');
+    expect(list.closest('[data-pad-scope]')).not.toBeNull();
+    expect(screen.queryByTestId('pause-hub')).toBeNull();
+    const rows = [...list.querySelectorAll<HTMLElement>('button[data-testid]')].map(
+      (b) => b.dataset.testid,
+    );
+    expect(rows).toEqual([
+      'pause-resume',
+      'pause-build',
+      'open-controls',
+      'open-settings',
+      'pause-anvil',
+      'pause-abandon',
+    ]);
+    const resume = screen.getByTestId('pause-resume');
+    expect(resume).toHaveFocus();
+    expect(resume).toHaveClass('k-btn-lg');
+    expect(resume).toHaveAttribute('data-primary-action', 'resume');
     const anvil = screen.getByRole('button', { name: /^Anvil · floor restarts/ });
     // Its subtitle: the floor replays, so what it picked up and hasn't banked is lost.
     expect(anvil).toHaveTextContent("This floor's unbanked haul is lost");
@@ -108,6 +153,19 @@ describe('PauseScreen', () => {
     expect(on.onResume).not.toHaveBeenCalled();
   });
 
+  it("the hub's footer: the tab's prompts and Tabs (the grammar order), then back to the list and Resume", () => {
+    renderPause();
+    toHub();
+    const text = screen.getByTestId('pause-hub').querySelector('footer')!.textContent!;
+    const order = ['Inspect', 'Tabs', 'Full compare', 'Pause menu', 'Resume'].map((s) =>
+      text.indexOf(s),
+    );
+    expect(order.every((at, i) => at > (order[i - 1] ?? -1))).toBe(true);
+    expect(screen.getByTestId('pause-back')).toHaveAttribute('data-pad-back');
+    expect(screen.getByTestId('pause-hub-resume')).toHaveAttribute('data-pad-menu');
+    expect(screen.queryByTestId('open-controls')).toBeNull();
+  });
+
   it('over the stop, the Anvil says the stop waits: nothing restarts', () => {
     const on = renderPause(undefined, true);
     expect(screen.queryByRole('button', { name: /^Anvil · floor restarts/ })).toBeNull();
@@ -116,18 +174,20 @@ describe('PauseScreen', () => {
     expect(on.onAnvil).toHaveBeenCalledTimes(1);
   });
 
-  it('Resume is hot metal on Esc / B / Menu and the first focus; Esc resumes', () => {
+  it("in the list B (its Back), the pad's Menu and Esc all resume", () => {
     const on = renderPause();
-    const resume = screen.getByTestId('pause-resume');
-    for (const marker of ['data-pad-back', 'data-pad-menu', 'data-pad-first'])
-      expect(resume).toHaveAttribute(marker);
-    expect(resume).toHaveClass('k-btn-lg');
-    press('Escape');
+    expect(screen.getByTestId('pause-screen').querySelector('[data-pad-menu]')).toBeNull();
+    padPress('b');
     expect(on.onResume).toHaveBeenCalledTimes(1);
+    padPress('menu');
+    expect(on.onResume).toHaveBeenCalledTimes(2);
+    press('Escape');
+    expect(on.onResume).toHaveBeenCalledTimes(3);
   });
 
   it('the digits skip the locked Forge', () => {
     renderPause();
+    toHub();
     press('Digit3');
     expect(selected()).toEqual(['tab-loadout']);
     press('Digit4');
@@ -156,6 +216,8 @@ describe('PauseScreen', () => {
     store().setProfile({ ...store().profile, bag: [helm] });
     store().markNew(['h1']);
     renderPause({ tab: 'loadout', uid: 'h1' });
+    expect(screen.getByTestId('pause-hub')).toBeInTheDocument();
+    expect(screen.queryByTestId('pause-screen')).toBeNull();
     expect(screen.getByTestId('item-sheet')).toHaveTextContent(
       'Selected · compared with your helm',
     );
@@ -184,13 +246,66 @@ describe('PauseScreen', () => {
     const onSkipStep = vi.fn();
     renderPause(undefined, true, { onSkipTutorial: vi.fn(), onSkipStep });
     expect(screen.getByTestId('pause-abandon')).toBeDisabled();
+    expect(screen.getByTestId('pause-abandon')).toHaveAccessibleDescription(
+      'Not while the guided start runs',
+    );
     fireEvent.click(screen.getByTestId('pause-skip-step'));
     expect(onSkipStep).toHaveBeenCalledTimes(1);
   });
 
   it('opens on Quests from the journal', () => {
     renderPause({ tab: 'quests' });
+    expect(screen.getByTestId('pause-hub')).toBeInTheDocument();
     expect(selected()).toEqual(['tab-quests']);
     expect(screen.getByTestId('quest-journal')).toBeInTheDocument();
+  });
+
+  it("in the hub B and Esc return to the list, its row focused, and the pad's Menu resumes", () => {
+    const on = renderPause();
+    toHub();
+    expect(screen.getByTestId('pause-hub')).toHaveAttribute('data-pad-scope');
+    expect(screen.queryByTestId('pause-screen')).toBeNull();
+    padPress('b');
+    expect(screen.getByTestId('pause-screen')).toBeInTheDocument();
+    expect(screen.getByTestId('pause-build')).toHaveFocus();
+    expect(on.onResume).not.toHaveBeenCalled();
+    toHub();
+    press('Escape');
+    expect(screen.getByTestId('pause-screen')).toBeInTheDocument();
+    expect(on.onResume).not.toHaveBeenCalled();
+    toHub();
+    padPress('menu');
+    expect(on.onResume).toHaveBeenCalledTimes(1);
+  });
+
+  it('a link (the journal, a find) opens the hub directly; B from there is the list', () => {
+    renderPause({ tab: 'quests' });
+    expect(selected()).toEqual(['tab-quests']);
+    padPress('b');
+    expect(screen.getByTestId('pause-screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('pause-hub')).toBeNull();
+  });
+
+  it('beside the list, the dive as it stands: depth, biome, rooms, banked, the death-loss line, the tracked objective', () => {
+    const dive = store().profile.dive!;
+    const banked = addMaterial({ ...emptyHaul(), scrap: 40 }, { kind: 'metal', metal: 'iron' }, 3);
+    store().setProfile({ ...store().profile, dive: { ...dive, banked, bounty: 12 } });
+    renderPause(undefined, false, { roomsExplored: 2, roomsTotal: 6 });
+    const state = screen.getByTestId('pause-state');
+    expect(state).toHaveTextContent(`Depth 1 · ${registry.getBiomeForDepth(1).name}`);
+    expect(state).toHaveTextContent('Rooms explored 2 / 6');
+    expect(state).not.toHaveTextContent('foes left');
+    expect(state).toHaveTextContent('Banked 40 scrap · 3 materials · +12 bounty on extract');
+    const loss = Math.round(registry.getDelveBalance().crafting.deathLoss * 100);
+    expect(state).toHaveTextContent(`Banked this dive · dying loses ${loss}% of it`);
+    const quest = SAMPLE_QUESTS.find((q) => q.tracked && q.status !== 'claimed')!;
+    expect(state).toHaveTextContent(
+      `${quest.name}: ${quest.objectives.find((o) => !o.done)!.text}`,
+    );
+  });
+
+  it('on the open room the state counts the foes left, not rooms', () => {
+    renderPause();
+    expect(screen.getByTestId('pause-state')).toHaveTextContent('12 foes left');
   });
 });
