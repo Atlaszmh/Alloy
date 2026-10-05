@@ -124,6 +124,20 @@ describe('DepartSheet', () => {
     expect(onTraining).toHaveBeenCalledTimes(2);
   });
 
+  it('Enter with nothing focused delves (a click on a chip leaves the focus nowhere), unless a dive is held', () => {
+    const { onDelve } = sheet();
+    (document.activeElement as HTMLElement).blur();
+    press('Enter');
+    expect(onDelve).toHaveBeenCalledTimes(1);
+    document.body.replaceChildren();
+
+    engine.why = WHY;
+    const held = sheet();
+    (document.activeElement as HTMLElement).blur();
+    press('Enter');
+    expect(held.onDelve).not.toHaveBeenCalled();
+  });
+
   it('a lesson holds Delve, saying why', () => {
     engine.why = WHY;
     sheet();

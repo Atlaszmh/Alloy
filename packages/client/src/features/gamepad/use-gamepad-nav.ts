@@ -253,6 +253,15 @@ function wrapFocus(el: HTMLElement, dir: NavDir, els: HTMLElement[]): HTMLElemen
   return end === el ? null : end;
 }
 
+const OPPOSITE: Record<NavDir, NavDir> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+/** The last move, if it crossed panes: where it left, where it landed, which way. */
+let lastCross: { from: HTMLElement; to: HTMLElement; dir: NavDir } | null = null;
+
+/**
+ * A D-pad press: left/right adjust a focused slider or list; else the focus moves to
+ * `nextFocus`'s pick, straight back across the panes it just crossed (`lastCross`), or round a
+ * `[data-pad-wrap]` list at its edge.
+ */
 export function moveFocus(dir: NavDir): void {
   const active = document.activeElement;
   if (
@@ -270,8 +279,21 @@ export function moveFocus(dir: NavDir): void {
   if (!(active instanceof HTMLElement) || !els.includes(active)) return focus(els[0]);
   // Its pane remembers it now: a focus given this frame (a click, code) hasn't met keepFocus yet.
   groupFocus.set(groupOf(active), active);
-  const next = nextFocus(active, dir) ?? wrapFocus(active, dir, els);
-  if (next) focus(next);
+  const picked = nextFocus(active, dir);
+  // Straight back: the press that reverses the last crossing returns to the control it left
+  // (the bag's tile, from a footer button that sits under another pane), unless a control
+  // inside this pane lies that way.
+  const back =
+    lastCross?.to === active &&
+    dir === OPPOSITE[lastCross.dir] &&
+    els.includes(lastCross.from) &&
+    (!picked || groupOf(picked) !== groupOf(active))
+      ? lastCross.from
+      : null;
+  const next = back ?? picked ?? wrapFocus(active, dir, els);
+  if (!next) return;
+  lastCross = groupOf(next) !== groupOf(active) ? { from: active, to: next, dir } : null;
+  focus(next);
 }
 
 const TAB_LISTS = {

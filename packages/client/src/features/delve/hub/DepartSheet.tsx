@@ -55,8 +55,20 @@ export function DepartSheet({
   const lesson = active ? null : tutorialBlocksDive(registry, profile);
   const held = blocked || !!lesson;
 
+  // The sheet's own keys (a dialog is its own scope): T, and Enter while nothing is focused (a
+  // click on a start depth leaves the focus nowhere). The pad's Menu is not Delve's: no
+  // `data-pad-menu` here.
   usePrompts(
-    [{ id: 'training', label: 'Training', binding: TRAINING_BINDING, onPress: onTraining }],
+    [
+      { id: 'training', label: 'Training', binding: TRAINING_BINDING, onPress: onTraining },
+      {
+        id: 'delve',
+        label: 'Delve',
+        binding: { key: ['Enter', 'NumpadEnter'] },
+        onPress: onDelve,
+        disabled: held,
+      },
+    ],
     body,
   );
 

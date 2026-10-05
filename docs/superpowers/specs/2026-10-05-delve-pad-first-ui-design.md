@@ -89,7 +89,7 @@ Kit and hub shell only: no tab's panes are rebuilt. Client only.
   2. **Tracked**: each tracked quest's name and its first objective still to do (read-only; none: nothing).
   3. **Waiting** (`claim-count`): "n to claim" as a button that closes the sheet and opens Quests, between dives when n > 0.
   4. **What holds the dive**: the unapplied-draft block (`draft-block`: its warning, Apply with the engine's reason, and "Discard changes & delve", absent under a lesson) and the lesson's reason (`lesson-block`), exactly as the footer has them today.
-  5. **Delve** (`delve-button`, the primary button, `data-tutorial="hub.delve"`, disabled by a draft or a lesson with the same `aria-describedby`; "Resume dive · depth N" while a dive is open, when nothing holds it and parts 1 and 3 are absent), **Training** (`training-button`, `data-tutorial="hub.training"`, drawing the T key) and the dialog's Back.
+  5. **Delve** (`delve-button`, the primary button, Enter's too while nothing in the sheet is focused, `data-tutorial="hub.delve"`, disabled by a draft or a lesson with the same `aria-describedby`; "Resume dive · depth N" while a dive is open, when nothing holds it and parts 1 and 3 are absent), **Training** (`training-button`, `data-tutorial="hub.training"`, drawing the T key) and the dialog's Back.
 - **The sheet's first focus** (the dialog's `data-pad-first`, for every device): Delve when it is enabled; else the draft's Apply when it can apply; else the dialog's Back.
 - Delve in the sheet does what the footer's did (`startDive(depth)` unless a dive is active, the sound, the route). Training closes nothing: it navigates.
 - T still opens the Training Grounds from the hub (the hub's `training` prompt keeps `KeyT`, without the pad's View), and from the sheet, which binds T itself (a dialog is its own scope, where the hub's prompts are inert).
@@ -112,6 +112,8 @@ The hub's planks hold the tab's prompts and Menu on the left and, on the right, 
 ### 2.4 Lists wrap at a true edge
 
 `moveFocus` wraps when `nextFocus` finds nothing: if the focused control sits in a `[data-pad-wrap]` container and the press is up or down, the focus goes to that container's lowest or topmost candidate. The kit's `Dialog` takes `wrap`, which sets the attribute on the dialog itself, its Back included: the system menu passes it, so its loop is Back, Resume, the entries (in dev builds the chips under them), and round again, both ways. `nextFocus` itself is unchanged, so the pad audit's rules hold. Phase 2's pause list uses the same attribute.
+
+**Straight back.** `moveFocus` also remembers the last move when it crossed panes (`lastCross`): the press that reverses it returns to the control it left, unless a control inside the pane entered lies that way. The footer's one button sits under the right-hand pane, so without this, down from the bag and up again would land in the compare pane. `nextFocus` is unchanged here too.
 
 ### 2.5 Prompt order
 

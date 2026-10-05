@@ -290,6 +290,42 @@ describe('groups: the focus stays in a pane while it can, and comes back to wher
     expect(document.activeElement).toBe(a1);
   });
 
+  it('straight back across panes returns to the control left, whatever pane lies over the one entered', () => {
+    // A bag (left) and a sheet (right) over a footer whose only button sits under the sheet.
+    const [bag, sheet] = [pane(0), pane(200)];
+    const [tile, equip] = [button(bag, 0, 0), button(sheet, 200, 0)];
+    const foot = at(document.body.appendChild(document.createElement('div')), 0, 300, 300, 40);
+    foot.setAttribute('data-pad-group', '');
+    const delve = at(foot.appendChild(document.createElement('button')), 250, 300, 50, 40);
+    tile.focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(delve);
+    // By the picks alone, up from Delve is the sheet over it.
+    expect(nextFocus(delve, 'up', { memory: false })).toBe(equip);
+    moveFocus('up');
+    expect(document.activeElement).toBe(tile);
+    // It is the crossing that is remembered, not the bag: from the sheet, the way back is the sheet.
+    equip.focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(delve);
+    moveFocus('up');
+    expect(document.activeElement).toBe(equip);
+  });
+
+  it('a neighbour inside the pane entered still takes the opposite press', () => {
+    const [a, b] = [pane(0), pane(200)];
+    const a1 = button(a, 80, 0);
+    const [c, d] = [button(b, 200, 0), button(b, 260, 0)];
+    // The right pane last held d, so a1's press enters it there, with c between.
+    d.focus();
+    keepFocus();
+    a1.focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(d);
+    moveFocus('left');
+    expect(document.activeElement).toBe(c);
+  });
+
   it('a control in no group is a group of one', () => {
     const lone = at(document.body.appendChild(document.createElement('button')), 400, 0);
     const { b2 } = scene();
