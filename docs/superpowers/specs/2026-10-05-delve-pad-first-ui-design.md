@@ -14,13 +14,13 @@ A scripted pad on the pad-nav spec's seeded mid-game save, at 1920×1080 (v0.64.
 
 | Screen | D-pad stops on screen | Target |
 |---|---|---|
-| Loadout (12 bag items) | 35 | about 21 |
+| Loadout (12 bag items) | 35 | 24 measured at v0.67.0 (about 21 asked): the 7 worn slots, the 12 tiles (one stop a bag item), the bag's sort, Equip best, Salvage junk, Auto-salvage and Delve |
 | Skills, a move selected | 25 | about 10 |
-| Forge, a pattern open | 26 | about 14 |
-| Temper | 25 | about 15 |
+| Forge, a pattern open | 26 | 14 measured at v0.67.0 (about 14 asked) |
+| Temper | 25 | 21 measured at v0.67.0 (about 15 asked): the gear rows (one stop a gear row; 19 on this save), the operations that can be done (the rest are disabled, never stops) and Delve |
 | Quests | 14 | 14 (no cross-pane trip to claim) |
 | The stop | 7 | 3 or 4 a step |
-| Pause | 32 | 7 |
+| Pause | 32 | 8 (Help joins the list in phase 3) |
 
 Text: at 1920×1080 the smallest text is 14 px and 69–92% of a hub tab's text is under 18 px; at 1280×800 (UI scale 0.75) it is 11–12 px. Settings has no text size.
 
@@ -62,7 +62,7 @@ One job a button, on every Delve screen outside the fight. Each phase brings its
 | B | Back, and nothing else | Close a sheet or a picker; take back a salvage (phase 3); else nothing at a screen's root |
 | LB / RB | The top tabs | As today |
 | LT / RT | The level under the tabs | A skill, a bench, a Codex section, the bag's filter |
-| Right stick | Scroll the detail pane | Never moves the focus |
+| Right stick | Scroll the detail pane | Never moves the focus; its press: the Loadout's full compare |
 | Menu | The system menu; the pause in a dive | Never starts a dive |
 | View | The plan | At the Anvil the Depart sheet; in a dive the journal and the build |
 
@@ -147,15 +147,19 @@ Each item's plan starts by reading its screen's code; what follows is the design
 
 ## 4. Phase 3: Loadout and Forge (v0.67.0)
 
-- **Loadout** (`hub/loadout/*`). The bag's filters step on LT/RT (a kit sub `Tabs`), off the D-pad. The compare pane always shows the focused item, a worn one too (its stats and moveset), with one verdict line first ("An upgrade as it comes", "Better only as a home for your moveset", "Worse"); under the pad, tiles show no focus tooltip. Its buttons stay for the mouse but leave the D-pad (the footer's A / X / Y act on the focused tile), which retires the RT "Actions" jump. The right stick scrolls the pane.
-- **Salvage with Undo.** X (and Del) salvages the focused item at once; the store keeps the profile from before for 5 seconds and the footer offers "Undo" on B (and Ctrl+Z) meanwhile: B is "back", it has no other job at the Loadout's root, and X stays free to salvage the next item. Any other change to the save ends the offer. The 2-second "press again" arming for precious items goes.
+- **Loadout** (`hub/loadout/*`). The bag's filters step on LT/RT (a kit sub `Tabs`), off the D-pad. The compare pane always shows the focused item, a worn one too (its stats and moveset; the worn weapon when nothing is focused), with one verdict line first ("An upgrade as it comes", "Better only as a home for your moveset", "Worse"); "Worse" reads "About the same as what you wear" when the change is within the upgrade threshold (`UPGRADE_EPSILON`): an equal item is not worse. Under the pad, tiles show no focus tooltip. Its buttons stay for the mouse but leave the D-pad (the footer's A / X / Y act on the focused tile), which retires the RT "Actions" jump. The right stick scrolls the pane. Full compare (a weapon's moveset and every stat line of a bag item) toggles on a press of the right stick (R3), or Shift on the keys; it is a toggle, never a hold.
+- **Transfer by the pad.** A on a bag weapon that can take your moveset opens a take sheet (Equip as it is, or Transfer my moveset here, each with its Power and the transfer's price; the better one focused): a priced action gets a sheet (rule 1). Every other bag item equips on A.
+- **A worn item.** On a worn tile, X unequips (it goes to the bag; a locked item too, since nothing is lost) and A selects.
+- **The doll's shortcuts** (the attunement strip and "Skills ›") leave the D-pad: LB/RB reach the Skills tab.
+- **Salvage with Undo.** X (and Del) salvages the focused item at once; Salvage's label names what becomes of a weapon's runes. The store keeps the save from before for 5 seconds (the whole of it, the NEW marks too) and the footer offers "Undo" on B (and Ctrl+Z) meanwhile: B is "back", it has no other job at the Loadout's root, and X stays free to salvage the next item. Any other change to the save ends the offer. The 2-second "press again" arming for precious items goes. Salvage junk's sheet salvages through the same store op, so its Undo is offered the same way.
 - **Salvage junk** opens a review sheet: each candidate with what it gives, A keeps one back, Y salvages the rest, with the total. The engine's fences are unchanged.
-- **How to delve** leaves the Loadout's default pane: a Help entry in the system menu and the pause, and a Codex section, one topic a page.
-- **Forge** (`hub/forge/*`). The bench is rows, not chip fields: Metal, Flux and Element are steppers over what the save holds (what it lacks is one line saying where it drops), Lines open the shard picker. The preview pane (no stops) adds the item's Power against what is worn, as a range from `previewForge`'s bands (an engine helper if the client can't compose it). **Materials** becomes a third sub tab: bars, flux, shards and essences as rows with Refine on the row, then the shard bench, the rune pouch and Fuse.
-- **Temper**: the six operations as one list, each row its price and, when it can't be done, the reason.
+- **How to delve** leaves the Loadout's default pane: a Help entry in the system menu and the pause, and a Codex section, one topic a page (six topics). A save that answers Jump in sees Help open as a dialog once its mana is chosen (Hesta takes its place on a guided save).
+- **Forge** (`hub/forge/*`). The bench is rows, not chip fields: Metal, Flux and Element are steppers (a kit `Stepper`, stepped by the D-pad's left/right) over what the save holds (what it lacks is one line saying where it drops), Lines open the shard picker. The preview pane (no stops) adds the item's Power against what is worn, as a range from `previewForge`'s bands (an engine helper, `forgePowerRange`). Random lines are left out of both ends of the range ("before 1 random line"): what they roll is not known until the forge. **Materials** becomes a third sub tab: bars, flux, shards and essences as rows with Refine on the row, then the shard bench, the rune pouch and Fuse.
+- **The benches' columns.** The Forge and Temper benches are list, actions, preview (the preview has no stops); Materials is its own bench (bars, flux, shards and essences with Refine on the row; the shard bench, an affix stepper and Buy; the rune pouch with Fuse).
+- **Temper**: the six operations as one list, each row its price and, when it can't be done, the reason, beside the item's detail. The gear list's kind chips leave the D-pad (mouse only).
 - **Each tab restores its selection** when you come back to it (the pattern, the gear row, the bag tile), held by the hub.
 - The guided start's targets and trails for these controls move with them (`forge.bar`, `forge.flux`, `forge.refine`, `loadout.*`, `temper.*`); TU01 follows.
-- **Close:** the audit's allowances drop to the new counts; version 0.67.0.
+- **Close:** the audit's allowances drop to the new counts; version 0.67.0. Measured on the audit's save (12 bag items) at both sizes: Loadout 24 stops, Forge 10 (14 with a pattern open), Temper 21, Materials 5, the junk sheet 10, Help 1, the pause list 8; the press budgets (PN07): equip an upgrade 0 D-pad presses, salvage an item 1, forge an item 3.
 
 ## 5. Phase 4: Skills (v0.68.0)
 
