@@ -259,6 +259,7 @@ test.describe('Delve guided start', () => {
     await page.getByTestId('mana-realign').click();
     await marked('mana.bind');
     await page.getByTestId('mana-bind-frost').click();
+    await marked('mana.confirm');
 
     // The pad takes over on the confirm: A binds, and the step moves on with the view still up.
     await page.getByTestId('mana-bind-confirm').focus();

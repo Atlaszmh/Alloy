@@ -59,6 +59,22 @@ describe('the Mana view (the Anvil, Skills tab)', () => {
     expect(screen.getAllByTestId(/^attune-/)).toHaveLength(2); // the pair's bars only
   });
 
+  it("the lesson's bind: the choices are done while one awaits its confirm, and the confirm is its own target", () => {
+    store().setProfile({ ...store().profile, tutorial: { step: 'l1-bind', count: 0, misses: 0 } });
+    renderMana();
+    const bind = screen.getByTestId('bind-section');
+    expect(bind).toHaveAttribute('data-tutorial', 'mana.bind');
+    expect(bind).toHaveAttribute('data-tutorial-done', 'false');
+    fireEvent.click(screen.getByTestId('mana-bind-frost'));
+    expect(bind).toHaveAttribute('data-tutorial-done', 'true');
+    expect(screen.getByTestId('mana-bind-confirm')).toHaveAttribute(
+      'data-tutorial',
+      'mana.confirm',
+    );
+    fireEvent.click(screen.getByTestId('mana-bind-cancel'));
+    expect(bind).toHaveAttribute('data-tutorial-done', 'false');
+  });
+
   it("offers every element while Hesta's lesson asks for the bind, gear of it or not", () => {
     store().setProfile({ ...store().profile, tutorial: { step: 'l1-bind', count: 0, misses: 0 } });
     renderMana();

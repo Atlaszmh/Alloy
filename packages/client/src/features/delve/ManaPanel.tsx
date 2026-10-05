@@ -144,7 +144,12 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
         </div>
       )}
       {!secondary && (
-        <div className="flex flex-col gap-2" data-testid="bind-section" data-tutorial="mana.bind">
+        <div
+          className="flex flex-col gap-2"
+          data-testid="bind-section"
+          data-tutorial="mana.bind"
+          data-tutorial-done={binding !== null}
+        >
           <div className="text-[14px] text-[var(--k-text-3)]">
             Bind a second element: your moves and blows can use it, and your chains keep the ones
             they have (add the element in the chain builder). Power now{' '}
@@ -179,6 +184,7 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
                 variant="primary"
                 size="sm"
                 onClick={() => onBind(binding)}
+                data-tutorial="mana.confirm"
                 testId="mana-bind-confirm"
               >
                 Bind
