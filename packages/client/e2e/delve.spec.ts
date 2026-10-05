@@ -372,6 +372,7 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('forge-refused')).toHaveCount(0);
     await page.getByTestId('forge-button').click();
     await expect(page.getByTestId('forge-bench').getByRole('status')).toContainText('Forged');
+    await page.getByTestId('bench-materials').click();
     await expect(page.getByTestId('material-metal-rusty')).toContainText('Rusty bar ×4');
     await page.getByTestId('tab-loadout').click();
     await expect(page.getByTestId('tab-loadout')).toContainText('NEW 1');

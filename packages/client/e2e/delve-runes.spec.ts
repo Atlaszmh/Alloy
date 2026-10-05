@@ -182,6 +182,7 @@ test.describe('Delve runes', () => {
     await seed(page, heroWith(registry, [], { scrap: 20, runes: { split: [3, 0, 0, 0, 0] } }));
     await page.goto('/delve');
     await page.getByTestId('tab-forge').click();
+    await page.getByTestId('bench-materials').click();
     const pouch = page.getByTestId('rune-pouch');
     await expect(pouch).toBeVisible();
     await pouch.getByTestId('rune-fuse-split-1').click();
@@ -237,6 +238,7 @@ test.describe('Delve runes', () => {
 
     // The pouch: a rune's raw price, with no move to ease it.
     await page.getByTestId('tab-forge').click();
+    await page.getByTestId('bench-materials').click();
     await expect(page.getByTestId('pouch-quick-3')).toContainText(
       runeText(registry, QUICK_III).cost!,
     );

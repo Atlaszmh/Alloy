@@ -33,9 +33,10 @@ const ALLOW: Record<string, [number, number]> = {
   loadout: [11, 7],
   'loadout-item': [11, 7],
   skills: [2, 4],
-  forge: [14, 14],
-  'forge-pattern': [20, 20],
-  temper: [18, 18],
+  forge: [0, 0],
+  'forge-pattern': [6, 6],
+  temper: [0, 0],
+  materials: [0, 0],
   codex: [0, 0],
   quests: [0, 0],
   depart: [0, 0],
@@ -52,6 +53,8 @@ const ALLOW: Record<string, [number, number]> = {
  * doors and Extract (the seeded hero's life is full: no potion).
  */
 const CEILING: Record<string, number> = {
+  // The audit's save: the shard bench's stepper and Buy, its Refines, and Delve.
+  materials: 5,
   'stop-powerup': 4,
   'stop-road': 5,
   'pause-list': 8,
@@ -304,6 +307,8 @@ test.describe('Delve pad navigation', () => {
     await check(page, 'forge-pattern');
     await page.getByRole('tab', { name: /Temper/ }).click();
     await check(page, 'temper');
+    await click(page, 'bench-materials');
+    await check(page, 'materials');
     await click(page, 'tab-codex');
     await check(page, 'codex');
     await click(page, 'tab-quests');
@@ -359,7 +364,7 @@ test.describe('Delve pad navigation', () => {
     await back(page, 'left', 'row');
   });
 
-  test('PN04: Forge and Temper: pattern, bench, materials and back; LT/RT lands in the bench', async ({ page }) => {
+  test('PN04: Forge and Temper: pattern, bench and back; LT/RT lands in the bench', async ({ page }) => {
     await seed(page);
     await page.goto('/delve');
     await click(page, 'tab-forge');
@@ -367,9 +372,8 @@ test.describe('Delve pad navigation', () => {
     await page.getByTestId('pattern-cuirass').focus();
     await tap(page, BUTTON.up); // the pad takes the input lock (and moves within the list)
     await page.getByTestId('pattern-cuirass').focus();
+    // Materials is a bench of its own now: the Forge bench's right is its (empty) preview column.
     await leave(page, 'right', 'pattern');
-    await leave(page, 'right', 'bench');
-    await back(page, 'left', 'bench');
     await back(page, 'left', 'pattern');
     // RT steps to Temper: the pattern list goes, and the focus lands on a control of the bench.
     await tap(page, BUTTON.rt);

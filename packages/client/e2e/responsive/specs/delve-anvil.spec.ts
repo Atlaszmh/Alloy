@@ -37,8 +37,8 @@ for (const vp of PC_VIEWPORTS) {
     });
   }
 
-  // The Forge tab's three panes with the most in them: a forge's preview, and the Temper bench.
-  for (const bench of ['forge-preview', 'temper'] as const) {
+  // The Forge tab's benches with the most in them: a forge's preview, Temper and Materials.
+  for (const bench of ['forge-preview', 'temper', 'materials'] as const) {
     test(`Delve Anvil ${bench} @ ${vp.name} (${vp.width}×${vp.height})`, async ({
       page,
       runProbes,
@@ -50,6 +50,9 @@ for (const vp of PC_VIEWPORTS) {
       if (bench === 'temper') {
         await page.getByTestId('bench-temper').click();
         await expect(page.getByTestId('temper')).toBeVisible();
+      } else if (bench === 'materials') {
+        await page.getByTestId('bench-materials').click();
+        await expect(page.getByTestId('materials-pane')).toBeVisible();
       } else {
         await page.getByTestId('pattern-cuirass').click();
         await page.getByTestId('flux-uncommon').click();

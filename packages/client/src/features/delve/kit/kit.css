@@ -630,9 +630,10 @@ html[data-input='gamepad'] .delve-ui :focus {
 }
 
 .k-stepper > button {
+  /* 32 design px: 24 px, a target's least, at the smallest UI scale (0.75). */
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   color: #fee761;
   background: #262b44;
   border: 0;

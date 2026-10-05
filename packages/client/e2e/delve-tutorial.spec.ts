@@ -274,6 +274,10 @@ test.describe('Delve guided start', () => {
     // metal) passes the refine at once.
     if ((await step(page)) === 'l1-refine') {
       await page.getByTestId('tab-forge').click();
+      // The Materials bench is the way to the refine: its sub tab is marked first.
+      await marked('forge.materials');
+      await page.getByTestId('bench-materials').click();
+      await marked('forge.refine:rusty');
       await page.getByTestId('refine-metal-rusty').click();
     }
     await expect.poll(() => step(page)).toBe('l1-claim2');
