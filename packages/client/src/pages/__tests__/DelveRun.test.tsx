@@ -369,6 +369,7 @@ describe('DelveRun', () => {
     renderRun();
     const hud = () => screen.getByTestId('purse-bar').closest('.delve-hud-zoom')!;
     expect(hud()).not.toHaveAttribute('inert');
+    expect(hud()).not.toHaveStyle({ visibility: 'hidden' });
     fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
     expect(hud()).toHaveAttribute('inert');
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
@@ -390,6 +391,8 @@ describe('DelveRun', () => {
     );
     const stop = screen.getByTestId('door-choice').parentElement!;
     expect(hud()).toHaveAttribute('inert');
+    // The stop has its own counts, finds and Menu: the HUD is laid out under it, not drawn.
+    expect(hud()).toHaveStyle({ visibility: 'hidden' });
     expect(stop).not.toHaveAttribute('inert');
     fireEvent.click(within(stop).getByRole('button', { name: 'Menu' }));
     expect(stop).toHaveAttribute('inert');

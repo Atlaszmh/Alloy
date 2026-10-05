@@ -1,6 +1,13 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react';
-import { baseDisplayName, isBossDepth, type DiveState, type Haul } from '@alloy/engine';
+import {
+  baseDisplayName,
+  isBossDepth,
+  type DiveState,
+  type Haul,
+  type TutorialEvent,
+} from '@alloy/engine';
 import { useControlsStore } from '@/stores/controlsStore';
+import { useDelveStore } from '@/stores/delveStore';
 import { Button, Footer, Glyph, Panel, Screen, usePrompts, type Prompt } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { ItemIcon } from '../ItemIcon';
@@ -11,7 +18,13 @@ import { FAMILY_STYLE, runeName } from '../runes/rune-style';
 import { MARK, useFloorFinds } from '../arena/hud/FoundLog';
 import { haulRows, materialCount, type HaulRow } from '../materials/material-style';
 import { StopPanel } from '../StopPanel';
+import { TutorialPanel } from '../tutorial/TutorialPanel';
+import { SHOWN_AT } from '../tutorial/tutorial-view';
 import { DoorPane } from './DoorPane';
+
+/** A stop step's "Skip this step" (a stop has no beats): to the save. */
+const sendTutorial = (event: TutorialEvent): void =>
+  useDelveStore.getState().tutorialEvents([event]);
 
 /** How long after it mounts the stop ignores presses: one carried from the fight never skips or takes a door. */
 export const ARM_MS = 450;
@@ -66,6 +79,7 @@ export interface StopScreenProps {
  * each expanding in place to its picker; the doors on the right. At its top level there is no
  * back: Esc (or the menu key) and the pad's Menu are its Menu prompt, which opens the pause over
  * it. Its Menu is no `[data-pad-menu]`, so Enter with nothing focused never opens the pause.
+ * On a guided stop Hesta's strip sits in the header row, between the title and the counts.
  */
 export const StopScreen = memo(function StopScreen({
   dive,
@@ -94,6 +108,7 @@ export const StopScreen = memo(function StopScreen({
   const offering = !!stop && !stop.taken && !skipped;
   const runeCount = runes.reduce((n, r) => n + r.count, 0);
   const menuKey = useControlsStore((s) => s.config.keys.menu);
+  const tutorial = useDelveStore((s) => s.profile.tutorial);
 
   const prompts: Prompt[] = [
     { id: 'take', label: 'Take', binding: { mouse: 'click', pad: 'a' } },
@@ -151,8 +166,8 @@ export const StopScreen = memo(function StopScreen({
       }
     >
       <div ref={mainRef} className="box-border flex h-full flex-col gap-8 px-[72px]" inert={!armed}>
-        <div className="flex items-end justify-between">
-          <div className="flex flex-col gap-[6px]">
+        <div className="flex items-end justify-between gap-6">
+          <div className="flex flex-none flex-col gap-[6px]">
             <span className="k-label" style={{ color: 'var(--k-mana)' }}>
               {biome.name}
             </span>
@@ -163,7 +178,19 @@ export const StopScreen = memo(function StopScreen({
               </span>
             )}
           </div>
-          <div className="flex gap-9 text-[16px] text-[var(--k-text-3)]" data-testid="floor-counts">
+          {/* Hesta's strip: a stop's steps only (it gives way when the row is short). */}
+          {tutorial && (
+            <TutorialPanel
+              state={tutorial}
+              where={SHOWN_AT.stop}
+              place="stop"
+              onEvent={sendTutorial}
+            />
+          )}
+          <div
+            className="flex flex-none gap-9 text-[16px] text-[var(--k-text-3)]"
+            data-testid="floor-counts"
+          >
             <span>
               <b className="k-disp text-[30px] text-[var(--k-hot-hi)]">
                 {formatNumber(dive.bounty)}

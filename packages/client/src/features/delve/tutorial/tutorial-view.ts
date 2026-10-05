@@ -14,9 +14,15 @@ import { getDelveRegistry } from '../registry';
  * this only looks a step up and passes the Training Grounds' casts on.
  */
 
-/** Where each screen shows Hesta's panel: the dive its floors and stops, the Anvil its lessons and the Training step, the Training Grounds theirs. */
+/**
+ * Where each screen shows Hesta's strip: the dive its floors and stops (its HUD's strip the
+ * floors', the stop's own strip the stops'), the Anvil its lessons and the Training step, the
+ * Training Grounds theirs.
+ */
 export const SHOWN_AT = {
   dive: ['floor', 'stop'],
+  floor: ['floor'],
+  stop: ['stop'],
   anvil: ['anvil', 'training'],
   training: ['training'],
 } as const satisfies Record<string, readonly TutorialWhere[]>;

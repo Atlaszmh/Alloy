@@ -392,4 +392,48 @@ describe("StopScreen (a guided start's stops)", () => {
     at('d1-3');
     expect(screen.getByTestId('extract-button')).toBeInTheDocument();
   });
+
+  it("a guided stop shows Hesta's strip in the header row, between the title and the counts", () => {
+    vi.spyOn(registry, 'getTutorialData').mockReturnValue({
+      ...registry.getTutorialData(),
+      steps: [
+        {
+          id: 'take',
+          where: 'stop',
+          floor: 'd1-1',
+          line: 'Hesta speaks.',
+          objective: 'Take Equip',
+          trigger: { type: 'takeStop', count: 1 },
+          stop: { kinds: ['equip'], doors: ['winding'], extract: false },
+        },
+        {
+          id: 'walk',
+          where: 'floor',
+          floor: 'd1-1',
+          line: 'On the floor.',
+          objective: 'Walk',
+          trigger: { type: 'ack', count: 1 },
+        },
+      ],
+    });
+    const on = (step: string) =>
+      act(() =>
+        store().setProfile({ ...store().profile, tutorial: { step, count: 0, misses: 0 } }),
+      );
+    atStop(['equip']);
+    expect(screen.queryByTestId('tutorial-panel')).toBeNull();
+    on('take');
+    const strip = screen.getByTestId('tutorial-panel');
+    expect(strip).toHaveAttribute('data-place', 'stop');
+    expect(screen.getByTestId('tutorial-objective')).toHaveTextContent('Take Equip');
+    expect(screen.getByTestId('tutorial-line')).toHaveTextContent('Hesta speaks.');
+    const title = screen.getByRole('heading', { level: 1 });
+    const counts = screen.getByTestId('floor-counts');
+    expect(strip.parentElement).toBe(counts.parentElement);
+    expect(title.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(strip.compareDocumentPosition(counts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // A floor's step is the HUD's strip's, never the stop's.
+    on('walk');
+    expect(screen.queryByTestId('tutorial-panel')).toBeNull();
+  });
 });

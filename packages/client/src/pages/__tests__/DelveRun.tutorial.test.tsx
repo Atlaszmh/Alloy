@@ -4,12 +4,14 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import {
   applyTutorialEvents,
   createDelveProfile,
+  questStates,
   settleDive,
   startDive,
   tutorialSkippable,
   tutorialText,
   type ArpgWorld,
   type DelveProfile,
+  type QuestState,
   type TutorialEvent,
 } from '@alloy/engine';
 import { createArenaInput } from '@/features/delve/arena/input';
@@ -37,6 +39,8 @@ vi.mock('@alloy/engine', async (orig) => ({
   ...(await orig<typeof import('@alloy/engine')>()),
   tutorialText: vi.fn(),
   tutorialSkippable: vi.fn(),
+  // The engine's quests are B1's: one tracked quest, for the HUD's tracker.
+  questStates: vi.fn(),
   applyTutorialEvents: vi.fn((_r: unknown, p: DelveProfile) => p),
   retryTutorialDepth: vi.fn((_r: unknown, p: DelveProfile) => p),
   skipTutorial: vi.fn((p: DelveProfile) => ({ ...p, tutorial: null })),
@@ -97,6 +101,29 @@ vi.mock('@/features/delve/hub/PauseScreen', () => ({
 }));
 
 const registry = getDelveRegistry();
+/** `questStates` as the HUD's tracker reads it: the first quest, tracked. */
+const tracked = (): QuestState[] => {
+  const first = registry.getQuestsData().quests[0];
+  return [
+    {
+      id: first.id,
+      kind: first.kind,
+      status: 'active',
+      isNew: false,
+      tracked: true,
+      name: first.name,
+      line: first.line,
+      objectives: first.objectives.map((o) => ({
+        id: o.id,
+        text: o.text,
+        count: o.count,
+        value: 0,
+        done: false,
+      })),
+      rewards: [],
+    },
+  ];
+};
 const renderRun = () =>
   render(
     <MemoryRouter initialEntries={['/delve/run']}>
@@ -134,6 +161,7 @@ describe('DelveRun: the guided start', () => {
     withSteps();
     vi.mocked(tutorialText).mockImplementation(fakeText);
     vi.mocked(tutorialSkippable).mockReturnValue(false);
+    vi.mocked(questStates).mockImplementation(tracked);
     vi.mocked(applyTutorialEvents).mockClear();
     vi.mocked(settleDive).mockClear();
     for (const list of [seen.pause, seen.paused, seen.live, seen.calls]) list.length = 0;
@@ -141,11 +169,12 @@ describe('DelveRun: the guided start', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("shows the floor's own step above the dock, ahead of the save's", () => {
+  it("shows the floor's own step under the top bar, ahead of the save's, in place of the tracked quests", () => {
     guided('walk', 'cast');
     renderRun();
     const panel = screen.getByTestId('tutorial-panel');
-    expect(panel.closest('[data-hud="dock"]')).not.toBeNull();
+    expect(panel.closest('[data-hud="centre"]')).not.toBeNull();
+    expect(panel).toHaveAttribute('data-place', 'hud');
     expect(panel).toHaveTextContent('Cast your Primary.');
     expect(tutorialText).toHaveBeenCalledWith(
       expect.anything(),
@@ -154,6 +183,14 @@ describe('DelveRun: the guided start', () => {
       seen.world,
     );
     expect(seen.paused.at(-1)).toBe(false);
+    // One goal on screen: the tracker gives way, and is back when no step shows.
+    expect(screen.queryByTestId('quest-tracker')).toBeNull();
+    act(() => {
+      seen.world = null;
+      useDelveStore.setState({ profile: { ...useDelveStore.getState().profile } });
+    });
+    expect(screen.queryByTestId('tutorial-panel')).toBeNull();
+    expect(screen.getByTestId('quest-tracker')).toBeInTheDocument();
   });
 
   it('a reading beat holds the fight, no pause screen, until Continue goes to the floor', () => {
@@ -172,14 +209,19 @@ describe('DelveRun: the guided start', () => {
     expect(screen.getByTestId('tutorial-panel')).toHaveAttribute('data-step', 'cast');
   });
 
-  it("at a stop the save's step shows over the stop, and its events go to the save", () => {
+  it("at a stop the save's step shows in the stop's own strip, the only one, and its events go to the save", () => {
     guided('equip', null);
     renderRun();
     toStop();
     const panel = screen.getByTestId('tutorial-panel');
+    expect(panel).toHaveAttribute('data-place', 'stop');
     expect(panel).toHaveTextContent('Better weapons carry more skills.');
     // Inside the stop's own pad scope, so the pad reaches it.
     expect(panel.closest('[data-pad-scope]')).toBe(screen.getByTestId('door-choice'));
+    // The dive's HUD is not drawn under the stop.
+    expect(screen.getByTestId('purse-bar').closest('.delve-hud-zoom')).toHaveStyle({
+      visibility: 'hidden',
+    });
     vi.mocked(tutorialSkippable).mockReturnValue(true);
     act(() => useDelveStore.setState({ profile: { ...useDelveStore.getState().profile } }));
     fireEvent.click(screen.getByTestId('tutorial-skip-step'));

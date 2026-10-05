@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import {
   chooseDoor,
@@ -205,13 +204,8 @@ export function DelveRun() {
     setArenaLive(!paused);
     return () => setArenaLive(false);
   }, [paused]);
-  /** The stop's own pad scope (its screen), which Hesta's panel joins so the pad reaches it. */
-  const stopRef = useRef<HTMLDivElement>(null);
-  const [stopScope, setStopScope] = useState<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    const screen = stopRef.current?.querySelector<HTMLElement>('[data-pad-scope]');
-    setStopScope(choosing && !finished ? (screen ?? null) : null);
-  }, [choosing, finished]);
+  // Hesta's strip in the HUD: a floor's steps only (the stop shows its own), never under the retry screen.
+  const guidedFloor = !fallen && !!stepIn(registry, tutorial, SHOWN_AT.floor);
   const manualAttack = useDelveStore((s) => s.manualAttack);
   const arena = useArena(hostRef, { paused, insets, onUi, manualAttack });
   arenaRef.current = arena;
@@ -361,13 +355,15 @@ export function DelveRun() {
       <HudGrid
         onInsets={setInsets}
         inert={!!pause || choosing || asking || fallen}
+        hidden={choosing && !finished}
         top={<PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />}
         right={
           <FloorColumn
             dive={dive}
             biome={biome}
             hud={arena.hud}
-            quests={quests}
+            // One goal on screen: the tracked quests give way to a guided step.
+            quests={guidedFloor ? [] : quests}
             onInspect={openItem}
             onJournal={openJournal}
           />
@@ -375,38 +371,38 @@ export function DelveRun() {
         dock={
           !choosing &&
           !finished && (
-            <>
-              {/* Hesta's panel, above the dock (see the tutorial spec). */}
-              {tutorial && !fallen && (
-                <div className="mb-4">
-                  <TutorialPanel
-                    state={tutorial}
-                    where={SHOWN_AT.dive}
-                    world={world}
-                    place="hud"
-                    onEvent={onTutorial}
-                  />
-                </div>
-              )}
-              <SkillDock
-                hud={arena.hud}
-                world={arena.worldRef}
-                onCast={arena.cast}
-                onDodge={arena.dodge}
-                onPotion={arena.potion}
-                onAttack={tapAttack}
-                manualAttack={manualAttack}
-              />
-            </>
+            <SkillDock
+              hud={arena.hud}
+              world={arena.worldRef}
+              onCast={arena.cast}
+              onDodge={arena.dodge}
+              onPotion={arena.potion}
+              onAttack={tapAttack}
+              manualAttack={manualAttack}
+            />
           )
         }
-        centre={<BossBar hud={arena.hud} />}
+        centre={
+          <>
+            {/* Hesta's strip, under the top bar and over the boss's bar. */}
+            {tutorial && guidedFloor && (
+              <TutorialPanel
+                state={tutorial}
+                where={SHOWN_AT.floor}
+                world={world}
+                place="hud"
+                onEvent={onTutorial}
+              />
+            )}
+            <BossBar hud={arena.hud} />
+          </>
+        }
       />
 
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
       {choosing && !finished && (
-        <div ref={stopRef} className="absolute inset-0 z-40" inert={!!pause}>
+        <div className="absolute inset-0 z-40" inert={!!pause}>
           <StopScreen
             dive={dive}
             haul={floorHaul}
@@ -416,20 +412,6 @@ export function DelveRun() {
             onMenu={openMenu}
             onInspect={openItem}
           />
-          {/* Hesta's panel, in the stop's screen: top centre, between its title and its counts. */}
-          {tutorial &&
-            stopScope &&
-            createPortal(
-              <div className="absolute left-1/2 top-2 z-10 w-[560px] -translate-x-1/2">
-                <TutorialPanel
-                  state={tutorial}
-                  where={SHOWN_AT.dive}
-                  place="stop"
-                  onEvent={onTutorial}
-                />
-              </div>,
-              stopScope,
-            )}
         </div>
       )}
 
