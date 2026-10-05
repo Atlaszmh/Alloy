@@ -199,6 +199,7 @@ export function PromptBar({
             tabIndex={-1}
             data-pad-skip
             data-pad-back={p.padBack ? '' : undefined}
+            data-tutorial={p.tutorial}
             disabled={p.disabled}
             onClick={p.onPress}
             onPointerUp={blurAfterMouse}
@@ -207,7 +208,12 @@ export function PromptBar({
             {p.label}
           </button>
         ) : (
-          <span key={p.id} className="k-prompt" aria-disabled={p.disabled || undefined}>
+          <span
+            key={p.id}
+            className="k-prompt"
+            aria-disabled={p.disabled || undefined}
+            data-tutorial={p.tutorial}
+          >
             <InputGlyph binding={p.binding} size="sm" />
             {p.label}
           </span>

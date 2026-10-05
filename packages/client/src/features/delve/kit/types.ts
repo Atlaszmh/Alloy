@@ -37,6 +37,8 @@ export interface Prompt {
   /** Drawn as a real (non-navigable, data-pad-skip) button that the mouse can click, e.g. the hub's "Menu" (data-pad-back). */
   asButton?: boolean;
   padBack?: boolean;
+  /** The guided-start target the prompt bar puts on this prompt's item (`data-tutorial`): under the pad, the button to press. */
+  tutorial?: string;
 }
 
 export type GlyphId =

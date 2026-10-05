@@ -13,19 +13,20 @@ import { EquippedPane } from './EquippedPane';
 import { BagPane } from './BagPane';
 import { ComparePane, type LoadoutActions } from './ComparePane';
 import { needsBind } from './BindChoice';
+import { TakeSheet, canTake } from './TakeSheet';
 
 /** A precious item's second Salvage press must come within this. */
 const ARMED_MS = 2000;
 
 /**
- * The Anvil's Loadout tab: the equipped pane, the bag and the compare pane, in the spec's
- * 430 / flexible / 470 px columns. The compare pane shows the last hovered bag item (until a
- * selection), else the selected one
- * (a click, or the pad's focus), else the worn weapon (the how-to, on a first save). The tab's
- * prompts: Select, Equip, Full compare (hold Shift / LT), Salvage (Del / X) and Lock (L / Y),
- * which act on the hovered or selected item; under the pad, RT jumps to the compare pane's first
- * action and B from there goes back. In `mode: 'pause'` the item actions give way to notes. Its
- * tile and filter live in the hub's memory.
+ * The Anvil's Loadout tab: the equipped pane, the bag and the compare pane (430 / flexible / 470
+ * px). The compare pane shows the last hovered bag item (keys and mouse), else the selected or
+ * focused one (a worn one too), else the worn weapon (the how-to, on a first save). The footer's
+ * prompts act on that item: A equips (under the pad, A on a bag weapon that can take your moveset
+ * opens the take sheet; on a worn tile A only selects), X salvages a bag item and unequips a worn
+ * one, Y locks, R3 or Shift toggles Full compare. Under the pad A and X carry the guided start's
+ * targets (`Prompt.tutorial`). In `mode: 'pause'` the item actions give way to notes. Its tile and
+ * filter live in the hub's memory.
  */
 export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
@@ -39,10 +40,8 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
   const [full, setFull] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
   const [asked, setAsked] = useState<string | null>(null);
-  // The pad's focus is in the compare pane (RT took it there; B brings it back to `from`).
-  const [inPane, setInPane] = useState(false);
-  const pane = useRef<HTMLDivElement>(null);
-  const from = useRef<HTMLElement | null>(null);
+  const [taking, setTaking] = useState<string | null>(null);
+  const declined = useDelveStore((s) => s.bindDeclined);
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const locked = mode === 'pause' || isDiveActive(profile);
 
@@ -53,6 +52,11 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
   // (Strike the Anvil claimed): a guided save has Hesta (see the tutorial spec).
   const howTo =
     !target && !profile.tutorial && !profile.quests.claimed.includes('strike_the_anvil');
+  const found = target ? findItem(profile, target) : null;
+  const worn = found?.where === 'equipped';
+  const targetLocked = !!found?.item.locked;
+  const takes = !!target && !locked && canTake(profile, declined, target);
+  const hasTarget = !!target;
 
   const select = (uid: string) => {
     setSelected(uid);
@@ -78,7 +82,18 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
     salvage: (uid) => {
       const s = useDelveStore.getState();
       const found = findItem(s.profile, uid);
-      if (locked || found?.where !== 'bag' || found.item.locked) return;
+      if (locked || !found) return;
+      // A worn item comes off to the bag instead.
+      if (found.where === 'equipped') {
+        try {
+          s.unequip(found.item.slot);
+          playSound('orbRemove');
+        } catch {
+          showToast('Bag is full');
+        }
+        return;
+      }
+      if (found.item.locked) return;
       const { item } = found;
       const precious =
         weaponParts(registry, item).runes.length > 0 ||
@@ -101,6 +116,14 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
       playSound('buttonClick');
     },
   };
+  /** Take a bag item: a weapon that can take your moveset asks how (the take sheet), the rest equip. */
+  const take = (uid: string) => {
+    const s = useDelveStore.getState();
+    if (!locked && canTake(s.profile, s.bindDeclined, uid)) {
+      select(uid);
+      setTaking(uid);
+    } else actions.equip(uid);
+  };
   // The prompts are set once; their keys act through the latest actions and target.
   const latest = useRef({ actions, target });
   latest.current = { actions, target };
@@ -120,13 +143,6 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
     if (memory) memory.loadout = { uid: selected, filter };
   }, [memory, selected, filter]);
 
-  // Where the focus is (a removed button's focus, put back by the pad's nav, never blurs).
-  useEffect(() => {
-    const on = (e: FocusEvent) => setInPane(!!pane.current?.contains(e.target as Node));
-    document.addEventListener('focusin', on);
-    return () => document.removeEventListener('focusin', on);
-  }, []);
-
   // A device switch forgets the hover.
   useEffect(() => useInputDeviceStore.subscribe(() => setHovered(null)), []);
 
@@ -135,59 +151,51 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
       const { actions: a, target: uid } = latest.current;
       if (uid) a[act](uid);
     };
-    const prompts: Prompt[] = [
-      {
-        id: 'select',
-        label: mode === 'pause' ? 'Inspect' : 'Select',
-        binding: { mouse: 'click', pad: 'a' },
-      },
-      { id: 'equip', label: 'Equip', binding: { mouse: 'rmb', pad: 'a' } },
-      {
-        id: 'compare',
-        label: 'Full compare',
-        binding: { key: ['ShiftLeft', 'ShiftRight'], pad: 'lt', whileHeld: true },
-        onHold: setFull,
-      },
+    const select: Prompt = {
+      id: 'select',
+      label: mode === 'pause' ? 'Inspect' : 'Select',
+      binding: { mouse: 'click', pad: 'a' },
+    };
+    const compare: Prompt = {
+      id: 'compare',
+      label: 'Full compare',
+      binding: { key: ['ShiftLeft', 'ShiftRight'], pad: 'rs' },
+      onPress: () => setFull((f) => !f),
+    };
+    if (mode === 'pause') {
+      setPrompts([select, compare]);
+      return;
+    }
+    // Under the pad one A names what A does on the focused tile.
+    const a: Prompt = pad
+      ? {
+          id: 'equip',
+          label: worn ? 'Select' : takes ? 'Equip or transfer' : 'Equip',
+          binding: { mouse: 'rmb', pad: 'a' },
+          tutorial: worn ? undefined : takes ? 'loadout.transfer' : 'loadout.equip',
+        }
+      : { id: 'equip', label: 'Equip', binding: { mouse: 'rmb', pad: 'a' } };
+    setPrompts([
+      ...(pad ? [] : [select]),
+      a,
       {
         id: 'salvage',
-        label: 'Salvage',
+        label: worn ? 'Unequip' : 'Salvage',
         binding: { key: 'Delete', pad: 'x' },
         onPress: on('salvage'),
+        disabled: !hasTarget || (!worn && targetLocked),
+        tutorial: pad && !worn ? 'loadout.salvage' : undefined,
       },
-      { id: 'lock', label: 'Lock', binding: { key: 'KeyL', pad: 'y' }, onPress: on('lock') },
-    ];
-    // The pad reaches the compare pane's actions without stepping across the bag's tiles.
-    const toActions: Prompt = {
-      id: 'to-actions',
-      label: 'Actions',
-      binding: { pad: 'rt' },
-      onPress: () => {
-        // The first enabled kit button (the header's item tile isn't an action).
-        const first = pane.current?.querySelector<HTMLElement>('.k-btn:not(:disabled)');
-        if (!first) return;
-        from.current = document.activeElement as HTMLElement | null;
-        first.focus();
+      {
+        id: 'lock',
+        label: 'Lock',
+        binding: { key: 'KeyL', pad: 'y' },
+        onPress: on('lock'),
+        disabled: !hasTarget,
       },
-    };
-    const toBag: Prompt = {
-      id: 'to-bag',
-      label: 'Back to bag',
-      binding: { pad: 'b' },
-      onPress: () => {
-        const back = from.current?.isConnected
-          ? from.current
-          : document.querySelector<HTMLElement>('[data-testid="bag-item"]');
-        back?.focus();
-      },
-    };
-    setPrompts(
-      mode === 'pause'
-        ? prompts.filter((p) => p.id === 'select' || p.id === 'compare')
-        : pad
-          ? [...prompts, inPane ? toBag : toActions]
-          : prompts,
-    );
-  }, [mode, setPrompts, pad, inPane]);
+      compare,
+    ]);
+  }, [mode, setPrompts, pad, worn, takes, targetLocked, hasTarget]);
   useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (
@@ -208,24 +216,24 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
         onSelect={select}
         onHover={setHovered}
         onEquip={actions.equip}
+        onTake={take}
       />
       {howTo ? (
         <div className="k-scroll min-h-0">
           <HowTo />
         </div>
       ) : (
-        <div ref={pane} className="contents">
-          <ComparePane
-            uid={target ?? profile.equipped.weapon?.uid ?? null}
-            source={!target ? 'worn' : target === hovered ? 'hovered' : 'selected'}
-            full={full}
-            locked={locked}
-            asked={asked}
-            actions={actions}
-            go={go}
-          />
-        </div>
+        <ComparePane
+          uid={target ?? profile.equipped.weapon?.uid ?? null}
+          source={!target ? 'worn' : target === hovered ? 'hovered' : 'selected'}
+          full={full}
+          locked={locked}
+          asked={asked}
+          actions={actions}
+          go={go}
+        />
       )}
+      {taking && <TakeSheet uid={taking} onClose={() => setTaking(null)} />}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   type GearSlot,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { Glyph, Panel, PixelSprite } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { ItemTile } from '../../ItemTile';
@@ -39,8 +40,10 @@ const GLOW =
 
 /**
  * The Loadout's left pane: the paper doll round the hero on the anvil (each worn item's card on
- * hover or focus, a click shows it in the compare pane), the hero's stats, the pair's attunement
- * (to the Mana view on Skills) and the weapon's moveset (slots used of each skill's cap).
+ * hover or focus, a click shows it in the compare pane; under the pad focus selects it and no card
+ * shows), the hero's stats, the pair's attunement (to the Mana view on Skills) and the weapon's
+ * moveset (slots used of each skill's cap). The attunement strip and the moveset's "Skills ›" are
+ * the mouse's (`data-pad-skip`): LB/RB reach Skills.
  */
 export function EquippedPane({
   selected,
@@ -54,6 +57,7 @@ export function EquippedPane({
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const newUids = useDelveStore((s) => s.newUids);
+  const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const { equipped, pair } = profile;
   const stats = useMemo(
     () => profileStats(registry, { equipped, pair }),
@@ -114,6 +118,7 @@ export function EquippedPane({
               isNew={item ? newUids[item.uid] : false}
               selected={!!item && selected === item.uid}
               onClick={item ? () => onSelect(item.uid) : undefined}
+              onFocus={item && pad ? () => onSelect(item.uid) : undefined}
               testId={`slot-${slot}`}
             />
           );
@@ -123,7 +128,7 @@ export function EquippedPane({
               className="flex flex-col items-center gap-1"
               style={{ gridColumn: col, gridRow: row }}
             >
-              {item ? <ItemTooltip uid={item.uid}>{tile}</ItemTooltip> : tile}
+              {item && !pad ? <ItemTooltip uid={item.uid}>{tile}</ItemTooltip> : tile}
               <span className="k-label">{SLOT_LABEL[slot]}</span>
             </div>
           );
@@ -149,6 +154,7 @@ export function EquippedPane({
         className="flex flex-col gap-2 text-left"
         onClick={() => go({ tab: 'skills', view: 'mana' })}
         data-testid="mana-strip"
+        data-pad-skip
       >
         <span className="flex w-full items-baseline justify-between">
           <span className="k-label">Attunement</span>
@@ -165,6 +171,7 @@ export function EquippedPane({
               type="button"
               className="k-caption -my-1.5 inline-flex min-h-8 items-center"
               onClick={() => go({ tab: 'skills' })}
+              data-pad-skip
             >
               Skills ›
             </button>

@@ -125,7 +125,11 @@ describe('the kit glyphs', () => {
       />,
     );
     const labels = [...document.querySelectorAll('.k-prompt')].map((el) => el.textContent);
-    expect(labels.map((t) => t?.replace(/^.*?(Equip|Lock|Back)$/, '$1'))).toEqual(['Equip', 'Lock', 'Back']);
+    expect(labels.map((t) => t?.replace(/^.*?(Equip|Lock|Back)$/, '$1'))).toEqual([
+      'Equip',
+      'Lock',
+      'Back',
+    ]);
   });
 
   it('a prompt button lets go of focus after a mouse click, so Enter reaches the screen', () => {
@@ -141,5 +145,18 @@ describe('the kit glyphs', () => {
     button.focus();
     fireEvent.pointerUp(button, { pointerType: 'mouse' });
     expect(button).not.toHaveFocus();
+  });
+  it("the prompt bar puts a prompt's guided-start target on its item", () => {
+    render(
+      <PromptBar
+        prompts={[
+          { id: 'equip', label: 'Equip', binding: { pad: 'a' }, tutorial: 'loadout.equip' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Equip').closest('.k-prompt')).toHaveAttribute(
+      'data-tutorial',
+      'loadout.equip',
+    );
   });
 });

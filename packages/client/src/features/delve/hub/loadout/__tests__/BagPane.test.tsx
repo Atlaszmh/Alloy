@@ -36,7 +36,8 @@ const open = (locked = false) => {
     onSelect: vi.fn(),
     onHover: vi.fn(),
     onEquip: vi.fn(),
-      };
+    onTake: vi.fn(),
+  };
   render(<BagPane {...props} />);
   return props;
 };
@@ -64,7 +65,8 @@ describe('the bag pane', () => {
       onSelect: vi.fn(),
       onHover: vi.fn(),
       onEquip: vi.fn(),
-          };
+      onTake: vi.fn(),
+    };
     render(<BagPane {...props} selected="c1" />);
     expect(tile('c1')).toHaveAttribute('data-tutorial', 'loadout.bag:chest.uncommon');
     expect(tile('c1')).toHaveAttribute('aria-pressed', 'true');
@@ -109,7 +111,8 @@ describe('the bag pane', () => {
       onSelect: vi.fn(),
       onHover: vi.fn(),
       onEquip: vi.fn(),
-            onFilter,
+      onTake: vi.fn(),
+      onFilter,
     };
     const { rerender } = render(<BagPane {...props} filter="all" />);
     const list = screen.getByRole('tablist', { name: 'Bag filter' });
@@ -162,7 +165,8 @@ describe('the bag pane', () => {
       onSelect: vi.fn(),
       onHover: vi.fn(),
       onEquip: vi.fn(),
-          };
+      onTake: vi.fn(),
+    };
     const { rerender } = render(<BagPane {...props} selected={null} />);
     expect(
       tiles()
@@ -180,7 +184,7 @@ describe('the bag pane', () => {
     expect(tiles().find((t) => t.dataset.uid === 'r1')).toHaveAttribute('data-delta', 'up');
   });
 
-  it('hover and a click select, a right-click equips; under the pad focus selects and A equips', () => {
+  it('hover and a click select, a right-click equips; under the pad focus selects and A takes it', () => {
     put(gear('h1', 'helm'));
     const props = open();
     const helm = tiles()[0];
@@ -200,7 +204,8 @@ describe('the bag pane', () => {
     fireEvent.focus(helm);
     expect(props.onSelect).toHaveBeenCalledWith('h1');
     fireEvent.click(helm);
-    expect(props.onEquip).toHaveBeenCalledWith('h1');
+    expect(props.onTake).toHaveBeenCalledWith('h1');
+    expect(props.onEquip).not.toHaveBeenCalled();
   });
 
   it('Equip best never asks, and leaves weapons alone', () => {

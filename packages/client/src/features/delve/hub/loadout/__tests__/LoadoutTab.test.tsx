@@ -122,15 +122,16 @@ describe('LoadoutTab', () => {
     expect(screen.getByTestId('bind-prompt-confirm')).toHaveFocus();
   });
 
-  it('sets its prompts (Select, Equip, Full compare, Salvage, Lock), only Select and Full compare when paused, and clears them when it goes', () => {
+  it('sets its prompts in the grammar (A, X, Y, R3), only Select and Full compare when paused, and clears them when it goes', () => {
     const { props, unmount } = open();
-    expect(prompts(props).map((x) => [x.label, x.binding])).toEqual([
-      ['Select', { mouse: 'click', pad: 'a' }],
-      ['Equip', { mouse: 'rmb', pad: 'a' }],
-      ['Full compare', { key: ['ShiftLeft', 'ShiftRight'], pad: 'lt', whileHeld: true }],
-      ['Salvage', { key: 'Delete', pad: 'x' }],
-      ['Lock', { key: 'KeyL', pad: 'y' }],
+    expect(prompts(props).map((x) => [x.id, x.label, x.binding])).toEqual([
+      ['select', 'Select', { mouse: 'click', pad: 'a' }],
+      ['equip', 'Equip', { mouse: 'rmb', pad: 'a' }],
+      ['salvage', 'Salvage', { key: 'Delete', pad: 'x' }],
+      ['lock', 'Lock', { key: 'KeyL', pad: 'y' }],
+      ['compare', 'Full compare', { key: ['ShiftLeft', 'ShiftRight'], pad: 'rs' }],
     ]);
+    expect(prompts(props).some((x) => x.id === 'to-actions' || x.id === 'to-bag')).toBe(false);
     unmount();
     expect(props.setPrompts).toHaveBeenLastCalledWith([]);
     const paused = open({ mode: 'pause' }).props;
@@ -164,29 +165,74 @@ describe('LoadoutTab', () => {
     expect(screen.queryByText(/Hovered/)).toBeNull();
   });
 
-  it("under the pad RT jumps to the compare pane's first action, and B from there goes back to the tile", () => {
-    put(gear('h1', 'helm'), gear('r1', 'ring'));
+  it('under the pad one A prompt names what A does on the focused tile, and carries the guided-start target', () => {
+    put(gear('h1', 'helm'), rareSword('w1'));
     const { props } = open();
-    expect(prompts(props).some((x) => x.id === 'to-actions')).toBe(false); // the pad's only
     act(() => useInputDeviceStore.getState().setDevice('gamepad'));
-    act(() => tile('r1').focus());
-    expect(prompt(props, 'to-actions').binding).toEqual({ pad: 'rt' });
-    expect(prompts(props).some((x) => x.id === 'to-bag')).toBe(false);
-    act(() => prompt(props, 'to-actions').onPress!());
-    expect(screen.getByTestId('equip-button')).toHaveFocus();
-    expect(prompt(props, 'to-bag').binding).toEqual({ pad: 'b' });
-    act(() => prompt(props, 'to-bag').onPress!());
-    expect(tile('r1')).toHaveFocus();
-    expect(prompts(props).some((x) => x.id === 'to-bag')).toBe(false);
+    act(() => tile('h1').focus());
+    expect(
+      prompts(props)
+        .filter((x) => x.binding.pad === 'a')
+        .map((x) => [x.label, x.tutorial]),
+    ).toEqual([['Equip', 'loadout.equip']]);
+    expect(prompt(props, 'salvage').tutorial).toBe('loadout.salvage');
+    // A bag weapon that can take your moveset: A opens the take sheet, the prompt says so.
+    act(() => tile('w1').focus());
+    expect(
+      prompts(props)
+        .filter((x) => x.binding.pad === 'a')
+        .map((x) => [x.label, x.tutorial]),
+    ).toEqual([['Equip or transfer', 'loadout.transfer']]);
+    // Under the keys no prompt carries a target: the pane's buttons do.
+    act(() => useInputDeviceStore.getState().setDevice('keyboard'));
+    expect(prompts(props).every((x) => x.tutorial === undefined)).toBe(true);
   });
 
-  it("holding Full compare shows every stat line and a weapon's moveset", () => {
+  it('on a worn tile X unequips and A only selects', () => {
+    const { props } = open();
+    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    act(() => screen.getByTestId('slot-weapon').focus());
+    // Focus selects a worn item under the pad: the pane shows it.
+    expect(screen.getByTestId('item-sheet')).toHaveTextContent('Equipped · your weapon');
+    expect(
+      prompts(props)
+        .filter((x) => x.binding.pad === 'a')
+        .map((x) => x.label),
+    ).toEqual(['Select']);
+    expect(prompt(props, 'salvage').label).toBe('Unequip');
+    act(() => prompt(props, 'salvage').onPress!());
+    expect(store().profile.equipped.weapon).toBeUndefined();
+  });
+
+  it('a locked item turns X off, and Y unlocks it', () => {
+    put(gear('h1', 'helm'));
+    const { props } = open({ link: { tab: 'loadout', uid: 'h1' } });
+    act(() => prompt(props, 'lock').onPress!());
+    expect(prompt(props, 'salvage').disabled).toBe(true);
+    act(() => prompt(props, 'salvage').onPress?.());
+    expect(store().profile.bag).toHaveLength(1);
+    act(() => prompt(props, 'lock').onPress!());
+    expect(prompt(props, 'salvage').disabled).toBe(false);
+  });
+
+  it('under the pad A on a bag weapon that can take your moveset opens the take sheet; any other item equips', () => {
+    put(gear('h1', 'helm'), rareSword('w1'));
+    open();
+    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    fireEvent.click(tile('h1')); // A presses the focused tile
+    expect(store().profile.equipped.helm?.uid).toBe('h1');
+    fireEvent.click(tile('w1'));
+    expect(screen.getByTestId('take-sheet')).toBeInTheDocument();
+    expect(store().profile.equipped.weapon?.uid).not.toBe('w1');
+  });
+
+  it("R3 (or Shift) toggles Full compare: every stat line and a weapon's moveset", () => {
     put(rareSword('w1'));
     const { props } = open({ link: { tab: 'loadout', uid: 'w1' } });
     expect(screen.queryByTestId('item-moveset')).toBeNull();
-    act(() => prompt(props, 'compare').onHold!(true));
+    act(() => prompt(props, 'compare').onPress!());
     expect(screen.getByTestId('item-moveset')).toBeInTheDocument();
-    act(() => prompt(props, 'compare').onHold!(false));
+    act(() => prompt(props, 'compare').onPress!());
     expect(screen.queryByTestId('item-moveset')).toBeNull();
   });
 

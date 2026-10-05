@@ -5,6 +5,7 @@ import {
   profileStats,
   salvageYield,
   unsocketMode,
+  type GearItem,
   type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
@@ -61,6 +62,56 @@ export function verdictOf(
 }
 
 /**
+ * Move your moveset onto the bag weapon `item` (the store's `transfer`), with its sound and its
+ * toast, or say why not. True when it moved.
+ */
+export function transferOnto(item: GearItem): boolean {
+  const res = useDelveStore.getState().transfer(item.uid);
+  if (!res.ok) {
+    playSound('combineFail');
+    showToast(res.reason ?? 'Cannot transfer');
+    return false;
+  }
+  playSound('combineMerge');
+  vibrate('success');
+  const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
+  const moved = partsText(getDelveRegistry(), res.runes, res.destroyed);
+  showToast(`Your moveset moved onto ${item.name}${links}${moved ? ` · ${moved}` : ''}`);
+  return true;
+}
+
+/**
+ * What a transfer of your moveset onto `item` leaves: the chains it can't carry (their extra
+ * slots come back as Links) and the runes with no socket there, by the pull rule. The compare
+ * pane's Transfer and the pad's take sheet both show it.
+ */
+export function TransferNotes({ worn, item }: { worn: GearItem; item: GearItem }): ReactElement {
+  const registry = getDelveRegistry();
+  const unsocket = useDelveStore((s) => s.unsocket);
+  const pull = unsocketMode(registry, unsocket);
+  const transfer = movesetTransfer(registry, worn, item);
+  const leaves = carriedSkills(registry, worn).filter(
+    (s) => !carriedSkills(registry, item).includes(s),
+  );
+  return (
+    <>
+      {leaves.length > 0 && (
+        <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-leaves">
+          Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
+        </span>
+      )}
+      {transfer.runes.length > 0 && (
+        <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-runes">
+          {pull === 'destroy'
+            ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
+            : `${runeNames(registry, transfer.runes)} back to your pouch`}
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
  * The Loadout's right pane: the hovered (else selected, else worn) item against what's worn in
  * its slot: its Power change (a bag weapon's as it is and as a home for your moveset), the stat
  * table, the attunement it moves, the bind choice for gear outside the pair, a weapon's moveset
@@ -92,7 +143,6 @@ export function ComparePane({
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const declined = useDelveStore((s) => s.bindDeclined);
-  const unsocket = useDelveStore((s) => s.unsocket);
   const { equipped, pair } = profile;
   const attunement = useMemo(
     () => profileStats(registry, { equipped, pair }).attunement,
@@ -109,16 +159,10 @@ export function ComparePane({
 
   const inBag = where === 'bag';
   const transfer = worn && asIs ? movesetTransfer(registry, worn, item) : null;
-  // Your chains the target can't carry stay behind (their extra slots come back as Links).
-  const leaves =
-    worn && transfer
-      ? carriedSkills(registry, worn).filter((s) => !carriedSkills(registry, item).includes(s))
-      : [];
   // Equip takes a weapon as it is; Transfer is marked by its value as a home.
   const equipCmp = asIs ?? cmp;
   const isUpgrade = !!equipCmp && equipCmp.powerPct > UPGRADE_EPSILON;
   const homeUpgrade = !!transfer && !!cmp && cmp.powerPct > UPGRADE_EPSILON;
-  const pull = unsocketMode(registry, unsocket);
   // What salvage gives, as the engine reckons it: only a bag item salvages, and only between dives.
   const yields = inBag && !locked ? salvageYield(registry, profile, item) : null;
   const binding = inBag && !locked && needsBind(profile, declined, item);
@@ -132,19 +176,7 @@ export function ComparePane({
         ? `${source === 'hovered' ? 'Hovered' : 'Selected'} · compared with your ${slot}`
         : `Equipped · your ${slot}`;
 
-  const onTransfer = () => {
-    const res = useDelveStore.getState().transfer(item.uid);
-    if (!res.ok) {
-      playSound('combineFail');
-      showToast(res.reason ?? 'Cannot transfer');
-      return;
-    }
-    playSound('combineMerge');
-    vibrate('success');
-    const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
-    const moved = partsText(registry, res.runes, res.destroyed);
-    showToast(`Your moveset moved onto ${item.name}${links}${moved ? ` · ${moved}` : ''}`);
-  };
+  const onTransfer = () => transferOnto(item);
 
   const onUnequip = () => {
     try {
@@ -250,18 +282,7 @@ export function ComparePane({
                 </>
               )}
             </Button>
-            {leaves.length > 0 && (
-              <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-leaves">
-                Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
-              </span>
-            )}
-            {transfer.runes.length > 0 && (
-              <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-runes">
-                {pull === 'destroy'
-                  ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
-                  : `${runeNames(registry, transfer.runes)} back to your pouch`}
-              </span>
-            )}
+            {worn && <TransferNotes worn={worn} item={item} />}
           </div>
         )}
 

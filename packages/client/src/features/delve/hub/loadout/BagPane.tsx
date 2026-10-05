@@ -66,8 +66,9 @@ const AUTO_RARITIES: Rarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic'];
  * remembers it) and the sort chip, eight columns of tiles (▲ better as it
  * is, ◇ better only with your moveset moved onto it, ▼ worse, NEW, the lock), and the footer:
  * Equip best, Salvage junk and auto-salvage. A click selects a tile for the compare pane and a
- * right-click equips it; under the pad, focus selects and A equips (spec, decided item 36). The
- * selected tile, else the first, is the pad's first focus (`data-pad-first`).
+ * right-click equips it; under the pad, focus selects and A takes it (`onTake`: equips, or asks how
+ * to take a weapon that can take your moveset). The selected tile, else the first, is the pad's
+ * first focus (`data-pad-first`).
  */
 export function BagPane({
   locked,
@@ -77,6 +78,7 @@ export function BagPane({
   onSelect,
   onHover,
   onEquip,
+  onTake,
 }: {
   /** Mid-dive or paused: Equip best, Salvage junk and auto-salvage wait for the Anvil. */
   locked: boolean;
@@ -86,6 +88,8 @@ export function BagPane({
   onSelect: (uid: string) => void;
   onHover: (uid: string | null) => void;
   onEquip: (uid: string) => void;
+  /** A under the pad: equip, or the take sheet for a weapon. */
+  onTake: (uid: string) => void;
 }): ReactElement {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
@@ -240,7 +244,7 @@ export function BagPane({
                 data-pad-first={(selected ? item.uid === selected : i === 0) || undefined}
                 data-tutorial={`loadout.bag:${item.slot}.${item.rarity}`}
                 onClick={() => {
-                  if (useInputDeviceStore.getState().device === 'gamepad') onEquip(item.uid);
+                  if (useInputDeviceStore.getState().device === 'gamepad') onTake(item.uid);
                   else {
                     playSound('orbSelect');
                     onSelect(item.uid);
