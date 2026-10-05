@@ -228,4 +228,54 @@ describe('trails', () => {
       'stop.card': 'stopKind',
     });
   });
+
+  it('passes the known targets, and the keys the data holds', () => {
+    expect(
+      steps(
+        anvil(
+          'quests.done',
+          'quests.claim',
+          'forge.pattern',
+          'forge.pattern:cuirass',
+          'forge.bar:rusty',
+          'forge.flux:uncommon',
+          'forge.refine:iron',
+          'loadout.bag:chest.uncommon',
+          'skills.card:last',
+        ),
+      ),
+    ).toEqual([]);
+    expect(steps(atStop(['equip'], 'stop.card:equip', 'stop.pick'))).toEqual([]);
+  });
+
+  it('names an unknown target, and a key on a target that takes none', () => {
+    expect(steps(anvil('forge.anvil'))).toEqual(['forge: no target forge.anvil']);
+    expect(steps(anvil('forge.anvil:big'))).toEqual(['forge: no target forge.anvil']);
+    // A keyed-only target without its key is no target.
+    expect(steps(anvil('loadout.bag'))).toEqual(['forge: no target loadout.bag']);
+    expect(steps(anvil('quests.claim:first'))).toEqual(['forge: quests.claim takes no key']);
+  });
+
+  it('names a key the data lacks', () => {
+    expect(steps(anvil('forge.pattern:spoon'))).toEqual(['forge: no forge.pattern spoon']);
+    expect(steps(anvil('forge.bar:tin'))).toEqual(['forge: no forge.bar tin']);
+    expect(steps(anvil('forge.refine:tin'))).toEqual(['forge: no forge.refine tin']);
+    expect(steps(anvil('forge.flux:common'))).toEqual(['forge: no forge.flux common']);
+    expect(steps(anvil('loadout.bag:chest'))).toEqual(['forge: no loadout.bag chest']);
+    expect(steps(anvil('loadout.bag:hat.rare'))).toEqual(['forge: no loadout.bag hat.rare']);
+    expect(steps(anvil('loadout.bag:chest.shiny'))).toEqual(['forge: no loadout.bag chest.shiny']);
+    expect(steps(anvil('loadout.bag:chest.rare.x'))).toEqual([
+      'forge: no loadout.bag chest.rare.x',
+    ]);
+    expect(steps(anvil('skills.card:middle'))).toEqual(['forge: no skills.card middle']);
+    // A stop card's key is a kind its own stop offers.
+    expect(steps(atStop(['equip'], 'stop.card:move'))).toEqual(['walk: no stop.card move']);
+    expect(steps(anvil('stop.card:equip'))).toEqual(['forge: no stop.card equip']);
+  });
+
+  it('names a trail on a floor step', () => {
+    expect(steps({ ...STEP, trail: ['quests.claim'] })).toEqual([
+      'walk: a trail on an Anvil, Training or stop step',
+    ]);
+  });
 });
