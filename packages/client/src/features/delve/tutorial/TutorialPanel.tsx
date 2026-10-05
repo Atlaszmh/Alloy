@@ -149,14 +149,15 @@ export function TutorialPanel({
   const shown = (held && registry.getTutorialData().steps.find((s) => s.id === held)) || step;
   const beat = !!step?.beat && !held;
   // Enter continues a beat, in whatever scope holds the strip (a focused control keeps its own).
+  // It stays bound through the hold, doing nothing, so Enter never falls through to the menu.
   usePrompts(
     [
       {
         id: 'tutorial-continue',
         label: 'Continue',
         binding: { key: ['Enter', 'NumpadEnter'] },
-        onPress: () => onEvent({ type: 'ack' }),
-        disabled: !beat,
+        onPress: () => beat && onEvent({ type: 'ack' }),
+        disabled: !step?.beat,
       },
     ],
     root,

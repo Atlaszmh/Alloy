@@ -167,11 +167,26 @@ describe("the strip's hold on a finished step", () => {
   });
 
   it('a beat shows Continue only after the hold, and Enter waits with it', () => {
-    const { rerender } = render(strip('cast'));
-    rerender(strip('listen'));
+    // jsdom lays nothing out: every element gets a box, so the screen's menu button is visible.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }),
+    );
+    const menu = vi.fn();
+    const screenOf = (step: string) => (
+      <>
+        <button data-pad-menu onClick={menu}>
+          Menu
+        </button>
+        {strip(step)}
+      </>
+    );
+    const { rerender } = render(screenOf('cast'));
+    rerender(screenOf('listen'));
     expect(screen.queryByTestId('tutorial-continue')).toBeNull();
     fireEvent.keyDown(document.body, { code: 'Enter' });
     expect(onEvent).not.toHaveBeenCalled();
+    // The hold keeps Enter: it never falls through to the screen's menu.
+    expect(menu).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(STEP_HOLD_MS));
     expect(screen.getByTestId('tutorial-continue')).toBeInTheDocument();
   });
