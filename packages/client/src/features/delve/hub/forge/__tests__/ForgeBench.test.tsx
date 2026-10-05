@@ -57,6 +57,55 @@ describe('ForgeBench', () => {
     useInputDeviceStore.setState({ device: 'keyboard' });
   });
 
+  it("carries the guided start's trail: a keyed pattern, bar and flux, and the Lines field done once a line holds a shard", () => {
+    withMaterials({
+      metals: { ...emptyMaterials().metals, rusty: 5 },
+      flux: { ...emptyMaterials().flux, uncommon: 2 },
+      shards: { maxHp: [1] },
+    });
+    bench();
+    const pattern = screen.getByTestId('pattern-cuirass');
+    expect(pattern).toHaveAttribute('data-tutorial', 'forge.pattern:cuirass');
+    fireEvent.click(pattern);
+    expect(pattern).toHaveAttribute('aria-pressed', 'true');
+    // The first bar held is the bench's own pick: chosen from the start.
+    expect(screen.getByTestId('metal-rusty')).toHaveAttribute('data-tutorial', 'forge.bar:rusty');
+    expect(screen.getByTestId('metal-rusty')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('flux-none')).not.toHaveAttribute('data-tutorial');
+    const flux = screen.getByTestId('flux-uncommon');
+    expect(flux).toHaveAttribute('data-tutorial', 'forge.flux:uncommon');
+    fireEvent.click(flux);
+    expect(screen.getByTestId('flux-uncommon')).toHaveAttribute('aria-checked', 'true');
+    const lines = () => document.querySelector('[data-tutorial="forge.shard"]')!;
+    expect(lines()).toHaveAttribute('data-tutorial-done', 'false');
+    fireEvent.click(screen.getByTestId('shard-slot-0'));
+    // In the picker's own scope the picker is the target.
+    expect(lines()).toBe(screen.getByTestId('shard-picker'));
+    fireEvent.click(screen.getByTestId('shard-pick-maxHp-1'));
+    expect(lines()).toHaveAttribute('data-tutorial-done', 'true');
+  });
+
+  it('the Lines field is done at once when no shard held fits the item: the forge needs none', () => {
+    // A Crit Chance shard fits no cuirass; a Max Life one does.
+    const holding = (shards: MaterialsPouch['shards']) =>
+      withMaterials({
+        metals: { ...emptyMaterials().metals, rusty: 5 },
+        flux: { ...emptyMaterials().flux, uncommon: 2 },
+        shards,
+      });
+    holding({ critChance: [2] });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    fireEvent.click(screen.getByTestId('flux-uncommon'));
+    const lines = () => document.querySelector('[data-tutorial="forge.shard"]')!;
+    expect(lines()).toHaveAttribute('data-tutorial-done', 'true');
+    expect(screen.getByTestId('forge-button')).toBeEnabled();
+    act(() => holding({ critChance: [2], maxHp: [1] }));
+    expect(lines()).toHaveAttribute('data-tutorial-done', 'false');
+    act(() => holding({}));
+    expect(lines()).toHaveAttribute('data-tutorial-done', 'true');
+  });
+
   it('lists the learned patterns, then the unknown ones greyed with where they come from', () => {
     bench();
     const list = screen.getByTestId('pattern-list');

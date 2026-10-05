@@ -33,7 +33,7 @@ import { LegendaryFanfare } from '../../LegendaryFanfare';
 import { RARITY_LABEL, RARITY_TEXT, SLOT_LABEL, manaStyle } from '../../format';
 import { SKILL_NAME } from '../../chains/chain-text';
 import { PatternList } from './PatternList';
-import { ShardPicker } from './ShardPicker';
+import { ShardPicker, heldShards } from './ShardPicker';
 import { materialLabel, pct, shardName, statRange, valueRange } from './materials-text';
 
 export const SELECT_PROMPT: Prompt = {
@@ -55,14 +55,17 @@ export function ForgeLocked() {
 function Field({
   label,
   tutorial,
+  done,
   children,
 }: {
   label: string;
   tutorial?: TutorialTarget;
+  /** The guided start's trail: this field's click is made (`data-tutorial-done`). */
+  done?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2" data-tutorial={tutorial}>
+    <div className="flex flex-col gap-2" data-tutorial={tutorial} data-tutorial-done={done}>
       <span className="k-label">{label}</span>
       {children}
     </div>
@@ -225,6 +228,11 @@ export function ForgeBench({
         .filter(([, n]) => n > 0)
         .map(([s, n]) => `${SKILL_NAME[s as keyof typeof SKILL_NAME]} +${n}`)
     : [];
+  // The guided start's trail: the Lines are done once one holds a shard, or at once when no
+  // shard held fits the item (the forge needs none), so the marker goes on to Forge.
+  const linesDone =
+    shards.length > 0 ||
+    (!!preview && heldShards(registry, profile.materials.shards, preview.slot, []).length === 0);
 
   return (
     <>
@@ -318,6 +326,7 @@ export function ForgeBench({
                   label: `${materialLabel(registry, { kind: 'metal', metal: m })} ×${metals[m]}`,
                   disabled: metals[m] === 0,
                   testId: `metal-${m}`,
+                  tutorial: `forge.bar:${m}`,
                 }))}
               />
             </Field>
@@ -334,6 +343,7 @@ export function ForgeBench({
                     label: `${RARITY_LABEL[g]} ×${fluxHeld[g]}`,
                     disabled: fluxHeld[g] === 0,
                     testId: `flux-${g}`,
+                    tutorial: `forge.flux:${g}`,
                   })),
                 ]}
               />
@@ -384,7 +394,7 @@ export function ForgeBench({
                 })}
               />
             </Field>
-            <Field label="Lines" tutorial="forge.shard">
+            <Field label="Lines" tutorial="forge.shard" done={linesDone}>
               {preview.lines.length === 0 && (
                 <p className="k-caption">A common item rolls no lines: add flux for some.</p>
               )}

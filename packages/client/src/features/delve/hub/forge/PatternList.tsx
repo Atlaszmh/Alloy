@@ -37,6 +37,7 @@ export function PatternList({
               aria-pressed={selected === b.id}
               onClick={() => onSelect(b.id)}
               data-testid={`pattern-${b.id}`}
+              data-tutorial={`forge.pattern:${b.id}`}
             >
               <span
                 aria-hidden

@@ -192,6 +192,7 @@ export function Segmented<T extends string>({
             disabled={o.disabled}
             title={o.title}
             data-testid={o.testId}
+            data-tutorial={o.tutorial}
             className="k-seg"
             style={tint ? { color: o.color } : undefined}
             onClick={() => onChange(o.id)}

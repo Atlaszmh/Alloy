@@ -117,7 +117,8 @@ export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export interface SegmentedProps<T extends string> {
-  options: { id: T; label: ReactNode; color?: string; disabled?: boolean; title?: string; testId?: string }[];
+  /** `tutorial`: the option's guided-start target (`data-tutorial`), e.g. `forge.bar:rusty`. */
+  options: { id: T; label: ReactNode; color?: string; disabled?: boolean; title?: string; testId?: string; tutorial?: string }[];
   value: T | null;
   onChange: (id: T) => void;
   columns?: number;

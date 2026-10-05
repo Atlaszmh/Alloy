@@ -37,6 +37,13 @@ describe('ForgeTab', () => {
     store().resetProfile(1234, 'fire');
   });
 
+  it("names both benches' sub tabs for the guided start: forge.bench, the way to the bench's controls, and forge.temper", () => {
+    render(<ForgeTab {...props()} />);
+    expect(screen.getByTestId('bench-forge')).toHaveAttribute('data-tutorial', 'forge.bench');
+    expect(screen.getByTestId('bench-forge')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('bench-temper')).toHaveAttribute('data-tutorial', 'forge.temper');
+  });
+
   it('opens on the Forge bench; Temper lists what you wear first, then the bag, filtered by kind', () => {
     store().setProfile({ ...store().profile, bag: [item('h1', 'helm'), item('w1', 'weapon')] });
     const p = props();

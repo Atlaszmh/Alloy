@@ -1,12 +1,39 @@
-import { shardTiersOf, type GearSlot, type HeroStatKey, type ShardRef } from '@alloy/engine';
+import {
+  shardTiersOf,
+  type DataRegistry,
+  type GearSlot,
+  type HeroStatKey,
+  type MaterialsPouch,
+  type ShardRef,
+} from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../../registry';
 import { SLOT_LABEL } from '../../format';
 import { pct, shardName } from './materials-text';
 
 /**
- * The shards held that a line of a `slot` item can take: each affix the slot
- * allows, but `exclude`, at every tier held, with its count and roll band. A
+ * The shards of `pouch` that a line of a `slot` item can take: each affix the
+ * slot allows, but `exclude`, at every tier held, with its count and roll band.
+ */
+export function heldShards(
+  registry: DataRegistry,
+  pouch: MaterialsPouch['shards'],
+  slot: GearSlot,
+  exclude: readonly HeroStatKey[],
+) {
+  return registry
+    .getDelveData()
+    .affixes.filter((a) => a.slots.includes(slot) && !exclude.includes(a.stat))
+    .flatMap((a) =>
+      shardTiersOf(registry, a.stat).flatMap((band) => {
+        const n = pouch[a.stat]?.[band.tier - 1] ?? 0;
+        return n > 0 ? [{ shard: { stat: a.stat, tier: band.tier }, n, band }] : [];
+      }),
+    );
+}
+
+/**
+ * The shards held that a line of a `slot` item can take (`heldShards`). A
  * plain list: the caller holds the pad scope and its Back.
  */
 export function ShardPicker({
@@ -22,15 +49,7 @@ export function ShardPicker({
 }) {
   const registry = getDelveRegistry();
   const pouch = useDelveStore((s) => s.profile.materials.shards);
-  const held = registry
-    .getDelveData()
-    .affixes.filter((a) => a.slots.includes(slot) && !exclude.includes(a.stat))
-    .flatMap((a) =>
-      shardTiersOf(registry, a.stat).flatMap((band) => {
-        const n = pouch[a.stat]?.[band.tier - 1] ?? 0;
-        return n > 0 ? [{ shard: { stat: a.stat, tier: band.tier }, n, band }] : [];
-      }),
-    );
+  const held = heldShards(registry, pouch, slot, exclude);
   if (held.length === 0)
     return (
       <p className="k-body-2" data-testid="shard-none">
