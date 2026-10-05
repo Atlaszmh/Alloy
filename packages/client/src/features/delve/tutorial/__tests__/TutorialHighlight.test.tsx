@@ -6,7 +6,7 @@ import { getDelveRegistry } from '../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 
-// See the tutorial spec's client: the highlight round the current step's target.
+// See the pad-nav and guidance spec (1.5, 2.2): the marker round the current step's target.
 
 const registry = getDelveRegistry();
 const step = (id: string, highlight?: TutorialStep['highlight']): TutorialStep => ({
@@ -32,13 +32,14 @@ const at = (step: string | null) =>
       },
     }),
   );
-const ring = () => screen.queryByTestId('tutorial-highlight');
+const pad = () => act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+const marker = () => screen.queryByTestId('tutorial-highlight');
 const placed = () => {
-  const s = ring()!.style;
+  const s = marker()!.style;
   return [s.display, s.left, s.top, s.width, s.height];
 };
 
-describe('TutorialHighlight', () => {
+describe('TutorialHighlight (the marker)', () => {
   beforeEach(() => {
     localStorage.clear();
     useDelveStore.getState().resetProfile(1234, 'fire');
@@ -51,7 +52,7 @@ describe('TutorialHighlight', () => {
         step('bind', 'mana.bind'),
       ],
     });
-    boxes = { 'hub.delve': DOMRect.fromRect({ x: 100, y: 50, width: 200, height: 40 }) };
+    boxes = { 'hub.delve': DOMRect.fromRect({ x: 100, y: 500, width: 200, height: 40 }) };
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement,
     ) {
@@ -68,14 +69,15 @@ describe('TutorialHighlight', () => {
     vi.unstubAllGlobals();
   });
 
-  it('draws nothing with no tutorial, or on a step that names no target', () => {
+  it('draws nothing with no tutorial, and hides on a step with nothing to mark', () => {
     render(<TutorialHighlight />);
-    expect(ring()).toBeNull();
+    expect(marker()).toBeNull();
     at('read');
-    expect(ring()).toBeNull();
+    expect(marker()!.style.display).toBe('none');
+    expect(marker()).not.toHaveAttribute('data-target');
   });
 
-  it("outlines the step's target, outside it by the gap and its width, and never takes the pointer", () => {
+  it("brackets the step's target 10 px outside it, an arrow above, and never takes the pointer", () => {
     render(
       <div data-pad-scope>
         <button data-tutorial="hub.delve">Delve</button>
@@ -83,26 +85,58 @@ describe('TutorialHighlight', () => {
     );
     render(<TutorialHighlight />);
     at('look');
-    expect(ring()).toHaveAttribute('data-target', 'hub.delve');
-    expect(ring()!.parentElement).toBe(document.body);
-    expect(ring()).toHaveStyle({ pointerEvents: 'none', position: 'fixed' });
-    expect(placed()).toEqual(['block', '91px', '41px', '218px', '58px']);
+    expect(marker()).toHaveAttribute('data-target', 'hub.delve');
+    expect(marker()!.parentElement).toBe(document.body);
+    expect(marker()).toHaveStyle({ pointerEvents: 'none', position: 'fixed' });
+    expect(placed()).toEqual(['block', '90px', '490px', '220px', '60px']);
+    expect(marker()!.querySelectorAll('[data-corner]')).toHaveLength(4);
+    expect(marker()!.querySelector('[data-glyph="down"]')).not.toBeNull();
+    expect(marker()).toHaveAttribute('data-arrow', 'above');
+  });
+
+  it('points from below when there is no room above the target', () => {
+    boxes['hub.delve'] = DOMRect.fromRect({ x: 100, y: 20, width: 200, height: 40 });
+    render(<button data-tutorial="hub.delve">Delve</button>);
+    render(<TutorialHighlight />);
+    at('look');
+    expect(marker()).toHaveAttribute('data-arrow', 'below');
+  });
+
+  it('breathes and bounces, and stands still under reduced motion', () => {
+    const cancel = vi.fn();
+    const animate = vi.fn(() => ({ cancel }));
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    try {
+      render(<button data-tutorial="hub.delve">Delve</button>);
+      const { unmount } = render(<TutorialHighlight />);
+      at('look');
+      expect(animate).toHaveBeenCalledTimes(2);
+      unmount();
+      expect(cancel).toHaveBeenCalledTimes(2);
+      animate.mockClear();
+      vi.stubGlobal('matchMedia', () => ({ matches: true }));
+      render(<TutorialHighlight />);
+      expect(marker()!.style.display).toBe('block');
+      expect(animate).not.toHaveBeenCalled();
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate;
+    }
   });
 
   it('follows its target as the layout moves, and hides while it is off screen or gone', () => {
     const { unmount } = render(<button data-tutorial="hub.delve">Delve</button>);
     render(<TutorialHighlight />);
     at('look');
-    boxes['hub.delve'] = DOMRect.fromRect({ x: 300, y: 60, width: 200, height: 40 });
+    boxes['hub.delve'] = DOMRect.fromRect({ x: 300, y: 560, width: 200, height: 40 });
     nextFrame();
-    expect(placed()).toEqual(['block', '291px', '51px', '218px', '58px']);
-    boxes['hub.delve'] = DOMRect.fromRect({ x: 5000, y: 60, width: 200, height: 40 });
+    expect(placed()).toEqual(['block', '290px', '550px', '220px', '60px']);
+    boxes['hub.delve'] = DOMRect.fromRect({ x: 5000, y: 560, width: 200, height: 40 });
     nextFrame();
-    expect(ring()!.style.display).toBe('none');
-    boxes['hub.delve'] = DOMRect.fromRect({ x: 300, y: 60, width: 200, height: 40 });
+    expect(marker()!.style.display).toBe('none');
+    boxes['hub.delve'] = DOMRect.fromRect({ x: 300, y: 560, width: 200, height: 40 });
     unmount();
     nextFrame();
-    expect(ring()!.style.display).toBe('none');
+    expect(marker()!.style.display).toBe('none');
   });
 
   it('looks only in the topmost pad scope: a dialog over the target hides it', () => {
@@ -118,7 +152,7 @@ describe('TutorialHighlight', () => {
     );
     render(<TutorialHighlight />);
     at('look');
-    expect(ring()!.style.display).toBe('none');
+    expect(marker()!.style.display).toBe('none');
   });
 
   it('under the pad, moves the focus to the target once as it appears; under the keys, leaves it', () => {
@@ -132,7 +166,7 @@ describe('TutorialHighlight', () => {
     at('look');
     expect(document.activeElement).toBe(document.body);
     at(null);
-    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    pad();
     at('look');
     expect(screen.getByText('Delve')).toHaveFocus();
     act(() => screen.getByTestId('other').focus());
@@ -140,33 +174,111 @@ describe('TutorialHighlight', () => {
     expect(screen.getByTestId('other')).toHaveFocus();
   });
 
-  it("points at the way to a target behind a tab or a view: the view's control, else the hub tab", () => {
+  it('a re-render that swaps the target for a new DOM node moves nothing', () => {
+    const tree = (k: string) => (
+      <>
+        <button data-testid="other">Other</button>
+        <button key={k} data-tutorial="hub.delve">
+          Delve
+        </button>
+      </>
+    );
+    pad();
+    const { rerender } = render(tree('a'));
+    render(<TutorialHighlight />);
+    at('look');
+    const first = screen.getByText('Delve');
+    expect(first).toHaveFocus();
+    act(() => screen.getByTestId('other').focus());
+    rerender(tree('b'));
+    nextFrame();
+    expect(screen.getByText('Delve')).not.toBe(first);
+    expect(screen.getByTestId('other')).toHaveFocus();
+    expect(marker()!.style.display).toBe('block');
+  });
+
+  it('the same target in a newly opened pad scope is a new marked target: the focus follows in, and back out', () => {
+    const tree = (picker: boolean) => (
+      <>
+        <div data-pad-scope>
+          <button data-tutorial="hub.delve">Field</button>
+          <button data-testid="other">Other</button>
+        </div>
+        {picker && (
+          <div data-pad-scope>
+            <button>Back</button>
+            <button data-tutorial="hub.delve">Pick</button>
+          </div>
+        )}
+      </>
+    );
+    pad();
+    const { rerender } = render(tree(false));
+    render(<TutorialHighlight />);
+    at('look');
+    expect(screen.getByText('Field')).toHaveFocus();
+    rerender(tree(true));
+    act(() => screen.getByText('Back').focus());
+    nextFrame();
+    expect(screen.getByText('Pick')).toHaveFocus();
+    rerender(tree(false));
+    act(() => screen.getByTestId('other').focus());
+    nextFrame();
+    expect(screen.getByText('Field')).toHaveFocus();
+  });
+
+  it('points at the way to a target behind a tab or a view, the focus following only onto a D-pad stop', () => {
     boxes['hub.tab.skills'] = DOMRect.fromRect({ x: 400, y: 10, width: 100, height: 40 });
     boxes['skills.mana'] = DOMRect.fromRect({ x: 40, y: 500, width: 200, height: 60 });
     boxes['mana.bind'] = DOMRect.fromRect({ x: 600, y: 300, width: 300, height: 100 });
-    const hub = (tab: string, view?: 'mana' | 'bind') => (
+    const hub = (tab: string, view?: 'bind') => (
       <div data-pad-scope>
-        <button role="tab" aria-selected={tab === 'loadout'} data-tutorial="hub.tab.loadout">
-          Loadout
-        </button>
-        <button role="tab" aria-selected={tab === 'skills'} data-tutorial="hub.tab.skills">
-          Skills
-        </button>
+        <div role="tablist" data-pad-skip>
+          <button role="tab" aria-selected={tab === 'loadout'} data-tutorial="hub.tab.loadout">
+            Loadout
+          </button>
+          <button role="tab" aria-selected={tab === 'skills'} data-tutorial="hub.tab.skills">
+            Skills
+          </button>
+        </div>
         {tab === 'skills' && <button data-tutorial="skills.mana">Mana</button>}
         {view === 'bind' && <div data-tutorial="mana.bind">Bind</div>}
       </div>
     );
+    pad();
     const { rerender } = render(hub('loadout'));
     render(<TutorialHighlight />);
     at('bind');
-    expect(ring()).toHaveAttribute('data-target', 'mana.bind');
-    expect(placed()).toEqual(['block', '391px', '1px', '118px', '58px']);
+    expect(marker()).toHaveAttribute('data-target', 'hub.tab.skills');
+    expect(placed()).toEqual(['block', '390px', '0px', '120px', '60px']);
+    // A kit tab is LB/RB's, never the D-pad's: the marker alone points at it.
+    expect(screen.getByText('Skills')).not.toHaveFocus();
     rerender(hub('skills'));
     nextFrame();
-    expect(placed()).toEqual(['block', '31px', '491px', '218px', '78px']);
+    expect(marker()).toHaveAttribute('data-target', 'skills.mana');
+    expect(placed()).toEqual(['block', '30px', '490px', '220px', '80px']);
+    expect(screen.getByText('Mana')).toHaveFocus();
     rerender(hub('skills', 'bind'));
     nextFrame();
-    expect(placed()).toEqual(['block', '591px', '291px', '318px', '118px']);
+    expect(marker()).toHaveAttribute('data-target', 'mana.bind');
+    expect(placed()).toEqual(['block', '590px', '290px', '320px', '120px']);
+  });
+
+  it('a marked pane gives the focus to its first D-pad stop', () => {
+    boxes['mana.bind'] = DOMRect.fromRect({ x: 600, y: 300, width: 300, height: 100 });
+    pad();
+    render(
+      <div data-tutorial="mana.bind">
+        <span data-pad-skip>
+          <button>Help</button>
+        </span>
+        <button>Frost</button>
+        <button>Storm</button>
+      </div>,
+    );
+    render(<TutorialHighlight />);
+    at('bind');
+    expect(screen.getByText('Frost')).toHaveFocus();
   });
 
   it('passes over a way already open: its tab selected, nothing to point at', () => {
@@ -184,7 +296,7 @@ describe('TutorialHighlight', () => {
     );
     render(<TutorialHighlight />);
     at('claim');
-    expect(ring()!.style.display).toBe('none');
+    expect(marker()!.style.display).toBe('none');
   });
 
   it("never moves the pad's focus onto the HUD", () => {
@@ -194,10 +306,10 @@ describe('TutorialHighlight', () => {
         <button data-tutorial="hud.potion">Potion</button>
       </div>,
     );
-    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    pad();
     render(<TutorialHighlight />);
     at('hud');
-    expect(ring()!.style.display).toBe('block');
+    expect(marker()!.style.display).toBe('block');
     expect(screen.getByText('Potion')).not.toHaveFocus();
   });
 });
