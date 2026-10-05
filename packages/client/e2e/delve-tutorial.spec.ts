@@ -1,5 +1,13 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { ARENA_READY, SAVE_KEY, seedProfile, startDive, stepTo } from './fixtures/delve';
+import {
+  addSlot,
+  createDefaultRegistry,
+  createDelveProfile,
+  defaultMoveset,
+  generateItem,
+  SeededRNG,
+} from '@alloy/engine';
+import { ARENA_READY, SAVE_KEY, armed, seedProfile, startDive, stepTo } from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
@@ -326,6 +334,79 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('ability-readout')).toBeVisible();
     await marked('skills.addSlot');
     await expect(page.getByTestId('add-slot')).toBeFocused();
+  });
+
+  test("TU04: lesson 2 by the pad: the rare's Transfer through the take sheet, then a Hone on Temper's list", async ({
+    page,
+  }) => {
+    const registry = createDefaultRegistry();
+    // Grask's set drop: a rare sword in the primary.
+    const rare = generateItem(
+      registry,
+      { uid: 'grask-sword', ilvl: 5, rarity: 'rare', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(5),
+    );
+    // The worn sword as lesson 1 left it: a Primary past its base slots, so the Transfer has a
+    // moveset to move (the step holds once the rare is worn with more moves than its base).
+    const built = addSlot(
+      registry,
+      { ...armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' })), links: 9, scrap: 2000 },
+      'primary',
+    );
+    expect(built.ok).toBe(true);
+    // A save at the lesson's Transfer, Grask's rare in the bag, the scrap for the move and a hone.
+    await seedProfile(page, 4242, false, 'frost', {
+      scrap: 2000,
+      equipped: built.profile.equipped,
+      bag: [{ ...rare, moveset: defaultMoveset(registry, rare, 'fire') }],
+      tutorial: { step: 'l2-transfer', count: 0, misses: 0 },
+    });
+    await installPad(page);
+    await page.goto('/delve');
+    const marker = page.getByTestId('tutorial-highlight');
+    const marked = (target: string) => expect(marker).toHaveAttribute('data-target', target);
+    await expect(page.getByTestId('loadout-tab')).toBeVisible();
+    await marked('loadout.bag:weapon.rare');
+    // The pad takes the input lock on RB (to Skills, where the marker's way is the Loadout's
+    // tab) and LB comes back. The marker moves the focus only as its target changes, and the
+    // page loaded under the keys, so this is what puts the pad's focus on the marked tile.
+    await tap(page, BUTTON.rb);
+    await marked('hub.tab.loadout');
+    await tap(page, BUTTON.lb);
+
+    // The rare's tile first: the marker's focus lands on it, which selects it under the pad.
+    await expect(page.locator('[data-uid="grask-sword"]')).toBeFocused();
+    await expect(page.getByTestId('item-verdict')).toBeVisible();
+    // Then the footer's A, which on this weapon is "Equip or transfer".
+    await marked('loadout.transfer');
+    await expect(page.locator('.k-prompt[data-tutorial="loadout.transfer"]')).toContainText(
+      'Equip or transfer',
+    );
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('take-sheet')).toBeVisible();
+    // In the sheet, its Transfer: marked and focused.
+    await marked('loadout.transfer');
+    await expect(page.getByTestId('take-transfer')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect.poll(() => step(page)).toBe('l2-hone');
+
+    // The Hone: the Forge tab, then its Temper bench, then the Hone row, a line and Hone.
+    await marked('hub.tab.forge');
+    await tap(page, BUTTON.rb);
+    await tap(page, BUTTON.rb);
+    await marked('forge.temper');
+    await tap(page, BUTTON.rt);
+    await marked('temper.hone');
+    await expect(page.getByTestId('temper-op-hone')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await marked('temper.line');
+    await expect(page.getByTestId('hone-line-0')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await marked('temper.go');
+    await expect(page.getByTestId('hone-button')).toBeFocused();
+    await tap(page, BUTTON.a);
+    // The seeded save has no quest to claim, so l2-claim holds at once: on to the board.
+    await expect.poll(() => step(page)).toBe('l2-board');
   });
 
   test('TU02: a Jump in save has only the Basic until its first forge gives it a Primary', async ({
