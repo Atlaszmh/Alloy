@@ -71,7 +71,7 @@ test.describe('Delve quests', () => {
       page.getByTestId('quest-tracker').getByTestId('tracked-bring_it_home'),
     ).toBeVisible();
     await page.keyboard.press('Escape');
-    await page.getByTestId('dive-pause').getByTestId('pause-abandon').click();
+    await page.getByTestId('pause-screen').getByTestId('pause-abandon').click();
     await expect(page.getByTestId('dive-summary')).toContainText('ABANDONED');
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();

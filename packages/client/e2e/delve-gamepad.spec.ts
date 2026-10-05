@@ -26,6 +26,7 @@ const BUTTON = {
   rb: 5,
   lt: 6,
   rt: 7,
+  view: 8,
   menu: 9,
   up: 12,
   down: 13,
@@ -186,7 +187,7 @@ async function padWalk(page: Page, id: string): Promise<void> {
 }
 
 test.describe('Delve with a controller', () => {
-  test('G01: Menu opens the pause with Resume focused; RB steps its tabs, skipping Forge; B resumes; Menu opens it again, and A on Resume resumes', async ({
+  test('G01: Menu opens the pause list on Resume; A on Build and quests opens the hub, where RB steps the tabs past the Forge and B goes back; B and Menu resume; View opens the hub on Quests', async ({
     page,
   }) => {
     await setup(page, true);
@@ -198,23 +199,38 @@ test.describe('Delve with a controller', () => {
     const pause = page.getByTestId('pause-screen');
     const resume = pause.getByTestId('pause-resume');
     await expect(pause).toBeVisible();
-    // The pad has the input lock: the focus goes straight to Resume, on the Loadout tab.
+    // The pad has the input lock: the focus goes straight to Resume.
     await expect(resume).toBeFocused();
-    await expect(pause.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.down);
+    await expect(pause.getByTestId('pause-build')).toBeFocused();
+    await tap(page, BUTTON.a);
+    const hub = page.getByTestId('pause-hub');
+    await expect(hub.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
-    await expect(pause.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
+    await expect(hub.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
     // The Forge is locked mid-dive: RB steps over it.
     await tap(page, BUTTON.rb);
-    await expect(pause.getByTestId('tab-codex')).toHaveAttribute('aria-selected', 'true');
-    await expect(pause.getByTestId('tab-forge')).toHaveAttribute('aria-selected', 'false');
+    await expect(hub.getByTestId('tab-codex')).toHaveAttribute('aria-selected', 'true');
+    await expect(hub.getByTestId('tab-forge')).toHaveAttribute('aria-selected', 'false');
+    // B: back to the list, on the row that opened the hub; B again resumes.
+    await tap(page, BUTTON.b);
+    await expect(pause.getByTestId('pause-build')).toBeFocused();
     await tap(page, BUTTON.b);
     await expect(pause).toBeHidden();
-
+    // Menu opens it on Resume again; Menu resumes; and so does A on Resume.
     await tap(page, BUTTON.menu);
-    await expect(pause).toBeVisible();
+    await expect(resume).toBeFocused();
+    await tap(page, BUTTON.menu);
+    await expect(pause).toBeHidden();
+    await tap(page, BUTTON.menu);
     await expect(resume).toBeFocused();
     await tap(page, BUTTON.a);
     await expect(pause).toBeHidden();
+    // View, the journal, opens the hub on Quests directly; Menu there resumes.
+    await tap(page, BUTTON.view);
+    await expect(hub.getByTestId('tab-quests')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.menu);
+    await expect(hub).toBeHidden();
   });
 
   test('G02: B dodges, and the hints switch to the controller', async ({ page }) => {

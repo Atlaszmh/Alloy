@@ -101,7 +101,10 @@ test.describe('Delve loot loop', () => {
     // Abandon the dive (items are kept; it counts as a death: the summary, then the Anvil), and
     // equip it at the Anvil (answering an off-pair item's bind choice, which the compare pane
     // shows in place of Equip; the pane stays).
-    await pause.getByRole('button', { name: 'Abandon · counts as a death' }).click();
+    await page.keyboard.press('Escape'); // the hub's Back: the list
+    const list = page.getByTestId('pause-screen');
+    await expect(list).toBeVisible();
+    await list.getByRole('button', { name: 'Abandon · counts as a death' }).click();
     await expect(page.getByTestId('dive-summary')).toContainText('ABANDONED');
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
@@ -205,7 +208,7 @@ test.describe('Delve loot loop', () => {
     // Abandon counts as a death: the summary shows what the dive brought home and what it lost.
     await door.getByRole('button', { name: 'Menu' }).click();
     await page
-      .getByTestId('dive-pause')
+      .getByTestId('pause-screen')
       .getByRole('button', { name: 'Abandon · counts as a death' })
       .click();
     const summary = page.getByTestId('dive-summary');

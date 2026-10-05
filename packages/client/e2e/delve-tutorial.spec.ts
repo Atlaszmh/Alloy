@@ -339,7 +339,7 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('attack-button')).toBeVisible();
     await expect(page.getByTestId('ability-0')).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await page.getByTestId('dive-pause').getByTestId('pause-abandon').click();
+    await page.getByTestId('pause-screen').getByTestId('pause-abandon').click();
     await page.getByTestId('return-camp').click();
 
     // The kit forges an uncommon sword: worn, it carries the Primary.
