@@ -11,8 +11,23 @@ interface ToastMessage {
 let toastId = 0;
 let toastListener: ((msg: ToastMessage) => void) | null = null;
 
-/** Fire-and-forget toast from anywhere */
+let sink: ((text: string) => void) | null = null;
+
+/**
+ * Send every toast to `fn` instead of the container until the returned release is called: the
+ * dive's gain feed takes the notices while the fight is live (the pad-first spec, 3). One sink
+ * at a time, the last routed winning; a release only clears its own.
+ */
+export function routeToasts(fn: (text: string) => void): () => void {
+  sink = fn;
+  return () => {
+    if (sink === fn) sink = null;
+  };
+}
+
+/** Fire-and-forget toast from anywhere: to the routed sink while one is (`routeToasts`), else the container. */
 export function showToast(text: string, opts: { variant?: ToastVariant } = {}) {
+  if (sink) return sink(text);
   toastListener?.({ id: ++toastId, text, variant: opts.variant ?? 'default' });
 }
 

@@ -4,7 +4,8 @@ import { useDelveStore } from '@/stores/delveStore';
 
 /**
  * Show the Delve's waiting notices (an overtake, builds a realign or a save
- * migration changed) as toasts. Call it in a page that renders a
+ * migration changed) as toasts (in a live dive, lines of the gain feed:
+ * `routeToasts`). Call it in a page that renders a
  * ToastContainer: the page's effect runs after its children's, so the
  * container is listening. Pass `enabled = false` while the page renders no
  * ToastContainer, and the notices wait for the next page. Taking them from

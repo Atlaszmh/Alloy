@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import { ToastContainer, showToast } from '../Toast';
+import { ToastContainer, routeToasts, showToast } from '../Toast';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -64,5 +64,29 @@ describe('Toast', () => {
       vi.advanceTimersByTime(2);
     });
     expect(screen.queryByText(/ephemeral/)).toBeNull();
+  });
+
+  it("while a sink is routed (the dive's gain feed), every toast goes to it instead; released, to the container again", () => {
+    render(<ToastContainer />);
+    const got: string[] = [];
+    const release = routeToasts((text) => got.push(text));
+    act(() => showToast('Pattern learned: Maul'));
+    expect(got).toEqual(['Pattern learned: Maul']);
+    expect(screen.queryByText('Pattern learned: Maul')).toBeNull();
+    release();
+    act(() => showToast('Equip: done'));
+    expect(got).toHaveLength(1);
+    expect(screen.getByText('Equip: done')).toBeInTheDocument();
+  });
+
+  it('a stale release leaves the sink that replaced it', () => {
+    const first: string[] = [];
+    const second: string[] = [];
+    const releaseFirst = routeToasts((t) => first.push(t));
+    const releaseSecond = routeToasts((t) => second.push(t));
+    releaseFirst();
+    showToast('Objective done: Reach depth 2');
+    expect([first, second]).toEqual([[], ['Objective done: Reach depth 2']]);
+    releaseSecond();
   });
 });
