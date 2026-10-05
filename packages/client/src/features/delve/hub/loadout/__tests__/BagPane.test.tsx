@@ -46,6 +46,16 @@ describe('the bag pane', () => {
     useInputDeviceStore.setState({ device: 'keyboard' });
   });
 
+  it('keys each tile for the guided start by its slot and rarity (loadout.bag), pressed once selected', () => {
+    put(gear('h1', 'helm'), gear('c1', 'chest', 'uncommon'));
+    const props = { locked: false, onSelect: vi.fn(), onHover: vi.fn(), onEquip: vi.fn() };
+    render(<BagPane {...props} selected="c1" />);
+    expect(tile('c1')).toHaveAttribute('data-tutorial', 'loadout.bag:chest.uncommon');
+    expect(tile('c1')).toHaveAttribute('aria-pressed', 'true');
+    expect(tile('h1')).toHaveAttribute('data-tutorial', 'loadout.bag:helm.magic');
+    expect(tile('h1')).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('counts the bag, and marks each tile ▲ better as it is, ◇ better only as a home, NEW', () => {
     const p = store().profile;
     const sword = p.equipped.weapon!;

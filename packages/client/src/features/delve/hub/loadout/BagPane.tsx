@@ -224,6 +224,7 @@ export function BagPane({
                 isNew={newUids[item.uid]}
                 selected={selected === item.uid}
                 testId="bag-item"
+                data-tutorial={`loadout.bag:${item.slot}.${item.rarity}`}
                 onClick={() => {
                   if (useInputDeviceStore.getState().device === 'gamepad') onEquip(item.uid);
                   else {
