@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
 import { navCapture, padPrompts, scopedLast, topScope } from '@/features/delve/kit/prompts';
 import type { PadButton, PadState } from './gamepad';
@@ -285,7 +286,8 @@ function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
   do i = (i + delta + tabs.length) % tabs.length;
   while (!enabled(tabs[i]));
   const before = document.activeElement;
-  tabs[i].click();
+  // Rendered now (React would in a microtask): the old tab's controls must be gone before the focus is placed.
+  flushSync(() => tabs[i].click());
   // A list that is also a pane's content (the Skills tab's skill list): its row takes the focus.
   if (isCandidate(tabs[i])) return focus(tabs[i]);
   // A kit tab list is off the D-pad. A focused control that survived the switch keeps the focus;

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { render, renderHook } from '@testing-library/react';
+import { createElement as h, Fragment, useState } from 'react';
 import {
   candidates,
   claimDevices,
@@ -529,6 +530,38 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     (main.firstElementChild as HTMLElement).focus();
     tap(PAD.up);
     expect((document.activeElement as HTMLElement).getAttribute('role')).not.toBe('tab');
+  });
+
+  it("a React tab list's switch is rendered before the focus is placed: the new tab's first control", async () => {
+    // Boxes by `data-top`: b-second lies where a-only was, so a focus left to fall goes there.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const top = Number(this.dataset.top ?? 0);
+      return { left: 0, top, width: 10, height: 10, right: 10, bottom: top + 10 } as DOMRect;
+    });
+    function Hub() {
+      const [tab, setTab] = useState<'a' | 'b'>('a');
+      const tabFor = (t: 'a' | 'b') =>
+        h('button', { role: 'tab', 'aria-selected': tab === t, onClick: () => setTab(t) });
+      return h(
+        Fragment,
+        null,
+        h('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' }, tabFor('a'), tabFor('b')),
+        ...(tab === 'a'
+          ? [h('button', { key: 'a', 'data-name': 'a-only', 'data-top': '40' })]
+          : [
+              h('button', { key: 'b1', 'data-name': 'b-first', 'data-top': '0' }),
+              h('button', { key: 'b2', 'data-name': 'b-second', 'data-top': '40' }),
+            ]),
+      );
+    }
+    render(h(Hub));
+    (document.querySelector('[data-name="a-only"]') as HTMLElement).focus();
+    tap(PAD.rb);
+    await Promise.resolve();
+    tick();
+    expect((document.activeElement as HTMLElement).getAttribute('data-name')).toBe('b-first');
   });
 
   it("a screen's prompt takes its button first; A still presses the focused control", () => {

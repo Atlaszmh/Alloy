@@ -298,12 +298,13 @@ test.describe('Delve pad navigation', () => {
     await back(page, 'left', 'tile');
     const bag = await leave(page, 'down', 'low');
     expect((await where(page)).foot).toBe(true);
-    // Up from the footer goes into the pane above the focused button: when that is the bag, to
-    // the control it was left on.
+    // Down from tile 4's column reaches a footer control under the bag (at both sizes), so up
+    // goes back into the bag, to the control it was left on.
     await tap(page, BUTTON.up);
     const at = await where(page);
     expect(at.foot).toBe(false);
-    if (at.group === bag) expect(await marked(page)).toBe('low');
+    expect(at.group).toBe(bag);
+    expect(await marked(page)).toBe('low');
   });
 
   test('PN03: Skills: the list, the cards and the inspector, and back to the same card', async ({ page }) => {
@@ -337,9 +338,20 @@ test.describe('Delve pad navigation', () => {
     // RT steps to Temper: the pattern list goes, and the focus lands on a control of the bench.
     await tap(page, BUTTON.rt);
     await expect(page.getByRole('tab', { name: /Temper/ })).toHaveAttribute('aria-selected', 'true');
+    // The pattern list's focus went with it: the bench's first control takes it.
+    const first = await page.evaluate(async () => {
+      const nav = await import('/src/features/gamepad/use-gamepad-nav.ts' as string);
+      const list = document.querySelector('[data-pad-tabs="sub"]')!;
+      const el = (nav.candidates(null) as HTMLElement[]).find(
+        (c) =>
+          list.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING &&
+          !c.closest('[data-screen-section="screen-foot"]'),
+      );
+      return el === document.activeElement;
+    });
+    expect(first, "the focus is on the Temper bench's first control").toBe(true);
     const at = await where(page);
     expect(at.tab).toBe(false);
     expect(at.foot).toBe(false);
-    expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
   });
 });
