@@ -8,6 +8,7 @@ import {
   keepFocus,
   moveFocus,
   nextFocus,
+  PAD_STEP,
   STICK_SCROLL_PX,
   useGamepadNav,
 } from '../use-gamepad-nav';
@@ -502,6 +503,8 @@ const PAD = {
   rt: 7,
   menu: 9,
   up: 12,
+  down: 13,
+  left: 14,
   right: 15,
 } as const;
 
@@ -600,6 +603,23 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     const step = (STICK_SCROLL_PX * 16) / 1000;
     expect(by.map((v) => Math.round(v))).toEqual([step, step, -step].map(Math.round));
     expect(document.activeElement).toBe(button);
+  });
+
+  it('left/right on a focused [data-pad-step] control step it (PAD_STEP), never moving the focus; up and down move on', () => {
+    // A button either side of the stepper, which a plain left/right would move to, and one below.
+    el('button', {}, document.body, 0, 0);
+    const stepper = el('div', { 'data-pad-step': '', tabindex: '0' }, document.body, 20, 0);
+    el('button', {}, document.body, 40, 0);
+    const below = el('button', {}, document.body, 20, 20);
+    const heard: number[] = [];
+    stepper.addEventListener(PAD_STEP, (e) => heard.push((e as CustomEvent<number>).detail));
+    stepper.focus();
+    tap(PAD.right);
+    tap(PAD.left);
+    expect(heard).toEqual([1, -1]);
+    expect(document.activeElement).toBe(stepper);
+    tap(PAD.down);
+    expect(document.activeElement).toBe(below);
   });
 
   it("B presses the topmost scope's back, never the page's; Menu its menu, else its back", () => {

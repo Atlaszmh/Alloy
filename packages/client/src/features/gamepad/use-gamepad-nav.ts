@@ -11,7 +11,7 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * left-stick flick) moves focus to the control lying that way (`nextFocus`:
  * inside its `[data-pad-group]` pane while one does, else into the pane that
  * way, at the control it last held; never onto one scrolled out of its list;
- * left/right adjust a focused slider or list), A presses it. At an edge, up
+ * left/right adjust a focused slider, list or stepper (`PAD_STEP`)), A presses it. At an edge, up
  * and down wrap inside a `[data-pad-wrap]` list (`wrapFocus`). Every other
  * button goes to the screen's prompts first (`padPrompts`, which also times
  * the holds); one no prompt takes does its default: B presses the topmost
@@ -265,7 +265,13 @@ const OPPOSITE: Record<NavDir, NavDir> = { up: 'down', down: 'up', left: 'right'
 let lastCross: { from: HTMLElement; to: HTMLElement; dir: NavDir } | null = null;
 
 /**
- * A D-pad press: left/right adjust a focused slider or list; else the focus moves to
+ * The event a focused `[data-pad-step]` control hears for left/right (`detail`: -1 or 1), in
+ * place of a focus move: the kit's `Stepper`.
+ */
+export const PAD_STEP = 'padstep';
+
+/**
+ * A D-pad press: left/right adjust a focused slider, list or stepper (`PAD_STEP`); else the focus moves to
  * `nextFocus`'s pick, straight back across the panes it just crossed (`lastCross`), or round a
  * `[data-pad-wrap]` list at its edge.
  */
@@ -280,6 +286,14 @@ export function moveFocus(dir: NavDir): void {
   }
   if (active instanceof HTMLSelectElement && (dir === 'left' || dir === 'right')) {
     return stepSelect(active, dir);
+  }
+  if (
+    active instanceof HTMLElement &&
+    active.matches('[data-pad-step]') &&
+    (dir === 'left' || dir === 'right')
+  ) {
+    active.dispatchEvent(new CustomEvent(PAD_STEP, { detail: dir === 'right' ? 1 : -1 }));
+    return;
   }
   const els = candidates();
   if (els.length === 0) return;

@@ -129,6 +129,21 @@ export interface SegmentedProps<T extends string> {
   'aria-label': string;
 }
 
+/** The kit `Stepper`: one value of several, stepped left and right. */
+export interface StepperProps<T extends string> {
+  label: string;
+  /** In order; `text` is what assistive tech reads (`aria-valuetext`). */
+  options: { id: T; label: ReactNode; text: string }[];
+  value: T;
+  onChange: (id: T) => void;
+  /** One line under it: what the save lacks and where it drops. */
+  note?: ReactNode;
+  /** Its guided-start target (`data-tutorial`), and whether its step is done (`data-tutorial-done`). */
+  tutorial?: string;
+  done?: boolean;
+  testId?: string;
+}
+
 export interface BarProps {
   value: number;
   max: number;

@@ -178,9 +178,12 @@ async function audit(page: Page): Promise<Report> {
     const groupOf = (el: HTMLElement) => el.closest('[data-pad-group]') ?? el;
     const dirs = ['up', 'down', 'left', 'right'] as const;
     const opp = { up: 'down', down: 'up', left: 'right', right: 'left' } as const;
-    /** A press from `el`, scrolled into view as focusing it would. A slider or a list takes left/right itself. */
+    /** A press from `el`, scrolled into view as focusing it would. A slider, a list or a stepper takes left/right itself. */
     const next = (el: HTMLElement, d: (typeof dirs)[number]): HTMLElement | null => {
-      const own = el instanceof HTMLSelectElement || (el instanceof HTMLInputElement && el.type === 'range');
+      const own =
+        el instanceof HTMLSelectElement ||
+        (el instanceof HTMLInputElement && el.type === 'range') ||
+        el.matches('[data-pad-step]');
       if (own && (d === 'left' || d === 'right')) return null;
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       return nav.nextFocus(el, d, { memory: false });

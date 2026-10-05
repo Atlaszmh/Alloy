@@ -609,6 +609,47 @@ html[data-input='gamepad'] .delve-ui :focus {
   cursor: pointer;
 }
 
+/* The Stepper: its label over a raised-steel well, the value centred between ◂ ▸ (the mouse's). */
+.k-stepper-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.k-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 2px;
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  color: #ffffff;
+  background: #3a4466;
+  border: 2px solid #5a6988;
+}
+
+.k-stepper > button {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: #fee761;
+  background: #262b44;
+  border: 0;
+  cursor: pointer;
+}
+
+.k-stepper > button:disabled {
+  color: #5a6988;
+  cursor: not-allowed;
+}
+
+.k-stepper-value {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
 .k-swatch {
   width: 10px;
   height: 10px;

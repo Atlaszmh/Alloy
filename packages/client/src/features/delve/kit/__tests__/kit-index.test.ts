@@ -26,6 +26,7 @@ const CONTRACT = [
   'Tabs',
   'Chip',
   'Segmented',
+  'Stepper',
   'Bar',
   'Tile',
   'Tooltip',

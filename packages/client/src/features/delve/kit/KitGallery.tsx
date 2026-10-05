@@ -4,7 +4,7 @@ import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { RARITY_COLOR, RARITY_TEXT } from '../format';
 import { ItemIcon } from '../ItemIcon';
 import '../delve.css';
-import { Bar, Button, Chip, Segmented, Tabs } from './controls';
+import { Bar, Button, Chip, Segmented, Stepper, Tabs } from './controls';
 import { GLYPH_ART } from './glyph-art';
 import { Glyph, InputGlyph, Price, PromptBar } from './glyphs';
 import { PixelSprite } from './PixelSprite';
@@ -170,6 +170,13 @@ export function KitGallery(): ReactElement {
               onChange={setRarity}
               columns={3}
               options={RARITIES.map((r) => ({ id: r, label: r, color: RARITY_COLOR[r] }))}
+            />
+            <Stepper<Rarity>
+              label="Rarity"
+              value={rarity}
+              onChange={setRarity}
+              options={RARITIES.map((r) => ({ id: r, label: r, text: r }))}
+              note="Left and right step it"
             />
             <Tabs<Tab>
               aria-label="Sub tabs"
