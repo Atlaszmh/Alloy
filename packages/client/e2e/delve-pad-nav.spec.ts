@@ -34,7 +34,11 @@ const ALLOW: Record<string, [number, number]> = {
   'loadout-item': [11, 7],
   'junk-sheet': [0, 0],
   help: [0, 0],
-  skills: [2, 4],
+  skills: [0, 0],
+  'skills-editor': [0, 0],
+  // The form grid's short last row: Strike, alone under Lance and Burst.
+  'skills-forms': [2, 2],
+  'apply-sheet': [0, 0],
   forge: [0, 0],
   'forge-pattern': [0, 0],
   temper: [0, 0],
@@ -63,6 +67,16 @@ const CEILING: Record<string, number> = {
   'junk-sheet': 10,
   // Help's Back: its topics are a kit tab list, off the D-pad.
   help: 1,
+  // The strip's Realign, the Primary's three cards and Delve (the strip's tabs are LT/RT's, the
+  // footer's Revert and Apply the mouse's; no slot to buy on the audit save).
+  skills: 5,
+  // The move editor: Kind, Form, Elements, Position and Payment (no socket on its move; Back and
+  // Remove are B's and X's).
+  'skills-editor': 5,
+  // The Primary's five forms (Back is B's).
+  'skills-forms': 5,
+  // The Apply sheet: its Back, Apply, Try in Training and Discard changes.
+  'apply-sheet': 4,
   // The 9 learned patterns and Delve; with a pattern open, its Flux, Metal and Element rows and Forge.
   forge: 10,
   'forge-pattern': 14,
@@ -355,6 +369,24 @@ test.describe('Delve pad navigation', () => {
     await expect(page.getByTestId('junk-sheet')).toHaveCount(0);
     await click(page, 'tab-skills');
     await check(page, 'skills');
+    // The move editor over the audit save's Primary (its first card), its form grid, and the
+    // Apply sheet over a change.
+    await click(page, 'move-0');
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await check(page, 'skills-editor');
+    await click(page, 'move-form');
+    await expect(page.getByTestId('form-picker')).toBeVisible();
+    await check(page, 'skills-forms');
+    await page.keyboard.press('Escape'); // the grid's Back
+    await expect(page.getByTestId('form-picker')).toHaveCount(0);
+    await page.getByTestId('move-kind').press('ArrowRight'); // a change, so the sheet has one
+    await page.keyboard.press('Escape'); // the editor's Back
+    await expect(page.getByTestId('move-editor')).toHaveCount(0);
+    await click(page, 'chain-apply');
+    await expect(page.getByTestId('apply-sheet')).toBeVisible();
+    await check(page, 'apply-sheet');
+    await click(page, 'apply-sheet-discard');
+    await expect(page.getByTestId('apply-sheet')).toHaveCount(0);
     await click(page, 'tab-forge');
     await check(page, 'forge');
     await click(page, 'pattern-cuirass');
