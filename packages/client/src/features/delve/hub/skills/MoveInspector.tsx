@@ -7,6 +7,7 @@ import {
   type MoveKind,
   type FormId,
 } from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
 import { Button, Panel, Segmented } from '@/features/delve/kit';
 import { manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
@@ -36,6 +37,7 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
   const data = registry.getArpgData();
   const { move, slot, index, locked, resolved } = ed;
   const { stats, runes } = anvil.editor;
+  const secondary = useDelveStore((s) => s.profile.pair.secondary);
   if (ed.absent || !move)
     return (
       <Panel as="aside" aria-label="Move inspector">
@@ -49,6 +51,10 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
   const ab = resolved?.moves[index] ?? null;
   const name = (m: ManaType) => manaStyle(registry, m).name;
   const offText = (m: ManaType) => (off.includes(m) ? ' · off-pair' : '');
+  // The guided start's lesson (`l1-skills`): the Primary's last move takes the secondary, its
+  // first move the rune. Each control is a target only on that move.
+  const lessonLast = ed.skill === 'primary' && index === ed.entries.length - 1;
+  const lessonFirst = ed.skill === 'primary' && index === 0;
 
   return (
     <Panel as="aside" aria-label={`Move ${index + 1} inspector`} testId="ability-readout">
@@ -112,7 +118,10 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
         )}
         <section
           className="flex flex-col gap-2"
-          data-tutorial={ed.skill === 'primary' ? 'skills.elements' : undefined}
+          data-tutorial={lessonLast ? 'skills.elements' : undefined}
+          data-tutorial-done={
+            'elements' in move && !!secondary && move.elements.includes(secondary)
+          }
         >
           <span className="k-label">{'form' in move ? 'Elements' : 'Element'}</span>
           {'element' in move ? (
@@ -203,6 +212,8 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
                   style={{ borderColor: ed.socket === s ? 'var(--k-mana)' : undefined }}
                   onClick={() => ed.openPicker(index, s)}
                   data-testid={`inspect-socket-${s}`}
+                  data-tutorial={lessonFirst && s === 0 ? 'skills.rune' : undefined}
+                  data-tutorial-done={ed.sockets.some((x) => x !== null)}
                 >
                   {r ? (
                     <RuneGlyph rune={r} dormant={idle} />
@@ -231,7 +242,7 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
         )}
       </fieldset>
       {ed.picker ? (
-        <RunePicker {...ed.picker} />
+        <RunePicker {...ed.picker} tutorial={lessonFirst ? 'skills.rune' : undefined} />
       ) : ab ? (
         <div className="k-well flex flex-col gap-2 px-3.5 py-3">
           <MoveNumbers

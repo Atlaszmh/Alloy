@@ -31,6 +31,8 @@ export interface RunePickerProps {
   payment?: AbilityPayment;
   /** The move's `ResolvedAbility.ease`: each price eased by it. */
   ease?: number;
+  /** The guided start's target the list of runes carries (`data-tutorial`): its field's, e.g. `skills.rune`. */
+  tutorial?: string;
   /** A pick, then `onClose`. */
   onPick: (rune: RuneRef) => void;
   /** A pull, then `onClose`. */
@@ -109,6 +111,7 @@ export function RunePicker({
   dormant = false,
   payment,
   ease,
+  tutorial,
   onPick,
   onPull,
   onClose,
@@ -214,7 +217,7 @@ export function RunePicker({
           {tierChoice ? 'No rune fits this move.' : 'No rune in your pouch fits this move.'}
         </div>
       )}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2" data-tutorial={tutorial}>
         {rows.map(({ rune, count, dormant: idle }) => {
           const key = `${rune.id}-${rune.tier}`;
           return (

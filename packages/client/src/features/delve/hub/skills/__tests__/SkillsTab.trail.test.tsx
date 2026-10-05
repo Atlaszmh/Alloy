@@ -65,6 +65,32 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     expect(target('skills.addSlot')).toBeNull();
   });
 
+  it('the inspector: the elements are a target on the last move only, done in the secondary; the socket row and its picker are skills.rune', () => {
+    renderSkills();
+    // Move 1 of 2 is selected: its elements are not the lesson's.
+    expect(target('skills.elements')).toBeNull();
+    fireEvent.click(screen.getByTestId('move-1'));
+    expect(done('skills.elements')).toBe('false');
+    fireEvent.click(screen.getByTestId('element-frost'));
+    expect(done('skills.elements')).toBe('true');
+    // The first move's socket row, once it has a socket.
+    fireEvent.click(screen.getByTestId('move-0'));
+    expect(target('skills.rune')).toBeNull();
+    fireEvent.click(within(screen.getByTestId('sockets-0')).getByTestId('socket-open'));
+    expect(target('skills.rune')).toBe(screen.getByTestId('inspect-socket-0'));
+    expect(done('skills.rune')).toBe('false');
+    // Its picker, a scope of its own, carries the same target on its list of runes.
+    fireEvent.click(screen.getByTestId('inspect-socket-0'));
+    const list = screen
+      .getByTestId('rune-picker')
+      .querySelector<HTMLElement>('[data-tutorial="skills.rune"]')!;
+    fireEvent.click(within(list).getByTestId('rune-pick-quick'));
+    expect(screen.queryByTestId('rune-picker')).toBeNull();
+    expect(done('skills.rune')).toBe('true');
+    expect(screen.getByTestId('chain-apply')).toHaveAttribute('data-tutorial', 'skills.apply');
+    expect(screen.getByTestId('chain-apply')).toBeEnabled();
+  });
+
   it('a card is done as a way once its move holds what selecting it is for: the last the secondary, the first a rune', () => {
     renderSkills();
     expect(done('skills.card:last')).toBe('false');
