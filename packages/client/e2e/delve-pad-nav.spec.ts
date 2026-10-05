@@ -54,7 +54,7 @@ const ALLOW: Record<string, [number, number]> = {
 const CEILING: Record<string, number> = {
   'stop-powerup': 4,
   'stop-road': 5,
-  'pause-list': 7,
+  'pause-list': 8,
 };
 
 /** A dozen bag items of mixed slots and rarities, two of them weapons. */

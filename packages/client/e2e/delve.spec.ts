@@ -18,7 +18,14 @@ test.describe('Delve loot loop', () => {
 
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     await expect(page.getByTestId('paper-doll')).toBeVisible();
+    // How to delve is Help now: the pane shows the worn weapon, and the system menu holds Help.
+    await expect(page.getByTestId('item-sheet')).toContainText('Your weapon');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('open-help').click();
     await expect(page.getByTestId('delve-howto')).toBeVisible();
+    await page.keyboard.press('Escape'); // Help's Back: the menu
+    await page.keyboard.press('Escape'); // the menu's Back
+    await expect(page.getByTestId('system-menu')).toHaveCount(0);
 
     await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
@@ -68,8 +75,6 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     await expect(page.getByTestId('scrap-count')).toHaveText(/[1-9][\d,]* scrap/);
-    // How to delve stays until Strike the Anvil is claimed (a forge, after Bring It Home).
-    await expect(page.getByTestId('delve-howto')).toBeVisible();
   });
 
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
@@ -314,6 +319,10 @@ test.describe('Delve loot loop', () => {
     await expect(choice).toBeVisible();
     await page.getByTestId('mana-choice-frost').click();
     await expect(choice).toBeHidden();
+    // Jump in promised How to delve: it opens once.
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('help-dialog')).toHaveCount(0);
     await page.getByTestId('tab-skills').click();
     // The common sword carries the Basic alone: the others show locked.
     const summary = page.getByTestId('abilities-summary');

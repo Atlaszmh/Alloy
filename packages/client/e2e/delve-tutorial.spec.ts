@@ -331,6 +331,10 @@ test.describe('Delve guided start', () => {
     await page.goto('/delve');
     await page.getByTestId('guided-jump').click();
     await page.getByTestId('mana-choice-fire').click();
+    // Jump in promised How to delve: it opens once.
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('help-dialog')).toHaveCount(0);
     expect(await step(page)).toBeNull();
     await expect(page.getByTestId('tutorial-panel')).toHaveCount(0);
 
