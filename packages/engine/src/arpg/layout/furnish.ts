@@ -25,8 +25,11 @@ export interface Furnishing {
   hazards: { kind: string; element: ManaType; x: number; y: number }[];
 }
 
-/** Tries a room makes for each piece its budget holds. */
+/** Tries a room makes for each piece its budget holds (a den, dense cover, more). */
 const TRIES = 4;
+const DEN_TRIES = 12;
+/** How much likelier a den takes a piece with cover or crumbling cover. */
+const DEN_COVER = 3;
 /** How far round a room's centre, the start and an interactable the floor stays clear, in cells (a 5 × 5). */
 const CLEAR = 2;
 /** The legend's cells that the furnisher writes, by the cell code and the palette's look kind. */
@@ -111,6 +114,7 @@ function furnishRoom(
       (!has(p, 'c') || budget.crumbling),
   );
   if (want === 0 || usable.length === 0) return;
+  const den = room.kind === 'den';
 
   // Kept clear: two cells in front of each door, and round the room's centre (where its
   // interactable stands and its foes walk home), the start and the interactable.
@@ -143,9 +147,14 @@ function furnishRoom(
   const others = data.hazards.filter((h) =>
     palette.hazards.every((id) => data.hazards.find((d) => d.id === id)!.element !== h.element),
   );
-  for (let t = 0, placed = 0; t < want * TRIES && placed < want; t++) {
+  const tries = want * (den ? DEN_TRIES : TRIES);
+  for (let t = 0, placed = 0; t < tries && placed < want; t++) {
     // The piece, where it stands and which way it faces.
-    const piece = weightedPick(usable, (p) => p.weight, rng);
+    const piece = weightedPick(
+      usable,
+      (p) => p.weight * (den && (has(p, '#') || has(p, 'c')) ? DEN_COVER : 1),
+      rng,
+    );
     const tag = piece.tags[rng.nextInt(0, piece.tags.length - 1)];
     const flip = piece.turns && rng.next() < 0.5;
     const face = piece.turns ? rng.nextInt(0, 3) : 0;

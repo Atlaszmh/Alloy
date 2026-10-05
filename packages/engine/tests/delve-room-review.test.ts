@@ -3,12 +3,13 @@ import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { aimPoint, nearestMonster } from '../src/arpg/abilities/targeting.js';
 import { botInput } from '../src/arpg/bot.js';
 import { UNREACHED } from '../src/arpg/flow.js';
+import { planFloor } from '../src/arpg/layout/generate.js';
 import { isWalkable, moveCircle } from '../src/arpg/grid.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { createFloorWorld } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
-import { CELL } from '../src/types/floor-map.js';
+import { CELL, type Room } from '../src/types/floor-map.js';
 import { arena, bal, dummy, gear, registry, STEP } from './fixtures/arena.js';
 import { floorWorld } from './fixtures/flow-map.js';
 import { block, walledMap } from './fixtures/maps.js';
@@ -204,4 +205,39 @@ describe('ambush packs', () => {
       }
     expect(stacked).toEqual([]);
   });
+});
+
+describe('a den', () => {
+  it(
+    "holds dense cover: half again a combat room's share of its floor",
+    { timeout: 60_000 },
+    () => {
+      const share = { den: [0, 0], combat: [0, 0] };
+      for (let s = 0; s < 30; s++)
+        for (let depth = 1; depth <= 30; depth++) {
+          const { map } = planFloor(
+            registry,
+            1000 + s * 7919,
+            depth,
+            registry.getBiomeForDepth(depth),
+            null,
+          );
+          for (const r of map.rooms.filter(
+            (o: Room) => !o.arena && (o.kind === 'den' || o.kind === 'combat'),
+          )) {
+            const tally = share[r.kind as 'den' | 'combat'];
+            const { x, y, w, h } = r.rect;
+            for (let j = y; j < y + h; j++)
+              for (let i = x; i < x + w; i++) {
+                const c = map.cells[j * map.width + i];
+                tally[0] += c === CELL.cover || c === CELL.crumbling ? 1 : 0;
+                tally[1]++;
+              }
+          }
+        }
+      const den = share.den[0] / share.den[1];
+      const combat = share.combat[0] / share.combat[1];
+      expect(den).toBeGreaterThan(1.5 * combat);
+    },
+  );
 });
