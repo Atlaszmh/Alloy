@@ -73,6 +73,13 @@ export async function stepTo(page: Page, testId: string, value: RegExp): Promise
   await expect(el).toHaveAttribute('aria-valuetext', value);
 }
 
+/** Apply the Skills tab's draft: the footer's Apply opens the Apply sheet, whose Apply applies it. */
+export async function applyDraft(page: Page): Promise<void> {
+  await page.getByTestId('chain-apply').click();
+  await page.getByTestId('apply-sheet-confirm').click();
+  await expect(page.getByTestId('apply-sheet')).toHaveCount(0);
+}
+
 /** From the Anvil: the footer's Delve opens the Depart sheet, whose Delve starts (or resumes) the dive. */
 export async function startDive(page: Page): Promise<void> {
   await page.getByTestId('depart-button').click();

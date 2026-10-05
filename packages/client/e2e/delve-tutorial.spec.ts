@@ -7,7 +7,15 @@ import {
   generateItem,
   SeededRNG,
 } from '@alloy/engine';
-import { ARENA_READY, SAVE_KEY, armed, seedProfile, startDive, stepTo } from './fixtures/delve';
+import {
+  ARENA_READY,
+  SAVE_KEY,
+  applyDraft,
+  armed,
+  seedProfile,
+  startDive,
+  stepTo,
+} from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
@@ -277,7 +285,7 @@ test.describe('Delve guided start', () => {
     await page.getByTestId('socket-open').click();
     await page.getByTestId('inspect-socket-0').click();
     await page.getByTestId('rune-picker').locator('[data-testid^="rune-pick-"]').first().click();
-    await page.getByTestId('chain-apply').click();
+    await applyDraft(page);
     await expect.poll(() => step(page)).toBe('l1-salvage');
 
     // Salvage the old common sword, refine three Rusty bars into Iron.

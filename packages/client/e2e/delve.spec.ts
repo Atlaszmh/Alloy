@@ -7,6 +7,7 @@ import {
   stepTo,
   toRoad,
   useFullHud,
+  applyDraft,
 } from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
@@ -286,7 +287,7 @@ test.describe('Delve loot loop', () => {
     await stepTo(page, 'move-elements', /^Fire \+ Nature$/);
     await expect(page.getByTestId('ability-readout')).toContainText('light Wildfire Burst');
     await expect(page.getByTestId('chain-price')).toContainText('free until your first dive');
-    await page.getByTestId('chain-apply').click();
+    await applyDraft(page);
     await expect(page.getByTestId('chain-price')).toHaveText('No changes');
     const summary = page.getByTestId('abilities-summary');
     await expect(summary).toHaveText('light Wildfire Burst');

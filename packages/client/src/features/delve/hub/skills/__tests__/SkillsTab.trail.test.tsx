@@ -95,6 +95,12 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     expect(done('skills.rune')).toBe('true');
     expect(screen.getByTestId('chain-apply')).toHaveAttribute('data-tutorial', 'skills.apply');
     expect(screen.getByTestId('chain-apply')).toBeEnabled();
+    // It opens the Apply sheet, whose Apply carries the target too.
+    fireEvent.click(screen.getByTestId('chain-apply'));
+    expect(screen.getByTestId('apply-sheet-confirm')).toHaveAttribute(
+      'data-tutorial',
+      'skills.apply',
+    );
   });
 
   it('a card is done as a way once its move holds what selecting it is for: the last the secondary, the first a rune', () => {

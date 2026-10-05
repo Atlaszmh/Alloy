@@ -358,7 +358,11 @@ test.describe('Delve with a controller', () => {
     await tap(page, BUTTON.b);
     await expect(page.getByTestId('move-editor')).toHaveCount(0);
     await expect(page.getByTestId('move-1')).toBeFocused();
-    await page.getByTestId('chain-apply').click();
+    // Y opens the Apply sheet on its Apply; A applies.
+    await tap(page, BUTTON.y);
+    await expect(page.getByTestId('apply-sheet-confirm')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('apply-sheet')).toHaveCount(0);
     await expect.poll(async () => (await blow()).kind).toBe('medium');
   });
 
@@ -409,7 +413,11 @@ test.describe('Delve with a controller', () => {
             .moves[0].runes,
       );
     expect(await sockets()).toEqual([null]);
-    await page.getByTestId('chain-apply').click();
+    // Y in the editor opens the Apply sheet on its Apply; A applies.
+    await tap(page, BUTTON.y);
+    await expect(page.getByTestId('apply-sheet-confirm')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('apply-sheet')).toHaveCount(0);
     await expect.poll(sockets).toEqual([{ id: 'quick', tier: 3 }]);
   });
 

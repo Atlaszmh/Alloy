@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { armed, startDive as departAndDelve } from './fixtures/delve';
+import { applyDraft, armed, startDive as departAndDelve } from './fixtures/delve';
 import {
   baseCost,
   beginFloor,
@@ -120,7 +120,7 @@ test.describe('Delve runes', () => {
     const apply = page.getByTestId('chain-apply');
     await expect(apply).toContainText('1 Link');
     await expect(apply).toContainText('20 scrap');
-    await apply.click();
+    await applyDraft(page);
     await expect(page.getByTestId('chain-price')).toHaveText('No changes');
     await expect.poll(() => primarySockets(page)).toEqual([QUICK_III]);
     const after = await saved(page);
