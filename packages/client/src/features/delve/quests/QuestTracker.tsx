@@ -8,18 +8,36 @@ import { QUEST_KIND, objectiveCount, type QuestView } from './types';
 /**
  * The HUD's quest tracker (Phase 3's right column): up to `delve.quests.maxTracked` tracked quests;
  * nothing while none is. With `onJournal`, its Journal hint is a button that opens the journal.
+ * With `compact` (the lean HUD's corner), one line: the first tracked quest and its next objective.
  */
 export function QuestTracker({
   quests,
   onJournal,
+  compact,
 }: {
   quests: QuestView[];
   onJournal?: () => void;
+  compact?: boolean;
 }): ReactElement | null {
   const config = useControlsStore((s) => s.config);
   const { maxTracked } = getDelveRegistry().getDelveBalance().quests;
   const shown = quests.filter((q) => q.tracked).slice(0, maxTracked);
   if (shown.length === 0) return null;
+  if (compact) {
+    const q = shown[0];
+    const o = q.objectives.find((x) => !x.done);
+    return (
+      <div className="flex min-w-0 text-[15px]" data-testid="quest-tracker">
+        <div className="flex min-w-0 items-baseline gap-2" data-testid={`tracked-${q.id}`}>
+          <span className="k-disp truncate text-[17px]" style={{ color: QUEST_KIND[q.kind].text }}>
+            {q.name}
+          </span>
+          <span className="truncate">{o ? o.text : 'Ready to claim'}</span>
+          {o && <b className="k-disp flex-none text-[16px] text-[var(--k-hot-hi)]">{objectiveCount(o)}</b>}
+        </div>
+      </div>
+    );
+  }
   const hint = (
     <>
       <InputGlyph
