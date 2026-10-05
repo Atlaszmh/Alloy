@@ -1,4 +1,4 @@
-import { useRef, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   tutorialSkippable,
   tutorialText,
@@ -13,15 +13,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { keyLabel } from '@/features/controls/controls';
-import {
-  Button,
-  InputGlyph,
-  Keycap,
-  Panel,
-  PixelSprite,
-  usePrompts,
-  type ScaleContext,
-} from '../kit';
+import { Button, InputGlyph, Keycap, PixelSprite, usePrompts, type Binding } from '../kit';
 import { bindingOf } from '../arena/hud/SkillDock';
 import { getDelveRegistry } from '../registry';
 import { stepIn } from './tutorial-view';
@@ -59,6 +51,12 @@ export function TutorialParts({ parts }: { parts: TutorialTextPart[] }): ReactEl
   );
 }
 
+/** Where the strip sits: the arena's HUD (the dive, the Training Grounds), the stop's header row, or the Anvil's row. */
+export type TutorialPlace = 'hud' | 'stop' | 'anvil';
+
+/** How long the HUD's strip shows Hesta's line after a step begins, before it folds away. */
+export const LINE_MS = 8000;
+
 export interface TutorialPanelProps {
   /** The state to show: a floor's `world.tutorial` while it is fought, else the save's. */
   state: TutorialState;
@@ -66,32 +64,38 @@ export interface TutorialPanelProps {
   where: readonly TutorialWhere[];
   /** The floor's world, for its Primary's next move (`{primarySkill}`). */
   world?: ArpgWorld | null;
-  /** The zoom it sits under: 'hud' in the arena's HUD, 'ui' at the Anvil and the stop. */
-  context: ScaleContext;
+  /** Where it sits: 720 px wide in the HUD and the stop (the line under the objective), a full row at the Anvil (the line beside it). */
+  place: TutorialPlace;
   /** A beat's Continue (`ack`) and "Skip this step" (`skipStep`), to the floor or the save. */
   onEvent: (event: TutorialEvent) => void;
 }
 
 /**
- * Hesta's panel (see the tutorial spec's client): her sprite, her line and the objective (with
- * the inputs drawn for the device in hand, and the count while a step needs more than one), all
- * as `tutorialText` gives them. A reading beat has Continue (focused at once, A on the pad, and
- * Enter in the screen's pad scope); the panel is never a scope of its own, so the screen's
- * highlights and pad focus still find their targets. "Skip this step" shows when
- * `tutorialSkippable` allows it.
+ * Hesta's objective strip (see the pad-nav and guidance spec, 2.1): her portrait, the objective
+ * large (with the inputs drawn for the device in hand, and the count while a step needs more
+ * than one), then her line, all as `tutorialText` gives them. In the HUD her line folds away
+ * `LINE_MS` after a step begins (it stays in the DOM) but for a beat; at the stop and the Anvil
+ * it always shows. A reading beat has Continue (A on the pad, and Enter in the screen's pad
+ * scope), the strip's only D-pad stop; the strip is never a scope of its own, so the screen's
+ * tabs, prompts and Menu keep working. When `tutorialSkippable` allows it, "Skip this step" is
+ * a mouse button the D-pad passes by, beside the way to it from the Menu.
  */
 export function TutorialPanel({
   state,
   where,
   world,
-  context,
+  place,
   onEvent,
 }: TutorialPanelProps): ReactElement | null {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const ref = useRef<HTMLDivElement>(null);
+  const config = useControlsStore((s) => s.config);
+  const root = useRef<HTMLElement>(null);
   const step = stepIn(registry, state, where);
-  // Enter continues a beat, in whatever scope holds the panel (a focused control keeps its own).
+  /** The step on show, and whether its Continue is. */
+  const shown = step;
+  const beat = !!step?.beat;
+  // Enter continues a beat, in whatever scope holds the strip (a focused control keeps its own).
   usePrompts(
     [
       {
@@ -99,63 +103,89 @@ export function TutorialPanel({
         label: 'Continue',
         binding: { key: ['Enter', 'NumpadEnter'] },
         onPress: () => onEvent({ type: 'ack' }),
-        disabled: !step?.beat,
+        disabled: !beat,
       },
     ],
-    ref,
+    root,
   );
-  if (!step) return null;
+  /** The step whose line has folded away (the HUD's strip only: the others always show it). */
+  const [foldedId, setFoldedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (place !== 'hud' || !shown || shown.beat) return;
+    const t = setTimeout(() => setFoldedId(shown.id), LINE_MS);
+    return () => clearTimeout(t);
+  }, [place, shown]);
+  if (!step || !shown) return null;
   const giver = registry.getQuestsData().giver;
-  const text = tutorialText(registry, profile, step.id, world);
+  const text = tutorialText(registry, profile, shown.id, world);
   const skippable = tutorialSkippable(registry, profile, state, world);
-  const need = step.trigger.count;
+  const need = shown.trigger.count;
+  /** How the Menu that holds "Skip this step" opens here: the Anvil's system menu, else the menu binding. */
+  const menu: Binding =
+    place === 'anvil'
+      ? { key: 'Escape', pad: 'b' }
+      : { key: config.keys.menu ?? undefined, pad: config.pad.menu ?? undefined };
   return (
-    <Panel
-      as="section"
-      material={context === 'hud' ? 'glass' : 'plate'}
-      scroll={false}
+    <section
+      ref={root}
       aria-label={giver.name}
-      className="pointer-events-auto"
-      testId="tutorial-panel"
+      className={`k-glass pointer-events-auto box-border flex items-center gap-4 px-4 py-2 ${
+        place === 'anvil' ? 'w-full' : 'w-[720px] max-w-full min-w-0'
+      }`}
+      data-pad-group
+      data-place={place}
+      data-step={step.id}
+      data-testid="tutorial-panel"
     >
-      <div ref={ref} className="flex items-start gap-4">
-        <span className="k-well flex size-[96px] shrink-0 items-center justify-center">
-          <PixelSprite id={giver.sprite} scale={3} context={context} label={giver.name} />
-        </span>
-        <div className="flex min-w-0 flex-col gap-2">
-          <span className="k-label">{giver.name}</span>
-          <p
-            className="m-0 text-[16px] leading-[1.45] text-[var(--k-text)]"
-            data-testid="tutorial-line"
-          >
-            <TutorialParts parts={text.line} />
-          </p>
-          <p
-            className="m-0 flex flex-wrap items-center gap-x-[6px] gap-y-1 text-[16px] text-[var(--k-hot-hi)]"
-            data-testid="tutorial-objective"
-          >
-            <TutorialParts parts={text.objective} />
-            {need > 1 && (
-              <span className="text-[var(--k-text-2)]">
-                {Math.min(state.count, need)} / {need}
-              </span>
-            )}
-          </p>
-        </div>
-      </div>
-      {(step.beat || skippable) && (
-        <div className="flex justify-end gap-3">
-          {skippable && (
-            <Button
-              variant="quiet"
-              size="sm"
-              onClick={() => onEvent({ type: 'skipStep' })}
-              testId="tutorial-skip-step"
-            >
-              Skip this step
-            </Button>
+      <span className="flex size-[52px] flex-none items-center justify-center">
+        <PixelSprite
+          id={giver.sprite}
+          scale={1.75}
+          context={place === 'hud' ? 'hud' : 'ui'}
+          label={giver.name}
+        />
+      </span>
+      <div
+        className={`flex min-w-0 flex-1 ${place === 'anvil' ? 'items-center gap-6' : 'flex-col gap-1'}`}
+      >
+        <p
+          className="m-0 flex origin-left flex-wrap items-center gap-x-2 gap-y-1 text-[28px] leading-none text-[var(--k-hot-hi)] [font-family:var(--k-font-display)]"
+          data-testid="tutorial-objective"
+        >
+          <TutorialParts parts={text.objective} />
+          {need > 1 && (
+            <span className="inline-block text-[var(--k-text-2)]" data-testid="tutorial-count">
+              {Math.min(state.count, need)} / {need}
+            </span>
           )}
-          {step.beat && (
+        </p>
+        <p
+          className="m-0 min-w-0 flex-1 text-[16px] leading-[1.35] text-[var(--k-text)]"
+          hidden={foldedId === shown.id}
+          data-testid="tutorial-line"
+        >
+          <TutorialParts parts={text.line} />
+        </p>
+      </div>
+      {(beat || skippable) && (
+        <div className="flex flex-none items-center gap-3">
+          {skippable && (
+            <span className="flex items-center gap-2 text-[14px] text-[var(--k-text-3)]" data-pad-skip>
+              Stuck? Skip this step from the
+              <InputGlyph binding={menu} size="sm" />
+              Menu
+              <Button
+                variant="quiet"
+                size="sm"
+                tabIndex={-1}
+                onClick={() => onEvent({ type: 'skipStep' })}
+                testId="tutorial-skip-step"
+              >
+                Skip this step
+              </Button>
+            </span>
+          )}
+          {beat && (
             <Button
               variant="primary"
               binding={{ key: 'Enter', pad: 'a' }}
@@ -169,6 +199,6 @@ export function TutorialPanel({
           )}
         </div>
       )}
-    </Panel>
+    </section>
   );
 }

@@ -207,7 +207,7 @@ export function DelveTraining() {
                 <TutorialPanel
                   state={tutorial}
                   where={SHOWN_AT.training}
-                  context="hud"
+                  place="hud"
                   onEvent={(e) => useDelveStore.getState().tutorialEvents([e])}
                 />
               </div>

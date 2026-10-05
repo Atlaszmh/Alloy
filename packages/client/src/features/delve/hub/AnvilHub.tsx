@@ -195,7 +195,7 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
                   <TutorialPanel
                     state={profile.tutorial}
                     where={SHOWN_AT.anvil}
-                    context="ui"
+                    place="anvil"
                     onEvent={(e) => useDelveStore.getState().tutorialEvents([e])}
                   />
                 </div>

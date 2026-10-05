@@ -383,7 +383,7 @@ export function DelveRun() {
                     state={tutorial}
                     where={SHOWN_AT.dive}
                     world={world}
-                    context="hud"
+                    place="hud"
                     onEvent={onTutorial}
                   />
                 </div>
@@ -425,7 +425,7 @@ export function DelveRun() {
                 <TutorialPanel
                   state={tutorial}
                   where={SHOWN_AT.dive}
-                  context="ui"
+                  place="stop"
                   onEvent={onTutorial}
                 />
               </div>,
