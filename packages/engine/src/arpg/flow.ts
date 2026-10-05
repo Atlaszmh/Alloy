@@ -26,7 +26,7 @@ export function clearanceOf(m: { radius: number }): Clearance {
   return m.radius > 1.5 ? 'huge' : m.radius > 0.5 ? 'large' : 'small';
 }
 
-/** A clearance class's width in cells, as `flowField` takes it (the large class at most `hallWidth`). */
+/** A clearance class's width in cells, as `flowField` takes it (large: at most `hallWidth`). */
 export function clearanceCells(c: Clearance, hallWidth: number): number {
   return c === 'huge' ? HUGE : c === 'large' ? Math.min(LARGE, hallWidth) : 1;
 }
@@ -125,8 +125,9 @@ const AROUND = [
 /**
  * The way down `field` from `p`: toward the centre of the neighbouring cell
  * nearest its target (a diagonal only where both cells beside it are in the
- * field, unless `p`'s own cell isn't), or straight at `target` in its own cell; null where the field
- * doesn't reach (nor any neighbour) or nothing is nearer.
+ * field, unless `p`'s own cell isn't), or straight at `target` in its own
+ * cell; null where the field doesn't reach (nor any neighbour) or nothing is
+ * nearer.
  */
 export function downhill(map: FloorMap, field: Uint16Array, p: Vec, target: Vec): Vec | null {
   const w = map.width;

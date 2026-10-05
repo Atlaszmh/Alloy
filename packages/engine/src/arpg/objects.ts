@@ -111,9 +111,10 @@ function prime(ctx: SimCtx, hz: HazardEntity): void {
  * A primed hazard bursts (`hazardBurst`) on everyone within its `burst` that it
  * sees, for `terrain.hazardDamage` × the depth's foe damage (`depthGrowth`):
  * the hero takes the damage only (`noPerfect`: a dodge's i-frames avoid it, but
- * it is never a perfect dodge); each foe takes it as nobody's hit (source
- * `hazard`: × `terrain.hazardFoeMult`, no crit, none of the hero's element power) with its element's
- * stacks as a heavy blow brings them, reactions as usual. It wears crumbling
+ * it is never a perfect dodge); each foe takes it × `terrain.hazardFoeMult` as
+ * nobody's hit (source `hazard`: no crit, none of the hero's element power)
+ * with its element's stacks as a heavy blow brings them, reactions as usual.
+ * It wears crumbling
  * cover, sets off the hazards and breaks the props it reaches (a chain), and
  * is dormant for `terrain.recharge`.
  */
