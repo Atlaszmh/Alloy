@@ -187,3 +187,21 @@ describe('auto-aim past room objects', () => {
     );
   });
 });
+
+describe('ambush packs', () => {
+  it('never stack two packs on the same foliage cells of a room', () => {
+    const stacked: string[] = [];
+    for (let s = 0; s < 30; s++)
+      for (const depth of [16, 17, 18, 19, 20]) {
+        const w = floor(depth, 1000 + s * 7919);
+        const at = new Map<string, number>();
+        for (const m of w.monsters.filter((o) => o.ambush)) {
+          const k = `${Math.floor(m.x)},${Math.floor(m.y)}`;
+          const other = at.get(k);
+          if (other !== undefined && other !== m.packId) stacked.push(`d${depth} s${s} ${k}`);
+          at.set(k, m.packId);
+        }
+      }
+    expect(stacked).toEqual([]);
+  });
+});

@@ -604,6 +604,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     packId: number,
     roomId: number | null,
     elite = false,
+    used = new Set<number>(),
   ) => {
     const inArea = (i: number, j: number) =>
       i >= area.x && j >= area.y && i < area.x + area.w && j < area.y + area.h;
@@ -642,7 +643,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     centers.push({ x: cx, y: cy });
     const size = spawnRng.nextInt(bal.dive.packSize[0], bal.dive.packSize[1]);
     const elitePack = spawnRng.next() < eliteChance || elite;
-    const used = new Set<number>();
+    const mine = new Set<number>();
     for (let i = 0; i < size; i++) {
       const angle = (Math.PI * 2 * i) / size + spawnRng.next() * 0.6;
       const r = i === 0 && elitePack ? 0 : bal.arena.packSpacing * (0.7 + spawnRng.next() * 0.6);
@@ -653,16 +654,19 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
       // A foe wider than a cell stands at the centre of an open 3 × 3, never wedged in cover.
       const large = clearanceOf(m) !== 'small';
       const stand = (a: number, b: number) => open(a, b) && (!large || block(a - 1, b - 1, free));
-      // Hidden foes spread over the patch's cells, one a cell while they last.
+      // Hidden foes spread over the patch's cells, one a cell while they last, then share their
+      // own pack's (never another's).
       const at = !plan
         ? snapToWalkable(map, x, y)
         : ambush
           ? (spawnAt(map, x, y, (a, b) => hidden(a, b) && !used.has(b * width + a)) ??
+            spawnAt(map, x, y, (a, b) => hidden(a, b) && mine.has(b * width + a)) ??
             spawnAt(map, x, y, hidden)!)
           : (spawnAt(map, x, y, stand) ?? snapToWalkable(map, x, y));
       if (plan && large)
         Object.assign(at, { x: Math.floor(at.x) + 0.5, y: Math.floor(at.y) + 0.5 });
       used.add(Math.floor(at.y) * width + Math.floor(at.x));
+      mine.add(Math.floor(at.y) * width + Math.floor(at.x));
       Object.assign(m, { x: at.x, y: at.y });
       m.ambush = ambush;
     }
@@ -714,8 +718,10 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
         world.bossId = spawn(biome.boss, 'boss', at.x, at.y, 0, room.id).id;
       }
       const centers: Vec[] = [];
+      // The cells its foes stand on, shared by the room's packs: two never hide on the same.
+      const used = new Set<number>();
       for (let p = 0; p < plan.packs[room.id]; p++)
-        pack(room.rect, centers, ++packId, room.id, room.kind === 'den');
+        pack(room.rect, centers, ++packId, room.id, room.kind === 'den', used);
     }
     // Its furnishing's props and hazards, their ids after the foes'.
     placeObjects(registry, world, plan.furnishing);
