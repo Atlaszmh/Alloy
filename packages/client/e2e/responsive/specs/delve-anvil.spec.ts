@@ -76,6 +76,27 @@ for (const vp of PC_VIEWPORTS) {
     });
   }
 
+  // The Skills tab's move editor with its form grid open (its tallest state), and the Apply sheet.
+  for (const view of ['skills-editor', 'apply-sheet'] as const) {
+    test(`Delve Anvil ${view} @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await seedProfile(page, 4242, false);
+      await page.goto('/delve');
+      await page.getByTestId('tab-skills').click();
+      await page.getByTestId('move-0').click();
+      if (view === 'skills-editor') {
+        await page.getByTestId('move-form').click();
+        await expect(page.getByTestId('form-picker')).toBeVisible();
+      } else {
+        await stepTo(page, 'move-kind', /^Heavy$/);
+        await page.getByTestId('move-editor-back').click();
+        await page.getByTestId('chain-apply').click();
+        await expect(page.getByTestId('apply-sheet')).toBeVisible();
+      }
+      await runProbes(`delve-anvil-${view}`, vp, { delve: {} });
+    });
+  }
+
   // Help over the system menu: its longest topic scrolls inside its body.
   test(`Delve Anvil help @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
