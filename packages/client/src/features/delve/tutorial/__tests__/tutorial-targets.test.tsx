@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
-import { TUTORIAL_TARGETS, type TutorialTarget } from '@alloy/engine';
+import { TUTORIAL_TARGETS } from '@alloy/engine';
 import { getDelveRegistry } from '../../registry';
 import { WAY_TO } from '../marked';
 import { HubHeader } from '../../hub/HubHeader';
@@ -17,23 +17,24 @@ const sources = readdirSync(src, { recursive: true, encoding: 'utf8' })
   .filter((f) => /\.tsx?$/.test(f) && !/__tests__|\.test\.|tutorial[\\/]marked\.ts$/.test(f))
   .map((f) => readFileSync(resolve(src, f), 'utf8'));
 const placed = (t: string) => sources.some((s) => s.includes(`'${t}'`) || s.includes(`"${t}"`));
-/** The trails' new targets, until plan 03's tasks place them (Task 15 empties and removes this). */
-const PENDING: TutorialTarget[] = [
-  'stop.pick',
-  'forge.bench',
-  'temper.line',
-  'temper.go',
-  'mana.confirm',
-  'skills.rune',
-  'quests.done',
-];
+/** A keyed target is placed by its template (`` `forge.bar:${…}` ``) or by its whole name (`'skills.card:last'`). */
+const placedKeyed = (t: string) =>
+  sources.some((s) => s.includes('`' + t.split(':')[0] + ':${') || s.includes(`'${t}'`));
 
 describe("the guided start's targets", () => {
   it("every target is placed by name (the hub's tabs by HubHeader, Temper's Hone by its bench)", () => {
-    const named = TUTORIAL_TARGETS.filter(
-      (t) => !t.startsWith('hub.tab.') && t !== 'temper.hone' && !PENDING.includes(t),
-    );
+    const named = TUTORIAL_TARGETS.filter((t) => !t.startsWith('hub.tab.') && t !== 'temper.hone');
     expect(named.filter((t) => !placed(t))).toEqual([]);
+  });
+
+  it('every trail entry and every way is placed too, a keyed one by its template or its whole name', () => {
+    const steps = getDelveRegistry().getTutorialData().steps;
+    const named = new Set<string>(
+      [...steps.flatMap((s) => s.trail ?? []), ...Object.values(WAY_TO)].filter(
+        (t) => !t.startsWith('hub.tab.'),
+      ),
+    );
+    expect([...named].filter((t) => !(t.includes(':') ? placedKeyed(t) : placed(t)))).toEqual([]);
   });
 
   it("every step's target is on the screen its step shows on, or a way there is (a hub tab, a view)", () => {
