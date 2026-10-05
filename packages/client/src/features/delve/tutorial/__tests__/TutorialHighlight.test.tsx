@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import type { TutorialStep } from '@alloy/engine';
 import { TutorialHighlight } from '../TutorialHighlight';
+import { TutorialPanel } from '../TutorialPanel';
+import { SHOWN_AT } from '../tutorial-view';
 import { getDelveRegistry } from '../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
@@ -50,6 +52,7 @@ describe('TutorialHighlight (the marker)', () => {
         step('read'),
         step('hud', 'hud.potion'),
         step('bind', 'mana.bind'),
+        { ...step('beat', 'hub.delve'), beat: true },
       ],
     });
     boxes = { 'hub.delve': DOMRect.fromRect({ x: 100, y: 500, width: 200, height: 40 }) };
@@ -172,6 +175,29 @@ describe('TutorialHighlight (the marker)', () => {
     act(() => screen.getByTestId('other').focus());
     nextFrame();
     expect(screen.getByTestId('other')).toHaveFocus();
+  });
+
+  it("on a beat marking its own highlight, Continue keeps the focus: the marker, mounted after the strip, leaves it", () => {
+    pad();
+    at('beat');
+    render(
+      <div data-pad-scope>
+        <button data-tutorial="hub.delve">Delve</button>
+        <TutorialPanel
+          state={useDelveStore.getState().profile.tutorial!}
+          where={SHOWN_AT.anvil}
+          place="anvil"
+          onEvent={() => {}}
+        />
+      </div>,
+    );
+    nextFrame();
+    const go = screen.getByTestId('tutorial-continue');
+    expect(go).toHaveFocus();
+    render(<TutorialHighlight />);
+    nextFrame();
+    expect(marker()).toHaveAttribute('data-target', 'hub.delve');
+    expect(go).toHaveFocus();
   });
 
   it('a re-render that swaps the target for a new DOM node moves nothing', () => {

@@ -77,7 +77,8 @@ function focusMarked(el: HTMLElement): void {
  * `data-target` names what it marks. Under the pad the focus moves to the marked control once
  * each time the marked target changes: keyed on the step, the target's id and the pad scope it
  * is found in (a picker opened over a field of the same target is a new one), never on the
- * target's DOM node, so a re-render moves nothing. Mounted once, by AppShell.
+ * target's DOM node, so a re-render moves nothing; on a beat that marks its own highlight the
+ * strip's Continue holds the focus and the marker leaves it. Mounted once, by AppShell.
  */
 export function TutorialHighlight(): ReactElement | null {
   const step = useTutorialStep();
@@ -109,7 +110,9 @@ export function TutorialHighlight(): ReactElement | null {
       div.dataset.target = marked.id;
       const key = `${step.id}:${marked.id}`;
       const scope = marked.el.closest('[data-pad-scope]');
-      if (key !== followed || scope !== followedIn) focusMarked(marked.el);
+      // A beat marking its own highlight leaves the focus to the strip's Continue (its rule).
+      const continueOwns = !!step.beat && marked.id === step.highlight;
+      if ((key !== followed || scope !== followedIn) && !continueOwns) focusMarked(marked.el);
       followed = key;
       followedIn = scope;
       const r = marked.el.getBoundingClientRect();
