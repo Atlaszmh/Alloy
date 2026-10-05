@@ -48,7 +48,7 @@ export function SkillList({
   const weapon = anvil.weapon ? registry.getGearBase(anvil.weapon.baseId).name : 'your fists';
 
   return (
-    <aside className="k-scroll flex min-h-0 flex-col gap-2" aria-label="Skills">
+    <aside className="k-scroll flex min-h-0 flex-col gap-2" aria-label="Skills" data-pad-group="">
       <span className="k-label pl-1">Skills on {weapon}</span>
       <div
         role="tablist"
