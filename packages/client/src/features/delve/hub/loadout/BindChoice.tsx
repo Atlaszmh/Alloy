@@ -31,7 +31,8 @@ export function needsBind(
 /**
  * The bind choice, inline in the compare pane (it was the BindPrompt modal): bind the item's
  * element and equip it, or equip it for its stats only and not be asked about that element again
- * this session. Shows the Power either way. `ask` (an Equip pressed) gives Bind the focus.
+ * this session. Shows the Power either way. Off the D-pad until an Equip asks (`ask`): then Bind
+ * takes the focus.
  */
 export function BindChoice({ item, ask }: { item: GearItem; ask: boolean }): ReactElement {
   const registry = getDelveRegistry();
@@ -70,6 +71,7 @@ export function BindChoice({ item, ask }: { item: GearItem; ask: boolean }): Rea
       aria-label={`Bind ${st.name}`}
       className="k-well flex flex-col gap-3 p-3.5"
       data-testid="bind-prompt"
+      data-pad-skip={ask ? undefined : ''}
     >
       <div className="k-disp flex items-center gap-2 text-[22px]">
         <Glyph id={item.mana} size={22} color={st.color} /> Bind {st.name} as your second element?

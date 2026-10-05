@@ -220,7 +220,6 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
             source={!target ? 'worn' : target === hovered ? 'hovered' : 'selected'}
             full={full}
             locked={locked}
-            armed={armed}
             asked={asked}
             actions={actions}
             go={go}

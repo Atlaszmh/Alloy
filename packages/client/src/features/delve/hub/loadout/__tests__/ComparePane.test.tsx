@@ -16,7 +16,7 @@ import {
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
 import { ToastContainer } from '@/components/Toast';
-import { ComparePane } from '../ComparePane';
+import { ComparePane, VERDICT_TEXT, verdictOf } from '../ComparePane';
 import { getDelveRegistry } from '../../../registry';
 import { UPGRADE_EPSILON, formatDelta } from '../../../format';
 
@@ -72,6 +72,27 @@ const withRunes = (w: GearItem, runes: (RuneRef | null)[]): GearItem => {
 const split = { id: 'split', tier: 3 } as const;
 const quick = { id: 'quick', tier: 1 } as const;
 
+/**
+ * A built-up common sword worn against a plain uncommon one in the bag (`w2`): worse as it is,
+ * better as a home for your moveset.
+ */
+const putHomeOnlyWeapon = () => {
+  const p = store().profile;
+  const sword = p.equipped.weapon!;
+  const mine = {
+    ...sword,
+    moveset: defaultMoveset(registry, sword, 'fire', { primary: 5, basic: 5 }),
+  };
+  const plain = generateItem(
+    registry,
+    { uid: 'w2', ilvl: 2, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+    new SeededRNG(4),
+  );
+  const equipped = { ...p.equipped, weapon: mine };
+  store().setProfile({ ...p, equipped, bag: [plain] });
+  return { p, plain, equipped };
+};
+
 /** The pane showing `uid` as selected, and the toasts. */
 const show = (uid: string | null, over: Partial<Parameters<typeof ComparePane>[0]> = {}) => {
   const props = {
@@ -79,7 +100,6 @@ const show = (uid: string | null, over: Partial<Parameters<typeof ComparePane>[0
     source: 'selected' as const,
     full: false,
     locked: false,
-    armed: null,
     asked: null,
     actions: { equip: vi.fn(), salvage: vi.fn(), lock: vi.fn() },
     go: vi.fn(),
@@ -94,6 +114,27 @@ const show = (uid: string | null, over: Partial<Parameters<typeof ComparePane>[0
   return { props, unmount: view.unmount };
 };
 const pane = () => screen.getByTestId('item-sheet');
+
+describe('verdictOf', () => {
+  const c = (powerPct: number) => ({ powerPct });
+  const up = UPGRADE_EPSILON * 4;
+  it('reads the engine comparison as the bag tile reads its mark', () => {
+    expect(verdictOf(null, null)).toBeNull(); // a worn item: nothing to compare
+    expect(verdictOf(c(up), null)).toBe('up');
+    expect(verdictOf(c(-up), null)).toBe('worse');
+    expect(verdictOf(c(0), null)).toBe('same');
+    // A weapon: as it comes decides an upgrade, as a home for your moveset the ◇.
+    expect(verdictOf(c(up), c(up))).toBe('up');
+    expect(verdictOf(c(up), c(-up))).toBe('home');
+    expect(verdictOf(c(-up), c(-up))).toBe('worse');
+    expect(VERDICT_TEXT).toEqual({
+      up: 'An upgrade as it comes',
+      home: 'Better only as a home for your moveset',
+      worse: 'Worse than what you wear',
+      same: 'About the same as what you wear',
+    });
+  });
+});
 
 describe('the compare pane', () => {
   beforeEach(() => {
@@ -195,14 +236,43 @@ describe('the compare pane', () => {
     expect(props.go).toHaveBeenCalledWith({ tab: 'forge', uid: 'h1' });
   });
 
-  it('a locked item says Unlock, and its Salvage waits; an armed one says Press again', () => {
-    put({ ...helm('fire'), locked: true }, rareSword('w1'));
-    const view = show('h1');
+  it('a locked item says Unlock, and its Salvage waits', () => {
+    put({ ...helm('fire'), locked: true });
+    show('h1');
     expect(screen.getByTestId('lock-button')).toHaveTextContent('Unlock');
     expect(screen.getByTestId('salvage-button')).toBeDisabled();
+  });
+
+  it('leads with one verdict line for a bag item, none for a worn one', () => {
+    put(helm('fire')); // the helm slot is empty: pure gain
+    const view = show('h1');
+    const verdict = screen.getByTestId('item-verdict');
+    expect(verdict).toHaveAttribute('data-verdict', 'up');
+    expect(verdict).toHaveTextContent('An upgrade as it comes');
+    // First in the pane's body, before the item's header.
+    const body = pane().querySelector('[data-pad-scroll]')!;
+    expect(body.firstElementChild).toBe(verdict);
     view.unmount();
-    show('w1', { armed: 'w1' });
-    expect(screen.getByTestId('salvage-button')).toHaveTextContent(/^Press again to melt/);
+    show(store().profile.equipped.weapon!.uid, { source: 'worn' });
+    expect(screen.queryByTestId('item-verdict')).toBeNull();
+  });
+
+  it('a bag weapon worse as it comes but better with your moveset reads "Better only as a home"', () => {
+    putHomeOnlyWeapon();
+    show('w2');
+    expect(screen.getByTestId('item-verdict')).toHaveAttribute('data-verdict', 'home');
+    expect(screen.getByTestId('item-verdict')).toHaveTextContent(VERDICT_TEXT.home);
+  });
+
+  it('its actions are for the mouse: off the D-pad, while the bind choice joins it only when asked', () => {
+    put(helm('storm'));
+    const view = show('h1');
+    expect(screen.getByTestId('compare-actions')).toHaveAttribute('data-pad-skip');
+    expect(screen.getByTestId('bind-prompt').closest('[data-pad-skip]')).not.toBeNull();
+    view.unmount();
+    show('h1', { asked: 'h1' });
+    expect(screen.getByTestId('bind-prompt').closest('[data-pad-skip]')).toBeNull();
+    expect(screen.getByTestId('bind-prompt-confirm')).toHaveFocus();
   });
 
   it('gear outside an unbound pair shows the bind choice inline, with the Power either way; Bind binds, then equips', () => {
@@ -308,20 +378,7 @@ describe('the compare pane', () => {
   });
 
   it('each valuation shows its own delta: Equip is marked as it is, Transfer as a home', () => {
-    const p = store().profile;
-    const sword = p.equipped.weapon!;
-    // A built-up common sword against a plain uncommon one: worse as it is, better as a home.
-    const mine = {
-      ...sword,
-      moveset: defaultMoveset(registry, sword, 'fire', { primary: 5, basic: 5 }),
-    };
-    const plain = generateItem(
-      registry,
-      { uid: 'w2', ilvl: 2, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
-      new SeededRNG(4),
-    );
-    const equipped = { ...p.equipped, weapon: mine };
-    store().setProfile({ ...p, equipped, bag: [plain] });
+    const { p, plain, equipped } = putHomeOnlyWeapon();
     const depth = referenceDepth(store().profile);
     const asIs = compareItem(equipped, plain, registry, depth, p.pair, 'asIs').powerPct;
     const home = compareItem(equipped, plain, registry, depth, p.pair).powerPct;
