@@ -93,6 +93,7 @@ export function Chip({
  * A tab list. 'top' is stepped by LB/RB, 'sub' by LT/RT; the pad nav finds it by `data-pad-tabs`.
  * Disabled tabs are skipped. `glyphs` draws the stepping inputs at both ends, with `digits` the
  * 1..n keys too; the screen binds those keys through its prompts (spec revision 2), never Tabs.
+ * The D-pad never lands on a tab (`data-pad-skip`): LB/RB step the top level and LT/RT the sub level.
  */
 export function Tabs<T extends string>({
   tabs,
@@ -118,6 +119,7 @@ export function Tabs<T extends string>({
       aria-label={ariaLabel}
       className="k-tabs"
       data-pad-tabs={level === 'sub' ? 'sub' : ''}
+      data-pad-skip=""
     >
       {glyphs && (
         <span aria-hidden className="k-glyph-row">

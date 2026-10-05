@@ -13,7 +13,10 @@ import { PromptBar } from './glyphs';
 import { uiLayer } from './layer';
 import type { DialogProps, PanelProps, Prompt, ScreenProps } from './types';
 
-/** A pane: a plate (wood-framed riveted steel, the hub), glass (HUD steel) or a well (a dark inset). */
+/**
+ * A pane: a plate (wood-framed riveted steel, the hub), glass (HUD steel) or a well (a dark inset).
+ * A plate or a glass panel is a pad group (`data-pad-group`): the D-pad keeps to it while it can.
+ */
 export function Panel({
   as: Tag = 'section',
   material = 'plate',
@@ -35,6 +38,7 @@ export function Panel({
       style={accent ? { ...style, borderColor: accent } : style}
       aria-labelledby={title !== undefined && !rest['aria-label'] ? titleId : undefined}
       data-testid={testId}
+      data-pad-group={material === 'well' ? undefined : ''}
     >
       {(title !== undefined || aside !== undefined) && (
         <div className="k-panel-head">
@@ -95,7 +99,7 @@ export function Header({
   aside?: ReactNode;
 }): ReactElement {
   return (
-    <div className="k-header">
+    <div className="k-header" data-pad-group="">
       <h1 className="k-header-title">
         <span className="k-disp">{title}</span>
         {subtitle !== undefined && <span className="k-caption">{subtitle}</span>}
@@ -115,7 +119,7 @@ export function Footer({
   children?: ReactNode;
 }): ReactElement {
   return (
-    <div className="k-footer">
+    <div className="k-footer" data-pad-group="">
       <PromptBar prompts={prompts} />
       {children !== undefined && <div className="k-footer-aside">{children}</div>}
     </div>

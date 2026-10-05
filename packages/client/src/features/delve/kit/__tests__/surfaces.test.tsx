@@ -28,6 +28,29 @@ describe('the kit surfaces', () => {
     expect(glass.lastElementChild).not.toHaveClass('k-scroll');
   });
 
+  it('marks a plate, a glass panel, the header and the footer as pad groups, never a well', () => {
+    render(
+      <>
+        <Panel testId="plate">a</Panel>
+        <Panel material="glass" testId="glass">
+          b
+        </Panel>
+        <Panel material="well" testId="well">
+          c
+        </Panel>
+        <Header title="The Anvil" />
+        <Footer prompts={[]}>
+          <button type="button">Delve</button>
+        </Footer>
+      </>,
+    );
+    expect(screen.getByTestId('plate')).toHaveAttribute('data-pad-group');
+    expect(screen.getByTestId('glass')).toHaveAttribute('data-pad-group');
+    expect(screen.getByTestId('well')).not.toHaveAttribute('data-pad-group');
+    expect(screen.getByText('The Anvil').closest('[data-pad-group]')).toHaveClass('k-header');
+    expect(screen.getByText('Delve').closest('[data-pad-group]')).toHaveClass('k-footer');
+  });
+
   it('makes a zoomed screen with a header band, a main area and a plank footer', () => {
     render(
       <Screen

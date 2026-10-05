@@ -102,6 +102,17 @@ describe('the kit controls', () => {
     expect(screen.getByRole('tablist')).toHaveAttribute('data-pad-tabs', 'sub');
   });
 
+  it('keeps its tabs off the D-pad: LB/RB and LT/RT step them', () => {
+    const { rerender } = render(
+      <Tabs tabs={[...TABS]} value="loadout" onChange={() => {}} level="top" aria-label="Anvil" />,
+    );
+    expect(screen.getByRole('tablist')).toHaveAttribute('data-pad-skip');
+    rerender(
+      <Tabs tabs={[...TABS]} value="loadout" onChange={() => {}} level="sub" aria-label="Anvil" />,
+    );
+    expect(screen.getByRole('tablist')).toHaveAttribute('data-pad-skip');
+  });
+
   it('leaves the digit keys to the screen: `digits` only draws their glyphs', () => {
     const onChange = vi.fn();
     render(
