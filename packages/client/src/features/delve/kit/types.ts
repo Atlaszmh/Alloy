@@ -84,6 +84,8 @@ export interface DialogProps {
   footer?: ReactNode;
   width?: number;
   initialFocus?: RefObject<HTMLElement | null>;
+  /** Up and down wrap at the dialog's ends, its Back included (a plain list: the system menu). */
+  wrap?: boolean;
   testId?: string;
 }
 

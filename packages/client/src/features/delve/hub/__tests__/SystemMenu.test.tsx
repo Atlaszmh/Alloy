@@ -58,6 +58,14 @@ describe('SystemMenu', () => {
     expect(screen.getByTestId('menu-resume')).toHaveFocus();
   });
 
+  it('wraps for the pad: the dialog is a [data-pad-wrap] list, its Back included', () => {
+    renderMenu();
+    const list = screen.getByTestId('system-menu');
+    expect(list).toHaveAttribute('data-pad-wrap');
+    expect(list).toContainElement(screen.getByTestId('menu-main'));
+    expect(list.querySelector('[data-pad-back]')).not.toBeNull();
+  });
+
   it('opens Controls and Settings in its place, and their Close comes back to it', () => {
     renderMenu();
     fireEvent.click(screen.getByTestId('open-controls'));

@@ -22,7 +22,8 @@ export interface SystemMenuEntry {
  * pad's way to it, as the pause has it in a dive) and Skip tutorial while the
  * guided start runs, and Title screen, plus Restart and the pull rule in dev
  * builds. Controls, Settings and Skip tutorial's confirm open in its place,
- * and their Back returns to it.
+ * and their Back returns to it. Under the pad its list wraps (the dialog's
+ * `wrap`): down from the last entry goes to Back, up from Back to the last.
  */
 export function SystemMenu({
   onClose,
@@ -59,7 +60,7 @@ export function SystemMenu({
       />
     );
   return (
-    <Dialog title="Menu" onClose={onClose} width={440} testId="system-menu">
+    <Dialog title="Menu" onClose={onClose} width={440} wrap testId="system-menu">
       <div className="flex flex-col gap-3">
         <Button variant="primary" size="lg" onClick={onClose} testId="menu-resume" data-pad-first>
           Resume

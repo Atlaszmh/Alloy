@@ -133,7 +133,8 @@ const FOCUSABLE =
  * A centred plate in uiLayer() (zoomed), its own pad scope. Back carries `data-pad-back` (Esc and B
  * press it); with no `onClose` the dialog is forced and has no Back. The focus goes to
  * `initialFocus`, else the first `[data-pad-first]` inside, else Back, else the first control,
- * and back to the opener on close.
+ * and back to the opener on close. With `wrap` it is a `[data-pad-wrap]` list: the pad's up and
+ * down wrap at its ends.
  */
 export function Dialog({
   title,
@@ -142,6 +143,7 @@ export function Dialog({
   footer,
   width = 640,
   initialFocus,
+  wrap,
   testId,
 }: DialogProps): ReactElement {
   const titleId = useId();
@@ -188,6 +190,7 @@ export function Dialog({
         className="k-panel k-plate k-dialog"
         style={{ width }}
         data-testid={testId}
+        data-pad-wrap={wrap ? '' : undefined}
         onKeyDown={trapTab}
       >
         <div className="k-panel-head">

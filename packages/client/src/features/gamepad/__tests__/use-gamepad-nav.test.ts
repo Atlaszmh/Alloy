@@ -110,6 +110,71 @@ describe('moveFocus between buttons', () => {
   });
 });
 
+describe('moveFocus in a wrapping list', () => {
+  afterEach(() => document.body.replaceChildren());
+
+  /** A column of buttons 40 px tall, 10 px apart, inside `parent`. */
+  const column = (parent: HTMLElement, n: number, left = 0): HTMLButtonElement[] =>
+    Array.from({ length: n }, (_, i) => {
+      const b = parent.appendChild(document.createElement('button'));
+      b.textContent = `row ${i}`;
+      b.getBoundingClientRect = () =>
+        DOMRect.fromRect({ x: left, y: i * 50, width: 200, height: 40 });
+      return b;
+    });
+  const boxed = (el: HTMLElement) => {
+    el.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 400, height: 400 });
+    return el;
+  };
+
+  it('down from the last row goes to the first, and up from the first to the last', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 4);
+    rows[3].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(rows[0]);
+    moveFocus('up');
+    expect(document.activeElement).toBe(rows[3]);
+  });
+
+  it('does not wrap without the attribute', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    const rows = column(list, 3);
+    rows[2].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(rows[2]);
+  });
+
+  it('never wraps sideways', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 3);
+    rows[1].focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(rows[1]);
+  });
+
+  it('prefers a real neighbour: a control below the list, outside it, takes the press', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 2);
+    const below = document.body.appendChild(document.createElement('button'));
+    below.getBoundingClientRect = () =>
+      DOMRect.fromRect({ x: 0, y: 300, width: 200, height: 40 });
+    rows[1].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(below);
+  });
+
+  it('leaves nextFocus alone: the audit sees an edge', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 2);
+    expect(nextFocus(rows[1], 'down', { memory: false })).toBeNull();
+  });
+});
+
 describe('candidates: a control scrolled out of its list', () => {
   afterEach(() => document.body.replaceChildren());
   /** `el` with a box `w` × `h` at `left`, `top`. */

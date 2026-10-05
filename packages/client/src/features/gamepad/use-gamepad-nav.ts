@@ -11,7 +11,8 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * left-stick flick) moves focus to the control lying that way (`nextFocus`:
  * inside its `[data-pad-group]` pane while one does, else into the pane that
  * way, at the control it last held; never onto one scrolled out of its list;
- * left/right adjust a focused slider or list), A presses it. Every other
+ * left/right adjust a focused slider or list), A presses it. At an edge, up
+ * and down wrap inside a `[data-pad-wrap]` list (`wrapFocus`). Every other
  * button goes to the screen's prompts first (`padPrompts`, which also times
  * the holds); one no prompt takes does its default: B presses the topmost
  * scope's `[data-pad-back]`, Menu its `[data-pad-menu]` (else its back),
@@ -234,6 +235,24 @@ function stepSelect(el: HTMLSelectElement, dir: NavDir): void {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+/**
+ * At an edge (nothing lies that way), up and down wrap inside a `[data-pad-wrap]` list: to its
+ * topmost candidate from the bottom, its lowest from the top. Null outside such a list, for a
+ * sideways press, or when `el` is the list's only candidate.
+ */
+function wrapFocus(el: HTMLElement, dir: NavDir, els: HTMLElement[]): HTMLElement | null {
+  if (dir !== 'up' && dir !== 'down') return null;
+  const list = el.closest('[data-pad-wrap]');
+  if (!list) return null;
+  const top = (c: HTMLElement) => c.getBoundingClientRect().top;
+  const further = (c: HTMLElement, best: HTMLElement) =>
+    dir === 'down' ? top(c) < top(best) : top(c) > top(best);
+  const end = els
+    .filter((c) => list.contains(c))
+    .reduce((best, c) => (further(c, best) ? c : best), el);
+  return end === el ? null : end;
+}
+
 export function moveFocus(dir: NavDir): void {
   const active = document.activeElement;
   if (
@@ -251,7 +270,7 @@ export function moveFocus(dir: NavDir): void {
   if (!(active instanceof HTMLElement) || !els.includes(active)) return focus(els[0]);
   // Its pane remembers it now: a focus given this frame (a click, code) hasn't met keepFocus yet.
   groupFocus.set(groupOf(active), active);
-  const next = nextFocus(active, dir);
+  const next = nextFocus(active, dir) ?? wrapFocus(active, dir, els);
   if (next) focus(next);
 }
 
