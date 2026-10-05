@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { defaultMoveset, generateItem, SeededRNG, type GearItem } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { useDelveStore, UNDO_MS } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { ToastContainer } from '@/components/Toast';
@@ -22,6 +22,23 @@ const rareSword = (uid: string, slots = {}): GearItem => {
     new SeededRNG(4),
   );
   return { ...w, moveset: defaultMoveset(registry, w, 'fire', slots) };
+};
+/** Put in the bag a copy of the worn uncommon sword with Split III in its first Primary move. */
+const putRunedSword = (uid: string) => {
+  const p = store().profile;
+  const worn = p.equipped.weapon!;
+  const chain = worn.moveset!.chains.primary!;
+  const runed = [{ ...chain.moves[0], runes: [{ id: 'split', tier: 3 as const }] }];
+  const held: GearItem = {
+    ...worn,
+    uid,
+    moveset: {
+      ...worn.moveset!,
+      chains: { ...worn.moveset!.chains, primary: { ...chain, moves: runed } },
+    },
+  };
+  expect(held.rarity).toBe('uncommon');
+  store().setProfile({ ...p, bag: [held] });
 };
 const open = (over: Partial<HubTabProps> = {}) => {
   const props: HubTabProps = {
@@ -236,58 +253,71 @@ describe('LoadoutTab', () => {
     expect(screen.queryByTestId('item-moveset')).toBeNull();
   });
 
-  // plan 02 rewrites Salvage's label and its arming.
-  it.skip('a precious item salvages on a second press within 2 s, and says the Links it gave', () => {
-    vi.useFakeTimers();
+  it('X salvages a precious item at once, and says the Links it gave', () => {
     // Three extra Primary slots: two Links past the one a rare forge grants free.
     put(rareSword('w1', { primary: 4 }));
-    open({ link: { tab: 'loadout', uid: 'w1' } });
-    const salvage = () => fireEvent.click(screen.getByTestId('salvage-button'));
+    const { props } = open({ link: { tab: 'loadout', uid: 'w1' } });
     expect(screen.getByTestId('salvage-button')).toHaveTextContent(
       /^Salvage · \+2 Links · \+\d+ scrap/,
     );
-    salvage();
-    expect(screen.getByTestId('salvage-button')).toHaveTextContent('Press again to melt');
-    act(() => vi.advanceTimersByTime(2001));
-    expect(screen.getByTestId('salvage-button')).not.toHaveTextContent('Press again');
-    salvage();
-    expect(store().profile.bag).toHaveLength(1);
-    salvage();
+    act(() => prompt(props, 'salvage').onPress!());
     expect(store().profile.bag).toHaveLength(0);
     expect(store().profile.links).toBe(2);
     expect(screen.getByText('+2 Links from its extra slots')).toBeInTheDocument();
   });
 
-  // plan 02 rewrites Salvage's label and its arming.
-  it.skip('Salvage asks first for any weapon holding runes, naming what becomes of them by the pull rule', () => {
+  it("Salvage names what becomes of a weapon's runes on its button, and melts at once", () => {
     useDelveStore.setState({ unsocket: null });
-    const p = store().profile;
-    const worn = p.equipped.weapon!;
-    const chain = worn.moveset!.chains.primary!;
-    const runed = [{ ...chain.moves[0], runes: [{ id: 'split', tier: 3 as const }] }];
-    const held: GearItem = {
-      ...worn,
-      uid: 'w2',
-      moveset: {
-        ...worn.moveset!,
-        chains: { ...worn.moveset!.chains, primary: { ...chain, moves: runed } },
-      },
-    };
-    expect(held.rarity).toBe('uncommon');
-    store().setProfile({ ...p, bag: [held] });
+    putRunedSword('w2');
     open({ link: { tab: 'loadout', uid: 'w2' } });
-    fireEvent.click(screen.getByTestId('salvage-button'));
-    expect(store().profile.bag).toHaveLength(1);
-    expect(screen.getByTestId('salvage-button')).toHaveTextContent(
-      'Press again to melt · destroys Split III',
-    );
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent('destroys Split III');
     act(() => store().setUnsocket('pay'));
-    expect(screen.getByTestId('salvage-button')).toHaveTextContent(
-      'Press again to melt · Split III back to your pouch',
-    );
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent('Split III back to your pouch');
+    expect(screen.getByTestId('salvage-button')).not.toHaveTextContent('Press again');
     fireEvent.click(screen.getByTestId('salvage-button'));
     expect(store().profile.bag).toHaveLength(0);
     expect(store().profile.runes).toEqual({ split: [0, 0, 1, 0, 0] });
+  });
+
+  it('for 5 s the footer offers Undo on B and Ctrl+Z; it puts the item back, and goes when the time is up', () => {
+    vi.useFakeTimers();
+    put(gear('h1', 'helm'), gear('r1', 'ring'));
+    const { props } = open({ link: { tab: 'loadout', uid: 'h1' } });
+    expect(prompts(props).some((x) => x.id === 'undo')).toBe(false);
+    act(() => prompt(props, 'salvage').onPress!());
+    expect(store().profile.bag.map((i) => i.uid)).toEqual(['r1']);
+    expect(prompt(props, 'undo')).toMatchObject({
+      label: 'Undo salvage',
+      binding: { key: 'KeyZ', ctrl: true, pad: 'b' },
+    });
+    act(() => prompt(props, 'undo').onPress!());
+    expect(store().profile.bag.map((i) => i.uid).sort()).toEqual(['h1', 'r1']);
+    expect(screen.getByText('Salvage undone')).toBeInTheDocument();
+    expect(prompts(props).some((x) => x.id === 'undo')).toBe(false);
+    // Again, and let the time run out.
+    act(() => prompt(props, 'salvage').onPress!());
+    expect(prompts(props).some((x) => x.id === 'undo')).toBe(true);
+    act(() => vi.advanceTimersByTime(UNDO_MS));
+    expect(prompts(props).some((x) => x.id === 'undo')).toBe(false);
+  });
+
+  it('another change to the save takes the Undo away (a lock, an equip)', () => {
+    put(gear('h1', 'helm'), gear('r1', 'ring'));
+    const { props } = open({ link: { tab: 'loadout', uid: 'h1' } });
+    act(() => prompt(props, 'salvage').onPress!());
+    expect(prompts(props).some((x) => x.id === 'undo')).toBe(true);
+    fireEvent.contextMenu(tile('r1'));
+    expect(store().profile.equipped.ring?.uid).toBe('r1');
+    expect(prompts(props).some((x) => x.id === 'undo')).toBe(false);
+  });
+
+  it('paused, no Undo is offered', () => {
+    put(gear('h1', 'helm'), gear('r1', 'ring'));
+    act(() => {
+      store().salvage(['h1']);
+    });
+    const { props } = open({ mode: 'pause' });
+    expect(prompts(props).some((x) => x.id === 'undo')).toBe(false);
   });
 
   it('paused, dive finds carry NEW and their actions are notes', () => {

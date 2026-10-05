@@ -9,7 +9,7 @@ import {
   type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
-import { partsText, runeNames, useDelveStore } from '@/stores/delveStore';
+import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -143,6 +143,7 @@ export function ComparePane({
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const declined = useDelveStore((s) => s.bindDeclined);
+  const unsocket = useDelveStore((s) => s.unsocket);
   const { equipped, pair } = profile;
   const attunement = useMemo(
     () => profileStats(registry, { equipped, pair }).attunement,
@@ -165,6 +166,8 @@ export function ComparePane({
   const homeUpgrade = !!transfer && !!cmp && cmp.powerPct > UPGRADE_EPSILON;
   // What salvage gives, as the engine reckons it: only a bag item salvages, and only between dives.
   const yields = inBag && !locked ? salvageYield(registry, profile, item) : null;
+  // What becomes of a weapon's runes, by the pull rule: Salvage's label says it before the press.
+  const melts = yields ? pullText(registry, yields.runes, unsocketMode(registry, unsocket)) : null;
   const binding = inBag && !locked && needsBind(profile, declined, item);
   const attune = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
   const slot = SLOT_LABEL[item.slot].toLowerCase();
@@ -333,6 +336,7 @@ export function ComparePane({
                   dust={yields.dust > 0 ? yields.dust : undefined}
                   signed
                 />
+                {melts && ` · ${melts}`}
               </Button>
             )}
             {yields && (yields.shards.length > 0 || yields.pattern || yields.essence) && (

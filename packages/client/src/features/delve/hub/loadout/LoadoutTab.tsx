@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { findItem, isDiveActive, rarityIndex, weaponParts } from '@alloy/engine';
+import { findItem, isDiveActive } from '@alloy/engine';
 import { partsText, useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -15,9 +15,6 @@ import { ComparePane, type LoadoutActions } from './ComparePane';
 import { needsBind } from './BindChoice';
 import { TakeSheet, canTake } from './TakeSheet';
 
-/** A precious item's second Salvage press must come within this. */
-const ARMED_MS = 2000;
-
 /**
  * The Anvil's Loadout tab: the equipped pane, the bag and the compare pane (430 / flexible / 470
  * px). The compare pane shows the last hovered bag item (keys and mouse), else the selected or
@@ -25,8 +22,9 @@ const ARMED_MS = 2000;
  * prompts act on that item: A equips (under the pad, A on a bag weapon that can take your moveset
  * opens the take sheet; on a worn tile A only selects), X salvages a bag item and unequips a worn
  * one, Y locks, R3 or Shift toggles Full compare. Under the pad A and X carry the guided start's
- * targets (`Prompt.tutorial`). In `mode: 'pause'` the item actions give way to notes. Its tile and
- * filter live in the hub's memory.
+ * targets (`Prompt.tutorial`). X salvages at once; for `UNDO_MS` after, B or Ctrl+Z takes it back
+ * (`undoSalvage`). In `mode: 'pause'` the item actions give way to notes. Its tile and filter live
+ * in the hub's memory.
  */
 export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
@@ -38,12 +36,13 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
   const [filter, setFilter] = useState<BagFilter>(kept?.filter ?? 'all');
   const [hovered, setHovered] = useState<string | null>(null);
   const [full, setFull] = useState(false);
-  const [armed, setArmed] = useState<string | null>(null);
   const [asked, setAsked] = useState<string | null>(null);
   const [taking, setTaking] = useState<string | null>(null);
   const declined = useDelveStore((s) => s.bindDeclined);
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const locked = mode === 'pause' || isDiveActive(profile);
+  // Salvage's Undo, while the store still offers it.
+  const undoLive = useDelveStore((s) => !!s.undo && s.profile === s.undo.after);
 
   const has = (uid: string | null): uid is string => !!uid && !!findItem(profile, uid);
   // Under the pad only the focus (the selection) counts: a mouse hover left behind never does.
@@ -94,15 +93,6 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
         return;
       }
       if (found.item.locked) return;
-      const { item } = found;
-      const precious =
-        weaponParts(registry, item).runes.length > 0 ||
-        rarityIndex(item.rarity) >= rarityIndex('rare');
-      if (precious && armed !== uid) {
-        setArmed(uid);
-        return;
-      }
-      setArmed(null);
       const { links, runes, destroyed } = s.salvage([uid]);
       playSound('orbRemove');
       vibrate('light');
@@ -127,12 +117,6 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
   // The prompts are set once; their keys act through the latest actions and target.
   const latest = useRef({ actions, target });
   latest.current = { actions, target };
-
-  useEffect(() => {
-    if (!armed) return;
-    const t = window.setTimeout(() => setArmed(null), ARMED_MS);
-    return () => window.clearTimeout(t);
-  }, [armed]);
 
   useEffect(() => {
     if (link?.tab === 'loadout' && link.uid) setSelected(link.uid);
@@ -194,8 +178,22 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
         disabled: !hasTarget,
       },
       compare,
+      ...(undoLive
+        ? [
+            {
+              id: 'undo',
+              label: 'Undo salvage',
+              binding: { key: 'KeyZ', ctrl: true, pad: 'b' },
+              onPress: () => {
+                if (!useDelveStore.getState().undoSalvage()) return;
+                playSound('orbPlace');
+                showToast('Salvage undone');
+              },
+            } satisfies Prompt,
+          ]
+        : []),
     ]);
-  }, [mode, setPrompts, pad, worn, takes, targetLocked, hasTarget]);
+  }, [mode, setPrompts, pad, worn, takes, targetLocked, hasTarget, undoLive]);
   useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (

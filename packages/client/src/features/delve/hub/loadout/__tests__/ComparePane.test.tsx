@@ -211,6 +211,8 @@ describe('the compare pane', () => {
     expect(screen.getByTestId('salvage-button')).toHaveTextContent(
       /^Salvage · \+2 Links · \+40 scrap · \+5 Mana Dust/,
     );
+    // It melts at once: no arming (the pad-first spec, 4).
+    expect(screen.getByTestId('salvage-button')).not.toHaveTextContent('Press again');
     // Named as the Forge names them: the percent Damage says so.
     expect(screen.getByTestId('salvage-yield')).toHaveTextContent(
       'Shard: Damage % II or Armor IV · 25% for a second' +
