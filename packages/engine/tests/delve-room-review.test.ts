@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { aimPoint, nearestMonster } from '../src/arpg/abilities/targeting.js';
 import { botInput } from '../src/arpg/bot.js';
@@ -15,6 +15,11 @@ import { floorWorld } from './fixtures/flow-map.js';
 import { block, walledMap } from './fixtures/maps.js';
 
 // The room objects' whole-feature review: each finding's guard.
+
+// Each test yields to the event loop as it ends: these tests run synchronously for many
+// seconds, and a worker that holds its event loop past 60 s in all leaves vitest's pending
+// task update to time out ("Timeout calling onTaskUpdate"), though every test passes.
+afterEach(() => new Promise((r) => setTimeout(r)));
 
 const floor = (depth: number, seed: number): ArpgWorld =>
   createFloorWorld(registry, {
