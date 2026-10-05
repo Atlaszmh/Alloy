@@ -44,7 +44,7 @@ vi.mock('@/features/delve/training/TrainingPanel', () => ({
     const [open, setOpen] = useState(false);
     return (
       <aside data-testid="training-panel">
-        <div role="tablist" data-pad-tabs="">
+        <div role="tablist" data-pad-tabs="" data-pad-skip="">
           <button type="button" role="tab" aria-selected="false">
             Loadout
           </button>
@@ -134,7 +134,8 @@ describe('DelveTraining', () => {
     useInputDeviceStore.setState({ device: 'gamepad' });
     fireEvent.click(screen.getByTestId('training-panel-toggle')); // the arena's View
     expect(dock()).toHaveAttribute('data-pad-scope');
-    expect(screen.getByRole('tab', { name: 'Targets' })).toHaveFocus();
+    // Never on a tab (LB/RB step those): the dock's first control.
+    expect(screen.getByRole('button', { name: 'Socket 1' })).toHaveFocus();
     expect(isPaused()).toBe(true);
     expect(live.calls.at(-1)).toBe(false);
     pad('b');

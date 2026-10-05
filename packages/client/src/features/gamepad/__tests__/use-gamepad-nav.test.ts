@@ -358,7 +358,7 @@ describe('keepFocus: the pad never loses the focus', () => {
 });
 
 /** The standard mapping's button indices. */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, menu: 9, right: 15 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, menu: 9, up: 12, right: 15 } as const;
 
 describe('the pad outside combat: scopes, tab lists and prompts', () => {
   const frames = new Map<number, FrameRequestCallback>();
@@ -479,6 +479,42 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     tap(PAD.lt);
     expect(sub()).toBe('defensive');
     expect(top()).toBe('forge');
+  });
+
+  it('a skipped tab list (the kit\'s) puts the focus in the content, or leaves it where it survived', () => {
+    const list = el('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' });
+    const main = el('div');
+    const foot = el('div', { 'data-screen-section': 'screen-foot' });
+    const delve = el('button', {}, foot, 0, 100);
+    /** Each tab swaps the main's content for its own two controls. */
+    const tab = (name: string, selected: boolean) => {
+      const t = el('button', { role: 'tab', 'aria-selected': String(selected) }, list);
+      t.addEventListener('click', () => {
+        for (const o of list.querySelectorAll('[role="tab"]')) o.setAttribute('aria-selected', 'false');
+        t.setAttribute('aria-selected', 'true');
+        main.replaceChildren();
+        el('button', { 'data-name': `${name}-first` }, main, 0, 20);
+        el('button', { 'data-name': `${name}-second` }, main, 0, 40);
+      });
+      return t;
+    };
+    const [, forge] = [tab('loadout', true), tab('forge', false)];
+    const stale = el('button', {}, main, 0, 20);
+    const name = () => (document.activeElement as HTMLElement).getAttribute('data-name');
+    // The focused control goes with the old tab: the new tab's first control takes the focus.
+    stale.focus();
+    tap(PAD.rb);
+    expect(forge.getAttribute('aria-selected')).toBe('true');
+    expect(name()).toBe('forge-first');
+    // The focused control survives the switch (the footer's): it keeps the focus.
+    delve.focus();
+    tap(PAD.rb);
+    expect(name()).toBeNull();
+    expect(document.activeElement).toBe(delve);
+    // And the D-pad never lands on a tab.
+    (main.firstElementChild as HTMLElement).focus();
+    tap(PAD.up);
+    expect((document.activeElement as HTMLElement).getAttribute('role')).not.toBe('tab');
   });
 
   it("a screen's prompt takes its button first; A still presses the focused control", () => {

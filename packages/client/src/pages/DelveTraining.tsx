@@ -6,6 +6,7 @@ import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
+import { FOCUSABLE } from '@/features/gamepad/use-gamepad-nav';
 import { ToastContainer } from '@/components/Toast';
 import { usePrompts, type Prompt } from '@/features/delve/kit';
 import { SystemMenu } from '@/features/delve/hub/SystemMenu';
@@ -77,11 +78,14 @@ export function DelveTraining() {
   }, [paused]);
   const manualAttack = useDelveStore((s) => s.manualAttack);
 
-  // The dock takes the pad's focus on its selected tab, and gives it up when the pad leaves.
+  // The dock takes the pad's focus on its first control (never a tab: LB/RB step those), and
+  // gives it up when the pad leaves.
   useLayoutEffect(() => {
     const dock = dockRef.current;
     if (padFocus)
-      dock?.querySelector<HTMLElement>('[data-pad-tabs] [aria-selected="true"]')?.focus();
+      [...(dock?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])]
+        .find((el) => !el.closest('[data-pad-skip]'))
+        ?.focus();
     else if (
       document.activeElement instanceof HTMLElement &&
       dock?.contains(document.activeElement)

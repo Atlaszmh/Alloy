@@ -15,7 +15,9 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * the holds); one no prompt takes does its default: B presses the topmost
  * scope's `[data-pad-back]`, Menu its `[data-pad-menu]` (else its back),
  * LB/RB step its top-level `[data-pad-tabs]` and LT/RT its
- * `[data-pad-tabs="sub"]`, past disabled tabs. The last visible
+ * `[data-pad-tabs="sub"]`, past disabled tabs. A stepped tab takes the focus
+ * only where tabs are D-pad stops (the skill list); a kit tab list puts it in
+ * the content. The last visible
  * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it, and while the
  * pad has the input lock the focus never gets lost (`keepFocus`, which starts
  * a scope on its `[data-pad-first]`). `[data-pad-skip]` controls are never
@@ -255,7 +257,22 @@ const TAB_LISTS = {
   sub: '[data-pad-tabs="sub"]',
 } as const;
 
-/** Step the topmost scope's tab list (LB/RB its top level, LT/RT its sub list), past disabled tabs. */
+/** The first candidate after `mark` in document order, outside the screen's footer. */
+function firstAfter(mark: Element): HTMLElement | null {
+  return (
+    candidates(null).find(
+      (el) =>
+        mark.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING &&
+        !el.closest('[data-screen-section="screen-foot"]'),
+    ) ?? null
+  );
+}
+
+/**
+ * Step the topmost scope's tab list (LB/RB its top level, LT/RT its sub list), past disabled
+ * tabs. The focus never rests on a tab the D-pad can't reach: it stays where it survived, else
+ * goes to the new tab's first control.
+ */
 function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
   const list = scopedLast(TAB_LISTS[level]);
   if (!list) return;
@@ -265,8 +282,15 @@ function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
   let i = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
   do i = (i + delta + tabs.length) % tabs.length;
   while (!enabled(tabs[i]));
+  const before = document.activeElement;
   tabs[i].click();
-  focus(tabs[i]);
+  // A list that is also a pane's content (the Skills tab's skill list): its row takes the focus.
+  if (isCandidate(tabs[i])) return focus(tabs[i]);
+  // A kit tab list is off the D-pad. A focused control that survived the switch keeps the focus;
+  // else the new tab's first control takes it.
+  if (before instanceof HTMLElement && before.isConnected && isCandidate(before)) return;
+  const first = firstAfter(list);
+  if (first) focus(first);
 }
 
 function stickDir(state: PadState): NavDir | null {
