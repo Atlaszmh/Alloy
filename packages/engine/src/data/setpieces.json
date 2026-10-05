@@ -159,7 +159,7 @@
       "id": "undergrowth",
       "rows": ["?fff?", "fffff", "fffff", "fffff", "?fff?"],
       "tags": ["centre"],
-      "biomes": ["sunken_quarry"],
+      "biomes": ["sunken_quarry", "cinder_mines", "frostvault", "bone_crypts"],
       "weight": 2,
       "turns": true
     },
@@ -189,6 +189,23 @@
       "weight": 2,
       "turns": true,
       "looks": { "c": "statue" }
+    },
+    {
+      "id": "ossuary_altar",
+      "rows": ["##.h.##"],
+      "tags": ["edge"],
+      "biomes": ["bone_crypts"],
+      "weight": 1,
+      "turns": true,
+      "looks": { "#": "tomb" }
+    },
+    {
+      "id": "spore_bed",
+      "rows": ["~~.~~", "~...~", "..h..", "~...~", "~~.~~"],
+      "tags": ["centre"],
+      "biomes": ["sunken_quarry"],
+      "weight": 1,
+      "turns": false
     },
     {
       "id": "spire_field",
@@ -221,7 +238,7 @@
       "looks": {
         "cover": ["timber", "ruin"],
         "crumbling": ["cracked_wall"],
-        "foliage": [],
+        "foliage": ["fungus"],
         "slow": ["coal_rubble"]
       },
       "props": ["crate", "barrel"],
@@ -231,7 +248,7 @@
       "looks": {
         "cover": ["ice_pillar", "ruin"],
         "crumbling": ["cracked_wall"],
-        "foliage": [],
+        "foliage": ["frost_fern"],
         "slow": ["snowdrift"]
       },
       "props": ["urn", "crate"],
@@ -261,7 +278,7 @@
       "looks": {
         "cover": ["tomb", "ruin"],
         "crumbling": ["statue", "cracked_wall"],
-        "foliage": [],
+        "foliage": ["cobweb"],
         "slow": ["mud"]
       },
       "props": ["urn", "bone_pile"],

@@ -232,14 +232,15 @@ describe('the furnisher', () => {
     expect(bad.slice(0, 5), `${bad.length} cells`).toEqual([]);
   });
 
-  it("places cover, crumbling cover, slow ground, props and hazards, mostly of the palette's, and foliage only in the Quarry", () => {
+  it("places cover, crumbling cover, slow ground, props and hazards, mostly of the palette's, and foliage where the palette has it", () => {
     const count = (floors: Furnished[], code: number) =>
       floors.reduce((n, { map }) => n + map.cells.filter((c) => c === code).length, 0);
     for (const code of [CELL.cover, CELL.crumbling, CELL.slow])
       expect(count(ALL, code), `${code}`).toBeGreaterThan(0);
     for (const biome of biomes) {
       const floors = ALL.filter(({ label }) => label.endsWith(biome.id));
-      expect(count(floors, CELL.foliage) > 0, biome.id).toBe(biome.id === 'sunken_quarry');
+      const leafy = data.palettes[biome.id].looks.foliage.length > 0;
+      expect(count(floors, CELL.foliage) > 0, biome.id).toBe(leafy);
       expect(floors.flatMap(({ f }) => f.props).length, biome.id).toBeGreaterThan(0);
     }
     const hazards = ALL.flatMap(({ f }) => f.hazards);

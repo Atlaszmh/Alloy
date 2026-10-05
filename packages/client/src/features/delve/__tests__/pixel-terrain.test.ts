@@ -210,6 +210,29 @@ describe("a floor painted from its map's cells", { timeout: 20000 }, () => {
     const ground = colour(30, 27);
     expect(Math.max(...mud.map((v, k) => Math.abs(v - ground[k])))).toBeGreaterThan(15);
   });
+
+  it("grows each foliage look in its own colours: the Crypts' cobwebs grey, not the theme's leaves", () => {
+    const paint = (look: LookId) => {
+      const map = furnished();
+      for (let y = 30; y <= 32; y++)
+        for (let x = 26; x <= 28; x++) map.look[y * map.width + x] = LOOK_IDS.indexOf(look);
+      const pw = floor(map, PIXEL_THEMES.bone_crypts);
+      const out = new Uint8ClampedArray(pw.size * 4);
+      renderPixelWorld(pw, out, 1);
+      return [0, 1, 2].map(
+        (k) => cellsOf(pw, 27, 31).reduce((s, i) => s + out[i * 4 + k], 0) / PPU ** 2,
+      );
+    };
+    const leaves = paint('undergrowth');
+    const webs = paint('cobweb');
+    // Grey under the Crypts' cold light: as much red as green, and far brighter than leaves.
+    expect(Math.abs(webs[0] - webs[1])).toBeLessThan(10);
+    expect(webs[0] + webs[1] + webs[2]).toBeGreaterThan(leaves[0] + leaves[1] + leaves[2] + 60);
+    const fern = paint('frost_fern');
+    const fungus = paint('fungus');
+    expect(Math.max(...fern.map((v, k) => Math.abs(v - leaves[k])))).toBeGreaterThan(15);
+    expect(Math.max(...fungus.map((v, k) => Math.abs(v - leaves[k])))).toBeGreaterThan(15);
+  });
 });
 
 describe('crumbling cover on the pixel floor', { timeout: 20000 }, () => {

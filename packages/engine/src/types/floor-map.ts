@@ -49,6 +49,9 @@ export const LOOK_IDS = [
   'mud',
   'ash',
   'rubble',
+  'fungus',
+  'frost_fern',
+  'cobweb',
 ] as const;
 export type LookId = (typeof LOOK_IDS)[number];
 

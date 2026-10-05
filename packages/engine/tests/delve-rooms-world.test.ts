@@ -109,8 +109,10 @@ describe('a furnished floor', () => {
     expect(bad.slice(0, 5), `${bad.length} foes`).toEqual([]);
   });
 
-  it("hides packs in the Quarry's foliage at ambushChance, asleep, each foe a whole 3 × 3 of it deep", () => {
-    const quarry = [16, 17, 18, 19];
+  it('hides packs in foliage at ambushChance, asleep, each foe a whole 3 × 3 of it deep', () => {
+    // The Mines', the Frostvault's, the Quarry's and the Crypts' depths (the Foundry and the
+    // Core grow none).
+    const quarry = [3, 8, 16, 17, 18, 19, 23];
     let hidden = 0;
     for (const seed of SEEDS)
       for (const depth of quarry) {
@@ -135,7 +137,7 @@ describe('a furnished floor', () => {
       }
     expect(hidden).toBeGreaterThan(0);
     for (const seed of SEEDS.slice(0, 4))
-      for (const depth of [...quarry, 3, 8, 23]) {
+      for (const depth of [...quarry, 13, 28]) {
         expect(world(depth, seed, hiding(0)).monsters.some((m) => m.ambush)).toBe(false);
         if (!quarry.includes(depth))
           expect(world(depth, seed, hiding(1)).monsters.some((m) => m.ambush)).toBe(false);

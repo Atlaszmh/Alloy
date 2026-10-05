@@ -58,6 +58,9 @@ export const FLOOR_LOOKS = [
   'mud',
   'ash',
   'rubble',
+  'fungus',
+  'frost_fern',
+  'cobweb',
 ] as const;
 export const LOOK = Object.fromEntries(FLOOR_LOOKS.map((id, k) => [id, k])) as Record<
   (typeof FLOOR_LOOKS)[number],
