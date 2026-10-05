@@ -30,6 +30,20 @@ describe('MaterialsPane', () => {
     store().resetProfile(1234, 'fire');
   });
 
+  it("keys each bar's Refine by its metal for the guided start (forge.refine), and no other row's", () => {
+    held({
+      metals: { ...emptyMaterials().metals, rusty: 5 },
+      flux: { ...emptyMaterials().flux, uncommon: 3 },
+    });
+    pane();
+    expect(screen.getByTestId('refine-metal-rusty')).toHaveAttribute(
+      'data-tutorial',
+      'forge.refine:rusty',
+    );
+    expect(screen.getByTestId('refine-flux-uncommon')).not.toHaveAttribute('data-tutorial');
+    expect(screen.getByTestId('materials-bars')).toHaveAttribute('data-tutorial', 'forge.refine');
+  });
+
   it("lists what's held by kind, shards by family and tier, and refines 3 → 1 at the engine's price", () => {
     held({
       metals: { ...emptyMaterials().metals, rusty: 5, iron: 1, voidforged: 3 },

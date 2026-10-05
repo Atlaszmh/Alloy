@@ -120,6 +120,24 @@ describe('Temper', () => {
       expect(screen.queryByTestId(`${op}-open`)).toBeNull();
   });
 
+  it("Hone's picker carries the guided start's trail: its lines, done once one is picked, then its confirm", () => {
+    bench(helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]), { scrap: 10_000 });
+    fireEvent.click(screen.getByTestId('hone-open'));
+    const lines = document.querySelector('[data-tutorial="temper.line"]')!;
+    expect(lines).toContainElement(screen.getByTestId('hone-line-0'));
+    expect(lines).toHaveAttribute('data-tutorial-done', 'false');
+    expect(screen.getByTestId('hone-button')).toHaveAttribute('data-tutorial', 'temper.go');
+    expect(screen.getByTestId('hone-button')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('hone-line-0'));
+    expect(lines).toHaveAttribute('data-tutorial-done', 'true');
+    expect(screen.getByTestId('hone-button')).toBeEnabled();
+    // Reforge's picker is no lesson's.
+    fireEvent.click(screen.getByTestId('hone-back'));
+    fireEvent.click(screen.getByTestId('reforge-open'));
+    expect(document.querySelector('[data-tutorial="temper.line"]')).toBeNull();
+    expect(screen.getByTestId('reforge-button')).not.toHaveAttribute('data-tutorial');
+  });
+
   it('hones a line through the engine, at its price, which grows with each hone', () => {
     const item = { ...helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]), hones: 2 };
     const cost = honeCost(registry, item);

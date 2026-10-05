@@ -78,6 +78,7 @@ function MaterialRow({
             onClick={() => onRefine(what, cost.count)}
             aria-describedby={short && !locked ? id : undefined}
             testId={`refine-${key}`}
+            data-tutorial={what.kind === 'metal' ? `forge.refine:${what.metal}` : undefined}
           >
             Refine {cost.count} → 1 · <Price scrap={cost.scrap} />
           </Button>

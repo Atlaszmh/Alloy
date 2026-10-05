@@ -178,23 +178,29 @@ export function Temper({ item }: { item: GearItem }) {
               Honed {item.hones} {item.hones === 1 ? 'time' : 'times'}: each hone costs more.
             </p>
           )}
-          {affixes.map((l, i) => (
-            <button
-              key={`${i}-${l.stat}`}
-              type="button"
-              className="k-well p-2 text-left"
-              style={{ borderColor: line === i ? 'var(--k-hot)' : undefined }}
-              aria-pressed={line === i}
-              data-pad-first={i === 0 ? '' : undefined}
-              onClick={() => {
-                setLine(i);
-                setShard(null); // a shard for one line may sit on another
-              }}
-              data-testid={`${op}-line-${i}`}
-            >
-              <AffixLine line={l} />
-            </button>
-          ))}
+          <div
+            className="flex flex-col gap-3"
+            data-tutorial={op === 'hone' ? 'temper.line' : undefined}
+            data-tutorial-done={line !== null}
+          >
+            {affixes.map((l, i) => (
+              <button
+                key={`${i}-${l.stat}`}
+                type="button"
+                className="k-well p-2 text-left"
+                style={{ borderColor: line === i ? 'var(--k-hot)' : undefined }}
+                aria-pressed={line === i}
+                data-pad-first={i === 0 ? '' : undefined}
+                onClick={() => {
+                  setLine(i);
+                  setShard(null); // a shard for one line may sit on another
+                }}
+                data-testid={`${op}-line-${i}`}
+              >
+                <AffixLine line={l} />
+              </button>
+            ))}
+          </div>
           {op === 'imprint' && line !== null && (
             <>
               <span className="k-label">Pick a shard</span>
@@ -211,6 +217,7 @@ export function Temper({ item }: { item: GearItem }) {
             disabled={!ready || opShort}
             onClick={onLineOp}
             aria-describedby={opShort ? `${id}-op` : undefined}
+            data-tutorial={op === 'hone' ? 'temper.go' : undefined}
             testId={`${op}-button`}
           >
             {line === null ? (
