@@ -333,8 +333,6 @@ test.describe('Delve with a controller', () => {
     // Along the chain's cards.
     await tap(page, BUTTON.right);
     await expect(page.getByTestId('move-1')).toBeFocused();
-    await tap(page, BUTTON.a);
-    await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
     // The weapon carries the chains.
     const blow = () =>
       page.evaluate(
@@ -343,14 +341,23 @@ test.describe('Delve with a controller', () => {
             .basic[1],
       );
     expect((await blow()).kind).toBe('light');
-    // On to the inspector's kind radios, and along them past the light one.
-    await padWalk(page, 'kind-medium');
+    // A opens the move's editor; its first row, Kind, takes the focus.
     await tap(page, BUTTON.a);
-    await expect(page.getByTestId('kind-medium')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
+    const kind = page.getByTestId('move-kind');
+    await expect(kind).toBeFocused();
+    await expect(kind).toHaveAttribute('aria-valuetext', 'Light');
+    await tap(page, BUTTON.right);
+    await expect(kind).toHaveAttribute('aria-valuetext', 'Medium');
+    expect(await focused()).toBe('move-kind');
     // A draft until Apply.
     await expect(page.getByTestId('chain-apply')).toBeEnabled();
     expect((await blow()).kind).toBe('light');
-    expect(await focused()).toBe('kind-medium');
+    // B closes the editor onto its card.
+    await tap(page, BUTTON.b);
+    await expect(page.getByTestId('move-editor')).toHaveCount(0);
+    await expect(page.getByTestId('move-1')).toBeFocused();
     await page.getByTestId('chain-apply').click();
     await expect.poll(async () => (await blow()).kind).toBe('medium');
   });
@@ -367,29 +374,34 @@ test.describe('Delve with a controller', () => {
     await expect(page.getByTestId('move-0')).toBeFocused();
     const focused = () =>
       page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
-    /** Press down, then up, until `id` has the focus (on a phone the tab bar sits in between). */
+    /** Walk the D-pad (a grid now: each direction in turn) until `id` has the focus. */
     const padTo = async (id: string) => {
-      for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.down);
-      for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.up);
+      for (const b of [BUTTON.down, BUTTON.right, BUTTON.up, BUTTON.left, BUTTON.down])
+        for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, b);
       expect(await focused()).toBe(id);
     };
-    // Down to the Primary's card's one open socket.
-    await padTo('socket-0');
+    // A opens the card's editor; down to its one open socket's row.
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await padTo('inspect-socket-0');
     const picker = page.getByTestId('rune-picker');
-    // A opens the picker, which takes the focus; B backs out, the focus back on the socket.
+    // A opens the rune grid, which takes the focus; B backs out, the focus back on the row.
     await tap(page, BUTTON.a);
     await expect(picker).toBeVisible();
     await expect.poll(focused).toMatch(/^rune-/);
     await tap(page, BUTTON.b);
     await expect(picker).toBeHidden();
-    await expect(page.getByTestId('socket-0')).toBeFocused();
+    await expect(page.getByTestId('inspect-socket-0')).toBeFocused();
     // Again, and A on Quick sockets it: a draft until Apply.
     await tap(page, BUTTON.a);
     await expect(picker).toBeVisible();
     await padTo('rune-pick-quick');
     await tap(page, BUTTON.a);
     await expect(picker).toBeHidden();
-    await expect(page.getByTestId('socket-0')).toHaveAttribute('data-rune', 'quick:3');
+    await expect(page.getByTestId('chain-cards').getByTestId('socket-0')).toHaveAttribute(
+      'data-rune',
+      'quick:3',
+    );
     const sockets = () =>
       page.evaluate(
         () =>

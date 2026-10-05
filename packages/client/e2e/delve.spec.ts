@@ -278,9 +278,12 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('abilities-panel')).toBeVisible();
     await expect(page.getByTestId('mana-view')).toBeVisible();
     await page.getByTestId('mana-back').click();
-    // The Primary's one move becomes a Wildfire Burst: a draft, free before the first dive.
+    // The Primary's one move becomes a Wildfire Burst: its editor's Form grid, then its
+    // Elements; a draft, free before the first dive.
+    await page.getByTestId('move-0').click();
+    await page.getByTestId('move-form').click();
     await page.getByTestId('form-burst').click();
-    await page.getByTestId('infusion-nature').click();
+    await stepTo(page, 'move-elements', /^Fire \+ Nature$/);
     await expect(page.getByTestId('ability-readout')).toContainText('light Wildfire Burst');
     await expect(page.getByTestId('chain-price')).toContainText('free until your first dive');
     await page.getByTestId('chain-apply').click();

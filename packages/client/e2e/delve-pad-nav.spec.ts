@@ -422,6 +422,16 @@ test.describe('Delve pad navigation', () => {
     await leave(page, 'down', 'card');
     expect((await where(page)).foot).toBe(true);
     await back(page, 'up', 'card');
+    // A opens the card's editor (its own scope: the focus goes in); B comes back to the card.
+    await mark(page, 'card');
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    expect(
+      await page.evaluate(() => !!document.activeElement?.closest('[data-testid="move-editor"]')),
+    ).toBe(true);
+    await tap(page, BUTTON.b);
+    await expect(page.getByTestId('move-editor')).toHaveCount(0);
+    expect(await marked(page)).toBe('card');
   });
 
   test('PN04: Forge by the pad: A on a pattern lands on the Flux row, right steps a row, down reaches Forge and left the patterns; RT goes to Temper, then Materials', async ({ page }) => {

@@ -269,13 +269,13 @@ test.describe('Delve guided start', () => {
 
     // The Primary: a slot, the new move in frost, a socket on the first move and the rune; Apply.
     await page.getByTestId('chain-skill-primary').click();
-    const cards = page.getByTestId('chain-cards');
     await page.getByTestId('add-slot').click();
-    await cards.getByTestId('move-2').click();
-    await page.getByTestId('element-frost').click();
-    await cards.getByTestId('move-0').click();
-    await cards.getByTestId('sockets-0').getByTestId('socket-open').click();
-    await cards.getByTestId('sockets-0').getByTestId('socket-0').click();
+    await page.getByTestId('move-2').click();
+    await stepTo(page, 'move-elements', /^Frost$/);
+    await page.getByTestId('move-editor-back').click();
+    await page.getByTestId('move-0').click();
+    await page.getByTestId('socket-open').click();
+    await page.getByTestId('inspect-socket-0').click();
     await page.getByTestId('rune-picker').locator('[data-testid^="rune-pick-"]').first().click();
     await page.getByTestId('chain-apply').click();
     await expect.poll(() => step(page)).toBe('l1-salvage');

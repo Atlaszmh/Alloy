@@ -101,8 +101,10 @@ test.describe('Delve runes', () => {
     await page.getByTestId('tab-skills').click();
     const cards = page.getByTestId('chain-cards');
     await expect(cards.getByTestId('socket-0')).toHaveCount(0);
-    await cards.getByTestId('socket-open').click();
-    await cards.getByTestId('socket-0').click();
+    // The move's editor: Open a socket, then its socket's row opens the rune grid.
+    await page.getByTestId('move-0').click();
+    await page.getByTestId('socket-open').click();
+    await page.getByTestId('inspect-socket-0').click();
     const picker = page.getByTestId('rune-picker');
     await expect(picker).toBeVisible();
     // The picker names the rune at its tier with its effect, as the engine's runeText fills it.
