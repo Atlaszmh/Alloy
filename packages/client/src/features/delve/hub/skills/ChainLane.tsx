@@ -15,12 +15,12 @@ import {
   type ManaSupport,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { Glyph, Panel, Price, Segmented, layerZoom } from '@/features/delve/kit';
+import { Glyph, Panel, Price, layerZoom } from '@/features/delve/kit';
 import { formatNumber, manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import { SocketRow } from '../../runes/SocketRow';
 import { KIND_NAME, SKILL_NAME, chainText } from '../../chains/chain-text';
-import { PAYMENTS, offPair, type ChainEditorModel } from '../../chains/useChainEditor';
+import { offPair, type ChainEditorModel } from '../../chains/useChainEditor';
 import { useTutorialStep } from '../../tutorial/tutorial-view';
 import { useChainMessage, type AnvilChains } from './useAnvilChains';
 
@@ -40,7 +40,7 @@ interface Drag {
 /**
  * The Skills tab's chain pane: the chosen chain's header (its slots, payment and rule) and its
  * summary line (its moves' names, or what carries it), its move cards in order (each its kind, element tile and form glyph, element or fusion, socket
- * pips and price; the chosen card's ◂ ▸ × toolbar), "+ Move" while a slot is free and "+ Slot"
+ * pips and price; a click on a card, or A, opens its move's editor, a pip's at its socket), "+ Move" while a slot is free and "+ Slot"
  * with its price while the chain is under its cap, a refused Apply's or Add slot's reason, and for
  * an ability chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37). Focus chooses a card,
  * and the chosen one leads the pad (`data-pad-first`).
@@ -49,11 +49,14 @@ export function ChainLane({
   ed,
   anvil,
   carrying,
+  onEdit,
 }: {
   ed: ChainEditorModel;
   anvil: AnvilChains;
   /** The pad has the chosen card picked up (X): it rides raised. */
   carrying: boolean;
+  /** A click (or A) on card `i`, or on its pip `socket`: its editor (the move pane's). */
+  onEdit: (i: number, socket?: number) => void;
 }) {
   const registry = getDelveRegistry();
   const { skill, entries, index, names, locked, absent, chain, resolved } = ed;
@@ -111,22 +114,6 @@ export function ChainLane({
               : ' · free · each swing strikes the next blow'}
           </span>
         )}
-        {chain && (
-          <div className="ml-auto">
-            <Segmented
-              aria-label="Payment"
-              value={chain.payment}
-              onChange={(p: AbilityPayment) => ed.setPayment(p)}
-              options={PAYMENTS.map(([p, label, text]) => ({
-                id: p,
-                label,
-                title: text,
-                disabled: locked,
-                testId: `payment-${p}`,
-              }))}
-            />
-          </div>
-        )}
       </div>
       <p className="k-caption m-0" data-testid="abilities-summary">
         {absent ? absentText?.(skill) : chainText(names)}
@@ -175,7 +162,7 @@ export function ChainLane({
                   aria-pressed={on}
                   aria-label={off ? `${names[i]}, off-pair` : names[i]}
                   onClick={() => {
-                    if (!dragged.current) ed.select(i);
+                    if (!dragged.current) onEdit(i);
                     dragged.current = false;
                   }}
                   onPointerDown={onPointerDown(i)}
@@ -229,24 +216,15 @@ export function ChainLane({
                 </button>
                 <span className="flex flex-wrap items-center gap-2">
                   {runes && (
-                    <span
-                      data-testid={`sockets-${i}`}
-                      data-tutorial={skill === 'primary' && i === 0 ? 'skills.socket' : undefined}
-                      data-tutorial-done={socketsOf(e).length > 0}
-                    >
+                    // The pips are the mouse's: a click opens the editor at that socket's grid.
+                    <span data-testid={`sockets-${i}`} data-pad-skip="">
                       <SocketRow
                         runes={socketsOf(e)}
                         cap={runes.socketCap}
-                        nextPrice={
-                          on && ed.nextSocket !== undefined
-                            ? (ed.nextSocket ?? { links: 0, scrap: 0 })
-                            : null
-                        }
+                        nextPrice={null}
                         dormant={ed.dormant(i)}
                         locked={locked}
-                        onSocketTap={(s) => ed.openPicker(i, s)}
-                        onOpenSocket={ed.openSocket}
-                        whyId={on && ed.openWhy ? `${id}-socket` : undefined}
+                        onSocketTap={(s) => onEdit(i, s)}
                       />
                     </span>
                   )}
@@ -258,43 +236,6 @@ export function ChainLane({
                     </span>
                   )}
                 </span>
-                {on && (
-                  // The mouse's: the pad carries with X and removes with Y (SkillsTab's prompts).
-                  <span className="flex gap-1.5" role="group" aria-label="Reorder" data-pad-skip>
-                    <button
-                      type="button"
-                      className="k-chip h-8 min-w-8 justify-center"
-                      disabled={locked || i === 0}
-                      aria-label={`Move ${names[i]} earlier`}
-                      onClick={() => ed.shift(i, -1)}
-                      data-earlier={i}
-                      data-testid={`move-left-${i}`}
-                    >
-                      ◂
-                    </button>
-                    <button
-                      type="button"
-                      className="k-chip h-8 min-w-8 justify-center"
-                      disabled={locked || i === entries.length - 1}
-                      aria-label={`Move ${names[i]} later`}
-                      onClick={() => ed.shift(i, 1)}
-                      data-later={i}
-                      data-testid={`move-right-${i}`}
-                    >
-                      ▸
-                    </button>
-                    <button
-                      type="button"
-                      className="k-chip h-8 min-w-8 justify-center"
-                      disabled={locked || entries.length === 1}
-                      aria-label={`Remove ${names[i]}`}
-                      onClick={() => ed.remove(i)}
-                      data-testid={`move-remove-${i}`}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
               </div>
             </Fragment>
           );
@@ -344,15 +285,6 @@ export function ChainLane({
           data-testid="chain-message"
         >
           {message}
-        </span>
-      )}
-      {ed.openWhy && (
-        <span
-          id={`${id}-socket`}
-          className="text-[14px] text-[var(--k-hot)]"
-          data-testid="socket-open-why"
-        >
-          {ed.openWhy}
         </span>
       )}
       {cycle && chain && (

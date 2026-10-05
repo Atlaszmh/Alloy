@@ -14,7 +14,8 @@ import { useAnvilChains } from './useAnvilChains';
 
 /**
  * The Anvil's Skills tab: the skill strip and the mana pair over the chosen chain's lane with its
- * stats and rhythm · the move inspector (or the Mana view, its own scope). Its footer is the
+ * stats and rhythm · the move pane: the chosen move's detail, or its editor (A or a click on a
+ * card; B or Esc closes it), or the Mana view (its own scope). Its footer is the
  * Apply bar (none in the pause, whose footer stays). Keys: `[` `]` step the skills (the pad's
  * LT RT step the strip), Del or a tap of Y removes the chosen move, Alt+← → move it, X picks it
  * up on the pad (the D-pad carries it, X drops it, B or Esc puts it back, and another skill or
@@ -55,6 +56,17 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
 
   const { locked, absent, entries, fixedShape } = ed;
   const canEdit = !locked && !absent && !fixedShape;
+  // The move editor is open on the chosen move.
+  const [editing, setEditing] = useState(false);
+  /** A or a click on card `i` (with `socket`, a pip: its rune grid too): its editor, unless the chain is read-only. */
+  const onEdit = (i: number, socket?: number) => {
+    if (!canEdit) return ed.select(i);
+    if (socket === undefined) ed.select(i);
+    else ed.openPicker(i, socket);
+    setEditing(true);
+  };
+  // Another skill, a link, the Mana view or a lock closes it.
+  useEffect(() => setEditing(false), [ed.skill, link, mana, canEdit]);
   /** Alt+← → move the chosen move; they're always taken, so the browser's Back never hears them. */
   const shiftChosen = (by: number) => {
     const { ed: now, mana: inMana } = live.current;
@@ -101,46 +113,51 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
     () =>
       mana
         ? [{ id: 'back', label: 'Back', binding: { key: 'Escape', pad: 'b' } }]
-        : carry !== null
+        : editing
           ? [
-              { id: 'carry', label: 'Move', binding: { pad: 'left' } },
-              { id: 'drop', label: 'Drop', binding: { pad: 'x' } },
-              // Esc too, before it could open the menu over a carried card.
-              {
-                id: 'put-back',
-                label: 'Put back',
-                binding: { key: 'Escape', pad: 'b' },
-                onPress: () => endCarry(true),
-              },
+              { id: 'change', label: 'Change', binding: { pad: 'a' } },
+              { id: 'back', label: 'Back', binding: { key: 'Escape', pad: 'b' } },
             ]
-          : [
-              { id: 'select', label: 'Select move', binding: { mouse: 'click', pad: 'a' } },
-              {
-                id: 'reorder',
-                label: 'Reorder',
-                binding: { mouse: 'drag', pad: 'x' },
-                onPress: pickUp,
-                disabled: !canEdit || entries.length < 2,
-              },
-              {
-                id: 'remove',
-                label: 'Remove',
-                binding: { key: 'Delete', pad: 'y' },
-                onPress: () => live.current.ed.remove(live.current.ed.index),
-                disabled: !canEdit || entries.length < 2,
-              },
-              { id: 'skill', label: 'Next skill', binding: { key: 'BracketRight', pad: 'rt' } },
-              {
-                id: 'apply',
-                label: 'Apply',
-                binding: APPLY_BINDING,
-                onPress: applyChains,
-                onHold: (held) => held && applyChains(),
-                disabled: !canApply,
-              },
-            ],
+          : carry !== null
+            ? [
+                { id: 'carry', label: 'Move', binding: { pad: 'left' } },
+                { id: 'drop', label: 'Drop', binding: { pad: 'x' } },
+                // Esc too, before it could open the menu over a carried card.
+                {
+                  id: 'put-back',
+                  label: 'Put back',
+                  binding: { key: 'Escape', pad: 'b' },
+                  onPress: () => endCarry(true),
+                },
+              ]
+            : [
+                { id: 'select', label: 'Edit move', binding: { mouse: 'click', pad: 'a' } },
+                {
+                  id: 'reorder',
+                  label: 'Reorder',
+                  binding: { mouse: 'drag', pad: 'x' },
+                  onPress: pickUp,
+                  disabled: !canEdit || entries.length < 2,
+                },
+                {
+                  id: 'remove',
+                  label: 'Remove',
+                  binding: { key: 'Delete', pad: 'y' },
+                  onPress: () => live.current.ed.remove(live.current.ed.index),
+                  disabled: !canEdit || entries.length < 2,
+                },
+                { id: 'skill', label: 'Next skill', binding: { key: 'BracketRight', pad: 'rt' } },
+                {
+                  id: 'apply',
+                  label: 'Apply',
+                  binding: APPLY_BINDING,
+                  onPress: applyChains,
+                  onHold: (held) => held && applyChains(),
+                  disabled: !canApply,
+                },
+              ],
     // The handlers read `live`: only what the prompts show re-makes them.
-    [mana, carry, canEdit, entries.length, canApply],
+    [mana, editing, carry, canEdit, entries.length, canApply],
   );
   useEffect(() => {
     if (mode === 'pause') return;
@@ -189,11 +206,16 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
         className="grid min-h-0 flex-1 gap-6"
         style={{ gridTemplateColumns: 'minmax(0, 1fr) 500px' }}
       >
-        <ChainLane ed={ed} anvil={anvil} carrying={carry !== null} />
+        <ChainLane ed={ed} anvil={anvil} carrying={carry !== null} onEdit={onEdit} />
         {mana ? (
           <ManaPanel stats={anvil.editor.stats} onBack={() => setMana(false)} />
         ) : (
-          <MoveInspector ed={ed} anvil={anvil} />
+          <MoveInspector
+            ed={ed}
+            anvil={anvil}
+            editing={editing}
+            onClose={() => setEditing(false)}
+          />
         )}
       </div>
     </div>

@@ -33,6 +33,10 @@ export interface RunePickerProps {
   ease?: number;
   /** The guided start's target the list of runes carries (`data-tutorial`): its field's, e.g. `skills.rune`. */
   tutorial?: string;
+  /** Lay the runes out two to a row (the Skills editor's grid); a list otherwise. */
+  grid?: boolean;
+  /** What a rune would do to the chain's damage a second, or null to say nothing (a blow's socket). */
+  damage?: (rune: RuneRef) => string | null;
   /** A pick, then `onClose`. */
   onPick: (rune: RuneRef) => void;
   /** A pull, then `onClose`. */
@@ -112,6 +116,8 @@ export function RunePicker({
   payment,
   ease,
   tutorial,
+  grid = false,
+  damage,
   onPick,
   onPull,
   onClose,
@@ -217,9 +223,13 @@ export function RunePicker({
           {tierChoice ? 'No rune fits this move.' : 'No rune in your pouch fits this move.'}
         </div>
       )}
-      <div className="flex flex-col gap-2" data-tutorial={tutorial}>
+      <div
+        className={grid ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2'}
+        data-tutorial={tutorial}
+      >
         {rows.map(({ rune, count, dormant: idle }) => {
           const key = `${rune.id}-${rune.tier}`;
+          const shift = damage?.(rune);
           return (
             <button
               key={key}
@@ -246,6 +256,14 @@ export function RunePicker({
                 why={idle ? dormantText(registry.getRune(rune.id)) : undefined}
                 id={`${id}-${key}`}
               />
+              {shift && (
+                <span
+                  className="text-[14px] text-[var(--k-text-2)]"
+                  data-testid={`rune-damage-${rune.id}`}
+                >
+                  {shift}
+                </span>
+              )}
             </button>
           );
         })}
