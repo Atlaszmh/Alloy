@@ -148,6 +148,24 @@ describe('QuestsTab', () => {
     expect(screen.queryByTestId('quest-claim')).toBeNull();
   });
 
+  it("marks the first completed quest's row for the guided start (quests.done), done once it is open", () => {
+    shown.quests = [
+      MAIN,
+      { ...KINDLING, status: 'complete' },
+      { ...DEEP_ROOTS, status: 'complete' },
+    ];
+    renderTab();
+    const row = screen.getByTestId('quest-kindling');
+    expect(row).toHaveAttribute('data-tutorial', 'quests.done');
+    expect(row).toHaveAttribute('data-tutorial-done', 'false');
+    // Only the first that waits, and never the open one that doesn't.
+    expect(screen.getByTestId('quest-deep-roots')).not.toHaveAttribute('data-tutorial');
+    expect(screen.getByTestId('quest-frozen-foreman')).not.toHaveAttribute('data-tutorial');
+    fireEvent.click(row);
+    expect(row).toHaveAttribute('data-tutorial-done', 'true');
+    expect(screen.getByTestId('quest-claim')).toHaveAttribute('data-tutorial', 'quests.claim');
+  });
+
   it('claims a completed quest from its button and from Enter, naming what it gave', () => {
     shown.quests = [{ ...MAIN, status: 'complete' }, DEEP_ROOTS];
     vi.mocked(useDelveStore.getState().claimQuest).mockReturnValue(

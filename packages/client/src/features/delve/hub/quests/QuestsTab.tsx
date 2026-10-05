@@ -207,8 +207,10 @@ function Journal({
   const done = quests.filter((q) => q.status === 'claimed');
   // The open quest's group stays open (a quest just claimed moves into Done).
   const doneOpen = showDone || done.some((q) => q.id === open);
+  // The guided start's `quests.done`: the first row that waits to be claimed, in the journal's order.
+  const waiting = quests.find((q) => q.status === 'complete')?.id;
   const row = (q: QuestView) => (
-    <QuestRow key={q.id} quest={q} on={q.id === open} onOpen={onOpen} />
+    <QuestRow key={q.id} quest={q} on={q.id === open} waiting={q.id === waiting} onOpen={onOpen} />
   );
   return (
     <Panel
@@ -298,10 +300,13 @@ function Group({
 function QuestRow({
   quest: q,
   on,
+  waiting,
   onOpen,
 }: {
   quest: QuestView;
   on: boolean;
+  /** The journal's first quest that waits to be claimed: the guided start's `quests.done`. */
+  waiting: boolean;
   onOpen: (id: string) => void;
 }) {
   return (
@@ -310,6 +315,8 @@ function QuestRow({
       onClick={() => onOpen(q.id)}
       aria-current={on}
       data-testid={`quest-${q.id}`}
+      data-tutorial={waiting ? 'quests.done' : undefined}
+      data-tutorial-done={waiting ? on : undefined}
       className="flex items-center gap-3 px-[14px] py-3 text-left"
       style={{
         background: on ? 'var(--k-wood-0)' : 'var(--k-well)',
