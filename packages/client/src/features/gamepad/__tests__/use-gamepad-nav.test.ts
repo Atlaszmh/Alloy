@@ -600,6 +600,42 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     expect((document.activeElement as HTMLElement).getAttribute('role')).not.toBe('tab');
   });
 
+  it("a stepped tab's focus goes to its [data-pad-first] control when it has one, else its first", () => {
+    const list = el('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' });
+    const main = el('div');
+    /** Whether tab B's second control says the focus lands on it. */
+    let marked = true;
+    /** Each tab swaps the main's content for its own controls. */
+    const tab = (selected: boolean, fill: () => void) => {
+      const t = el('button', { role: 'tab', 'aria-selected': String(selected) }, list);
+      t.addEventListener('click', () => {
+        for (const o of list.querySelectorAll('[role="tab"]')) o.setAttribute('aria-selected', 'false');
+        t.setAttribute('aria-selected', 'true');
+        main.replaceChildren();
+        fill();
+      });
+      return t;
+    };
+    const content = (text: string, top: number, attrs: Record<string, string> = {}) => {
+      el('button', attrs, main, 0, top).textContent = text;
+    };
+    tab(true, () => content('only', 20));
+    tab(false, () => {
+      content('one', 20);
+      content('two', 40, marked ? { 'data-pad-first': '' } : {});
+      content('three', 60);
+    });
+    el('button', {}, main, 0, 20).focus();
+    tap(PAD.rb);
+    expect(document.activeElement?.textContent).toBe('two');
+    // And with no [data-pad-first] in the content (step away and back): its first control.
+    marked = false;
+    tap(PAD.rb);
+    expect(document.activeElement?.textContent).toBe('only');
+    tap(PAD.rb);
+    expect(document.activeElement?.textContent).toBe('one');
+  });
+
   it("a React tab list's switch is rendered before the focus is placed: the new tab's first control", async () => {
     // Boxes by `data-top`: b-second lies where a-only was, so a focus left to fall goes there.
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (

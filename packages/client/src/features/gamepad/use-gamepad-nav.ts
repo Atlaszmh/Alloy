@@ -19,7 +19,7 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * LB/RB step its top-level `[data-pad-tabs]` and LT/RT its
  * `[data-pad-tabs="sub"]`, past disabled tabs. A stepped tab takes the focus
  * only where tabs are D-pad stops (the skill list); a kit tab list puts it in
- * the content. The last visible
+ * the content, on its `[data-pad-first]` control if it has one. The last visible
  * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it, and while the
  * pad has the input lock the focus never gets lost (`keepFocus`, which starts
  * a scope on its `[data-pad-first]`). `[data-pad-skip]` controls are never
@@ -279,21 +279,24 @@ const TAB_LISTS = {
   sub: '[data-pad-tabs="sub"]',
 } as const;
 
-/** The first candidate after `mark` in document order, outside the screen's footer. */
+/**
+ * Where a stepped tab's focus lands: among the candidates after `mark` in document order,
+ * outside the screen's footer, the first that says so (`[data-pad-first]`: a tab's selected row),
+ * else the first.
+ */
 function firstAfter(mark: Element): HTMLElement | null {
-  return (
-    candidates(null).find(
-      (el) =>
-        mark.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING &&
-        !el.closest('[data-screen-section="screen-foot"]'),
-    ) ?? null
+  const after = candidates(null).filter(
+    (el) =>
+      mark.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING &&
+      !el.closest('[data-screen-section="screen-foot"]'),
   );
+  return after.find((el) => el.hasAttribute('data-pad-first')) ?? after[0] ?? null;
 }
 
 /**
  * Step the topmost scope's tab list (LB/RB its top level, LT/RT its sub list), past disabled
  * tabs. The focus never rests on a tab the D-pad can't reach: it stays where it survived, else
- * goes to the new tab's first control.
+ * goes to the new tab's `[data-pad-first]` control, else its first (`firstAfter`).
  */
 function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
   const list = scopedLast(TAB_LISTS[level]);
