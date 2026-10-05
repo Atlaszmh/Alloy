@@ -59,8 +59,14 @@ export function Panes(props: ChainEditorProps) {
   return (
     <>
       <SkillStrip ed={ed} anvil={anvil} onMana={() => {}} />
-      <ChainLane ed={ed} anvil={anvil} carrying={false} onEdit={onEdit} />
-      <MoveInspector ed={ed} anvil={anvil} editing={editing} onClose={() => setEditing(false)} />
+      <ChainLane ed={ed} anvil={anvil} onEdit={onEdit} />
+      <MoveInspector
+        ed={ed}
+        anvil={anvil}
+        editing={editing}
+        onClose={() => setEditing(false)}
+        onApply={() => {}}
+      />
     </>
   );
 }

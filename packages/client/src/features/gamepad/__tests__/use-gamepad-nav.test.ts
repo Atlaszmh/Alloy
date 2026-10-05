@@ -14,7 +14,7 @@ import {
 } from '../use-gamepad-nav';
 import type { GamepadLike } from '../gamepad';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
-import { captureNav, usePrompts } from '@/features/delve/kit/prompts';
+import { usePrompts } from '@/features/delve/kit/prompts';
 
 describe('moveFocus on a list', () => {
   afterEach(() => document.body.replaceChildren());
@@ -805,43 +805,5 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
       1, 1, 0,
     ]);
     expect(clicks).toEqual(['focused']);
-  });
-
-  it('holding Y past its hold fires the hold prompt, and never the tap', () => {
-    const remove = vi.fn();
-    const apply = vi.fn();
-    renderHook(() =>
-      usePrompts([
-        { id: 'remove', label: 'Remove', binding: { pad: 'y' }, onPress: remove },
-        { id: 'apply', label: 'Apply', binding: { pad: 'y', padHold: 600 }, onHold: apply },
-      ]),
-    );
-    down = [PAD.y];
-    for (let i = 0; i < 40; i++) tick(); // 640 ms
-    down = [];
-    tick();
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(remove).not.toHaveBeenCalled();
-    tap(PAD.y);
-    expect(remove).toHaveBeenCalledTimes(1);
-  });
-
-  it('while a card is carried, the D-pad and A, B and X go to it, not the focus or the back', () => {
-    named(el('button', { 'data-pad-back': '' }), 'page-back');
-    const first = el('button', {}, document.body, 0, 0);
-    el('button', {}, document.body, 40, 0);
-    first.focus();
-    const heard: string[] = [];
-    const release = captureNav((input) => heard.push(input));
-    tap(PAD.right);
-    tap(PAD.x);
-    tap(PAD.a);
-    tap(PAD.b);
-    expect(heard).toEqual(['right', 'x', 'a', 'b']);
-    expect(clicks).toEqual([]);
-    expect(document.activeElement).toBe(first);
-    release();
-    tap(PAD.right);
-    expect(document.activeElement).not.toBe(first);
   });
 });

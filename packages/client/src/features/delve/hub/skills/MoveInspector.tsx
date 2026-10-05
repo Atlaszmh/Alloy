@@ -27,11 +27,14 @@ export function MoveInspector({
   anvil,
   editing,
   onClose,
+  onApply,
 }: {
   ed: ChainEditorModel;
   anvil: AnvilChains;
   editing: boolean;
   onClose: () => void;
+  /** Y in the editor: the Apply sheet. */
+  onApply: () => void;
 }) {
   const registry = getDelveRegistry();
   const data = registry.getArpgData();
@@ -78,7 +81,7 @@ export function MoveInspector({
           )}
         </div>
         {editing ? (
-          <MoveRows ed={ed} anvil={anvil} onClose={onClose} />
+          <MoveRows ed={ed} anvil={anvil} onClose={onClose} onApply={onApply} />
         ) : (
           <div className="flex min-w-0 flex-col gap-2 text-[14px] text-[var(--k-text-3)]">
             <span data-testid="detail-kind">

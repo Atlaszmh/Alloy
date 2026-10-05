@@ -48,13 +48,10 @@ interface Drag {
 export function ChainLane({
   ed,
   anvil,
-  carrying,
   onEdit,
 }: {
   ed: ChainEditorModel;
   anvil: AnvilChains;
-  /** The pad has the chosen card picked up (X): it rides raised. */
-  carrying: boolean;
   /** A click (or A) on card `i`, or on its pip `socket`: its editor (the move pane's). */
   onEdit: (i: number, socket?: number) => void;
 }) {
@@ -143,15 +140,10 @@ export function ChainLane({
               )}
               <div
                 className="k-well flex min-w-0 flex-1 flex-col gap-3 p-4"
-                data-carried={on && carrying ? '' : undefined}
                 style={{
                   borderColor: on ? 'var(--k-hot-hi)' : undefined,
                   background: on ? 'var(--k-wood-0)' : undefined,
-                  transform: moving
-                    ? `translateX(${drag.dx}px)`
-                    : on && carrying
-                      ? 'translateY(-8px)'
-                      : undefined,
+                  transform: moving ? `translateX(${drag.dx}px)` : undefined,
                   zIndex: moving ? 1 : undefined,
                 }}
               >

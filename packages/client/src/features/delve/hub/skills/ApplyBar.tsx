@@ -1,14 +1,20 @@
-import { Fragment, useId } from 'react';
-import { isDiveActive } from '@alloy/engine';
-import { applyLabel, runeNames, selectDraftApply, useDelveStore } from '@/stores/delveStore';
+import { Fragment, useId, type ReactNode } from 'react';
+import { isDiveActive, type DataRegistry } from '@alloy/engine';
+import {
+  applyLabel,
+  runeNames,
+  selectDraftApply,
+  useDelveStore,
+  type DraftApply,
+} from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Price, type Binding } from '@/features/delve/kit';
 import { getDelveRegistry } from '../../registry';
 import { DEPART_BINDING } from '../HubFooter';
 import { sayRefusal } from './useAnvilChains';
 
-/** Apply's inputs: Ctrl+Enter, or Y held on the pad. */
-export const APPLY_BINDING: Binding = { key: 'Enter', ctrl: true, pad: 'y', padHold: 600 };
+/** The Apply sheet's inputs: Ctrl+Enter, or Y on the pad. */
+export const APPLY_BINDING: Binding = { key: 'Enter', ctrl: true, pad: 'y' };
 
 /** Apply the chain draft (all or nothing), with its sound. */
 export function applyChains() {
@@ -19,12 +25,57 @@ export function applyChains() {
 }
 
 /**
- * The Skills tab's footer group (`chain-draft`, always shown): "n unapplied changes · price"
- * (or "No changes"), Revert, Apply with its price (off with the engine's reason while it would
- * be refused), and a compact Delve (the hub's `onDelve`), which opens the Depart sheet (the sheet
- * says what holds a dive, so the button never waits).
+ * The draft's price parts: what Apply spends (Links netted: the sockets of moves removed pay for
+ * those opened), a refund beyond that, and the runes it destroys (`DraftPrice` from the engine).
  */
-export function ApplyBar({ onDelve }: { onDelve: () => void }) {
+function priceParts(registry: DataRegistry, view: DraftApply): ReactNode[] {
+  const { price } = view;
+  if (!price) return [];
+  const links = price.links - price.refundLinks;
+  return [
+    (price.dust > 0 || links > 0 || price.scrap > 0) && (
+      <Price
+        dust={price.dust > 0 ? price.dust : undefined}
+        links={links > 0 ? links : undefined}
+        scrap={price.scrap > 0 ? price.scrap : undefined}
+      />
+    ),
+    links < 0 && <Price links={-links} signed />,
+    price.destroys.length > 0 && `destroys ${runeNames(registry, price.destroys)}`,
+  ].filter(Boolean);
+}
+
+/** Price parts joined by " · ". */
+function joined(parts: ReactNode[]): ReactNode {
+  return parts.map((p, i) => (
+    <Fragment key={i}>
+      {i > 0 && ' · '}
+      {p}
+    </Fragment>
+  ));
+}
+
+/**
+ * The draft's price in the words its `Price` draws, Links netted, then "destroys …"; "free" or
+ * "free until your first dive" when it costs nothing; the refusal when the engine won't price it.
+ * The Apply bar and the Apply sheet both say it.
+ */
+export function DraftPriceText({ view, firstDive }: { view: DraftApply; firstDive: boolean }) {
+  const parts = priceParts(getDelveRegistry(), view);
+  if (view.refused) return <span>{view.refused}</span>;
+  if (parts.length > 0) return <>{joined(parts)}</>;
+  return <>{firstDive ? 'free until your first dive' : 'free'}</>;
+}
+
+/**
+ * The Skills tab's footer group (`chain-draft`, always shown): "n unapplied changes · price"
+ * (or "No changes"), Revert, Apply with its price (with the engine's reason beside it while it
+ * would be refused), and a compact Delve (the hub's `onDelve`), which opens the Depart sheet (the
+ * sheet says what holds a dive, so the button never waits). Apply opens the Apply sheet
+ * (`onApply`); Revert and Apply are the mouse's, off the D-pad (the pad has Y and the sheet's
+ * Discard).
+ */
+export function ApplyBar({ onDelve, onApply }: { onDelve: () => void; onApply: () => void }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const view = useDelveStore(selectDraftApply);
@@ -35,28 +86,7 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
   const applyWhy = dry && !dry.ok ? dry.reason : null;
   // Unpriced, the price says why; Apply's own reason shows only when it says something else.
   const applyNote = applyWhy && applyWhy !== refused ? applyWhy : null;
-  // What Apply spends (Links netted: the sockets of moves removed pay for those opened), a
-  // refund beyond that, and the runes it destroys.
-  const links = price ? price.links - price.refundLinks : 0;
-  const parts = price
-    ? [
-        (price.dust > 0 || links > 0 || price.scrap > 0) && (
-          <Price
-            dust={price.dust > 0 ? price.dust : undefined}
-            links={links > 0 ? links : undefined}
-            scrap={price.scrap > 0 ? price.scrap : undefined}
-          />
-        ),
-        links < 0 && <Price links={-links} signed />,
-        price.destroys.length > 0 && `destroys ${runeNames(registry, price.destroys)}`,
-      ].filter(Boolean)
-    : [];
-  const priced = parts.map((p, i) => (
-    <Fragment key={i}>
-      {i > 0 && ' · '}
-      {p}
-    </Fragment>
-  ));
+  const parts = priceParts(registry, view);
 
   return (
     <div className="flex items-center gap-4" data-testid="chain-draft">
@@ -67,15 +97,7 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
           ) : (
             <>
               {n} unapplied change{n === 1 ? '' : 's'} ·{' '}
-              {refused ? (
-                <span>{refused}</span>
-              ) : parts.length > 0 ? (
-                priced
-              ) : profile.stats.dives === 0 ? (
-                'free until your first dive'
-              ) : (
-                'free'
-              )}
+              <DraftPriceText view={view} firstDive={profile.stats.dives === 0} />
             </>
           )}
         </span>
@@ -93,6 +115,7 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
         size="sm"
         disabled={n === 0}
         onClick={() => useDelveStore.getState().revertDraft()}
+        data-pad-skip
         testId="chain-revert"
       >
         Revert
@@ -100,16 +123,17 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
       <Button
         variant="primary"
         size="sm"
-        disabled={!dry?.ok}
-        onClick={applyChains}
+        disabled={n === 0}
+        onClick={onApply}
         binding={APPLY_BINDING}
         aria-label={applyLabel(registry, price)}
         aria-describedby={applyNote ? `${id}-apply` : applyWhy ? `${id}-price` : undefined}
         data-tutorial="skills.apply"
+        data-pad-skip
         testId="chain-apply"
       >
         Apply
-        {parts.length > 0 && <> · {priced}</>}
+        {parts.length > 0 && <> · {joined(parts)}</>}
       </Button>
       <Button
         size="sm"

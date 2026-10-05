@@ -2,9 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { createRef, type RefObject } from 'react';
 import {
-  captureNav,
   hudScaleFor,
-  navCapture,
   orderPrompts,
   padPrompts,
   scopedLast,
@@ -265,46 +263,16 @@ describe('the Esc and Enter rules', () => {
   });
 });
 
-describe('padPrompts: the tap and the hold', () => {
+describe('padPrompts: presses and held prompts', () => {
   const remove = vi.fn();
-  const apply = vi.fn();
   const prompts: Prompt[] = [
     { id: 'remove', label: 'Remove', binding: { key: 'Delete', pad: 'y' }, onPress: remove },
-    {
-      id: 'apply',
-      label: 'Apply',
-      binding: { key: 'Enter', ctrl: true, pad: 'y', padHold: 600 },
-      onHold: apply,
-    },
   ];
   const none = new Set<PadButton>();
   const y = new Set<PadButton>(['y']);
 
   afterEach(() => {
     remove.mockReset();
-    apply.mockReset();
-  });
-
-  it('a tap fires on its release under 400 ms; a hold at 600 ms; a release between fires neither', () => {
-    renderHook(() => usePrompts(prompts));
-    expect(padPrompts(y, held('y'), 1000)).toEqual(y);
-    expect(remove).not.toHaveBeenCalled(); // not on the press: it might become a hold
-    padPrompts(none, held(), 1300);
-    expect(remove).toHaveBeenCalledTimes(1);
-
-    padPrompts(y, held('y'), 2000);
-    padPrompts(none, held('y'), 2599);
-    expect(apply).not.toHaveBeenCalled();
-    padPrompts(none, held('y'), 2600);
-    padPrompts(none, held('y'), 2700);
-    padPrompts(none, held(), 2800);
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(apply).toHaveBeenCalledWith(true);
-    expect(remove).toHaveBeenCalledTimes(1);
-
-    padPrompts(y, held('y'), 3000);
-    padPrompts(none, held(), 3500);
-    expect([remove.mock.calls.length, apply.mock.calls.length]).toEqual([1, 1]);
   });
 
   it('a tap alone fires on its press; a display-only prompt takes nothing', () => {
@@ -348,24 +316,10 @@ describe('padPrompts: the tap and the hold', () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it('a press whose screen went away fires nothing: no tap on the release, no hold', () => {
-    const first = renderHook(() => usePrompts(prompts));
-    padPrompts(y, held('y'), 0);
-    first.unmount();
-    padPrompts(none, held(), 100);
-    const second = renderHook(() => usePrompts(prompts));
-    padPrompts(y, held('y'), 1000);
-    second.unmount();
-    padPrompts(none, held('y'), 1700);
-    padPrompts(none, held(), 1800);
-    expect([remove.mock.calls.length, apply.mock.calls.length]).toEqual([0, 0]);
-  });
-
-  it('the arena going live lets go of every held prompt: held ones hear the release, taps never fire', () => {
+  it('the arena going live lets go of every held prompt: held ones hear the release', () => {
     const compare = vi.fn();
     renderHook(() =>
       usePrompts([
-        ...prompts,
         {
           id: 'compare',
           label: 'Full compare',
@@ -375,28 +329,13 @@ describe('padPrompts: the tap and the hold', () => {
       ]),
     );
     keydown('ShiftLeft', { shiftKey: true });
-    padPrompts(new Set<PadButton>(['y', 'lt']), held('y', 'lt'), 0);
+    padPrompts(new Set<PadButton>(['lt']), held('lt'), 0);
     setArenaLive(true);
     expect(compare.mock.calls).toEqual([[true], [true], [false], [false]]);
     setArenaLive(false);
     keyup('ShiftLeft');
     padPrompts(none, held(), 100);
     expect(compare).toHaveBeenCalledTimes(4);
-    expect(remove).not.toHaveBeenCalled();
-  });
-});
-
-describe('captureNav', () => {
-  it('holds the handler until released; an older release leaves a newer one', () => {
-    const first = vi.fn();
-    const second = vi.fn();
-    const releaseFirst = captureNav(first);
-    expect(navCapture()).toBe(first);
-    const releaseSecond = captureNav(second);
-    releaseFirst();
-    expect(navCapture()).toBe(second);
-    releaseSecond();
-    expect(navCapture()).toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   MOVE_KINDS,
   runeTargetOf,
@@ -9,7 +9,7 @@ import {
   type MoveKind,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { Button, Price, Stepper } from '@/features/delve/kit';
+import { Button, Price, Stepper, usePrompts } from '@/features/delve/kit';
 import { manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import { RuneGlyph } from '../../runes/RuneGlyph';
@@ -18,6 +18,7 @@ import { dormantText, runeName } from '../../runes/rune-style';
 import { KIND_NAME, damageShift } from '../../chains/chain-text';
 import { KIND_HINT, moveChoices } from '../../chains/MoveEditor';
 import { PAYMENTS, cardAt, type ChainEditorModel } from '../../chains/useChainEditor';
+import { APPLY_BINDING } from './ApplyBar';
 import { FormPicker } from './FormPicker';
 import type { AnvilChains } from './useAnvilChains';
 
@@ -42,24 +43,47 @@ export function elementSets(
  * chosen move. Kind, Elements, Position and the chain's Payment are steppers; Form and each socket
  * open a grid of what fits (`FormPicker`, the `RunePicker` as a grid), each option with what it
  * does to the chain's damage a second; Open a socket is a row with its price, off with the
- * engine's reason beside it. Every change is a draft edit. Back (B, Esc) and Remove are off the
- * D-pad; Back closes it onto its card. The guided start's lesson marks the Primary's last move's
+ * engine's reason beside it. Every change is a draft edit. Back (B, Esc) and Remove (X, Del) are
+ * off the D-pad; Back closes it onto its card. Y or Ctrl+Enter opens the Apply sheet. The guided start's lesson marks the Primary's last move's
  * Elements and its first move's socket rows.
  */
 export function MoveRows({
   ed,
   anvil,
   onClose,
+  onApply,
 }: {
   ed: ChainEditorModel;
   anvil: AnvilChains;
   onClose: () => void;
+  /** Y or Ctrl+Enter: the Apply sheet (the hub's prompts are inert under this scope). */
+  onApply: () => void;
 }) {
   const registry = getDelveRegistry();
   const secondary = useDelveStore((s) => s.profile.pair.secondary);
   const [forms, setForms] = useState(false);
   const { move, index, entries, chain, slot } = ed;
   const runes = anvil.editor.runes;
+  const shape = !ed.fixedShape;
+  const root = useRef<HTMLDivElement>(null);
+  /** X, Del or Remove: the move goes and the editor closes. */
+  const remove = () => {
+    onClose();
+    ed.remove(index);
+  };
+  usePrompts(
+    [
+      {
+        id: 'remove',
+        label: 'Remove move',
+        binding: { key: 'Delete', pad: 'x' },
+        onPress: remove,
+        disabled: !shape || entries.length < 2,
+      },
+      { id: 'apply', label: 'Apply', binding: APPLY_BINDING, onPress: onApply },
+    ],
+    root,
+  );
   if (!move) return null;
   // Back lands on the move's card, wherever Position took it.
   const close = () => {
@@ -78,10 +102,9 @@ export function MoveRows({
   // first move the rune. Each row is a target only on that move.
   const lessonLast = ed.skill === 'primary' && index === entries.length - 1;
   const lessonFirst = ed.skill === 'primary' && index === 0;
-  const shape = !ed.fixedShape;
 
   return (
-    <div className="flex flex-col gap-3" data-pad-scope data-testid="move-editor">
+    <div ref={root} className="flex flex-col gap-3" data-pad-scope data-testid="move-editor">
       <div className="flex items-center justify-between gap-2">
         <span className="k-label">Edit move {index + 1}</span>
         <span className="flex gap-2">
@@ -89,10 +112,8 @@ export function MoveRows({
             variant="quiet"
             size="sm"
             disabled={!shape || entries.length < 2}
-            onClick={() => {
-              onClose();
-              ed.remove(index);
-            }}
+            onClick={remove}
+            binding={{ key: 'Delete', pad: 'x' }}
             aria-label={`Remove ${ed.names[index]}`}
             data-pad-skip
             testId="move-remove"

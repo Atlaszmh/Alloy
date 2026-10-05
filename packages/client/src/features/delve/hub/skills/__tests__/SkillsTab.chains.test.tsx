@@ -28,7 +28,20 @@ const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 /** The hero's chains, as its equipped weapon carries them. */
 const chains = () => heroChains(registry, store().profile.equipped, store().profile.pair) as Chains;
-const apply = () => fireEvent.click(screen.getByTestId('chain-apply'));
+/** The footer's Apply opens the Apply sheet, whose Apply applies the draft (when it can). */
+const apply = () => {
+  fireEvent.click(screen.getByTestId('chain-apply'));
+  const confirm = screen.queryByTestId('apply-sheet-confirm');
+  if (confirm) fireEvent.click(confirm);
+};
+/** The Apply sheet, opened by the footer's Apply. */
+const openSheet = () => {
+  fireEvent.click(screen.getByTestId('chain-apply'));
+  return screen.getByTestId('apply-sheet');
+};
+/** Back out of the Apply sheet, the draft as it was. */
+const closeSheet = () =>
+  fireEvent.click(within(screen.getByTestId('apply-sheet')).getByRole('button', { name: /Back/ }));
 /** The Apply bar's line: "No changes", or "n unapplied changes · price". */
 const priceLine = () => screen.getByTestId('chain-price');
 
@@ -160,11 +173,15 @@ describe('SkillsTab', () => {
     // A storm move the pair (Fire alone) doesn't hold: the engine refuses it.
     const storm: Move = { kind: 'medium', form: 'bolt', elements: ['storm'] };
     act(() => store().editDraft('primary', { moves: [storm], payment: 'mana' }));
-    const button = screen.getByTestId('chain-apply');
-    expect(button).toBeDisabled();
+    // The footer says why for the mouse; its Apply opens the sheet, whose Apply is off.
     expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Pick from your two elements');
-    expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('chain-apply-why').id);
-    apply();
+    openSheet();
+    const button = screen.getByTestId('apply-sheet-confirm');
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId('apply-sheet-why')).toHaveTextContent('Pick from your two elements');
+    expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('apply-sheet-why').id);
+    fireEvent.click(button);
+    closeSheet();
     expect(priceLine()).toHaveTextContent('1 unapplied change');
     // Back in the pair, it goes through.
     act(() =>
@@ -238,8 +255,11 @@ describe('SkillsTab', () => {
     edit(0);
     pickForm('lance'); // a changed form: editDust
     expect(priceLine()).toHaveTextContent('1 unapplied change · 5 Mana Dust');
-    expect(screen.getByTestId('chain-apply')).toBeDisabled();
     expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Not enough Mana Dust');
+    openSheet();
+    expect(screen.getByTestId('apply-sheet-confirm')).toBeDisabled();
+    expect(screen.getByTestId('apply-sheet-why')).toHaveTextContent('Not enough Mana Dust');
+    closeSheet();
     act(() => store().setProfile({ ...store().profile, manaDust: 20 }));
     stepTo('move-kind', 'Heavy');
     // Still one move changed: its kind and form together cost editDust once.
@@ -616,9 +636,13 @@ describe('SkillsTab: sockets and runes', () => {
     expect(price).toHaveTextContent('Not enough runes in your pouch');
     expect(price).not.toHaveTextContent(/free/);
     expect(screen.getAllByText('Not enough runes in your pouch')).toHaveLength(1);
-    const button = screen.getByTestId('chain-apply');
+    expect(screen.getByTestId('chain-apply')).toHaveAttribute('aria-describedby', price.id);
+    // The sheet says it once too, beside its Apply, which is off.
+    const sheet = openSheet();
+    expect(within(sheet).getAllByText('Not enough runes in your pouch')).toHaveLength(1);
+    const button = screen.getByTestId('apply-sheet-confirm');
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('aria-describedby', price.id);
+    expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('apply-sheet-why').id);
   });
 
   it("+ socket is off without the Links, saying why in the engine's words", () => {

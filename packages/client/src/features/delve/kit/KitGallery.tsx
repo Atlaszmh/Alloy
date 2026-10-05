@@ -30,7 +30,7 @@ const PROMPTS: Prompt[] = [
     binding: { key: 'ShiftLeft', pad: 'lt', whileHeld: true },
   },
   { id: 'salvage', label: 'Salvage', binding: { key: 'Delete', pad: 'x' } },
-  { id: 'apply', label: 'Apply', binding: { key: 'Enter', ctrl: true, pad: 'y', padHold: 600 } },
+  { id: 'apply', label: 'Apply', binding: { key: 'Enter', ctrl: true, pad: 'y' } },
   {
     id: 'menu',
     label: 'Menu',

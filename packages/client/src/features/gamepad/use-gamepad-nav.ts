@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
-import { navCapture, padPrompts, scopedLast, topScope } from '@/features/delve/kit/prompts';
+import { padPrompts, scopedLast, topScope } from '@/features/delve/kit/prompts';
 import type { PadButton, PadState } from './gamepad';
 import { startGamepad } from './gamepad-hub';
 import { pickNext, type NavDir, type NavRect } from './spatial-nav';
@@ -13,8 +13,7 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * way, at the control it last held; never onto one scrolled out of its list;
  * left/right adjust a focused slider, list or stepper (`PAD_STEP`)), A presses it. At an edge, up
  * and down wrap inside a `[data-pad-wrap]` list (`wrapFocus`). Every other
- * button goes to the screen's prompts first (`padPrompts`, which also times
- * the holds); one no prompt takes does its default: B presses the topmost
+ * button goes to the screen's prompts first (`padPrompts`); one no prompt takes does its default: B presses the topmost
  * scope's `[data-pad-back]`, Menu its `[data-pad-menu]` (else its back),
  * LB/RB step its top-level `[data-pad-tabs]` and LT/RT its
  * `[data-pad-tabs="sub"]`, past disabled tabs. A stepped tab takes the focus
@@ -23,8 +22,7 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it, and while the
  * pad has the input lock the focus never gets lost (`keepFocus`, which starts
  * a scope on its `[data-pad-first]`). `[data-pad-skip]` controls are never
- * D-pad targets. While a card is carried (`captureNav`) the D-pad and A/B/X go
- * to it. The right stick scrolls the topmost scope's `[data-pad-scroll]` pane
+ * D-pad targets. The right stick scrolls the topmost scope's `[data-pad-scroll]` pane
  * (`STICK_SCROLL_PX`); it never moves the focus. It also lets the keys, the
  * mouse and touch claim the lock (`claimDevices`).
  */
@@ -382,13 +380,10 @@ export function useGamepadNav(): void {
     let stickArmed = true;
     let last = 0;
     const stop = startGamepad((state, pressed, now) => {
-      // A carried card (Skills' reorder) hears the D-pad and A/B/X instead of the focus.
-      const carry = navCapture();
-      const move = (dir: NavDir) => (carry ? carry(dir) : moveFocus(dir));
       // A stick flick moves once; it re-arms when the stick comes back near the centre.
       const flick = stickDir(state);
       if (flick && stickArmed) {
-        move(flick);
+        moveFocus(flick);
         stickArmed = false;
       }
       if (Math.hypot(state.left.x, state.left.y) < 0.3) stickArmed = true;
@@ -397,22 +392,18 @@ export function useGamepadNav(): void {
       if (dir && dir !== heldDir) {
         heldDir = dir;
         repeatAt = now + REPEAT_DELAY_MS;
-        move(dir);
+        moveFocus(dir);
       } else if (dir && now >= repeatAt) {
         repeatAt = now + REPEAT_EVERY_MS;
-        move(dir);
+        moveFocus(dir);
       } else if (!dir) heldDir = null;
 
-      const carried = carry ? (['a', 'b', 'x'] as const).filter((b) => pressed.has(b)) : [];
-      for (const b of carried) carry?.(b);
       // The D-pad moves and A presses the focused control: never a prompt's.
-      const offered = [...pressed].filter(
-        (b) => !DPAD.has(b) && b !== 'a' && !(carried as readonly PadButton[]).includes(b),
-      );
+      const offered = [...pressed].filter((b) => !DPAD.has(b) && b !== 'a');
       const took = padPrompts(new Set(offered), state.buttons, now);
       const left = (b: PadButton) => offered.includes(b) && !took.has(b);
 
-      if (!carry && pressed.has('a')) {
+      if (pressed.has('a')) {
         const el = document.activeElement as HTMLElement | null;
         if (el && candidates().includes(el)) el.click();
         else moveFocus('down');

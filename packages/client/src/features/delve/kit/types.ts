@@ -12,19 +12,13 @@ export interface Binding {
   /** A pointer gesture shown instead of (or beside) a key. */
   mouse?: 'click' | 'rmb' | 'lmb' | 'drag' | 'hover';
   pad?: PadButton;
-  /** Pad: this binding is a hold, firing `onHold(true)` after this many ms (default 600). */
-  padHold?: number;
   /** A key held down rather than pressed: Shift compare, Alt labels (onHold true on down, false on up/blur). */
   whileHeld?: boolean;
 }
 
 /**
- * One prompt. Press timing:
- * - A prompt with only `onPress` fires on press down.
- * - Two prompts may share a pad button in a scope only if exactly one of them has `padHold`
- *   (Skills: Y Remove and hold-Y Apply). Then the tap's `onPress` fires on release under 400 ms,
- *   the hold's `onHold(true)` fires at `padHold`, and a press released between them fires neither.
- * - `whileHeld` and LT-hold prompts get `onHold(true)` on down and `onHold(false)` on up.
+ * One prompt. Press timing: a prompt with only `onPress` fires on press down; a `whileHeld` one
+ * gets `onHold(true)` on down and `onHold(false)` on up.
  */
 export interface Prompt {
   id: string;

@@ -4,7 +4,6 @@ import * as kit from '../index';
 /** Every component and hook of the spec's kit contract, as screens import them. */
 const CONTRACT = [
   'usePrompts',
-  'captureNav',
   'topScope',
   'scopedLast',
   'useUiScale',

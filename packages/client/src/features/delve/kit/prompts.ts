@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import { hudZoom } from './zoom';
 import { isArenaLive } from '@/features/gamepad/gamepad-hub';
 import type { PadButton } from '@/features/gamepad/gamepad';
-import type { NavDir } from '@/features/gamepad/spatial-nav';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { Binding, Prompt } from './types';
@@ -17,11 +16,6 @@ import type { Binding, Prompt } from './types';
  * the menu key and the pad then. A handled key is `preventDefault`ed, and a
  * key already prevented is skipped, so no press acts twice.
  */
-
-/** A pad tap that shares its button with a hold fires on a release under this. */
-export const TAP_MAX_MS = 400;
-/** A pad hold's default length (`Binding.padHold`). */
-export const HOLD_MS = 600;
 
 function visible(el: Element): boolean {
   const r = el.getBoundingClientRect();
@@ -206,12 +200,10 @@ export function usePrompts(prompts: Prompt[], scopeRef?: RefObject<HTMLElement |
 
 // ── The pad ───────────────────────────────────────────────────────────────
 
+/** A `whileHeld` prompt's button, held. */
 interface PadPress {
   at: number;
-  /** The tap that shares its button with `hold`: it fires on a release under TAP_MAX_MS. */
-  tap?: Prompt;
-  hold?: Prompt;
-  whileHeld?: Prompt;
+  whileHeld: Prompt;
   fired: boolean;
 }
 
@@ -221,10 +213,8 @@ const padHeld = new Map<PadButton, PadPress>();
  * The menu navigation's hand-off, once a frame (outside live combat): the
  * buttons pressed this frame (`pressed`), the buttons held (`held`) and the
  * time. Returns the presses a prompt took, which the navigation then leaves
- * alone. A tap alone fires on its press; a tap sharing its button with a hold
- * fires on a release under `TAP_MAX_MS`, the hold's `onHold(true)` at its
- * `padHold`, and a release between them fires neither; a `whileHeld` prompt
- * gets `onHold(true)` on the press and `onHold(false)` on the release.
+ * alone. A prompt fires on its press; a `whileHeld` one gets `onHold(true)` on
+ * the press and `onHold(false)` on the release. No menu prompt is a hold.
  */
 export function padPrompts(
   pressed: ReadonlySet<PadButton>,
@@ -232,17 +222,9 @@ export function padPrompts(
   now: number,
 ): Set<PadButton> {
   for (const [button, p] of padHeld) {
-    if (!held[button]) {
-      padHeld.delete(button);
-      if (p.whileHeld) p.whileHeld.onHold?.(false);
-      else if (!p.fired && now - p.at < TAP_MAX_MS) {
-        const tap = stillActive(p.tap);
-        if (tap) fire(tap);
-      }
-    } else if (p.hold && !p.fired && now - p.at >= (p.hold.binding.padHold || HOLD_MS)) {
-      p.fired = true;
-      stillActive(p.hold)?.onHold?.(true);
-    }
+    if (held[button]) continue;
+    padHeld.delete(button);
+    p.whileHeld.onHold?.(false);
   }
   const took = new Set<PadButton>();
   if (pressed.size === 0) return took;
@@ -252,13 +234,10 @@ export function padPrompts(
     if (mine.length === 0) continue;
     took.add(button);
     const whileHeld = mine.find((p) => p.binding.whileHeld);
-    const hold = mine.find((p) => p.binding.padHold !== undefined);
-    const tap = mine.find((p) => p !== whileHeld && p !== hold);
     if (whileHeld) {
       padHeld.set(button, { at: now, whileHeld, fired: true });
       whileHeld.onHold?.(true);
-    } else if (hold) padHeld.set(button, { at: now, hold, tap, fired: false });
-    else if (tap) fire(tap);
+    } else fire(mine[0]);
   }
   return took;
 }
@@ -268,15 +247,9 @@ function fire(p: Prompt): void {
   else p.onHold?.(true);
 }
 
-/** `p` as its screen has it now (by id), or undefined once its screen is gone or covered. */
-function stillActive(p: Prompt | undefined): Prompt | undefined {
-  return p && activePrompts().find((q) => q.id === p.id);
-}
-
 /**
  * Let go of every held key and pad button (a window blur, which never delivers
- * the keyup; the arena going live): a `whileHeld` prompt hears `onHold(false)`,
- * and a pending tap or hold never fires.
+ * the keyup; the arena going live): a `whileHeld` prompt hears `onHold(false)`.
  */
 export function releasePromptHolds(): void {
   const letGo = [...keysHeld.values()];
@@ -284,24 +257,6 @@ export function releasePromptHolds(): void {
   keysHeld.clear();
   padHeld.clear();
   for (const p of letGo) p.onHold?.(false);
-}
-
-/** What a carried card hears from the pad (Skills' reorder). */
-export type NavInput = NavDir | 'a' | 'b' | 'x';
-
-let carrying: ((input: NavInput) => void) | null = null;
-
-/** While carrying (Skills' pad reorder): the D-pad and A/B/X go to `handler` instead of the nav. Returns release. */
-export function captureNav(handler: (input: NavInput) => void): () => void {
-  carrying = handler;
-  return () => {
-    if (carrying === handler) carrying = null;
-  };
-}
-
-/** The handler `captureNav` set, if any (read by the menu navigation each frame). */
-export function navCapture(): ((input: NavInput) => void) | null {
-  return carrying;
 }
 
 // ── Scale ─────────────────────────────────────────────────────────────────

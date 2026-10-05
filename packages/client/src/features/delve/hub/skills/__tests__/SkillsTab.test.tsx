@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, screen, fireEvent, within } from '@testing-library/react';
 import {
   defaultMoveset,
@@ -8,7 +8,7 @@ import {
   type MoveKind,
 } from '@alloy/engine';
 import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
-import { navCapture, padPrompts } from '@/features/delve/kit/prompts';
+import { padPrompts } from '@/features/delve/kit/prompts';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
@@ -66,8 +66,8 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
   it("draws its prompts in the hub's footer", () => {
     renderSkills();
     const bar = screen.getByTestId('hub-footer');
-    for (const label of ['Edit move', 'Reorder', 'Remove', 'Next skill', 'Apply'])
-      expect(bar).toHaveTextContent(label);
+    for (const label of ['Edit move', 'Remove', 'Next skill']) expect(bar).toHaveTextContent(label);
+    expect(bar).not.toHaveTextContent('Reorder');
   });
 
   it('a link picks the skill', () => {
@@ -76,7 +76,7 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
     expect(screen.getByTestId('chain-skill-ultimate')).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('keys: ] and [ step the skills, Alt+arrows move the chosen move, Del removes it, Ctrl+Enter applies', () => {
+  it('keys: ] and [ step the skills, Alt+arrows move the chosen move, Del removes it, Ctrl+Enter opens the Apply sheet', () => {
     roomy();
     renderSkills();
     press('BracketRight');
@@ -92,6 +92,7 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
     press('Delete');
     expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium'));
     press('Enter', { ctrlKey: true });
+    fireEvent.click(screen.getByTestId('apply-sheet-confirm'));
     expect(chains().primary.moves.map((m) => m.kind)).toEqual(['light', 'medium', 'medium']);
   });
 
@@ -101,65 +102,74 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
     expect(press('ArrowRight', { altKey: true })).toBe(false);
   });
 
-  it('on the pad, X picks the chosen card up: the D-pad carries it, X drops it, B puts it back', () => {
-    roomy();
-    renderSkills();
-    act(() => void padPrompts(new Set(['x']), held('x'), 0));
-    act(() => navCapture()!('right'));
-    act(() => navCapture()!('right'));
-    expect(summary()).toHaveTextContent(kinds('medium', 'medium', 'light', 'heavy'));
-    act(() => navCapture()!('b'));
-    expect(navCapture()).toBeNull();
-    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium', 'heavy'));
-    act(() => void padPrompts(new Set(['x']), held('x'), 1000));
-    act(() => navCapture()!('right'));
-    act(() => navCapture()!('x'));
-    expect(navCapture()).toBeNull();
-    expect(summary()).toHaveTextContent(kinds('medium', 'light', 'medium', 'heavy'));
+});
+
+/** A pad tap: the press, then a release frame. */
+const padTap = (b: PadButton, at = 0) =>
+  act(() => {
+    padPrompts(new Set([b]), held(b), at);
+    padPrompts(new Set(), held(), at + 50);
   });
 
-  it('the carry lets go when the skill changes, the device switches or Esc puts it back, and never edits another chain', () => {
+describe('SkillsTab: X removes, Y opens the Apply sheet; no hold', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    store().resetProfile(1234, 'fire');
+    useInputDeviceStore.getState().setDevice('gamepad');
+    // jsdom has no layout: a box for every element, so the editor's scope is the topmost visible one.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }),
+    );
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('on the home row X removes the chosen move, never the last', () => {
     roomy();
     renderSkills();
-    const pickUp = (at: number) => act(() => void padPrompts(new Set(['x']), held('x'), at));
-    // LT / RT (here a click on the list) step to another skill mid-carry.
-    pickUp(0);
-    const carry = navCapture()!;
-    fireEvent.click(screen.getByTestId('chain-skill-basic'));
-    expect(navCapture()).toBeNull();
-    act(() => carry('right')); // a stale handler edits nothing
-    fireEvent.click(screen.getByTestId('chain-skill-primary'));
-    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium', 'heavy'));
-    // The keyboard takes over mid-carry: the card goes back.
-    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
-    pickUp(1000);
-    act(() => navCapture()!('right'));
-    act(() => useInputDeviceStore.getState().setDevice('keyboard'));
-    expect(navCapture()).toBeNull();
-    expect(screen.getByTestId('hub-footer')).not.toHaveTextContent('Put back');
-    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium', 'heavy'));
-    // Esc puts it back too, and is spent (no menu opens over it).
-    pickUp(2000);
-    act(() => navCapture()!('right'));
-    expect(press('Escape')).toBe(false);
-    expect(navCapture()).toBeNull();
-    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium', 'heavy'));
+    act(() => screen.getByTestId('move-1').focus());
+    padTap('x');
+    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'heavy'));
+    expect(chains().primary.moves).toHaveLength(4); // a draft
   });
 
-  it('on the pad, a tap of Y removes the chosen move and a held Y applies', () => {
+  it('in the editor X removes its move and closes it; Del too', () => {
     roomy();
     renderSkills();
-    act(() => {
-      padPrompts(new Set(['y']), held('y'), 0);
-      padPrompts(new Set(), held(), 100);
-    });
+    fireEvent.click(screen.getByTestId('move-0'));
+    padTap('x');
+    expect(screen.queryByTestId('move-editor')).toBeNull();
     expect(summary()).toHaveTextContent(kinds('medium', 'medium', 'heavy'));
-    expect(chains().primary.moves).toHaveLength(4);
-    act(() => {
-      padPrompts(new Set(['y']), held('y'), 1000);
-      padPrompts(new Set(), held('y'), 1700);
-      padPrompts(new Set(), held(), 1800);
-    });
-    expect(chains().primary.moves.map((m) => m.kind)).toEqual(['medium', 'medium', 'heavy']);
+    fireEvent.click(screen.getByTestId('move-0'));
+    press('Delete');
+    expect(screen.queryByTestId('move-editor')).toBeNull();
+    expect(summary()).toHaveTextContent(kinds('medium', 'heavy'));
+  });
+
+  it('Y opens the Apply sheet from the home row and from the editor; A applies; with nothing changed Y opens nothing', () => {
+    roomy();
+    renderSkills();
+    padTap('y');
+    expect(screen.queryByTestId('apply-sheet')).toBeNull();
+    fireEvent.click(screen.getByTestId('move-0'));
+    fireEvent.keyDown(screen.getByTestId('move-kind'), { key: 'ArrowRight' });
+    padTap('y', 1000);
+    expect(screen.getByTestId('apply-sheet')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('apply-sheet-confirm'));
+    expect(chains().primary.moves[0].kind).toBe('medium');
+    expect(screen.queryByTestId('apply-sheet')).toBeNull();
+  });
+
+  it('Ctrl+Enter and the footer’s Apply open the sheet too; none of its prompts is a hold', () => {
+    roomy();
+    renderSkills();
+    act(() => screen.getByTestId('move-0').focus());
+    padTap('x'); // a change to apply
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    press('Enter', { ctrlKey: true });
+    expect(screen.getByTestId('apply-sheet')).toBeInTheDocument();
+    fireEvent.click(within(screen.getByTestId('apply-sheet')).getByRole('button', { name: /Back/ }));
+    expect(screen.queryByTestId('apply-sheet')).toBeNull();
+    fireEvent.click(screen.getByTestId('chain-apply'));
+    expect(screen.getByTestId('apply-sheet')).toBeInTheDocument();
   });
 });

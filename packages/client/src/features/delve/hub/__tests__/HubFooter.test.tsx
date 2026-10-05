@@ -82,7 +82,7 @@ describe("the hub's footer", () => {
     lesson.why = WHY;
     draft();
     const onDelve = vi.fn();
-    render(<ApplyBar onDelve={onDelve} />);
+    render(<ApplyBar onDelve={onDelve} onApply={() => {}} />);
     const depart = screen.getByTestId('depart-button');
     expect(depart).toBeEnabled();
     expect(depart).not.toHaveAttribute('title');

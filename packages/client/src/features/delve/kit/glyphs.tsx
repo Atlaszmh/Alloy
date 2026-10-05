@@ -82,7 +82,7 @@ export function InputGlyph({
 }): ReactElement {
   const device = useInputDeviceStore((s) => s.device);
   if (device === 'gamepad' && binding.pad) {
-    return <PadGlyph button={binding.pad} hold={binding.padHold !== undefined} size={size} />;
+    return <PadGlyph button={binding.pad} size={size} />;
   }
   const key = Array.isArray(binding.key) ? binding.key[0] : binding.key;
   const caps = [
