@@ -174,7 +174,7 @@ describe('drawMinimap on a generated floor', () => {
       cells: Uint8Array.from([CELL.cover, CELL.crumbling, CELL.cover, CELL.wall]),
       fog: Uint8Array.from([1, 2, 0, 2]),
     };
-    drawFog(ctx, floor, 2);
+    expect(drawFog(ctx, floor, 2)).toBe(2);
     expect(fills).toEqual([
       { x: 0, y: 0, w: 2, h: 2, color: '#5a6988' },
       { x: 2, y: 0, w: 2, h: 2, color: '#5a6988' },
@@ -232,5 +232,23 @@ describe('Minimap', () => {
     expect(seen()).toBe(2 * once);
     rerender(<Minimap map={{ ...GENERATED, floor: { ...FLOOR, fogVersion: 2, version: 1 } }} />);
     expect(seen()).toBe(3 * once);
+  });
+
+  it('marks the cover cells and the hazards it shows on the canvas (data-cover, data-hazards)', () => {
+    const { ctx } = fakeContext();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as never);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 300,
+      height: 150,
+    } as DOMRect);
+    vi.spyOn(window, 'devicePixelRatio', 'get').mockReturnValue(1);
+    const cells = new Uint8Array(26 * 40);
+    cells[3] = CELL.cover;
+    cells[4] = CELL.crumbling;
+    const hazards = [{ x: 20, y: 30, color: '#ff6a2b' }];
+    render(<Minimap map={{ ...GENERATED, floor: { ...FLOOR, cells, hazards } }} />);
+    const canvas = screen.getByTestId('minimap');
+    expect(canvas.dataset.cover).toBe('2');
+    expect(canvas.dataset.hazards).toBe('1');
   });
 });

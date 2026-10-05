@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import type { BotPolicy } from '../src/arpg/bot.js';
 import { isWalkable } from '../src/arpg/grid.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
@@ -36,11 +36,17 @@ function sweep(seed: number, depth: number, policy: BotPolicy): string[] {
   return bad.slice(0, 3);
 }
 
+// Each test yields to the event loop as it ends: these tests run synchronously for many
+// seconds, and a worker that holds its event loop past 60 s in all leaves vitest's pending
+// task update to time out ("Timeout calling onTaskUpdate"), though every test passes.
+afterEach(() => new Promise((r) => setTimeout(r)));
+
+// A test a policy and a depth, so none runs long.
 describe('generated floors, swept', () => {
   for (const policy of ['thorough', 'beeline'] as const)
-    it(`${policy}: every floor reaches its exit and no body stands in a wall`, () => {
-      for (let seed = 1; seed <= 20; seed++)
-        for (const depth of [3, 8, 13, 18, 22, 28])
-          expect(sweep(seed, depth, policy), `seed ${seed} depth ${depth}`).toEqual([]);
-    }, 60_000);
+    for (const depth of [3, 8, 13, 18, 22, 28])
+      it(`${policy}, depth ${depth}: every floor reaches its exit and no body stands in a wall`, () => {
+        for (let seed = 1; seed <= 20; seed++)
+          expect(sweep(seed, depth, policy), `seed ${seed}`).toEqual([]);
+      }, 60_000);
 });
