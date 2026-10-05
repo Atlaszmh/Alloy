@@ -248,6 +248,8 @@ export function moveFocus(dir: NavDir): void {
   const els = candidates();
   if (els.length === 0) return;
   if (!(active instanceof HTMLElement) || !els.includes(active)) return focus(els[0]);
+  // Its pane remembers it now: a focus given this frame (a click, code) hasn't met keepFocus yet.
+  groupFocus.set(groupOf(active), active);
   const next = nextFocus(active, dir);
   if (next) focus(next);
 }

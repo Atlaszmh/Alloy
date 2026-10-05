@@ -210,6 +210,20 @@ describe('groups: the focus stays in a pane while it can, and comes back to wher
     expect(nextFocus(b1, 'left', { memory: false })).toBe(a2);
   });
 
+  it('remembers the control a move leaves, though no frame saw it focused', () => {
+    const { a1, a2, b1, b2 } = scene();
+    a2.focus();
+    keepFocus();
+    // Focused by a click or by code in the frame the D-pad moves: no keepFocus between.
+    a1.focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(b2);
+    moveFocus('down');
+    expect(document.activeElement).toBe(b1);
+    moveFocus('left');
+    expect(document.activeElement).toBe(a1);
+  });
+
   it('a control in no group is a group of one', () => {
     const lone = at(document.body.appendChild(document.createElement('button')), 400, 0);
     const { b2 } = scene();
