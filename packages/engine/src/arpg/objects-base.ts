@@ -1,6 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { ArpgWorld, Vec } from '../types/arpg.js';
-import { clamp } from './geometry.js';
+import { clamp, distToSegment } from './geometry.js';
 import { sees, solid } from './grid.js';
 import type { Furnishing } from './layout/furnish.js';
 import type { RoomObject } from './objects.js';
@@ -114,4 +114,11 @@ export function placeObjects(registry: DataRegistry, world: ArpgWorld, f: Furnis
       until: 0,
     });
   }
+}
+
+/** What a beam from `a` to `b`, `width` either side, reaches: what `a` sees. */
+export function objectsOnBeam(world: ArpgWorld, a: Vec, b: Vec, width: number): RoomObject[] {
+  return standing(world).filter(
+    (o) => distToSegment(o.x, o.y, a.x, a.y, b.x, b.y) <= width + o.radius && sees(world.map, a, o),
+  );
 }

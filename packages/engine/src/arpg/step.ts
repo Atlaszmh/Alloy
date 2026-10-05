@@ -382,13 +382,22 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
 
 // ── Projectiles ────────────────────────────────────────────────────────────
 
-/** Volley darts turn toward their foe while they perceive it (else the next nearest they do). */
+/**
+ * Volley darts turn toward their foe while they perceive it with no prop or hazard in the way
+ * (else the next nearest such).
+ */
 function steer(ctx: SimCtx, p: Projectile, dt: number): void {
-  const map = ctx.world.map;
+  const { world } = ctx;
   let target =
-    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && perceives(map, p, m)) ?? null;
+    world.monsters.find(
+      (m) =>
+        m.id === p.homingId &&
+        !m.dead &&
+        perceives(world.map, p, m) &&
+        objectsOnBeam(world, p, m, p.radius).length === 0,
+    ) ?? null;
   if (!target) {
-    target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds));
+    target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds), p.radius);
     p.homingId = target?.id ?? null;
     if (!target) return;
   }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { aimPoint, nearestMonster } from '../src/arpg/abilities/targeting.js';
 import { botInput } from '../src/arpg/bot.js';
 import { UNREACHED } from '../src/arpg/flow.js';
 import { isWalkable, moveCircle } from '../src/arpg/grid.js';
@@ -8,7 +9,7 @@ import { createFloorWorld } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
 import { CELL } from '../src/types/floor-map.js';
-import { bal, dummy, gear, registry, STEP } from './fixtures/arena.js';
+import { arena, bal, dummy, gear, registry, STEP } from './fixtures/arena.js';
 import { floorWorld } from './fixtures/flow-map.js';
 import { block, walledMap } from './fixtures/maps.js';
 
@@ -151,5 +152,38 @@ describe('a foe after the hero', () => {
         }
       }
     expect(stalls).toEqual([]);
+  });
+});
+
+describe('auto-aim past room objects', () => {
+  const brazier = (x: number, y: number) =>
+    ({
+      type: 'hazard',
+      id: 900,
+      kind: 'brazier',
+      element: 'fire',
+      x,
+      y,
+      radius: 0.45,
+      burst: 2,
+      state: 'dormant',
+      until: 1e9,
+    }) as const;
+
+  it('skips, for a shot, a foe a standing hazard hides; a swing or a beam still takes it', () => {
+    const w = arena([dummy(13, 30), dummy(17, 31)], { noBasic: true, primary: { form: 'bolt' } });
+    w.hazards = [{ ...brazier(13, 33) }];
+    const ctx = makeCtx(registry, w, []);
+    expect(nearestMonster(ctx, 13, 36, 20)?.x).toBe(13);
+    expect(nearestMonster(ctx, 13, 36, 20, undefined, 0.3)?.x).toBe(17);
+    expect(aimPoint(ctx, w.hero.chains[0]!.moves[0], null)?.x).toBe(17);
+    const lance = arena([dummy(13, 30), dummy(17, 31)], {
+      noBasic: true,
+      primary: { form: 'lance' },
+    });
+    lance.hazards = [{ ...brazier(13, 33) }];
+    expect(aimPoint(makeCtx(registry, lance, []), lance.hero.chains[0]!.moves[0], null)?.x).toBe(
+      13,
+    );
   });
 });

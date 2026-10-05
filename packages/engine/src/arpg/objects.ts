@@ -2,7 +2,7 @@ import type { ArpgWorld, HazardEntity, PropEntity, Vec } from '../types/arpg.js'
 import { BASIC_STATUS, hitMonster, hurtHero, killScrap, spawnDrop, type SimCtx } from './combat.js';
 import { isDashing } from './dodge.js';
 import { roomAt } from './fog.js';
-import { angleBetween, dirTo, dist, distToSegment } from './geometry.js';
+import { angleBetween, dirTo, dist } from './geometry.js';
 import { sees, shift, snapToWalkable } from './grid.js';
 import { rollMetal } from './material-drops.js';
 import { standing } from './objects-base.js';
@@ -47,12 +47,7 @@ export function objectsIn(
   );
 }
 
-/** What a beam from `a` to `b`, `width` either side, reaches: what `a` sees. */
-export function objectsOnBeam(world: ArpgWorld, a: Vec, b: Vec, width: number): RoomObject[] {
-  return standing(world).filter(
-    (o) => distToSegment(o.x, o.y, a.x, a.y, b.x, b.y) <= width + o.radius && sees(world.map, a, o),
-  );
-}
+export { objectsOnBeam } from './objects-base.js';
 
 /** What a body touches: a shot's contact, a charger's dash. */
 export function objectsTouching(

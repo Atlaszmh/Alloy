@@ -11,7 +11,7 @@ import { holdFull } from './abilities/resolve.js';
 import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
-import { alive, muzzle, nearestMonster, spawnProjectile } from './abilities/targeting.js';
+import { alive, muzzle, nearestMonster, SHOT, spawnProjectile } from './abilities/targeting.js';
 import { hitObject, objectsIn } from './objects.js';
 import { hitStructures } from './terrain.js';
 
@@ -58,7 +58,8 @@ function swingReach(w: HeroWeapon, s: ComboStepDef, manual: boolean) {
 /** Toward `aim` if given, else toward the nearest foe within `acquire`, else along `fallback`. */
 function aimAt(ctx: SimCtx, aim: Vec | null, acquire: number, fallback: Vec) {
   const h = ctx.world.hero;
-  const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire);
+  const shot = h.stats.weapon.kind === 'melee' ? undefined : SHOT;
+  const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire, undefined, shot);
   const to = aim ?? target;
   const dir = to ? dirTo(h.x, h.y, to.x, to.y) : fallback;
   return { target, dir: dir.x === 0 && dir.y === 0 ? fallback : dir };

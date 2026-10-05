@@ -5,7 +5,7 @@ import { angleBetween, dirTo, dist, distToSegment } from '../geometry.js';
 import { clipSight, moveCircle, perceives, sees, snapToWalkable } from '../grid.js';
 import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
 import { stepBonus, stepHeft } from './resolve.js';
-import { aimPoint, alive, muzzle, spawnProjectile } from './targeting.js';
+import { aimPoint, alive, muzzle, SHOT, spawnProjectile } from './targeting.js';
 import { hitObject, objectsIn, objectsOnBeam } from '../objects.js';
 import { hitStructures } from '../terrain.js';
 
@@ -77,7 +77,10 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       const n = ab.count;
       const targets = alive(ctx)
         .filter(
-          (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= ab.range + 2 && perceives(world.map, h, m),
+          (m) =>
+            dist(h.x, h.y, m.x, m.y) - m.radius <= ab.range + 2 &&
+            perceives(world.map, h, m) &&
+            objectsOnBeam(world, h, m, SHOT).length === 0,
         )
         .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
       for (let i = 0; i < n; i++) {
