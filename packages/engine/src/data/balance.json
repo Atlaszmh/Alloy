@@ -27,7 +27,7 @@
     "dive": {
       "bossEvery": 5, "eliteChance": 0.2, "healOnDepthClear": 0.25, "potions": 3, "maxPotions": 5,
       "potionHeal": 0.4, "bossPotionReward": 1, "doorsOffered": 3, "bountyBase": 15, "bountyGrowth": 1.1,
-      "packsBase": 4, "packsPerDepth": 0.2, "packsMax": 8, "packSize": [3, 5],
+      "packsBase": 3, "packsPerDepth": 0.2, "packsMax": 8, "packSize": [3, 5],
       "healthOrbChance": 0.08, "healthOrbHeal": 0.15
     },
     "loot": {
@@ -219,7 +219,7 @@
       }
     },
     "ai": {
-      "flowEvery": 0.25, "flowRadius": 30, "directRange": 4, "leashRadius": 12, "leashSeconds": 3, "sealGrace": 0.5,
+      "flowEvery": 0.25, "flowRadius": 30, "directRange": 4, "leashSeconds": 3, "sealGrace": 0.5,
       "roomVacuum": true, "sightRadius": 10, "fogEvery": 0.1, "exitHintSeconds": 60, "interactRadius": 1.5, "shrineChannel": 0.5,
       "pack": {
         "directorEvery": 0.25, "flowRadius": 24, "stuckTime": 1.5,
@@ -231,10 +231,10 @@
       }
     },
     "terrain": {
-      "slowMult": 0.6, "bossSlowMult": 0.8, "foliageSight": 2.5, "foliageDepth": 1.5, "searchTime": 3, "leashMargin": 0,
-      "structureLife": 60, "slamDamage": 0, "slamStagger": 0,
+      "slowMult": 0.6, "bossSlowMult": 0.8, "foliageSight": 2.5, "foliageDepth": 1.5, "searchTime": 3, "leashMargin": 4,
+      "structureLife": 60, "slamDamage": 0.5, "slamStagger": 0.6,
       "propLife": 1, "propDrops": { "chance": 0.35, "material": 0.4 },
-      "hazardDamage": 1.5, "fuse": 0.4, "recharge": 12, "hazardOffElement": 0.2
+      "hazardDamage": 1.5, "fuse": 0.6, "recharge": 15, "hazardOffElement": 0.2
     },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8 }
   }

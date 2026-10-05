@@ -321,8 +321,7 @@ export interface AiBalance {
   flowRadius: number;
   /** A foe with sight of the hero this close steers straight at it. */
   directRange: number;
-  /** A foe farther than this from its room's centre for `leashSeconds` goes home. */
-  leashRadius: number;
+  /** A foe more than `terrain.leashMargin` outside its room's rect for this long goes home. */
   leashSeconds: number;
   /** Seconds a sealing door waits for the doorway to clear. */
   sealGrace: number;
