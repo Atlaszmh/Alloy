@@ -10,6 +10,7 @@ import {
 import {
   activeMove,
   doorShut,
+  solidCode,
   tutorialExitHeld,
   type ArpgEvent,
   type ArpgWorld,
@@ -34,12 +35,14 @@ import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import { barrierBreakFx, reactionFx, reactionLabel } from './fx/reactions';
 import { runeFx, runeHex } from './fx/runes';
+import { roomObjectFx, roomObjectPoints } from './fx/room-objects';
 import { TIER_NUMERAL } from '../runes/rune-style';
 import {
   drawAim,
   drawAnticipation,
   drawFooting,
   drawGuard,
+  drawHazards,
   drawInfusions,
   drawLobs,
   drawMonsterMarks,
@@ -55,6 +58,7 @@ import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './pal
 import { PixelFloor } from './pixel/pixel-floor';
 import { FLOOR_MARGIN, floorInit } from './pixel/floor-engine';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
+import { RoomSprites } from './room-sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
 import { RARITY_TEXT } from '../format';
@@ -114,8 +118,8 @@ interface FogLayer {
   sprite: Sprite;
   source: BufferImageSource;
   pixels: Uint8Array;
-  /** The world's `fogVersion` it shows. */
-  version: number;
+  /** What it shows (`fogKey`): the world's fog over the map's cells. */
+  key: string;
 }
 
 interface Dying {
@@ -206,6 +210,8 @@ export class ArenaRenderer {
   private fog: FogLayer | null = null;
   private dropLayer = new Container();
   private entities = new Container();
+  /** The room objects from the atlas: props, hazards and the sprite-drawn cover (room-sprites.ts). */
+  private roomSprites = new RoomSprites(this.entities);
   private textLayer = new Container();
 
   private hero = new Container();
@@ -241,12 +247,14 @@ export class ArenaRenderer {
     this.entities.sortableChildren = true;
     this.groundFx = new PixelLayer(app.renderer);
     this.airFx = new PixelLayer(app.renderer, true);
+    // The ground marks (telegraphs, zones) and the drops over the creatures: the foliage's
+    // canopy goes between (`loadFloor`), hiding foes in it but never what warns or waits.
     this.root.addChild(
       this.floor,
-      this.groundFx.sprite,
       this.doorGfx,
-      this.dropLayer,
       this.entities,
+      this.groundFx.sprite,
+      this.dropLayer,
       this.airFx.sprite,
     );
     this.hero.addChild(this.heroAura, this.heroBody);
@@ -294,6 +302,7 @@ export class ArenaRenderer {
     this.doorShut.clear();
     this.doorHeld.clear();
     this.makeProps(world);
+    this.roomSprites.load(world);
     this.fog?.sprite.destroy({ texture: true, textureSource: true });
     this.fog = world.map.open ? null : this.makeFog(world.map);
     // The marker's beacon shows through the fog: it guides to what isn't seen yet.
@@ -301,6 +310,8 @@ export class ArenaRenderer {
     this.pixelFloor?.destroy();
     this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
+    // The foliage's canopy, over the creatures, under the ground marks (see pixel/pixel-floor.ts).
+    this.root.addChildAt(this.pixelFloor.canopy, this.root.getChildIndex(this.entities) + 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
     // A still frame: the new floor's view at once, for the HUD's first snapshot of it.
@@ -343,7 +354,7 @@ export class ArenaRenderer {
     const sprite = new Sprite(new Texture({ source }));
     sprite.position.set(-pad, -pad);
     this.root.addChild(sprite);
-    return { sprite, source, pixels, version: -1 };
+    return { sprite, source, pixels, key: '' };
   }
 
   private emoji(glyph: string): Texture {
@@ -577,6 +588,16 @@ export class ArenaRenderer {
         case 'runeFx':
           runeFx(this.fx, e);
           break;
+        case 'propBreak':
+        case 'hazardPrime':
+        case 'hazardBurst':
+        case 'crumble':
+        case 'wallSlam':
+        case 'chargeStun':
+          // The room objects' moments (fx/room-objects.ts), only where the hero sees them.
+          if (roomObjectPoints(e).some((p) => inSight(w, p.x, p.y)))
+            this.addShake(roomObjectFx(this.fx, e));
+          break;
         case 'chain':
           this.fx.bolt(e.points, MANA_HEX[e.element], 0.2, true);
           for (const p of e.points.slice(1)) this.fx.burst(p.x, p.y, MANA_HEX.storm, 3, 3);
@@ -771,21 +792,28 @@ export class ArenaRenderer {
     this.syncMonsters(w);
     this.syncDrops(w);
     this.syncProps(w);
+    this.roomSprites.update(w);
     this.drawDoors(w, dt);
     this.drawMarker(w);
     const fog = this.fog;
-    if (fog && fog.version !== w.fogVersion) {
+    if (fog && fog.key !== fogKey(w)) {
       paintFog(w.map, w.fog, FLOOR_MARGIN, fog.pixels);
       fog.source.update();
-      fog.version = w.fogVersion;
+      fog.key = fogKey(w);
     }
     // A foe out of sight shows nothing: not its marks, nor its wind-ups.
+    // Out of sight a foe shows nothing (not its marks, nor its wind-ups), nor a hazard its glow or fuse.
     const seen = w.map.open
       ? w
-      : { ...w, monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)) };
+      : {
+          ...w,
+          monsters: w.monsters.filter((m) => inSight(w, m.x, m.y)),
+          hazards: w.hazards.filter((h) => inSight(w, h.x, h.y)),
+        };
     drawZones(ground, w, this.time);
     drawLobs(ground, air, w, this.time);
     drawTelegraphs(ground, seen, this.time);
+    drawHazards(ground, seen, this.time, getDelveRegistry().getDelveBalance().terrain.fuse);
     drawFooting(ground, w, this.time);
     drawMonsterMarks(ground, air, seen, this.time);
     this.lifecycles.update(w, this.fx, this.time);
@@ -1282,9 +1310,19 @@ export function seenAt(w: ArpgWorld, x: number, y: number): boolean {
 }
 
 /**
+ * What the fog layer shows: the world's fog (`fogVersion`) over the map's
+ * cells (`FloorMap.version`; a crumble changes which cells are solid, and so
+ * which take their neighbours' fog). It repaints when either moves.
+ */
+export function fogKey(w: ArpgWorld): string {
+  return `${w.fogVersion}:${w.map.version}`;
+}
+
+/**
  * The fog layer's pixels (black, at `FOG_ALPHA`), one a cell over the map and
- * `pad` cells round it. A wall takes the clearest fog of the floor beside it,
- * so the walls round what the hero sees show; past the map's edge, the edge's.
+ * `pad` cells round it. A solid cell (a wall, cover; `solidCode`) takes the
+ * clearest fog of the floor beside it, so the walls round what the hero sees
+ * show; past the map's edge, the edge's.
  */
 export function paintFog(map: FloorMap, fog: Uint8Array, pad: number, out: Uint8Array): void {
   const { width: W, height: H, cells } = map;
@@ -1294,10 +1332,10 @@ export function paintFog(map: FloorMap, fog: Uint8Array, pad: number, out: Uint8
       const x = Math.min(W - 1, Math.max(0, ox - pad));
       const y = Math.min(H - 1, Math.max(0, oy - pad));
       let f = fog[y * W + x];
-      if (cells[y * W + x] === 1)
+      if (solidCode(cells[y * W + x]))
         for (let ny = Math.max(0, y - 1); ny <= Math.min(H - 1, y + 1); ny++)
           for (let nx = Math.max(0, x - 1); nx <= Math.min(W - 1, x + 1); nx++)
-            if (cells[ny * W + nx] !== 1) f = Math.max(f, fog[ny * W + nx]);
+            if (!solidCode(cells[ny * W + nx])) f = Math.max(f, fog[ny * W + nx]);
       out[(oy * OW + ox) * 4 + 3] = FOG_ALPHA[f];
     }
 }

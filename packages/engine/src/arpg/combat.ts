@@ -6,11 +6,13 @@ import type {
   DropKind,
   HitSource,
   MonsterEntity,
+  MonsterKind,
   ReactionDef,
   ReactionId,
   StatusId,
   Vec,
 } from '../types/arpg.js';
+import type { MaterialRef } from '../types/crafting.js';
 import type { DelveBalance } from '../types/delve.js';
 import type { GearItem } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
@@ -18,11 +20,12 @@ import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
-import { clipSight, sees, snapToWalkable } from './grid.js';
+import { clipSight, perceives, sees, snapToWalkable } from './grid.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
+import { offFootprints } from './objects-base.js';
 import { dropRune } from './rune-drops.js';
 import { dropMaterials } from './material-drops.js';
 import { onMonsterKilled } from './interact.js';
@@ -510,6 +513,22 @@ function react(
  * Deal damage to a monster: resistances, crits, statuses, elemental reactions,
  * lifesteal, knockback and death. Returns the damage dealt.
  */
+/**
+ * A hero's hit gives the hero away (see `terrainTick`): when no member of the
+ * foe's pack perceives the hero, the pack (awake, not going home, one that
+ * searches: a room, no boss) searches where the hero stands now, its clock
+ * started afresh, so a hero hidden in foliage can't keep hitting it unfound.
+ */
+function givenAway(ctx: SimCtx, m: MonsterEntity): void {
+  const { world, bal } = ctx;
+  const { map, hero: h } = world;
+  if (map.open || m.roomId === null || m.dummy) return;
+  const pack = world.monsters.filter((o) => o.packId === m.packId && !o.dead);
+  if (pack.some((o) => o.kind === 'boss' || perceives(map, o, h))) return;
+  const search = { at: { x: h.x, y: h.y }, until: world.t + bal.terrain.searchTime };
+  for (const o of pack) if (o.aggro && !o.goingHome) Object.assign(o, { search, goal: search.at });
+}
+
 export function hitMonster(
   ctx: SimCtx,
   m: MonsterEntity,
@@ -539,7 +558,9 @@ export function hitMonster(
   // A dummy resists as its own setting says (Neutral: nothing); its `element` is only its look.
   const resists = m.dummy ? m.dummy.element : m.element;
   if (element) {
-    if (opts.source !== 'dot') amount *= 1 + stats.elementPower[element];
+    // A DoT's power was in when it was applied; a hazard's burst is nobody's (none of the hero's).
+    if (opts.source !== 'dot' && opts.source !== 'hazard')
+      amount *= 1 + stats.elementPower[element];
     if (resists && element === resists) amount *= 1 - bal.monster.resist;
     if (resists && element === ctx.data.weakness[resists]) amount *= 1 + bal.monster.weakness;
   }
@@ -574,6 +595,7 @@ export function hitMonster(
   if (!m.aggro) aggroPack(ctx, m);
   // A leashed foe walking home turns back on whoever hits it, its leash counted afresh.
   if (m.goingHome) Object.assign(m, { goingHome: false, farSince: null });
+  if (opts.source === 'basic' || opts.source === 'skill') givenAway(ctx, m);
   ctx.events.push({
     kind: 'hit',
     id: m.id,
@@ -659,9 +681,16 @@ export function hitMonster(
     const d = dirTo(opts.kbFrom.x, opts.kbFrom.y, m.x, m.y);
     m.kbx += d.x * opts.knockback * 6 * resist;
     m.kby += d.y * opts.knockback * 6 * resist;
+    m.kbHit = amount;
   }
 
-  if (m.traits.includes('spiked') && opts.source !== 'dot' && opts.source !== 'reaction') {
+  // Spikes send back what the hero dealt: never a DoT's, a reaction's or a hazard's.
+  if (
+    m.traits.includes('spiked') &&
+    opts.source !== 'dot' &&
+    opts.source !== 'reaction' &&
+    opts.source !== 'hazard'
+  ) {
     hurtHero(ctx, amount * bal.monster.traits.spikedFraction, m.element, null, {
       unavoidable: true,
     });
@@ -670,21 +699,28 @@ export function hitMonster(
 }
 
 /**
- * A drop from foe `from` thrown toward (x, y): it lands short of any wall
- * between them, and belongs to the foe's room (see the floor maps spec).
+ * A drop from `from` (a dying foe, a broken prop) thrown toward (x, y): it
+ * lands short of any wall between them and off every prop's and hazard's
+ * footprint, and belongs to its room (see the floor maps spec).
  */
-function spawnDrop(
+export function spawnDrop(
   ctx: SimCtx,
   kind: DropKind,
-  from: MonsterEntity,
+  from: Vec & { roomId: number | null },
   tx: number,
   ty: number,
   /** `vacuum`: pulled to the hero from anywhere (default: once the floor is cleared). */
-  extra: { item?: GearItem; mana?: ManaType; amount: number; vacuum?: boolean },
+  extra: {
+    item?: GearItem;
+    mana?: ManaType;
+    material?: MaterialRef;
+    amount: number;
+    vacuum?: boolean;
+  },
 ): void {
   const { world } = ctx;
   const id = world.nextId++;
-  const { x, y } = clipSight(world.map, from, { x: tx, y: ty });
+  const { x, y } = offFootprints(world, from, clipSight(world.map, from, { x: tx, y: ty }));
   world.drops.push({
     id,
     kind,
@@ -692,6 +728,7 @@ function spawnDrop(
     y,
     item: extra.item,
     mana: extra.mana,
+    ...(extra.material && { material: extra.material }),
     ...(from.roomId !== null && { roomId: from.roomId }),
     amount: extra.amount,
     born: world.t,
@@ -710,9 +747,23 @@ export function livingBossId(world: ArpgWorld): number | null {
   return null;
 }
 
+/**
+ * A kill's scrap for a foe of `kind`, by the depth and the hero's Scrap Find
+ * (a broken prop's is a normal foe's).
+ */
+export function killScrap(ctx: SimCtx, kind: MonsterKind): number {
+  const { world, bal, registry } = ctx;
+  return Math.round(
+    bal.loot.scrapPerKill *
+      scrapLevelFactor(registry, world.depth) *
+      bal.drops.scrapByKind[kind] *
+      (1 + world.hero.stats.scrapFind / 100),
+  );
+}
+
 export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (m.dead) return;
-  const { world, bal, registry } = ctx;
+  const { world, bal } = ctx;
   const h = world.hero;
   const t = world.t;
   m.dead = true;
@@ -724,14 +775,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
 
   // The Training Grounds drop nothing from kills: no scrap, items, motes, orbs or materials.
   // The kill's scrap bursts out as pickups (`dropMaterials`).
-  const scrap = world.sandbox
-    ? 0
-    : Math.round(
-        bal.loot.scrapPerKill *
-          scrapLevelFactor(registry, world.depth) *
-          bal.drops.scrapByKind[m.kind] *
-          (1 + h.stats.scrapFind / 100),
-      );
+  const scrap = world.sandbox ? 0 : killScrap(ctx, m.kind);
   ctx.events.push({ kind: 'death', id: m.id, x: m.x, y: m.y, monsterKind: m.kind, scrap });
 
   if (h.stats.healOnKill > 0) healHero(ctx, h.stats.maxHp * h.stats.healOnKill, 'kill');
@@ -858,6 +902,8 @@ export interface HurtOpts {
   melee?: boolean;
   /** Ignores dodge, blind and invulnerability (spiked reflection). */
   unavoidable?: boolean;
+  /** A hazard's burst: the dodge's i-frames avoid it, but it never makes a perfect dodge. */
+  noPerfect?: boolean;
 }
 
 /** Monster → hero damage with dodge, blind, armor, thorns, vampirism and death. */
@@ -873,7 +919,7 @@ export function hurtHero(
   if (world.heroDead || raw <= 0) return;
   if (!opts.unavoidable) {
     if (world.t < h.invulnUntil) {
-      notePerfect(ctx);
+      if (!opts.noPerfect) notePerfect(ctx);
       return;
     }
     const blind =

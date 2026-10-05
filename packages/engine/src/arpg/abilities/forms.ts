@@ -2,10 +2,12 @@ import type { ResolvedAbility } from '../../types/ability.js';
 import type { Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
 import { angleBetween, dirTo, dist, distToSegment } from '../geometry.js';
-import { clipSight, moveCircle, sees, snapToWalkable } from '../grid.js';
+import { clipSight, moveCircle, perceives, sees, snapToWalkable } from '../grid.js';
 import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
 import { stepBonus, stepHeft } from './resolve.js';
-import { aimPoint, alive, muzzle, spawnProjectile } from './targeting.js';
+import { aimPoint, alive, muzzle, SHOT, spawnProjectile } from './targeting.js';
+import { hitObject, objectsIn, objectsOnBeam } from '../objects.js';
+import { hitStructures } from '../terrain.js';
 
 export interface FormResult {
   ok: boolean;
@@ -74,7 +76,12 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       h.facing = dir;
       const n = ab.count;
       const targets = alive(ctx)
-        .filter((m) => dist(h.x, h.y, m.x, m.y) - m.radius <= ab.range + 2 && sees(world.map, h, m))
+        .filter(
+          (m) =>
+            dist(h.x, h.y, m.x, m.y) - m.radius <= ab.range + 2 &&
+            perceives(world.map, h, m) &&
+            objectsOnBeam(world, h, m, SHOT).length === 0,
+        )
         .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
       for (let i = 0; i < n; i++) {
         const d = rotate(dir, (i - (n - 1) / 2) * 0.22);
@@ -139,6 +146,10 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           struck.add(m.id);
           hitMonster(ctx, m, hit, ab.element, opts);
         }
+        // An Echo's beam sets nothing off (see the room objects spec).
+        if (!ab.replay)
+          for (const obj of objectsOnBeam(world, h, { x: ex, y: ey }, width))
+            hitObject(ctx, obj, 'hero');
         if (hits.length > 0) {
           chainFrom(ctx, ab, hits[hits.length - 1], hit, struck);
           leaveZone(ctx, ab, hits[0].x, hits[0].y, Math.max(1.2, width * 2), hit);
@@ -199,6 +210,11 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
+      if (!ab.replay) {
+        for (const obj of objectsIn(world, h, reach, dir, arc)) hitObject(ctx, obj, 'hero');
+        // A heavy or hold Strike wears crumbling cover in its arc, as a heavy blow does.
+        if (ab.kind === 'heavy' || ab.kind === 'hold') hitStructures(ctx, h, reach, hit, dir, arc);
+      }
       if (hits.length > 0) {
         chainFrom(ctx, ab, hits[0], hit, new Set(hits.map((m) => m.id)));
         leaveZone(ctx, ab, h.x + dir.x * reach * 0.5, h.y + dir.y * reach * 0.5, reach * 0.7, hit);

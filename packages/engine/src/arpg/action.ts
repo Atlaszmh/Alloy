@@ -1,6 +1,6 @@
 import type { ArpgWorld, HeroEntity, Push, PushKind, Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
-import { moveCircle } from './grid.js';
+import { groundAt, moveCircle } from './grid.js';
 import { chargeCap } from './abilities/resolve.js';
 
 /**
@@ -72,9 +72,10 @@ function contactAt(
 }
 
 /**
- * Move the hero by push `p`'s slice up to progress `k`: less the part that
- * points against the steering `steer` (a unit vector; null when not steering),
- * stopped at walls, and cut at its stop foe's contact gap. Returns whether
+ * Move the hero by push `p`'s slice up to progress `k`: slowed by the ground
+ * under it (`groundAt`), less the part that points against the steering
+ * `steer` (a unit vector; null when not steering), stopped at walls, and cut
+ * at its stop foe's contact gap. Returns whether
  * it runs on: it ends when its progress runs out, its foe is gone, or it
  * reaches the gap (at once if the hero is already inside it).
  */
@@ -83,8 +84,9 @@ function slice(ctx: SimCtx, p: Push, k: number, steer: Vec | null): boolean {
   const h = world.hero;
   const foe = p.stopId === null ? null : world.monsters.find((m) => m.id === p.stopId && !m.dead);
   if (p.stopId !== null && !foe) return false;
-  let dx = p.dx * (k - p.done);
-  let dy = p.dy * (k - p.done);
+  const ground = groundAt(world.map, h);
+  let dx = p.dx * (k - p.done) * ground;
+  let dy = p.dy * (k - p.done) * ground;
   p.done = k;
   const against = steer ? dx * steer.x + dy * steer.y : 0;
   if (steer && against < 0) {

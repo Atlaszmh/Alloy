@@ -2,26 +2,37 @@ import type { ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity, Projectile, Vec } from '../../types/arpg.js';
 import type { SimCtx } from '../combat.js';
 import { dirTo, dist } from '../geometry.js';
-import { clipSight, sees, snapToWalkable } from '../grid.js';
+import { clipSight, perceives, sees, snapToWalkable } from '../grid.js';
+import { objectsOnBeam } from '../objects-base.js';
 
 export function alive(ctx: SimCtx): MonsterEntity[] {
   return ctx.world.monsters.filter((m) => !m.dead);
 }
 
-/** Nearest living monster whose edge is within `range` of (x, y), and that (x, y) sees. */
+/**
+ * Nearest living monster whose edge is within `range` of (x, y), and that (x, y) perceives;
+ * with `shot` (a shot's half width), one no standing prop or hazard hides from (x, y) along
+ * the shot's way, so a hazard is no sink for auto-aimed shots.
+ */
 export function nearestMonster(
   ctx: SimCtx,
   x: number,
   y: number,
   range: number,
   exclude?: Set<number>,
+  shot?: number,
 ): MonsterEntity | null {
   let best: MonsterEntity | null = null;
   let bestD = Infinity;
   for (const m of ctx.world.monsters) {
     if (m.dead || exclude?.has(m.id)) continue;
     const d = dist(x, y, m.x, m.y) - m.radius;
-    if (d <= range && d < bestD && sees(ctx.world.map, { x, y }, m)) {
+    if (
+      d <= range &&
+      d < bestD &&
+      perceives(ctx.world.map, { x, y }, m) &&
+      (shot === undefined || objectsOnBeam(ctx.world, { x, y }, m, shot).length === 0)
+    ) {
       best = m;
       bestD = d;
     }
@@ -29,11 +40,11 @@ export function nearestMonster(
   return best;
 }
 
-/** The in-range monster the hero sees whose surroundings hold the most foes (for placed abilities). */
+/** The in-range monster the hero perceives whose surroundings hold the most foes (for placed abilities). */
 export function bestCluster(ctx: SimCtx, range: number, radius: number): MonsterEntity | null {
   const h = ctx.world.hero;
   const candidates = alive(ctx).filter(
-    (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= range && sees(ctx.world.map, h, m),
+    (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= range && perceives(ctx.world.map, h, m),
   );
   let best: MonsterEntity | null = null;
   let bestScore = -1;
@@ -80,6 +91,8 @@ export function muzzle(ctx: SimCtx, d: Vec, out: number): Vec {
   const p = { x: h.x + d.x * out, y: h.y + d.y * out };
   return sees(ctx.world.map, h, p) ? p : { x: h.x, y: h.y };
 }
+/** The half width auto-aim keeps clear of props and hazards for a shot (a basic shot's radius). */
+export const SHOT = 0.3;
 /** Forms fired along a way from the hero (the rest are placed, self-centred or Blink). */
 export const DIRECTIONAL = new Set(['bolt', 'volley', 'lance', 'strike']);
 const PLACED = new Set(['burst', 'barrage', 'maelstrom']);
@@ -103,7 +116,8 @@ export function aimPoint(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): Vec
     return clipSight(world.map, h, p);
   }
   if (DIRECTIONAL.has(form)) {
-    const m = nearestMonster(ctx, h.x, h.y, ab.range + 1);
+    const shot = form === 'bolt' || form === 'volley' ? SHOT : undefined;
+    const m = nearestMonster(ctx, h.x, h.y, ab.range + 1, undefined, shot);
     return m ? { x: m.x, y: m.y } : null;
   }
   if (PLACED.has(form)) {

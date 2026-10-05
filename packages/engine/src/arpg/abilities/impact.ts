@@ -12,6 +12,8 @@ import { hitMonster, type HitOpts, type SimCtx } from '../combat.js';
 import { dirTo, dist } from '../geometry.js';
 import { clipSight, sees, shift, snapToWalkable } from '../grid.js';
 import { alive, nearestMonster, spawnProjectile } from './targeting.js';
+import { hitObject, objectsIn } from '../objects.js';
+import { hitStructures } from '../terrain.js';
 
 /** Pyroclasm's embers come off these forms' impacts. */
 const EMBER_FORMS = new Set(['bolt', 'burst', 'barrage']);
@@ -252,6 +254,12 @@ export function impact(
   );
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
+  // Its area reaches props, hazards and crumbling cover; a tick's, an Echo's and a Pierce shot's
+  // past its first foe never do (see the room objects spec).
+  if (!o.tick && !ab.replay && !o.through) {
+    for (const obj of objectsIn(world, { x, y }, radius)) hitObject(ctx, obj, 'hero');
+    hitStructures(ctx, { x, y }, radius, damage);
+  }
 
   if (hits.length > 0 && !o.through) {
     const first = hits.reduce((a, b) => (dist(x, y, a.x, a.y) <= dist(x, y, b.x, b.y) ? a : b));

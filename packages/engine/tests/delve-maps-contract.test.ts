@@ -55,7 +55,7 @@ describe('the inputs, the hooks and the stubs', () => {
 
   it("every area's op is exported", () => {
     const ops = [
-      ...['openRoom', 'moveCircle', 'lineOfSight', 'isWalkable', 'snapToWalkable', 'blocked'],
+      ...['openRoom', 'moveCircle', 'lineOfSight', 'isWalkable', 'snapToWalkable', 'solid'],
       ...['applyBuffs', 'generateFloor', 'flowField', 'flowTick', 'leashTick'],
       ...['sealTick', 'fogTick', 'hudMapOf', 'interactTick', 'applyShrine', 'exitFloor'],
       ...['onMonsterKilled', 'alcoveOffers', 'takeAlcove'],

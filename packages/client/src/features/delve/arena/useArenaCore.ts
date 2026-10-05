@@ -36,6 +36,7 @@ import type { AimView } from './fx/draw-world';
 import type { ViewRect } from './fx/pixel-layer';
 import { RARITY_COLOR } from '../format';
 import { FAMILY_STYLE } from '../runes/rune-style';
+import { MANA_HEX } from './palette';
 import { hasZoomedAncestor } from '../kit/zoom';
 import { loadDelveSprites } from './sprites';
 import {
@@ -132,10 +133,16 @@ export interface HudMap {
   /**
    * A generated floor's map (`hudMapOf`: revealed rooms and their icons, the exit, its hint, the
    * rooms explored), with the grid and the fog it is drawn from (the world's own arrays, never
-   * copied: the minimap redraws its fog when `fogVersion` moves); absent on the open room, whose
-   * `foes` are then every foe and `drops` every drop.
+   * copied: the minimap redraws its fog when `fogVersion` or the map's `version` moves), and the
+   * hazards in seen cells in their element's colour; absent on the open room, whose `foes` are
+   * then every foe and `drops` every drop.
    */
-  floor?: FloorHudMap & { cells: Uint8Array; fog: Uint8Array };
+  floor?: FloorHudMap & {
+    cells: Uint8Array;
+    fog: Uint8Array;
+    version: number;
+    hazards: { x: number; y: number; color: string }[];
+  };
 }
 
 /** The interactable in reach, for its plaque: the engine's prompt, where it stands, and a prayer's progress. */
@@ -427,7 +434,19 @@ export function snapshot(
         return color && (!floor || seenAt(world, d.x, d.y)) ? [{ x: d.x, y: d.y, color }] : [];
       }),
       terrain: [],
-      ...(floor && { floor: { ...floor, cells: world.map.cells, fog: world.fog } }),
+      ...(floor && {
+        floor: {
+          ...floor,
+          cells: world.map.cells,
+          fog: world.fog,
+          version: world.map.version,
+          hazards: world.hazards.flatMap((z) =>
+            seenAt(world, z.x, z.y)
+              ? [{ x: z.x, y: z.y, color: `#${MANA_HEX[z.element].toString(16).padStart(6, '0')}` }]
+              : [],
+          ),
+        },
+      }),
     },
     prompt: promptOf(world, prompt),
   };

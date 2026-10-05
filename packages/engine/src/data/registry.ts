@@ -16,6 +16,7 @@ import type { ManaType } from '../types/mana.js';
 import type { CraftingData } from '../types/crafting.js';
 import type { QuestsData } from '../types/quests.js';
 import type { TutorialData } from '../types/tutorial.js';
+import type { SetPiecesData } from '../types/floor-map.js';
 
 export class DataRegistry {
   constructor(private readonly data: LoadedData) {}
@@ -86,6 +87,11 @@ export class DataRegistry {
   /** `tutorial.json`: the guided start's steps, partners and hand-built floors (see the tutorial spec). */
   getTutorialData(): TutorialData {
     return this.data.tutorial;
+  }
+
+  /** `setpieces.json`: the props, hazards, set pieces and each biome's palette (see the room objects spec). */
+  getSetPieces(): SetPiecesData {
+    return this.data.setPieces;
   }
 
   getDelveBalance(): DelveBalance {

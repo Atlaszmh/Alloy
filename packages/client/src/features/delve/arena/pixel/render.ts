@@ -1,5 +1,5 @@
 import type { RGB } from './themes';
-import { DETAIL, MAT, PART, PROP, type PixelWorld } from './world';
+import { DETAIL, FLOOR_CELL, LOOK, MAT, PART, PROP, type PixelWorld } from './world';
 
 /**
  * Draws a PixelWorld into an RGBA buffer, lit like a night scene:
@@ -22,6 +22,8 @@ export interface RenderView {
   h: number;
   /** Output pixels per cell (1 or 2). */
   scale: number;
+  /** `out` holds a second picture under the first: the foliage's leaves (`passCanopy`). */
+  canopy?: boolean;
 }
 
 const LIGHT_GAIN = 1.6;
@@ -51,6 +53,59 @@ const RIPPLE: RGB = [230, 250, 255];
 const WHITE: RGB = [255, 255, 255];
 /** Per-sub-pixel scatter of the growth's leaves. */
 const GROWTH_MUL = [5.37, 9.11, 12.3, 15.7];
+/** A mine's timber ruins: planks, and the gaps between them. */
+const TIMBER: RGB = [150, 102, 60];
+const TIMBER_GAP: RGB = [52, 34, 24];
+/** Each slow ground's two tones (the second where the cell's noise is high), the same in every biome. */
+const SLOW_TONES: Record<number, readonly [RGB, RGB]> = {
+  [LOOK.coal_rubble]: [
+    [30, 26, 28],
+    [64, 58, 56],
+  ],
+  [LOOK.snowdrift]: [
+    [228, 238, 250],
+    [252, 254, 255],
+  ],
+  [LOOK.oil]: [
+    [18, 16, 24],
+    [60, 44, 92],
+  ],
+  [LOOK.mud]: [
+    [56, 40, 28],
+    [78, 56, 36],
+  ],
+  [LOOK.ash]: [
+    [54, 50, 50],
+    [82, 76, 74],
+  ],
+};
+
+/** A foliage look's own three tones (dark, mid, light), else the biome theme's `bush`. */
+const FOLIAGE_TONES: Record<number, readonly RGB[]> = {
+  // The Mines' fungus beds: mauve caps.
+  [LOOK.fungus]: [
+    [52, 30, 46],
+    [86, 48, 70],
+    [150, 92, 104],
+  ],
+  // The Frostvault's frost ferns: pale teal.
+  [LOOK.frost_fern]: [
+    [30, 74, 84],
+    [54, 118, 124],
+    [120, 186, 190],
+  ],
+  // The Crypts' cobwebs: grey shrouds.
+  [LOOK.cobweb]: [
+    [96, 96, 104],
+    [140, 140, 148],
+    [200, 200, 208],
+  ],
+};
+
+/** The leaf tones of foliage cell `i`: its look's own, else the theme's. */
+function bushTones(pw: PixelWorld, i: number): readonly RGB[] {
+  return FOLIAGE_TONES[pw.lookAt(i)] ?? pw.theme.bush;
+}
 
 /** A theme green pushed greener, for the nature growth. */
 function greener(c: RGB): RGB {
@@ -250,12 +305,14 @@ function fillBase(pw: PixelWorld, S: WorldScratch, i: number): void {
       g = c[1];
       b = c[2];
       break;
-    case MAT.BUSH:
-      c = n > 0.66 ? th.bush[2] : n > 0.22 ? th.bush[1] : th.bush[0];
+    case MAT.BUSH: {
+      const bush = bushTones(pw, i);
+      c = n > 0.66 ? bush[2] : n > 0.22 ? bush[1] : bush[0];
       r = c[0];
       g = c[1];
       b = c[2];
       break;
+    }
     case MAT.SOIL:
       c = th.soil[Math.min(2, tone)];
       r = c[0] + (n > 0.95 ? 18 : 0);
@@ -311,6 +368,34 @@ function fillBase(pw: PixelWorld, S: WorldScratch, i: number): void {
       g = n > 0.9 ? 66 : 18;
       b = n > 0.9 ? 98 : 28;
       break;
+    case MAT.RUIN: {
+      // Blocks of the biome's stone (a mine's timber planks), their joints in shade.
+      const wood = pw.lookAt(i) === LOOK.timber;
+      const joint = (pw.detail[i] & DETAIL.MORTAR) !== 0;
+      const v = joint ? 0.6 : 0.78 + (tone / 255) * 0.24 + (n - 0.5) * 0.06;
+      c = wood ? (joint ? TIMBER_GAP : TIMBER) : th.stone;
+      r = c[0] * v;
+      g = c[1] * v;
+      b = c[2] * v;
+      break;
+    }
+    case MAT.SLOW: {
+      const look = pw.lookAt(i);
+      if (look === LOOK.rubble) {
+        // A crumbled structure: chunks of its stone strewn on the bare ground.
+        const v = 0.6 + n * 0.3;
+        c = n > 0.62 ? th.stone : th.soil[1];
+        r = c[0] * v;
+        g = c[1] * v;
+        b = c[2] * v;
+      } else {
+        c = (SLOW_TONES[look] ?? SLOW_TONES[LOOK.mud])[n > 0.7 ? 1 : 0];
+        r = c[0];
+        g = c[1];
+        b = c[2];
+      }
+      break;
+    }
     default:
       c = th.wall[Math.min(2, tone)];
       r = c[0];
@@ -683,7 +768,8 @@ function passGround(F: Frame): void {
       const ch = charge[i];
       const special = blightGlow > 0 || fireA > 0 || ch > 0.05;
       const wetCell = wetNear[(y - y0) * vw + (x - x0)] === 1 && m !== MAT.WALL;
-      const jitterOn = s > 1 && m !== MAT.STONE && m !== MAT.RUBBLE;
+      const jitterOn = s > 1 && m !== MAT.STONE && m !== MAT.RUBBLE && m !== MAT.RUIN;
+      const crk = m === MAT.RUIN ? pw.crackAt(i) : 0;
       const pxBase = (x - x0) * s;
 
       for (let sy = 0; sy < s; sy++) {
@@ -701,6 +787,16 @@ function passGround(F: Frame): void {
             r *= j;
             g *= j;
             b *= j;
+          }
+          if (crk > 0) {
+            // Cracks across crumbling cover, wider as its structure wears.
+            const X = x + sx / s;
+            const Y = y + sy / s;
+            if (Math.abs(fsin(X * 0.5 + fsin(Y * 0.45) * 2.4 + Y * 0.35)) < 0.24 * crk) {
+              r *= 0.3;
+              g *= 0.3;
+              b *= 0.3;
+            }
           }
           if (wetCell) {
             // Fluid depth, bilinear across cells for smooth shorelines.
@@ -810,7 +906,6 @@ function passFoliage(F: Frame): void {
   }
   const g3 = th.grass[3];
   const gt = th.grassTip;
-  const b2 = th.bush[2];
   for (let y = y0; y < y0 + vh; y++) {
     for (let x = x0; x < x0 + vw; x++) {
       const i = y * W + x;
@@ -836,6 +931,7 @@ function passFoliage(F: Frame): void {
         tb = 255;
       } else if (bush) {
         const lift = 1.12 + ti * 0.18;
+        const b2 = bushTones(pw, i)[2];
         tr = b2[0] * lift;
         tg = b2[1] * lift;
         tb = b2[2] * lift;
@@ -858,7 +954,7 @@ function passFoliage(F: Frame): void {
           const rx = (x - x0) * s + sx + (sv > thr ? 1 : sv < -thr ? -1 : 0);
           if (rx < 0 || rx >= RW) continue;
           const j = V.rowCell[ry] * W + V.colCell[rx];
-          if ((mat[j] === MAT.WALL && !bush) || fluid[j] > 0.003) continue;
+          if ((mat[j] === MAT.WALL && !bush) || mat[j] === MAT.RUIN || fluid[j] > 0.003) continue;
           const o = (ry * RW + rx) * 4;
           out[o] = tr;
           out[o + 1] = tg;
@@ -1130,6 +1226,62 @@ function puff(
     for (let dx = 0; dx < size; dx++) put(F, rx + dx, ry + dy, r, g, b, a);
 }
 
+/**
+ * The foliage's leaves, drawn over everything on the floor: a second picture
+ * under the first (premultiplied alpha, lit as the floor). What stands in
+ * foliage shows only through the gaps, trampled leaves part, and round the
+ * hero standing in it (`seeThrough`) they turn see-through.
+ */
+function passCanopy(F: Frame): void {
+  const { pw, out, S, V, x0, y0, vw, vh, s, RW, RH } = F;
+  const W = pw.width;
+  const base = RW * RH * 4;
+  out.fill(0, base, base * 2);
+  const { mat, trample, frost } = pw;
+  const { sway, sw: sgw, tint, bushBlade, bladeThr } = S;
+  const LF = V.lightF;
+  const see = pw.seeThrough;
+  const vine = greener(pw.theme.bush[2]);
+  for (let y = y0; y < y0 + vh; y++) {
+    for (let x = x0; x < x0 + vw; x++) {
+      const i = y * W + x;
+      if (mat[i] !== MAT.BUSH || pw.codeAt(i) !== FLOOR_CELL.foliage) continue;
+      let a = 0.85 * (1 - trample[i]);
+      if (see) {
+        const d = Math.hypot(x - see.x, y - see.y) / see.r;
+        if (d < 1) a *= 0.15 + 0.85 * d * d;
+      }
+      if (a < 0.02) continue;
+      const c: RGB =
+        frost[i] > 0.2 ? [230, 242, 255] : pw.lookAt(i) === LOOK.vines ? vine : bushTones(pw, i)[2];
+      const lift = (1.12 + tint[i] * 0.18) * a;
+      const kc = ((y - y0) * vw + (x - x0)) * 3;
+      const r = c[0] * lift * LF[kc];
+      const g = c[1] * lift * LF[kc + 1];
+      const b = c[2] * lift * LF[kc + 2];
+      const sv = sway[(y >> 2) * sgw + (x >> 2)];
+      const blades = bushBlade[i];
+      for (let sy = 0; sy < s; sy++) {
+        // A cell up from its stem: the leaves stand over what is in them.
+        const ry = (y - y0 - 1) * s + sy;
+        if (ry < 0 || ry >= RH) continue;
+        for (let sx = 0; sx < s; sx++) {
+          const q = sx + sy * MAX_SCALE;
+          if (!((blades >> q) & 1)) continue;
+          const thr = bladeThr[i * SUBS + q];
+          const rx = (x - x0) * s + sx + (sv > thr ? 1 : sv < -thr ? -1 : 0);
+          if (rx < 0 || rx >= RW) continue;
+          const o = base + (ry * RW + rx) * 4;
+          out[o] = r;
+          out[o + 1] = g;
+          out[o + 2] = b;
+          out[o + 3] = a * 255;
+        }
+      }
+    }
+  }
+}
+
 /** albedo × (ambient + light) + emissive. */
 function composite(F: Frame): void {
   const { out, V, vw, s, RW, RH } = F;
@@ -1191,4 +1343,5 @@ export function renderPixelWorld(
   passProps(F);
   passParticles(F);
   composite(F);
+  if (view?.canopy) passCanopy(F);
 }

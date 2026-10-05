@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
-import { blocked, doorShut, isWalkable, lineOfSight } from '../src/arpg/grid.js';
+import { doorShut, isWalkable, lineOfSight, solid } from '../src/arpg/grid.js';
 import { bal, dummy, registry, run, STEP } from './fixtures/arena.js';
 import { floorWorld, twoRooms } from './fixtures/flow-map.js';
 
@@ -27,10 +27,10 @@ describe('doorShut', () => {
 
   it('a held door blocks movement and sight as a closed one does', () => {
     const map = twoRooms('combat');
-    expect([blocked(map, 9, 6), isWalkable(map, 9.5, 6.5)]).toEqual([false, true]);
+    expect([solid(map, 9, 6), isWalkable(map, 9.5, 6.5)]).toEqual([false, true]);
     expect(lineOfSight(map, { x: 4.5, y: 6 }, { x: 19, y: 6 })).toBe(true);
     map.doors[0].held = true;
-    expect([blocked(map, 9, 6), isWalkable(map, 9.5, 6.5)]).toEqual([true, false]);
+    expect([solid(map, 9, 6), isWalkable(map, 9.5, 6.5)]).toEqual([true, false]);
     expect(lineOfSight(map, { x: 4.5, y: 6 }, { x: 19, y: 6 })).toBe(false);
   });
 
@@ -63,6 +63,6 @@ describe('doorShut', () => {
       false,
       true,
     ]);
-    expect(blocked(w.map, 11, 6)).toBe(true);
+    expect(solid(w.map, 11, 6)).toBe(true);
   });
 });

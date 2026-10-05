@@ -67,14 +67,24 @@ test.describe('Delve loot loop', () => {
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
     page,
   }) => {
-    // Only elites and bosses drop gear: seed 39's first floor, played by the bot to the exit,
-    // drops gear at any frame rate (pinned in the engine's delve-banking test).
-    await seedProfile(page, 39);
+    // A floor and a half on a loaded machine.
+    test.setTimeout(360_000);
+    // Only elites and bosses drop gear: seed 11's first floor, played by the bot to the exit,
+    // drops gear at every steady step (pinned in the engine's delve-banking test).
+    await seedProfile(page, 11);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
 
     // Inspected from the right column's "Found this floor" log: the pause opens on Loadout.
     const loot = page.getByTestId('pickup-feed').getByTestId('loot-item').first();
+    // A loaded browser's uneven frames can still play the floor out without gear: then the bot
+    // goes a depth down and looks again.
+    const door = page.getByTestId('door-choice');
+    await expect(loot.or(door)).toBeVisible({ timeout: FLOOR_CLEAR });
+    if (!(await loot.isVisible())) {
+      await door.getByTestId('door-list').locator('[data-door]').first().click();
+      await expect(door).toBeHidden();
+    }
     await expect(loot).toBeVisible({ timeout: FLOOR_CLEAR });
     const name = (await loot.locator('span.truncate').textContent())!;
     await loot.click();

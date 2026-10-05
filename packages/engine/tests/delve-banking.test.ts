@@ -303,7 +303,7 @@ describe('the first boss, and when pickups bank', () => {
 
   it('when pickups bank never changes the outcome: every frame or only at the end, at 60 and 20 frames a second', () => {
     for (const [seed, depth] of [
-      [61, 1], // taken to the exit, with two pieces of elites' gear
+      [64, 1], // taken to the exit, with two pieces of elites' gear
       [3, 5], // the first boss, which kills the starter hero: the floor's haul is lost
     ])
       for (const fps of [60, 20]) {
@@ -314,13 +314,19 @@ describe('the first boss, and when pickups bank', () => {
         if (phase === 'dead') expect(lost!.scrap).toBeGreaterThan(0);
         else expect([banked.scrap, once.bag.length]).toEqual([expect.any(Number), 2]);
       }
-  });
+  }, 20_000); // eight bot-played floors: slow under the whole suite's load
 });
 
 describe('the E2E dives', () => {
-  it("seed 39's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
-    const p = startDive(registry, createDelveProfile(registry, 39, { primary: 'fire' }), 1);
-    for (const fps of [60, 45, 30, 20]) {
+  // The E2E's hero is armed (its seedProfile), and its sim runs at 2× (alloy:delve:timescale),
+  // a step a frame: a browser at 60 to 20 frames a second steps 1/30 to 1/10 s.
+  it("seed 11's first floor, played by the bot with the E2E's armed hero, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
+    const p = startDive(
+      registry,
+      armed(registry, createDelveProfile(registry, 11, { primary: 'fire' })),
+      1,
+    );
+    for (const fps of [60, 30, 20, 15, 10]) {
       const world = beginFloor(registry, p);
       const items: unknown[] = [];
       for (let i = 0, q = p; i < fps * 120 && !world.heroDead && !world.exited; i++) {

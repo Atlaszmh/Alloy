@@ -12,7 +12,7 @@ import type {
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
-import type { Buff, FloorLayout, Rect } from '../types/floor-map.js';
+import { CELL, type Buff, type FloorLayout, type FloorMap, type Rect } from '../types/floor-map.js';
 import type { TutorialState } from '../types/tutorial.js';
 import type { RuneRef } from '../types/rune.js';
 import {
@@ -25,9 +25,12 @@ import {
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
+import { clearanceOf } from './flow.js';
 import { dist } from './geometry.js';
-import { openRoom, snapToWalkable } from './grid.js';
+import { bindTerrain, openRoom, snapToWalkable, solid } from './grid.js';
+import { footprintsOf } from './layout/furnish.js';
 import { floorPacks, planFloor } from './layout/generate.js';
+import { placeObjects } from './objects-base.js';
 import { seedSetDrops, tutorialFloorMap } from './tutorial-floor.js';
 import { emptyHaul } from '../loot/materials.js';
 
@@ -88,6 +91,37 @@ export function emptyStatus(): StatusState {
   };
 }
 
+/**
+ * Where a foe spawns (see the room objects spec's "Spawns"): (x, y) when its cell is `ok`,
+ * else the centre of the nearest `ok` cell, ring by ring as `snapToWalkable` looks; null
+ * when none is.
+ */
+function spawnAt(
+  map: FloorMap,
+  x: number,
+  y: number,
+  ok: (cx: number, cy: number) => boolean,
+): Vec | null {
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  if (ok(cx, cy)) return { x, y };
+  for (let ring = 1; ring < Math.max(map.width, map.height); ring++) {
+    let best: Vec | null = null;
+    let bestD = Infinity;
+    for (let j = cy - ring; j <= cy + ring; j++)
+      for (let i = cx - ring; i <= cx + ring; i++) {
+        if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== ring || !ok(i, j)) continue;
+        const d = (i + 0.5 - x) ** 2 + (j + 0.5 - y) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = { x: i + 0.5, y: j + 0.5 };
+        }
+      }
+    if (best) return best;
+  }
+  return null;
+}
+
 export function isBossFloor(registry: DataRegistry, depth: number): boolean {
   return depth % registry.getDelveBalance().dive.bossEvery === 0;
 }
@@ -97,6 +131,25 @@ export function biomeCycle(registry: DataRegistry, depth: number): number {
   const every = registry.getDelveBalance().dive.bossEvery;
   const biomes = registry.getDelveData().biomes.length;
   return Math.floor((Math.max(1, depth) - 1) / (every * biomes));
+}
+
+/**
+ * A depth's growth for foes (see the room objects spec): `growth.monsterHp`
+ * and `monsterDmg` to the power depth − 1, and `monster.earlyRamp`. A foe's
+ * life is `baseHp × hp × def.hp × ramp`; a crumbling structure's life scales
+ * by `hp × ramp` and a hazard's burst by `dmg × ramp`.
+ */
+export function depthGrowth(
+  registry: DataRegistry,
+  depth: number,
+): { hp: number; dmg: number; ramp: number } {
+  const bal = registry.getDelveBalance();
+  const d = Math.max(0, depth - 1);
+  return {
+    hp: Math.pow(bal.growth.monsterHp, d),
+    dmg: Math.pow(bal.growth.monsterDmg, d),
+    ramp: bal.monster.earlyRamp[depth - 1] ?? 1,
+  };
 }
 
 interface MonsterSpawn {
@@ -125,12 +178,11 @@ export function createMonsterEntity(
 ): MonsterEntity {
   const bal = registry.getDelveBalance();
   const m = bal.monster;
-  const d = Math.max(0, spawn.depth - 1);
-  const ramp = m.earlyRamp[spawn.depth - 1] ?? 1;
+  const growth = depthGrowth(registry, spawn.depth);
   const def = spawn.def;
 
-  let hp = m.baseHp * Math.pow(bal.growth.monsterHp, d) * def.hp * ramp;
-  let damage = m.baseDmg * Math.pow(bal.growth.monsterDmg, d) * def.dmg * ramp;
+  let hp = m.baseHp * growth.hp * def.hp * growth.ramp;
+  let damage = m.baseDmg * growth.dmg * def.dmg * growth.ramp;
   let interval = def.interval;
   let speed = m.speed * (def.speed ?? 1);
   let radius = m.radius * (def.size ?? 1);
@@ -186,6 +238,10 @@ export function createMonsterEntity(
     roomId: spawn.roomId ?? null,
     farSince: null,
     goingHome: false,
+    job: null,
+    goal: null,
+    search: null,
+    ambush: false,
     x: spawn.x,
     y: spawn.y,
     radius,
@@ -205,6 +261,7 @@ export function createMonsterEntity(
     chargeHit: false,
     kbx: 0,
     kby: 0,
+    kbHit: 0,
     status: emptyStatus(),
     lastHitAt: -1,
     nextSpecialAt: 0,
@@ -423,6 +480,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
   const map = built
     ? tutorialFloorMap(registry, built, opts.depth)
     : (plan?.map ?? openRoom(bal.arena.width, bal.arena.height));
+  // Its terrain's numbers from the start: the bot may look before the first `terrainTick`.
+  if (!map.open) bindTerrain(map, bal.terrain);
   for (const room of map.rooms)
     if (room.interactable && opts.used?.includes(room.interactable.id))
       room.interactable.used = true;
@@ -438,6 +497,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     lootRng: rng.fork(`loot:${opts.loot.nextUid}`),
     runeRng: rng.fork(`runes:${opts.loot.nextUid}`),
     materialRng: rng.fork(`materials:${opts.loot.nextUid}`),
+    propRng: rng.fork(`props:${opts.loot.nextUid}`),
     depth: opts.depth,
     biomeId: biome.id,
     element: biome.mana,
@@ -449,7 +509,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     fogVersion: 0,
     fogAt: 0,
     exitHinted: false,
-    flow: { small: null, large: null, nextAt: 0 },
+    flow: { small: null, large: null, huge: null, nextAt: 0 },
     sealing: null,
     channel: null,
     exited: false,
@@ -465,6 +525,9 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     projectiles: [],
     zones: [],
     drops: [],
+    props: [],
+    hazards: [],
+    director: { nextAt: 0 },
     nextId: 1,
     loot: {
       ...opts.loot,
@@ -528,32 +591,86 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     return m;
   };
 
-  /** A pack 3 cells inside `area`, away from the hero and the other `centers`; an elite leads it at `eliteChance` (always when `elite`). */
+  // A generated floor's props' and hazards' footprints: no foe spawns on one.
+  const taken = plan ? footprintsOf(registry, map, plan.furnishing) : new Set<number>();
+  /**
+   * A pack 3 cells inside `area`, away from the hero and the other `centers`; an elite leads it
+   * at `eliteChance` (always when `elite`). On a generated floor each foe spawns on a cell in an
+   * open 3 × 3 of its room outside every footprint, and in a room with foliage a whole 3 × 3 of
+   * it deep (see the room objects spec's "Spawns") the pack hides there, asleep, at
+   * `ai.pack.ambush.ambushChance`.
+   */
   const pack = (
     area: Rect,
     centers: Vec[],
     packId: number,
     roomId: number | null,
     elite = false,
+    used = new Set<number>(),
   ) => {
+    const inArea = (i: number, j: number) =>
+      i >= area.x && j >= area.y && i < area.x + area.w && j < area.y + area.h;
+    const free = (i: number, j: number) => !solid(map, i, j) && !taken.has(j * width + i);
+    const block = (i: number, j: number, cell: (x: number, y: number) => boolean) => {
+      for (let y = j; y < j + 3; y++) for (let x = i; x < i + 3; x++) if (!cell(x, y)) return false;
+      return true;
+    };
+    const open = (i: number, j: number) => {
+      if (!inArea(i, j) || !free(i, j)) return false;
+      for (let b = j - 2; b <= j; b++)
+        for (let a = i - 2; a <= i; a++) if (block(a, b, free)) return true;
+      return false;
+    };
+    const leafy = (x: number, y: number) =>
+      map.cells[y * width + x] === CELL.foliage && !taken.has(y * width + x);
+    const hidden = (i: number, j: number) => inArea(i, j) && block(i - 1, j - 1, leafy);
+    const hides: Vec[] = [];
+    if (plan)
+      for (let j = area.y; j < area.y + area.h; j++)
+        for (let i = area.x; i < area.x + area.w; i++)
+          if (hidden(i, j)) hides.push({ x: i + 0.5, y: j + 0.5 });
+    const { on, ambushChance } = bal.ai.pack.ambush;
+    const ambush = hides.length > 0 && on && spawnRng.next() < ambushChance;
     let cx = 0;
     let cy = 0;
-    for (let attempt = 0; attempt < 40; attempt++) {
-      cx = area.x + 3 + spawnRng.next() * (area.w - 6);
-      cy = area.y + 3 + spawnRng.next() * (area.h - 6);
-      const farFromHero = dist(cx, cy, heroX, heroY) >= bal.layout.minPackDistance;
-      const farFromPacks = centers.every((c) => dist(c.x, c.y, cx, cy) >= 5.5);
-      if (farFromHero && farFromPacks) break;
-    }
+    if (ambush) ({ x: cx, y: cy } = hides[spawnRng.nextInt(0, hides.length - 1)]);
+    else
+      for (let attempt = 0; attempt < 40; attempt++) {
+        cx = area.x + 3 + spawnRng.next() * (area.w - 6);
+        cy = area.y + 3 + spawnRng.next() * (area.h - 6);
+        const farFromHero = dist(cx, cy, heroX, heroY) >= bal.layout.minPackDistance;
+        const farFromPacks = centers.every((c) => dist(c.x, c.y, cx, cy) >= 5.5);
+        if (farFromHero && farFromPacks) break;
+      }
     centers.push({ x: cx, y: cy });
     const size = spawnRng.nextInt(bal.dive.packSize[0], bal.dive.packSize[1]);
     const elitePack = spawnRng.next() < eliteChance || elite;
+    const mine = new Set<number>();
     for (let i = 0; i < size; i++) {
       const angle = (Math.PI * 2 * i) / size + spawnRng.next() * 0.6;
       const r = i === 0 && elitePack ? 0 : bal.arena.packSpacing * (0.7 + spawnRng.next() * 0.6);
       const def = biome.monsters[spawnRng.nextInt(0, biome.monsters.length - 1)];
-      const at = snapToWalkable(map, cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
-      spawn(def, i === 0 && elitePack ? 'elite' : 'normal', at.x, at.y, packId, roomId);
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      const m = spawn(def, i === 0 && elitePack ? 'elite' : 'normal', x, y, packId, roomId);
+      // A foe wider than a cell stands at the centre of an open 3 × 3, never wedged in cover.
+      const large = clearanceOf(m) !== 'small';
+      const stand = (a: number, b: number) => open(a, b) && (!large || block(a - 1, b - 1, free));
+      // Hidden foes spread over the patch's cells, one a cell while they last, then share their
+      // own pack's (never another's).
+      const at = !plan
+        ? snapToWalkable(map, x, y)
+        : ambush
+          ? (spawnAt(map, x, y, (a, b) => hidden(a, b) && !used.has(b * width + a)) ??
+            spawnAt(map, x, y, (a, b) => hidden(a, b) && mine.has(b * width + a)) ??
+            spawnAt(map, x, y, hidden)!)
+          : (spawnAt(map, x, y, stand) ?? snapToWalkable(map, x, y));
+      if (plan && large)
+        Object.assign(at, { x: Math.floor(at.x) + 0.5, y: Math.floor(at.y) + 0.5 });
+      used.add(Math.floor(at.y) * width + Math.floor(at.x));
+      mine.add(Math.floor(at.y) * width + Math.floor(at.x));
+      Object.assign(m, { x: at.x, y: at.y });
+      m.ambush = ambush;
     }
   };
 
@@ -603,9 +720,13 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
         world.bossId = spawn(biome.boss, 'boss', at.x, at.y, 0, room.id).id;
       }
       const centers: Vec[] = [];
+      // The cells its foes stand on, shared by the room's packs: two never hide on the same.
+      const used = new Set<number>();
       for (let p = 0; p < plan.packs[room.id]; p++)
-        pack(room.rect, centers, ++packId, room.id, room.kind === 'den');
+        pack(room.rect, centers, ++packId, room.id, room.kind === 'den', used);
     }
+    // Its furnishing's props and hazards, their ids after the foes'.
+    placeObjects(registry, world, plan.furnishing);
     world.totalMonsters = world.monsters.length;
     return world;
   }

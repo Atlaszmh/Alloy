@@ -565,54 +565,14 @@ export const ShrinesDataSchema = z
     'a refill lasts the floor',
   );
 
-/** A room template: a mask is `h` rows of `w` cells, each '.', '#' or '%'. */
+/** A room template: its floor's size in cells. */
 const RoomTemplateSchema = z
   .object({
     id: z.string().min(1),
     w: z.number().int().min(4),
     h: z.number().int().min(4),
-    masks: z.array(z.array(z.string())),
   })
-  .refine(
-    (t) =>
-      t.masks.every(
-        (m) => m.length === t.h && m.every((row) => row.length === t.w && /^[.#%]+$/.test(row)),
-      ),
-    'a mask is h rows of w cells',
-  )
-  .refine(
-    (t) => t.masks.every((m) => wideMask(m, t.w, t.h)),
-    'a mask keeps 3 open cells to each wall and between its obstacles',
-  );
-
-/**
- * Every passage through a mask 3 cells wide (a large foe's 3×3, see `arpg/flow.ts`): no
- * blocked cell within 2 of the room's edge, and blocked cells of different 8-connected
- * obstacles at least 4 apart (Chebyshev).
- */
-function wideMask(rows: string[], w: number, h: number): boolean {
-  const cells: { x: number; y: number }[] = [];
-  rows.forEach((row, y) => [...row].forEach((ch, x) => ch !== '.' && cells.push({ x, y })));
-  if (cells.some((c) => c.x < 3 || c.y < 3 || c.x > w - 4 || c.y > h - 4)) return false;
-  const near = (a: { x: number; y: number }, b: { x: number; y: number }, d: number) =>
-    Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= d;
-  // Label the obstacles by flood fill over 8-neighbours.
-  const label = cells.map(() => -1);
-  cells.forEach((_, s) => {
-    if (label[s] !== -1) return;
-    label[s] = s;
-    for (const queue = [s]; queue.length > 0; ) {
-      const a = queue.pop()!;
-      cells.forEach((c, b) => {
-        if (label[b] === -1 && near(cells[a], c, 1)) {
-          label[b] = s;
-          queue.push(b);
-        }
-      });
-    }
-  });
-  return cells.every((a, i) => cells.every((b, j) => label[i] === label[j] || !near(a, b, 3)));
-}
+  .strict();
 
 /** `layouts.json` (the generator checks the sizes against `delve.layout`'s coarse grid). */
 export const LayoutsDataSchema = z.object({
@@ -620,6 +580,10 @@ export const LayoutsDataSchema = z.object({
     .record(z.string(), z.array(RoomTemplateSchema).min(1))
     .refine((r) => 'default' in r, 'a default room list'),
   boss: RoomTemplateSchema,
+  arena: z
+    .array(RoomTemplateSchema)
+    .min(1)
+    .refine((ts) => ts.every((t) => t.w >= t.h), 'an arena is drawn wide'),
   props: z.object({
     chest: z.number().positive(),
     shrine: z.number().positive(),
@@ -627,6 +591,11 @@ export const LayoutsDataSchema = z.object({
     exit_gate: z.number().positive(),
   }),
 });
+
+/** A room kind's furnishing: pieces per 100 floor cells, hazards and crumbling cover allowed. */
+const FurnishBudgetSchema = z
+  .object({ pieces: z.number().min(0), hazards: z.boolean(), crumbling: z.boolean() })
+  .strict();
 
 /** `balance.json → delve.layout`. */
 export const LayoutBalanceSchema = z
@@ -667,21 +636,107 @@ export const LayoutBalanceSchema = z
       ),
     alcoveMax: z.number().int().min(0),
     deadEndWeight: z.number().min(0),
-    minCombatRooms: z.number().int().min(0),
+    minCombatRooms: z.number().int().min(1),
     vaultGuardChance: z.number().min(0).max(1),
-    pillarChance: z.number().min(0).max(1),
+    arenaPacks: z.number().int().min(0),
     minPackDistance: z.number().positive(),
     packsPerRoom: z.number().int().positive(),
     generatedDives: z.boolean(),
+    furnish: z
+      .object({
+        start: FurnishBudgetSchema,
+        combat: FurnishBudgetSchema,
+        arena: FurnishBudgetSchema,
+        den: FurnishBudgetSchema,
+        vault: FurnishBudgetSchema,
+        sanctum: FurnishBudgetSchema,
+        alcove: FurnishBudgetSchema,
+        exit: FurnishBudgetSchema,
+        boss: FurnishBudgetSchema,
+      })
+      .strict()
+      .refine(
+        (f) => !f.start.hazards && !f.boss.hazards && !f.boss.crumbling,
+        'no hazards in the start or boss rooms, no crumbling cover in a boss room',
+      ),
   })
-  .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid');
+  .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid')
+  .refine(
+    (l) => l.coarseCell * Math.max(l.coarseCols, l.coarseRows) <= 96,
+    'maps are at most 96 × 96 (see the room objects spec)',
+  );
+
+/** `balance.json → delve.ai.pack` (see the room objects spec's "Smarter packs"). */
+export const PackAiBalanceSchema = z
+  .object({
+    directorEvery: z.number().positive(),
+    flowRadius: z.number().int().positive(),
+    stuckTime: z.number().positive(),
+    ring: z.object({ on: z.boolean() }).strict(),
+    flank: z
+      .object({
+        on: z.boolean(),
+        kiteTime: z.number().min(0),
+        leadTime: z.number().min(0),
+        flankShare: z
+          .object({
+            fromDepth: z.number().int().min(1),
+            base: z.number().min(0).max(1),
+            perDepth: z.number().min(0),
+            max: z.number().min(0).max(1),
+          })
+          .strict(),
+      })
+      .strict(),
+    cover: z
+      .object({
+        on: z.boolean(),
+        coverSearch: z.number().int().positive(),
+        coverFlee: z.number().min(0),
+      })
+      .strict(),
+    charge: z
+      .object({ on: z.boolean(), chargeStun: z.number().min(0), chargeSlam: z.number().min(0) })
+      .strict(),
+    ambush: z
+      .object({
+        on: z.boolean(),
+        ambushChance: z.number().min(0).max(1),
+        ambushWake: z.number().positive(),
+      })
+      .strict(),
+  })
+  .strict();
+
+/** `balance.json → delve.terrain` (see the room objects spec's "Objects in a fight"). */
+export const TerrainBalanceSchema = z
+  .object({
+    slowMult: z.number().positive().max(1),
+    bossSlowMult: z.number().positive().max(1),
+    foliageSight: z.number().positive(),
+    foliageDepth: z.number().min(0),
+    searchTime: z.number().min(0),
+    leashMargin: z.number().min(0),
+    structureLife: z.number().positive(),
+    slamDamage: z.number().min(0),
+    slamStagger: z.number().min(0),
+    propLife: z.number().positive(),
+    propDrops: z
+      .object({ chance: z.number().min(0).max(1), material: z.number().min(0).max(1) })
+      .strict(),
+    hazardDamage: z.number().min(0),
+    hazardFoeMult: z.number().min(0),
+    fuse: z.number().min(0),
+    recharge: z.number().min(0),
+    hazardOffElement: z.number().min(0).max(1),
+  })
+  .strict();
 
 /** `balance.json → delve.ai`. */
 export const AiBalanceSchema = z.object({
   flowEvery: z.number().positive(),
   flowRadius: z.number().int().positive(),
   directRange: z.number().min(0),
-  leashRadius: z.number().positive(),
   leashSeconds: z.number().min(0),
   sealGrace: z.number().min(0),
   roomVacuum: z.boolean(),
@@ -690,6 +745,7 @@ export const AiBalanceSchema = z.object({
   exitHintSeconds: z.number().min(0),
   interactRadius: z.number().positive(),
   shrineChannel: z.number().min(0),
+  pack: PackAiBalanceSchema,
 });
 
 /** A count and a power (`split`, `extraShots`). */
@@ -1317,6 +1373,7 @@ const DelveBalanceSchema = z.object({
   quests: QuestsBalanceSchema,
   layout: LayoutBalanceSchema,
   ai: AiBalanceSchema,
+  terrain: TerrainBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
     // The open room's grid: whole cells.

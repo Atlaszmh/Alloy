@@ -14,7 +14,7 @@ const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 describe('chains on the weapon (save v6)', () => {
   it("a new profile's common sword carries its base moveset in the weapon's element: the basic chain", () => {
     const p = createDelveProfile(registry, 1);
-    expect(p.version).toBe(11);
+    expect(p.version).toBe(12);
     const sword = p.equipped.weapon!;
     expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'fire'));
     expect(sword.moveset!.slots).toEqual({ basic: 3 });

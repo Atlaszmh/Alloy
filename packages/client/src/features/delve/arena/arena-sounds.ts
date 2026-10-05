@@ -58,6 +58,22 @@ export function playArenaEvents(events: readonly ArpgEvent[]): void {
         playSound('synergyActivate');
         vibrate('success');
         break;
+      // The room objects (see the room objects spec), on the arena's cues.
+      case 'hazardPrime':
+        playSound('orbSelect');
+        break;
+      case 'hazardBurst':
+      case 'crumble':
+        playSound('forgeSlam');
+        vibrate('medium');
+        break;
+      case 'propBreak':
+        playSound('gemScatter');
+        break;
+      case 'wallSlam':
+      case 'chargeStun':
+        playSound('combineFail');
+        break;
       default:
         break;
     }

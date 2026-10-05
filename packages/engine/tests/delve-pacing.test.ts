@@ -54,11 +54,14 @@ describe('Delve ARPG pacing (autopilot)', () => {
     expect(end(DIVES)).toBeGreaterThanOrEqual(end(1) + 5);
   });
 
+  // At least three seeds in four (the robust rails' form): an essence is a boss's roll, and on
+  // furnished floors one seed may go 12 dives without one however deep it gets (seed 1 reaches
+  // depth 52 without; over 16 seeds 15 own a legendary at dive 12).
   it('legendaries arrive, forged from essences, without completing the codex early', () => {
-    for (const { profile } of fireResults) {
-      const gear = [...GEAR_SLOTS.map((s) => profile.equipped[s]), ...profile.bag];
-      expect(gear.some((i) => i?.rarity === 'legendary')).toBe(true);
-    }
+    const withLegendary = fireResults.filter(({ profile }) =>
+      [...GEAR_SLOTS.map((s) => profile.equipped[s]), ...profile.bag].some((i) => i?.rarity === 'legendary'),
+    );
+    expect(withLegendary.length).toBeGreaterThanOrEqual(3);
     const owned = avg(runs.map((r) => r[DIVES - 1].legendariesOwned));
     expect(owned).toBeGreaterThanOrEqual(1);
     expect(owned).toBeLessThan(registry.getDelveData().legendaries.length);
@@ -72,13 +75,14 @@ describe('Delve ARPG pacing (autopilot)', () => {
     }
   });
 
+  // The room objects spec's bands (bigger, furnished rooms): a clear 40–75 s a floor, a rush 25–55 s.
   it('floors are a snackable length: a full clear takes longer than a rush to the exit', () => {
     const clear = avg(runs.flatMap(perFloor));
     const rush = avg(rushRuns.flatMap(perFloor));
-    expect(clear).toBeGreaterThan(30);
-    expect(clear).toBeLessThan(60);
-    expect(rush).toBeGreaterThan(20);
-    expect(rush).toBeLessThan(45);
+    expect(clear).toBeGreaterThan(40);
+    expect(clear).toBeLessThan(75);
+    expect(rush).toBeGreaterThan(25);
+    expect(rush).toBeLessThan(55);
     expect(clear).toBeGreaterThan(1.25 * rush);
   });
 
@@ -103,13 +107,15 @@ describe('Delve crafting pacing targets (economySim)', () => {
       expect(first, `seed ${SEEDS[i]}`).toEqual({ opened: true, kitAlone: false, withDive1: true, forged: true });
   });
 
+  // Re-banded (06-bot-pacing.md): on the room objects' floors a seed's first epic spreads about
+  // ±1.6 dives round a mean of 4.8 (16 seeds), so four seeds' mean is held to 5.5, each still by 6.
   it('a first epic (or a legendary) is forged by about dive 5', () => {
     const first = economies.map(firstEpicDive);
     for (const [i, dive] of first.entries()) {
       expect(dive, `seed ${SEEDS[i]}`).toBeGreaterThan(0);
       expect(dive, `seed ${SEEDS[i]}`).toBeLessThanOrEqual(6);
     }
-    expect(avg(first)).toBeLessThanOrEqual(5);
+    expect(avg(first)).toBeLessThanOrEqual(5.5);
   });
 
   // The tutorial spec's target: no essence comes before drops.essenceMinDepth (20).

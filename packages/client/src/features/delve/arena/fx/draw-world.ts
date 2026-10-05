@@ -223,6 +223,25 @@ export function drawTelegraphs(ground: Graphics, w: ArpgWorld, time: number): vo
 }
 
 /**
+ * The room's hazards (see the room objects spec): a ready one's glow round its
+ * body; a primed one's telegraph, its burst's reach filling as its fuse (`fuse`,
+ * the balance's) burns; a dormant one nothing (its sprite shows it spent).
+ */
+export function drawHazards(ground: Graphics, w: ArpgWorld, time: number, fuse: number): void {
+  for (const h of w.hazards) {
+    const color = MANA_HEX[h.element];
+    if (h.state === 'ready')
+      manaRing(ground, h.x, h.y, h.radius + PX * 2, color, time, { alpha: 0.5, gaps: 3, spin: 1 });
+    else if (h.state === 'primed') {
+      const p = progress(w.t, h.until - fuse, h.until);
+      manaDust(ground, h.x, h.y, h.burst * p, color, time, 0.28, 0.9, h.id);
+      manaRing(ground, h.x, h.y, h.burst, color, time, { alpha: 0.6 + 0.4 * p, thickness: 2 });
+      manaRing(ground, h.x, h.y, Math.max(PX, h.burst * p), 0xffffff, time, { alpha: 0.8 });
+    }
+  }
+}
+
+/**
  * The Defensive move whose effect is up (`h.defend`, at its stage), even while
  * the chain's next move winds up, else null.
  */

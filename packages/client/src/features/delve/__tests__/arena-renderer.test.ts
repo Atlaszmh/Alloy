@@ -9,6 +9,7 @@ import {
   type Sprite,
 } from 'pixi.js';
 import {
+  CELL,
   computeHeroStats,
   createSandboxWorld,
   defaultChains,
@@ -28,6 +29,7 @@ import {
   drawHeldGate,
   dropPop,
   edgeArrow,
+  fogKey,
   holdPing,
   paintFog,
   pickupColor,
@@ -41,10 +43,12 @@ import { attachKeyboard, createArenaInput } from '../arena/input';
 import { RARITY_TEXT } from '../format';
 import { DUST_COLOR, METAL_COLOR, PATTERN_COLOR } from '../materials/material-style';
 import { runeHex } from '../arena/fx/runes';
+import type { ManaFx } from '../arena/fx/mana-fx';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
 import { useUIStore } from '@/stores/uiStore';
 import { ringMap } from './hand-map';
+import { RoomSprites } from '../arena/room-sprites';
 
 // The props' art: two frames each (the atlas isn't loaded under jsdom; nothing else has art here).
 vi.mock('../arena/sprites', async (importOriginal) => {
@@ -586,6 +590,25 @@ describe("a generated floor's fog", { timeout: 20000 }, () => {
     expect(at(8, 8)).toBe(0);
   });
 
+  it('repaints when the map changes under a still fog: crumbled cover shows its own fog', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    const c = 6 * 64 + 10;
+    w.map.cells[c] = CELL.crumbling;
+    w.fog[c] = 0; // solid: it takes the clearest fog of the floor round it
+    show(r, w);
+    const fog = (r as unknown as { fog: { pixels: Uint8Array } }).fog;
+    const at = (x: number, y: number) => fog.pixels[((y + 3) * 70 + x + 3) * 4 + 3];
+    expect(at(10, 6)).toBe(0);
+    w.map.cells[c] = CELL.slow; // crumbled to rubble: floor, with its own fog
+    r.update(0.1);
+    expect(at(10, 6)).toBe(0); // the same fog and map: not repainted
+    w.map.version++;
+    r.update(0.1);
+    expect(at(10, 6)).toBe(255);
+    expect(fogKey(w)).toBe(`${w.fogVersion}:1`);
+  });
+
   it('shows a foe, and the numbers of its hits, only while the hero sees it', () => {
     const { r } = stage();
     const w = onMap(ringMap());
@@ -742,5 +765,120 @@ describe('the guided start on the floor', { timeout: 20000 }, () => {
     w.tutorial = null;
     r.update(0.1);
     expect([drawn(gfx.markerGfx), drawn(gfx.arrowGfx)]).toEqual([false, false]);
+  });
+});
+
+describe("the room objects' moments on the floor", { timeout: 20000 }, () => {
+  it('play only where the hero sees them (a crumble at any of its cells), and shake the screen', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const view = r as unknown as { fx: ManaFx; shake: number };
+    const infuse = vi.spyOn(view.fx, 'infuse');
+    const disperse = vi.spyOn(view.fx, 'disperse');
+    const burst: ArpgEvent = {
+      kind: 'hazardBurst',
+      id: 9,
+      hazard: 'brazier',
+      element: 'fire',
+      x: 10.5,
+      y: 8.5,
+      radius: 2.5,
+    };
+    w.fog[8 * 64 + 10] = 1; // seen once, out of sight now
+    r.handleEvents([burst]);
+    expect([infuse.mock.calls.length, view.shake]).toEqual([0, 0]);
+    w.fog[8 * 64 + 10] = 2;
+    r.handleEvents([burst]);
+    expect(infuse).toHaveBeenCalledTimes(1);
+    expect(view.shake).toBeGreaterThan(0);
+    const cells = [
+      { x: 10, y: 8 },
+      { x: 50, y: 50 },
+    ];
+    w.fog.fill(0);
+    r.handleEvents([{ kind: 'crumble', structure: 0, cells }]);
+    expect(disperse).not.toHaveBeenCalled();
+    w.fog[8 * 64 + 10] = 2;
+    r.handleEvents([{ kind: 'crumble', structure: 0, cells }]);
+    expect(disperse).toHaveBeenCalledTimes(2);
+  });
+
+  it("draws a hazard's glow and telegraph only while the hero sees it", () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const ground = () =>
+      (r as unknown as { groundFx: { g: Graphics } }).groundFx.g.context.instructions.length;
+    const none = ground();
+    w.hazards.push({
+      type: 'hazard',
+      id: 42,
+      kind: 'brazier',
+      element: 'fire',
+      x: 6.5,
+      y: 10.5,
+      radius: 0.4,
+      burst: 2.5,
+      state: 'primed',
+      until: 0.3,
+    });
+    r.update(0);
+    expect(ground()).toBeGreaterThan(none);
+    w.fog[10 * 64 + 6] = 1; // seen once, out of sight now
+    r.update(0);
+    expect(ground()).toBe(none);
+  });
+});
+
+describe("the room objects' sprites (C2's RoomSprites)", { timeout: 20000 }, () => {
+  it('are loaded with each floor and updated every frame', () => {
+    const load = vi.spyOn(RoomSprites.prototype, 'load');
+    const update = vi.spyOn(RoomSprites.prototype, 'update');
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w); // loadFloor draws a still frame, then show draws one
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith(w);
+    expect(update).toHaveBeenCalledTimes(2);
+    r.update(0.1);
+    expect(update).toHaveBeenLastCalledWith(w);
+    expect(update).toHaveBeenCalledTimes(3);
+    load.mockRestore();
+    update.mockRestore();
+  });
+});
+
+describe("the foliage's canopy", () => {
+  it('is in the scene above the floor and over the creatures', () => {
+    const { r } = stage();
+    const w = onMap(ringMap());
+    show(r, w);
+    const view = r as unknown as {
+      root: Container;
+      pixelFloor: { sprite: Sprite; canopy: Sprite } | null;
+      entities: Container;
+    };
+    const { root, pixelFloor, entities } = view;
+    expect(pixelFloor).not.toBeNull();
+    const floorIndex = root.getChildIndex(pixelFloor!.sprite);
+    const canopyIndex = root.getChildIndex(pixelFloor!.canopy);
+    const entitiesIndex = root.getChildIndex(entities);
+    expect(canopyIndex).toBeGreaterThan(floorIndex);
+    expect(canopyIndex).toBeGreaterThan(entitiesIndex);
+  });
+
+  it('leaves the telegraphs, zones, ground marks and drops above it', () => {
+    const { r } = stage();
+    show(r, onMap(ringMap()));
+    const { root, pixelFloor, groundFx, dropLayer } = r as unknown as {
+      root: Container;
+      pixelFloor: { canopy: Sprite };
+      groundFx: { sprite: Sprite };
+      dropLayer: Container;
+    };
+    const canopy = root.getChildIndex(pixelFloor.canopy);
+    expect(root.getChildIndex(groundFx.sprite)).toBeGreaterThan(canopy);
+    expect(root.getChildIndex(dropLayer)).toBeGreaterThan(canopy);
   });
 });

@@ -18,7 +18,8 @@ export function queueEcho(ctx: SimCtx, echo: Echo): void {
  * It costs nothing, starts no beat, cooldown or recoil, makes no `cast` event,
  * and leaves the hero's facing as it was. A blow's strikes again (a held blow at
  * its stage) from where the hero stands, along its way, at `echo` × its power:
- * no step, mana, chain step or Twin Fang. A `runeFx` marks each that goes off.
+ * no step, mana, chain step or Twin Fang. Neither sets a room object off nor
+ * wears cover (`replay`, `echo`). A `runeFx` marks each that goes off.
  */
 export function echoTick(ctx: SimCtx): void {
   const { world } = ctx;
@@ -30,7 +31,7 @@ export function echoTick(ctx: SimCtx): void {
     if (e.ability) {
       const ab = e.ability;
       const knobs = { ...ab.knobs, echo: 0, guardOnLand: 0 };
-      const copy: ResolvedAbility = { ...ab, power: ab.power * ab.knobs.echo, knobs };
+      const copy: ResolvedAbility = { ...ab, power: ab.power * ab.knobs.echo, knobs, replay: true };
       const facing = h.facing;
       const res = executeForm(ctx, copy, e.aim);
       h.facing = facing;
@@ -47,7 +48,7 @@ export function echoTick(ctx: SimCtx): void {
       // A gear or chain change since it was queued may have taken the blow's Echo.
       if (!blow || blow.knobs.echo <= 0) continue;
       const kind = e.stage === null ? blow.kind : HOLD_STAGE_KINDS[e.stage];
-      landBlow(ctx, blow, kind, e.dir, blow.knobs.echo);
+      landBlow(ctx, blow, kind, e.dir, blow.knobs.echo, { echo: true });
       ctx.events.push({ kind: 'runeFx', effect: 'echo', x: h.x, y: h.y, element: blow.element });
     }
   }

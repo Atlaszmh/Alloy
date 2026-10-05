@@ -27,7 +27,7 @@
     "dive": {
       "bossEvery": 5, "eliteChance": 0.2, "healOnDepthClear": 0.25, "potions": 3, "maxPotions": 5,
       "potionHeal": 0.4, "bossPotionReward": 1, "doorsOffered": 3, "bountyBase": 15, "bountyGrowth": 1.1,
-      "packsBase": 4, "packsPerDepth": 0.2, "packsMax": 8, "packSize": [3, 5],
+      "packsBase": 3, "packsPerDepth": 0.2, "packsMax": 8, "packSize": [3, 5],
       "healthOrbChance": 0.08, "healthOrbHeal": 0.15
     },
     "loot": {
@@ -198,18 +198,43 @@
     },
     "sandbox": { "dummyLifeMult": 50, "heroStart": [13, 26], "dummyDistance": 3, "rowSpacing": 1.2, "clumpRadius": 1.2, "groupSpacing": 3.6, "spawnRing": 6, "edgeMargin": 1.5 },
     "layout": {
-      "coarseCell": 16, "coarseCols": 4, "coarseRows": 4, "rooms": { "base": 5, "perDepth": 0.1, "max": 8 },
+      "coarseCell": 24, "coarseCols": 4, "coarseRows": 4, "rooms": { "base": 5, "perDepth": 0.1, "max": 8 },
       "hallWidth": 3, "minWall": 2, "loops": [1, 2],
       "kindWeights": [
         { "fromDepth": 1, "weights": { "combat": 6, "den": 1, "vault": 1, "sanctum": 1, "alcove": 1 } },
         { "fromDepth": 6, "weights": { "combat": 5, "den": 2, "vault": 1, "sanctum": 1, "alcove": 1 } }
       ],
       "alcoveMax": 1, "deadEndWeight": 3, "minCombatRooms": 2, "vaultGuardChance": 0.35,
-      "pillarChance": 0.3, "minPackDistance": 9, "packsPerRoom": 2, "generatedDives": true
+      "arenaPacks": 1, "minPackDistance": 9, "packsPerRoom": 2, "generatedDives": true,
+      "furnish": {
+        "start": { "pieces": 1, "hazards": false, "crumbling": true },
+        "combat": { "pieces": 2.5, "hazards": true, "crumbling": true },
+        "arena": { "pieces": 3, "hazards": true, "crumbling": true },
+        "den": { "pieces": 3.5, "hazards": true, "crumbling": true },
+        "vault": { "pieces": 1, "hazards": true, "crumbling": true },
+        "sanctum": { "pieces": 1, "hazards": true, "crumbling": true },
+        "alcove": { "pieces": 1, "hazards": true, "crumbling": true },
+        "exit": { "pieces": 1, "hazards": true, "crumbling": true },
+        "boss": { "pieces": 1.5, "hazards": false, "crumbling": false }
+      }
     },
     "ai": {
-      "flowEvery": 0.25, "flowRadius": 30, "directRange": 4, "leashRadius": 12, "leashSeconds": 3, "sealGrace": 0.5,
-      "roomVacuum": true, "sightRadius": 10, "fogEvery": 0.1, "exitHintSeconds": 60, "interactRadius": 1.5, "shrineChannel": 0.5
+      "flowEvery": 0.25, "flowRadius": 30, "directRange": 4, "leashSeconds": 3, "sealGrace": 0.5,
+      "roomVacuum": true, "sightRadius": 10, "fogEvery": 0.1, "exitHintSeconds": 60, "interactRadius": 1.5, "shrineChannel": 0.5,
+      "pack": {
+        "directorEvery": 0.25, "flowRadius": 24, "stuckTime": 1.5,
+        "ring": { "on": true },
+        "flank": { "on": true, "kiteTime": 1.5, "leadTime": 0.8, "flankShare": { "fromDepth": 3, "base": 0.2, "perDepth": 0.02, "max": 0.5 } },
+        "cover": { "on": true, "coverSearch": 6, "coverFlee": 3 },
+        "charge": { "on": true, "chargeStun": 1.2, "chargeSlam": 0.5 },
+        "ambush": { "on": true, "ambushChance": 0.35, "ambushWake": 3 }
+      }
+    },
+    "terrain": {
+      "slowMult": 0.6, "bossSlowMult": 0.8, "foliageSight": 2.5, "foliageDepth": 1.5, "searchTime": 3, "leashMargin": 4,
+      "structureLife": 60, "slamDamage": 0.5, "slamStagger": 0.6,
+      "propLife": 1, "propDrops": { "chance": 0.35, "material": 0.4 },
+      "hazardDamage": 1.5, "hazardFoeMult": 4, "fuse": 0.6, "recharge": 15, "hazardOffElement": 0.2
     },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8 }
   }

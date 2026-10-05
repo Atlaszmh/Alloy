@@ -60,6 +60,142 @@
       "file": "sprites/exit-gate.ts"
     },
     {
+      "id": "urn",
+      "size": 11,
+      "units": 0.7,
+      "subject": "a painted terracotta clay urn with a tan band",
+      "source": "code",
+      "file": "sprites/urn.ts"
+    },
+    {
+      "id": "crate",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a wooden crate with a cross brace and a nailed lid",
+      "source": "code",
+      "file": "sprites/crate.ts"
+    },
+    {
+      "id": "barrel",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a wooden barrel with iron hoops",
+      "source": "code",
+      "file": "sprites/barrel.ts"
+    },
+    {
+      "id": "bone_pile",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a heap of old bones under a skull",
+      "source": "code",
+      "file": "sprites/bone-pile.ts"
+    },
+    {
+      "id": "brazier",
+      "size": 13,
+      "units": 0.8,
+      "subject": "an iron brazier bowl on a tripod, burning with orange flames",
+      "source": "code",
+      "file": "sprites/brazier.ts"
+    },
+    {
+      "id": "frost_crystal",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a cluster of glowing cyan ice crystal spikes on a rock",
+      "source": "code",
+      "file": "sprites/frost-crystal.ts"
+    },
+    {
+      "id": "storm_coil",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a copper tesla coil under a steel sphere, throwing yellow sparks",
+      "source": "code",
+      "file": "sprites/storm-coil.ts"
+    },
+    {
+      "id": "spore_pod",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a spotted green fungal spore pod on a stalk among leaves",
+      "source": "code",
+      "file": "sprites/spore-pod.ts"
+    },
+    {
+      "id": "shadow_brazier",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a dark crypt-stone brazier burning with violet flames",
+      "source": "code",
+      "file": "sprites/shadow-brazier.ts"
+    },
+    {
+      "id": "fire_vent",
+      "size": 13,
+      "units": 0.8,
+      "subject": "a basalt mound with a glowing crack of lava",
+      "source": "code",
+      "file": "sprites/fire-vent.ts"
+    },
+    {
+      "id": "statue",
+      "size": 16,
+      "units": 1,
+      "subject": "a hooded grey stone statue on a plinth",
+      "source": "code",
+      "file": "sprites/statue.ts"
+    },
+    {
+      "id": "boulder",
+      "size": 16,
+      "units": 1,
+      "subject": "a grey boulder with moss on its crown",
+      "source": "code",
+      "file": "sprites/boulder.ts"
+    },
+    {
+      "id": "spire",
+      "size": 16,
+      "units": 1,
+      "subject": "a jagged black obsidian spire with a molten orange seam",
+      "source": "code",
+      "file": "sprites/spire.ts"
+    },
+    {
+      "id": "ice_pillar",
+      "size": 16,
+      "units": 1,
+      "subject": "a frozen ice column with a snowy capital and base",
+      "source": "code",
+      "file": "sprites/ice-pillar.ts"
+    },
+    {
+      "id": "minecart",
+      "size": 16,
+      "units": 1,
+      "subject": "a toppled iron minecart spilling coal",
+      "source": "code",
+      "file": "sprites/minecart.ts"
+    },
+    {
+      "id": "tomb",
+      "size": 16,
+      "units": 1,
+      "subject": "a carved stone crypt headstone with a cross",
+      "source": "code",
+      "file": "sprites/tomb.ts"
+    },
+    {
+      "id": "machinery",
+      "size": 16,
+      "units": 1,
+      "subject": "a riveted steel boiler with a brass gauge and pipe",
+      "source": "code",
+      "file": "sprites/machinery.ts"
+    },
+    {
       "id": "mine_rat",
       "size": 10,
       "subject": "a mangy grey mine rat with glowing orange ember eyes and a soot-black tail",

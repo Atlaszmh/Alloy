@@ -34,6 +34,9 @@ export function twoRooms(
     width,
     height,
     cells,
+    look: new Uint8Array(width * height),
+    structures: [],
+    version: 0,
     rooms: [
       {
         id: 0,
