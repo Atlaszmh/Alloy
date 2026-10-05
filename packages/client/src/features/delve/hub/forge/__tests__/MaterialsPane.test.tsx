@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { emptyMaterials, refineCost, type MaterialsPouch } from '@alloy/engine';
 import { MaterialsPane } from '../MaterialsPane';
 import { getDelveRegistry } from '../../../registry';
+import { affixLabel, DROPS_FROM } from '../materials-text';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
 const registry = getDelveRegistry();
@@ -53,6 +54,11 @@ describe('MaterialsPane', () => {
     });
     pane();
     expect(screen.getByTestId('material-metal-rusty')).toHaveTextContent('Rusty bar ×5');
+    // A row is one line: the name and count, then its Refine, side by side.
+    const rusty = screen.getByTestId('material-metal-rusty');
+    expect(rusty).toHaveClass('items-center');
+    expect(within(rusty).getByTestId('refine-metal-rusty')).toBeInTheDocument();
+    expect(within(rusty).getByText('Rusty bar ×5').parentElement).toBe(rusty);
     expect(screen.getByTestId('refine-metal-rusty')).toHaveTextContent(
       `Refine ${RUSTY.count} → 1 · ${RUSTY.scrap} scrap`,
     );
@@ -101,26 +107,40 @@ describe('MaterialsPane', () => {
       'refine and buy between dives',
     );
     expect(screen.getByTestId('refine-metal-rusty')).toBeDisabled();
-    fireEvent.click(screen.getByTestId('bench-affix-armor'));
     expect(screen.getByTestId('bench-buy')).toBeDisabled();
   });
 
-  it('the shard bench sells a tier I shard of the affix picked', () => {
-    const price = registry.getDelveBalance().crafting.shardBench;
-    held({}, price.scrap, price.dust);
+  it("says where each kind it lacks drops", () => {
+    const depth = registry.getDelveBalance().drops.essenceMinDepth;
+    expect(DROPS_FROM.essence).toContain(`depth ${depth}`);
+    held({});
     pane();
-    expect(screen.getByTestId('materials-shards')).toHaveTextContent('None yet');
-    expect(screen.getByTestId('bench-buy')).toHaveTextContent('Pick an affix');
-    expect(screen.getByTestId('bench-buy')).toBeDisabled();
-    // Two affixes share "Damage": the percent one says so.
-    expect(screen.getByTestId('bench-affix-damagePct')).toHaveTextContent('Damage %');
-    fireEvent.click(screen.getByTestId('bench-affix-armor'));
-    expect(screen.getByTestId('bench-affix-armor')).toHaveAttribute('aria-pressed', 'true');
-    const buy = screen.getByTestId('bench-buy');
-    expect(buy).toHaveTextContent(`Buy Armor I · ${price.scrap} scrap · ${price.dust} Mana Dust`);
-    fireEvent.click(buy);
-    expect(store().profile).toMatchObject({ scrap: 0, manaDust: 0 });
-    expect(screen.getByText('Bought Armor I')).toBeInTheDocument();
-    expect(screen.getByTestId('material-shard-armor-1')).toHaveTextContent('Armor I ×1');
+    expect(screen.getByTestId('materials-bars')).toHaveTextContent(`None yet: ${DROPS_FROM.metal}`);
+    expect(screen.getByTestId('materials-flux')).toHaveTextContent(`None yet: ${DROPS_FROM.flux}`);
+    expect(screen.getByTestId('materials-shards')).toHaveTextContent(`None yet: ${DROPS_FROM.shard}`);
+    expect(screen.getByTestId('materials-essences')).toHaveTextContent(
+      `None yet: ${DROPS_FROM.essence}`,
+    );
+  });
+
+  it('the shard bench steps through every affix and buys a tier I shard of the one shown', () => {
+    store().setProfile({ ...store().profile, scrap: 1000, manaDust: 1000 });
+    pane();
+    const affix = screen.getByTestId('bench-affix');
+    expect(affix).toHaveAttribute('role', 'spinbutton');
+    const first = registry.getDelveData().affixes[0];
+    expect(affix).toHaveAttribute('aria-valuetext', affixLabel(registry, first.stat));
+    fireEvent.keyDown(affix, { key: 'ArrowRight' });
+    const second = registry.getDelveData().affixes[1];
+    expect(affix).toHaveAttribute('aria-valuetext', affixLabel(registry, second.stat));
+    const price = registry.getDelveBalance().crafting.shardBench;
+    expect(screen.getByTestId('bench-buy')).toHaveTextContent(
+      `Buy ${affixLabel(registry, second.stat)} I · ${price.scrap} scrap · ${price.dust} Mana Dust`,
+    );
+    const before = store().profile.materials.shards[second.stat]?.[0] ?? 0;
+    fireEvent.click(screen.getByTestId('bench-buy'));
+    expect(store().profile.materials.shards[second.stat]?.[0]).toBe(before + 1);
+    expect(store().profile).toMatchObject({ scrap: 1000 - price.scrap, manaDust: 1000 - price.dust });
+    expect(screen.queryAllByTestId(/^bench-affix-/)).toHaveLength(0); // the chips are gone
   });
 });

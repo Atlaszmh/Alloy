@@ -51,8 +51,9 @@ export const WAY_TO: Partial<Record<Bare, TutorialTrailTarget>> = {
   'forge.flux': 'forge.bench',
   'forge.shard': 'forge.bench',
   'forge.go': 'forge.bench',
-  // The Materials pane sits beside both benches.
-  'forge.refine': 'hub.tab.forge',
+  // The Materials bench's Refine.
+  'forge.refine': 'forge.materials',
+  'forge.materials': 'hub.tab.forge',
   'forge.temper': 'hub.tab.forge',
   'temper.hone': 'forge.temper',
   'temper.line': 'temper.hone',

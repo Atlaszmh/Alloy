@@ -106,25 +106,31 @@ describe('findWay', () => {
     expect(at(findWay('forge.refine:rusty'))).toEqual(['hub.tab.forge', 'tab']);
   });
 
-  it("the Forge bench's controls go by its sub tab; the Materials pane's Refine, beside both benches, by the tab alone", () => {
-    /** The Forge tab open, on the Temper bench or the Forge bench (nothing of either showing). */
-    const forge = (on: 'forge' | 'temper') =>
+  it("the Forge bench's controls go by its sub tab; the Materials bench's Refine by its own sub tab", () => {
+    /** The Forge tab open, on one bench (nothing of any showing). */
+    const forge = (on: 'forge' | 'temper' | 'materials') =>
       page(`<div data-pad-scope>
         <button id="tab" role="tab" aria-selected="true" data-tutorial="hub.tab.forge"></button>
         <button id="bench" role="tab" aria-selected="${on === 'forge'}"
           data-tutorial="forge.bench"></button>
         <button id="temper" role="tab" aria-selected="${on === 'temper'}"
           data-tutorial="forge.temper"></button>
+        <button id="materials" role="tab" aria-selected="${on === 'materials'}"
+          data-tutorial="forge.materials"></button>
       </div>`);
     forge('temper');
     for (const t of ['forge.pattern:cuirass', 'forge.bar:rusty', 'forge.flux:uncommon'] as const)
       expect(at(findWay(t))).toEqual(['forge.bench', 'bench']);
     expect(at(findWay('forge.shard'))).toEqual(['forge.bench', 'bench']);
     expect(at(findWay('forge.go'))).toEqual(['forge.bench', 'bench']);
-    expect(findWay('forge.refine:rusty')).toBeNull();
+    expect(at(findWay('forge.refine:rusty'))).toEqual(['forge.materials', 'materials']);
     // The Forge bench open already: its sub tab is done, and so is the tab.
     forge('forge');
     expect(findWay('forge.go')).toBeNull();
+    expect(at(findWay('forge.refine:rusty'))).toEqual(['forge.materials', 'materials']);
+    // On the Materials bench with no Refine showing: every way is open, nothing to point at.
+    forge('materials');
+    expect(findWay('forge.refine:rusty')).toBeNull();
   });
 
   it("Training's way is the footer's Delve while the Depart sheet is shut, and Training itself once it is open", () => {

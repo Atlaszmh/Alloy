@@ -3,32 +3,36 @@ import { findItem, GEAR_SLOTS, isDiveActive } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Panel, Tabs } from '../../kit';
-import type { HubLink, HubTabProps } from '../types';
+import type { ForgeBenchId, HubLink, HubTabProps } from '../types';
 import { ForgeBench, ForgeLocked, SELECT_PROMPT } from './ForgeBench';
 import { GearList } from './GearList';
 import { MaterialsPane } from './MaterialsPane';
 import { Temper } from './Temper';
 
-type Bench = 'forge' | 'temper';
-
 const forgeLink = (l?: HubLink) => (l?.tab === 'forge' ? l : null);
 /** A link's bench: its own, else Temper for an item ("Forge it ›" from the Loadout), else the Forge. */
-const benchOf = (l?: HubLink): Bench => {
-  const b = forgeLink(l)?.bench;
-  return b === 'forge' || b === 'temper' ? b : forgeLink(l)?.uid ? 'temper' : 'forge';
-};
+const benchOf = (l?: HubLink): ForgeBenchId =>
+  forgeLink(l)?.bench ?? (forgeLink(l)?.uid ? 'temper' : 'forge');
 
 /**
- * The Forge tab: two benches (a sub tab, LT/RT), each in three panes. The Forge
- * bench forges a new item from a pattern; the Temper bench works on the item
- * picked in the gear list; the Materials pane sits beside both.
- * `{ tab: 'forge', uid, bench }` links pick the item and the bench. Locked
- * while a dive is under way (the hub disables the tab in the pause).
+ * The Forge tab: three benches (a sub tab, LT/RT): Forge (a new item from a pattern), Temper
+ * (the gear list, the operations on the picked item, its detail) and Materials (refining, the
+ * shard bench, the rune pouch). Its bench and gear row live in the hub's memory; a
+ * `{ tab: 'forge', uid, bench }` link picks them. Locked while a dive is under way (the hub
+ * disables the tab in the pause).
  */
-export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
+export function ForgeTab({ mode, setPrompts, link, memory }: HubTabProps) {
   const profile = useDelveStore((s) => s.profile);
-  const [selected, setSelected] = useState<string | null>(forgeLink(link)?.uid ?? null);
-  const [bench, setBench] = useState<Bench>(benchOf(link));
+  const kept = memory?.forge;
+  const [selected, setSelected] = useState<string | null>(
+    forgeLink(link)?.uid ?? kept?.uid ?? null,
+  );
+  const [bench, setBench] = useState<ForgeBenchId>(
+    forgeLink(link) ? benchOf(link) : (kept?.bench ?? 'forge'),
+  );
+  useEffect(() => {
+    if (memory) memory.forge = { bench, uid: selected, baseId: memory.forge?.baseId ?? null };
+  }, [memory, bench, selected]);
   // A new link picks its item and bench.
   const [seen, setSeen] = useState(link);
   if (link !== seen) {
@@ -43,7 +47,7 @@ export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
   const locked = mode === 'pause' || isDiveActive(profile);
   // The Forge bench sets its own prompts (Enter forges); Temper and the lock show Select.
   useEffect(() => {
-    if (bench === 'temper' || locked) setPrompts([SELECT_PROMPT]);
+    if (bench !== 'forge' || locked) setPrompts([SELECT_PROMPT]);
   }, [bench, locked, setPrompts]);
 
   const equipped = GEAR_SLOTS.flatMap((s) => profile.equipped[s] ?? []);
@@ -64,6 +68,12 @@ export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
         tabs={[
           { id: 'forge', label: 'Forge', testId: 'bench-forge', tutorial: 'forge.bench' },
           { id: 'temper', label: 'Temper', testId: 'bench-temper', tutorial: 'forge.temper' },
+          {
+            id: 'materials',
+            label: 'Materials',
+            testId: 'bench-materials',
+            tutorial: 'forge.materials',
+          },
         ]}
       />
       <div
@@ -73,9 +83,14 @@ export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
           gridTemplateRows: 'minmax(0, 1fr)',
         }}
       >
-        {bench === 'forge' ? (
-          <ForgeBench locked={locked} setPrompts={setPrompts} />
-        ) : (
+        {bench === 'forge' && (
+          <>
+            <ForgeBench locked={locked} setPrompts={setPrompts} />
+            {/* The preview's column (plan 05). */}
+            <div />
+          </>
+        )}
+        {bench === 'temper' && (
           <>
             <GearList
               equipped={equipped}
@@ -89,9 +104,10 @@ export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
             <Panel aria-label="Temper" testId="temper-bench">
               {locked ? <ForgeLocked /> : item && <Temper key={item.uid} item={item} />}
             </Panel>
+            <div />
           </>
         )}
-        <MaterialsPane locked={locked} />
+        {bench === 'materials' && <MaterialsPane locked={locked} />}
       </div>
     </div>
   );

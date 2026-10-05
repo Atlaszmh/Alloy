@@ -37,11 +37,12 @@ describe('ForgeTab', () => {
     store().resetProfile(1234, 'fire');
   });
 
-  it("names both benches' sub tabs for the guided start: forge.bench, the way to the bench's controls, and forge.temper", () => {
+  it("names the three benches' sub tabs for the guided start: forge.bench, forge.temper and forge.materials", () => {
     render(<ForgeTab {...props()} />);
     expect(screen.getByTestId('bench-forge')).toHaveAttribute('data-tutorial', 'forge.bench');
     expect(screen.getByTestId('bench-forge')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('bench-temper')).toHaveAttribute('data-tutorial', 'forge.temper');
+    expect(screen.getByTestId('bench-materials')).toHaveAttribute('data-tutorial', 'forge.materials');
   });
 
   it('opens on the Forge bench; Temper lists what you wear first, then the bag, filtered by kind', () => {
@@ -51,7 +52,7 @@ describe('ForgeTab', () => {
     expect(screen.getByRole('tablist', { name: 'Bench' })).toHaveAttribute('data-pad-tabs', 'sub');
     expect(screen.getByTestId('bench-forge')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('pattern-list')).toBeInTheDocument();
-    expect(screen.getByTestId('materials-pane')).toBeInTheDocument();
+    expect(screen.queryByTestId('materials-pane')).toBeNull();
     expect(vi.mocked(p.setPrompts).mock.lastCall![0].map((x) => x.label)).toEqual([
       'Select',
       'Forge',
@@ -59,7 +60,7 @@ describe('ForgeTab', () => {
     fireEvent.click(screen.getByTestId('bench-temper'));
     expect(screen.getByTestId('bench-temper')).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByTestId('pattern-list')).toBeNull();
-    expect(screen.getByTestId('materials-pane')).toBeInTheDocument();
+    expect(screen.queryByTestId('materials-pane')).toBeNull();
     expect(p.setPrompts).toHaveBeenLastCalledWith([expect.objectContaining({ label: 'Select' })]);
     const worn = Object.values(store().profile.equipped).length;
     const rows = screen.getAllByTestId('temper-row');
@@ -73,6 +74,36 @@ describe('ForgeTab', () => {
     expect(armor.some((r) => r.textContent!.includes('Weapon'))).toBe(false);
     fireEvent.click(armor.at(-1)!);
     expect(screen.getByTestId('item-name')).toHaveTextContent(store().profile.bag[0].name);
+    // Materials: refining, the shard bench and the runes, on a bench of their own.
+    fireEvent.click(screen.getByTestId('bench-materials'));
+    expect(screen.getByTestId('bench-materials')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('materials-pane')).toBeInTheDocument();
+    expect(screen.getByTestId('shard-bench')).toBeInTheDocument();
+    expect(screen.getByTestId('rune-pouch')).toBeInTheDocument();
+    expect(screen.queryByTestId('pattern-list')).toBeNull();
+    expect(screen.queryByTestId('temper-row')).toBeNull();
+  });
+
+  it('a link opens the Materials bench ({ tab: forge, bench: materials })', () => {
+    render(<ForgeTab {...props({ link: { tab: 'forge', bench: 'materials' } })} />);
+    expect(screen.getByTestId('bench-materials')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('materials-pane')).toBeInTheDocument();
+  });
+
+  it("comes back to its bench and its gear row from the hub's memory", () => {
+    store().setProfile({ ...store().profile, bag: [item('h1', 'helm'), item('w1', 'weapon')] });
+    const memory = {};
+    const first = render(<ForgeTab {...props({ memory })} />);
+    fireEvent.click(screen.getByTestId('bench-temper'));
+    const row = (name: string) =>
+      screen.getAllByTestId('temper-row').find((r) => r.textContent!.includes(name))!;
+    const helmName = store().profile.bag[0].name;
+    fireEvent.click(row(helmName));
+    first.unmount();
+    render(<ForgeTab {...props({ memory })} />);
+    expect(screen.getByTestId('bench-temper')).toHaveAttribute('aria-selected', 'true');
+    expect(row(helmName)).toHaveAttribute('aria-pressed', 'true');
+    expect(row(helmName)).toHaveAttribute('data-pad-first');
   });
 
   it('a link picks its bench and item: an item opens Temper, and a new link moves them', () => {
@@ -97,7 +128,8 @@ describe('ForgeTab', () => {
     expect(p.setPrompts).toHaveBeenLastCalledWith([expect.objectContaining({ label: 'Select' })]);
     fireEvent.click(screen.getByTestId('bench-temper'));
     expect(screen.getByTestId('forge-locked')).toBeInTheDocument();
-    expect(screen.queryByTestId('upgrade-button')).toBeNull();
+    expect(screen.queryByTestId('temper-ops')).toBeNull();
+    fireEvent.click(screen.getByTestId('bench-materials'));
     expect(screen.getByTestId('rune-fuse-split-1')).toBeDisabled();
     expect(screen.getByTestId('refine-metal-rusty')).toBeDisabled();
     unmount();
@@ -114,6 +146,7 @@ describe('ForgeTab', () => {
         <ToastContainer />
       </>,
     );
+    fireEvent.click(screen.getByTestId('bench-materials'));
     fireEvent.click(within(screen.getByTestId('rune-pouch')).getByTestId('rune-fuse-split-1'));
     expect(store().profile).toMatchObject({ scrap: 0, runes: { split: [0, 1, 0, 0, 0] } });
     expect(screen.getByText('Fused 3 Split I into Split II')).toBeInTheDocument();
