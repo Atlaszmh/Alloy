@@ -161,6 +161,9 @@ test.describe('Delve guided start', () => {
           await expect(go).toBeFocused();
           await tap(page, BUTTON.a);
           await expect(go).toBeHidden();
+          // The mouse takes the input lock back for the rest of the dive (past MOUSE_CLAIM_PX).
+          await page.mouse.move(20, 20);
+          await page.mouse.move(80, 80, { steps: 4 });
         } else await go.click();
       } else if (await page.getByTestId('tutorial-skip-step').isVisible()) {
         await page.getByTestId('tutorial-skip-step').click();
