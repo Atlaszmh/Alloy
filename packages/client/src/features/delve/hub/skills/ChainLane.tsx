@@ -14,12 +14,14 @@ import {
   type ChainCycle,
   type ManaSupport,
 } from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
 import { Glyph, Panel, Price, Segmented, layerZoom } from '@/features/delve/kit';
 import { formatNumber, manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import { SocketRow } from '../../runes/SocketRow';
 import { KIND_NAME, SKILL_NAME } from '../../chains/chain-text';
 import { PAYMENTS, offPair, type ChainEditorModel } from '../../chains/useChainEditor';
+import { useTutorialStep } from '../../tutorial/tutorial-view';
 import { useChainMessage, type AnvilChains } from './useAnvilChains';
 
 /** Where a card dragged `dx` px (design px) from place `from` lands, `step` px a place apart. */
@@ -63,6 +65,10 @@ export function ChainLane({
   const dragged = useRef(false);
   const cycle = resolved ? chainCycle(registry, stats, resolved) : null;
   const message = useChainMessage((s) => s.text);
+  // The guided start's lesson: its step names how many moves the Primary should hold, and its
+  // last move takes the pair's secondary.
+  const lessonMoves = Number(useTutorialStep()?.trigger.filter?.moves);
+  const secondary = useDelveStore((s) => s.profile.pair.secondary);
   // The message is this lane's: it goes with it.
   useEffect(() => () => useChainMessage.setState({ text: null }), []);
 
@@ -178,6 +184,21 @@ export function ChainLane({
                   onPointerUp={onPointerUp}
                   onPointerCancel={() => setDrag(null)}
                   data-testid={`move-${i}`}
+                  data-tutorial={
+                    skill !== 'primary'
+                      ? undefined
+                      : i === 0
+                        ? 'skills.card:first'
+                        : i === entries.length - 1
+                          ? 'skills.card:last'
+                          : undefined
+                  }
+                  // As a way, a card is done once its move holds what selecting it is for.
+                  data-tutorial-done={
+                    i === 0
+                      ? socketsOf(e).some((r) => r !== null)
+                      : 'elements' in e && !!secondary && e.elements.includes(secondary)
+                  }
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="k-label whitespace-nowrap">Move {i + 1}</span>
@@ -210,6 +231,7 @@ export function ChainLane({
                     <span
                       data-testid={`sockets-${i}`}
                       data-tutorial={skill === 'primary' && i === 0 ? 'skills.socket' : undefined}
+                      data-tutorial-done={socketsOf(e).length > 0}
                     >
                       <SocketRow
                         runes={socketsOf(e)}
@@ -298,6 +320,7 @@ export function ChainLane({
             onClick={() => anvil.buySlot(skill)}
             data-testid="add-slot"
             data-tutorial={skill === 'primary' ? 'skills.addSlot' : undefined}
+            data-tutorial-done={entries.length >= lessonMoves}
           >
             <span className="k-disp text-[18px] text-[var(--k-text-2)]">+ Slot</span>
             <Price links={offer.price.links} scrap={offer.price.scrap} />
