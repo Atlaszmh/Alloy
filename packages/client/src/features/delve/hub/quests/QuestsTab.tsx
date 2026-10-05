@@ -56,7 +56,8 @@ const GIVER_NUDGE: Record<string, number> = { hesta: 3 };
  * The Quests tab: the journal (Main, Side, the Contract board, and the claimed ones under a
  * collapsed Done), the open quest (Hesta, her line, the objectives) and its rewards with Claim,
  * Track and a contract's Reroll. Opening a quest marks it seen; the engine prices and refuses.
- * It opens on the first quest that waits to be claimed, and the pad lands on its row.
+ * It opens on the first quest that waits to be claimed, and the pad lands on its row: A on it
+ * claims (never while a dive is open), and the next quest that waits opens and takes the focus.
  */
 export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
@@ -68,6 +69,9 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const [openId, setOpenId] = useState(link?.tab === 'quests' ? link.questId : undefined);
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  /** The open quest's row takes the focus once it is open (under the pad, after a claim). */
+  const [refocus, setRefocus] = useState(false);
   // With nothing chosen: the first quest waiting to be claimed, else the first still to do.
   const quest =
     quests.find((q) => q.id === openId) ??
@@ -85,6 +89,9 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
     [registry, profile, slot],
   );
 
+  // Under the pad, A on the open quest's row claims it (never while a dive is open).
+  const rowClaims = pad && !diving && quest?.status === 'complete';
+
   const open = (id: string) => {
     setOpenId(id);
     setMessage(null);
@@ -100,7 +107,15 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
         ? { good: true, text: `Claimed ${quest.name}: ${got.join(', ')}` }
         : { good: false, text: res.reason ?? '' },
     );
+    if (!res.ok) return;
+    // The next quest that waits opens (and, under the pad, takes the focus): A, A, A. With none
+    // left the claimed one stays open while it is in the journal.
+    const next = quests.find((q) => q.status === 'complete' && q.id !== quest.id);
+    setOpenId(next?.id ?? quest.id);
+    if (pad && next) setRefocus(true);
   };
+  /** A press of a row: under the pad the open, complete one claims; any other opens. */
+  const onRow = (id: string) => (rowClaims && id === quest?.id ? onClaim() : open(id));
   const onReroll = () => {
     if (slot < 0) return;
     const res = useDelveStore.getState().rerollContract(slot);
@@ -118,6 +133,12 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
     if (link?.tab === 'quests' && link.questId) setOpenId(link.questId);
   }, [link]);
 
+  useEffect(() => {
+    if (!refocus) return;
+    root.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+    setRefocus(false);
+  }, [refocus]);
+
   // Opening a quest marks it seen: NEW no more.
   useEffect(() => {
     if (quest?.isNew) markQuestSeen(quest.id);
@@ -130,8 +151,10 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
       setPrompts([]);
       return;
     }
-    const prompts: Prompt[] = [SELECT_PROMPT];
-    // On the pad, A presses the focused Claim button.
+    const prompts: Prompt[] = [
+      { ...SELECT_PROMPT, label: rowClaims ? 'Claim' : SELECT_PROMPT.label },
+    ];
+    // On the pad, A presses the focused Claim button, or the open quest's row.
     if (quest.status === 'complete' && !pad)
       prompts.push({
         id: 'claim',
@@ -157,11 +180,12 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
         disabled: !rerollOk,
       });
     setPrompts(prompts);
-  }, [setPrompts, setTracked, quest, canTrack, pad, diving, hasReroll, rerollOk]);
+  }, [setPrompts, setTracked, quest, canTrack, pad, diving, rowClaims, hasReroll, rerollOk]);
   useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (
     <div
+      ref={root}
       className="box-border grid h-full gap-6 px-8 py-6"
       style={{ gridTemplateColumns: COLUMNS }}
     >
@@ -171,7 +195,7 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
             quests={quests}
             board={board}
             open={quest.id}
-            onOpen={open}
+            onOpen={onRow}
             tracked={trackedCount}
             maxTracked={maxTracked}
           />
