@@ -408,20 +408,20 @@ test.describe('Delve pad navigation', () => {
     expect(await marked(page)).toBe('low');
   });
 
-  test('PN03: Skills: the list, the cards and the inspector, and back to the same card', async ({ page }) => {
+  test("PN03: Skills: RB lands on the chosen card; up to the strip's Realign, down to the footer, and straight back", async ({ page }) => {
     await seed(page);
     await page.goto('/delve');
     await tap(page, BUTTON.rb);
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
-    // LB/RB never leave the focus on a tab.
+    // LB/RB never leave the focus on a tab: the chosen card leads.
     expect((await where(page)).tab).toBe(false);
-    await page.getByTestId('chain-skill-primary').focus();
-    await leave(page, 'right', 'row');
-    expect((await where(page)).foot).toBe(false);
-    await leave(page, 'right', 'card');
-    expect((await where(page)).foot).toBe(false);
-    await back(page, 'left', 'card');
-    await back(page, 'left', 'row');
+    await expect(page.locator('[data-testid^="move-"][data-pad-first]')).toBeFocused();
+    await leave(page, 'up', 'card');
+    expect((await where(page)).id).toBe('mana-realign');
+    await back(page, 'down', 'card');
+    await leave(page, 'down', 'card');
+    expect((await where(page)).foot).toBe(true);
+    await back(page, 'up', 'card');
   });
 
   test('PN04: Forge by the pad: A on a pattern lands on the Flux row, right steps a row, down reaches Forge and left the patterns; RT goes to Temper, then Materials', async ({ page }) => {

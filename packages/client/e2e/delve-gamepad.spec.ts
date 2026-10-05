@@ -319,19 +319,18 @@ test.describe('Delve with a controller', () => {
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
     const focused = () =>
       page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
-    // The skill list steps with LT / RT; the Primary is the one first chosen.
+    // RB lands on the Primary's chosen card; LT / RT step the strip, and the card keeps the focus.
     await expect(page.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('move-0')).toBeFocused();
     await tap(page, BUTTON.lt);
     const basic = page.getByTestId('chain-skill-basic');
     await expect(basic).toHaveAttribute('aria-selected', 'true');
-    await expect(basic).toBeFocused();
+    await expect(page.getByTestId('move-0')).toBeFocused();
     await tap(page, BUTTON.rt);
     await expect(page.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.lt);
     await expect(basic).toHaveAttribute('aria-selected', 'true');
-    // From the row, the chain's cards lie to the right.
-    await tap(page, BUTTON.right);
-    await expect(page.getByTestId('move-0')).toBeFocused();
+    // Along the chain's cards.
     await tap(page, BUTTON.right);
     await expect(page.getByTestId('move-1')).toBeFocused();
     await tap(page, BUTTON.a);
@@ -364,10 +363,8 @@ test.describe('Delve with a controller', () => {
     await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
-    // LT / RT step the skill list (the Primary is the one first chosen), focusing its row.
-    await tap(page, BUTTON.lt);
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
+    // RB lands on the Primary's chosen card.
+    await expect(page.getByTestId('move-0')).toBeFocused();
     const focused = () =>
       page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
     /** Press down, then up, until `id` has the focus (on a phone the tab bar sits in between). */
@@ -376,9 +373,8 @@ test.describe('Delve with a controller', () => {
       for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.up);
       expect(await focused()).toBe(id);
     };
-    // From the row, right to the Primary's card's one open socket.
-    await tap(page, BUTTON.right);
-    await expect(page.getByTestId('socket-0')).toBeFocused();
+    // Down to the Primary's card's one open socket.
+    await padTo('socket-0');
     const picker = page.getByTestId('rune-picker');
     // A opens the picker, which takes the focus; B backs out, the focus back on the socket.
     await tap(page, BUTTON.a);
