@@ -49,7 +49,7 @@ interface DirectorState {
   /** Per foe pressed against something: where it stood, since when. */
   pressed: Map<number, { at: Vec; since: number }>;
   /** Per foe that was pinned: the point beside the obstacle it steps to, until when. */
-  detour: Map<number, { at: Vec; until: number }>;
+  detour: Map<number, { at: Vec; until: number; straight: boolean }>;
   /** Goal fields built since the last pass, by the map's version, the goal's cell and a clearance. */
   fields: Map<string, Uint16Array>;
 }
@@ -322,13 +322,17 @@ function unpin(ctx: SimCtx, st: DirectorState, led: MonsterEntity[]): void {
     else if (!p || dist(m.x, m.y, p.at.x, p.at.y) > PINNED)
       st.pressed.set(m.id, { at: { x: m.x, y: m.y }, since: world.t });
     else if (world.t - p.since >= stuckTime - 2 * directorEvery - 1e-9) {
-      // Round it on the side the hero is: the tangent nearer the way to the hero.
+      // Round it on the side the hero is (the tangent nearer the way to the hero), else the
+      // other, straight where its lane is open, else down its field to the hero's side.
       const n = dirTo(o.x, o.y, m.x, m.y);
       const want = dirTo(m.x, m.y, h.x, h.y);
       const side = -n.y * want.x + n.x * want.y >= 0 ? 1 : -1;
       const reach = o.radius + m.radius + 0.6;
-      const at = snapToWalkable(world.map, o.x - n.y * side * reach, o.y + n.x * side * reach);
-      st.detour.set(m.id, { at, until: world.t + stuckTime });
+      const round = (s: number) =>
+        snapToWalkable(world.map, o.x - n.y * s * reach, o.y + n.x * s * reach);
+      const lane = [side, -side].map(round).find((at) => laneOpen(world.map, m, at, m.radius));
+      const at = lane ?? round(side);
+      st.detour.set(m.id, { at, until: world.t + stuckTime, straight: lane !== undefined });
       st.pressed.delete(m.id);
     }
     const detour = st.detour.get(m.id);
@@ -345,16 +349,23 @@ function unpin(ctx: SimCtx, st: DirectorState, led: MonsterEntity[]): void {
  * in `ai.directRange`) and a flanker turns on the hero there; any other goal
  * (a search's, an intercept) is walked straight when in reach and sight with
  * no prop or hazard in the way, else down its field; a reached goal holds. A
- * pinned foe's step round its obstacle (`unpin`) goes straight.
+ * pinned foe's step round its obstacle (`unpin`) goes straight where its
+ * lane is open, else down its field.
  */
 export function goalWay(ctx: SimCtx, m: MonsterEntity, near: boolean): Vec | null {
   const goal = m.goal;
   if (!goal) return null;
   const { world, bal } = ctx;
   const d = dist(m.x, m.y, goal.x, goal.y);
-  // A pinned foe's step round its obstacle: straight there, then on as before.
-  if (goal === stateOf(world).detour.get(m.id)?.at)
-    return d > REACHED ? dirTo(m.x, m.y, goal.x, goal.y) : null;
+  // A pinned foe's step round its obstacle: there (straight where its lane is open, else down
+  // its field), then on as before.
+  const detour = stateOf(world).detour.get(m.id);
+  if (goal === detour?.at) {
+    if (d <= REACHED) return null;
+    return detour.straight
+      ? dirTo(m.x, m.y, goal.x, goal.y)
+      : downhill(world.map, goalField(ctx, m, goal), m, goal);
+  }
   if (!m.search) {
     if (m.job === 'ring') return near && d > REACHED ? dirTo(m.x, m.y, goal.x, goal.y) : null;
     if (m.job === 'flank' && near) return null;

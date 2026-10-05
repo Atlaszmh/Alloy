@@ -125,7 +125,7 @@ const AROUND = [
 /**
  * The way down `field` from `p`: toward the centre of the neighbouring cell
  * nearest its target (a diagonal only where both cells beside it are in the
- * field), or straight at `target` in its own cell; null where the field
+ * field, unless `p`'s own cell isn't), or straight at `target` in its own cell; null where the field
  * doesn't reach (nor any neighbour) or nothing is nearer.
  */
 export function downhill(map: FloorMap, field: Uint16Array, p: Vec, target: Vec): Vec | null {
@@ -141,7 +141,15 @@ export function downhill(map: FloorMap, field: Uint16Array, p: Vec, target: Vec)
   for (const [dx, dy] of AROUND) {
     const v = at(cx + dx, cy + dy);
     if (v >= best) continue;
-    if (dx && dy && (at(cx + dx, cy) === UNREACHED || at(cx, cy + dy) === UNREACHED)) continue;
+    // A diagonal only past two reached cells, unless the foe stands off the field (in a
+    // pocket too narrow for it): then any way back onto it.
+    if (
+      here !== UNREACHED &&
+      dx &&
+      dy &&
+      (at(cx + dx, cy) === UNREACHED || at(cx, cy + dy) === UNREACHED)
+    )
+      continue;
     best = v;
     to = { x: cx + dx + 0.5, y: cy + dy + 0.5 };
   }

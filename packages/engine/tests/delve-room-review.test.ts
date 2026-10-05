@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { botInput } from '../src/arpg/bot.js';
+import { UNREACHED } from '../src/arpg/flow.js';
 import { isWalkable, moveCircle } from '../src/arpg/grid.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { createFloorWorld } from '../src/arpg/world.js';
@@ -102,5 +104,52 @@ describe('a generated floor', () => {
         }
       }
     expect(wedged).toEqual([]);
+  });
+});
+
+describe('a foe after the hero', () => {
+  // A foe that wants to move (awake, in its field's reach, out of reach of the hero, no wind-up,
+  // charge or stagger, not holding cover or its goal, touching no other foe) yet stays put.
+  it('never stalls 3 s on a floor the bot fights through', { timeout: 180_000 }, () => {
+    const stalls: string[] = [];
+    for (let s = 4; s <= 7; s++)
+      for (let depth = 1; depth <= 20; depth++) {
+        const w = floor(depth, 1000 + s * 7919);
+        w.hero.hp = w.hero.stats.maxHp = 1e12;
+        const since = new Map<number, { x: number; y: number; t: number }>();
+        for (let i = 0; i < 90 / STEP && !w.exited; i++) {
+          stepWorld(registry, w, botInput(registry, w, 'thorough'), STEP);
+          for (const m of w.monsters) {
+            const gap = Math.hypot(m.x - w.hero.x, m.y - w.hero.y) - m.radius - w.hero.radius;
+            const cell = Math.floor(m.y) * w.map.width + Math.floor(m.x);
+            const wants =
+              !m.dead &&
+              m.aggro &&
+              !m.goingHome &&
+              (w.flow.small?.[cell] ?? UNREACHED) <= 20 &&
+              m.windupUntil <= 0 &&
+              m.chargeUntil <= w.t &&
+              w.t >= m.status.staggerUntil &&
+              gap > m.attackRange + 0.5 &&
+              m.job !== 'cover' &&
+              !(m.goal && Math.hypot(m.x - m.goal.x, m.y - m.goal.y) < 0.6) &&
+              !w.monsters.some(
+                (o) =>
+                  o !== m &&
+                  !o.dead &&
+                  Math.hypot(o.x - m.x, o.y - m.y) < o.radius + m.radius + 0.15,
+              );
+            const at = since.get(m.id);
+            if (!wants) since.delete(m.id);
+            else if (!at || Math.hypot(m.x - at.x, m.y - at.y) > 0.3)
+              since.set(m.id, { x: m.x, y: m.y, t: w.t });
+            else if (w.t - at.t >= 3) {
+              stalls.push(`d${depth} s${1000 + s * 7919} ${m.defId} at ${m.x},${m.y}`);
+              since.delete(m.id);
+            }
+          }
+        }
+      }
+    expect(stalls).toEqual([]);
   });
 });
