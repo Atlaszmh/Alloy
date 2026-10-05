@@ -6,7 +6,7 @@ import { useChainEditor, type ChainEditorProps } from '../../../chains/useChainE
 import type { HubLink, HubMode } from '../../types';
 import { ChainLane } from '../ChainLane';
 import { MoveInspector } from '../MoveInspector';
-import { SkillList } from '../SkillList';
+import { SkillStrip } from '../SkillStrip';
 import { SkillsTab } from '../SkillsTab';
 import type { AnvilChains } from '../useAnvilChains';
 
@@ -49,7 +49,7 @@ export function Panes(props: ChainEditorProps) {
   };
   return (
     <>
-      <SkillList ed={ed} anvil={anvil} onMana={() => {}} />
+      <SkillStrip ed={ed} anvil={anvil} onMana={() => {}} />
       <ChainLane ed={ed} anvil={anvil} carrying={false} />
       <MoveInspector ed={ed} anvil={anvil} />
     </>

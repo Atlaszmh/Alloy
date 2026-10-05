@@ -71,7 +71,7 @@ All from `/c/Projects/alloy-padui` in Git Bash.
 
 and write the count into this section ("Baseline (recorded <date> on `padui/main` at `<sha>`): client `tsc` clean, `vitest run` N files, M tests; all passing"). Phase 3 closed at 136 files and 1234 tests plus its own; read the real numbers. The engine's baseline is not needed: it is not touched (plan 05's fallback runs only the tutorial files). If the client baseline is not green, stop: phase 3 did not close.
 
-Baseline (recorded … on `padui/main` at `…`): …
+Baseline (recorded 2026-10-05 on `padui/main` at `c6ae5dd5`): client `tsc` clean, `vitest run` 139 files, 1293 tests; all passing.
 
 ## Conventions
 

@@ -18,7 +18,7 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * scope's `[data-pad-back]`, Menu its `[data-pad-menu]` (else its back),
  * LB/RB step its top-level `[data-pad-tabs]` and LT/RT its
  * `[data-pad-tabs="sub"]`, past disabled tabs. A stepped tab takes the focus
- * only where tabs are D-pad stops (the skill list); a kit tab list puts it in
+ * only where tabs are D-pad stops; a kit tab list puts it in
  * the content, on its `[data-pad-first]` control if it has one. The last visible
  * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it, and while the
  * pad has the input lock the focus never gets lost (`keepFocus`, which starts
@@ -353,7 +353,7 @@ function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
   const before = document.activeElement;
   // Rendered now (React would in a microtask): the old tab's controls must be gone before the focus is placed.
   flushSync(() => tabs[i].click());
-  // A list that is also a pane's content (the Skills tab's skill list): its row takes the focus.
+  // A tab list whose tabs are D-pad stops: its tab takes the focus.
   if (isCandidate(tabs[i])) return focus(tabs[i]);
   // A kit tab list is off the D-pad. A focused control that survived the switch keeps the focus;
   // else the new tab's first control takes it.

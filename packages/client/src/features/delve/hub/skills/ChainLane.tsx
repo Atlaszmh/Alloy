@@ -19,7 +19,7 @@ import { Glyph, Panel, Price, Segmented, layerZoom } from '@/features/delve/kit'
 import { formatNumber, manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import { SocketRow } from '../../runes/SocketRow';
-import { KIND_NAME, SKILL_NAME } from '../../chains/chain-text';
+import { KIND_NAME, SKILL_NAME, chainText } from '../../chains/chain-text';
 import { PAYMENTS, offPair, type ChainEditorModel } from '../../chains/useChainEditor';
 import { useTutorialStep } from '../../tutorial/tutorial-view';
 import { useChainMessage, type AnvilChains } from './useAnvilChains';
@@ -38,11 +38,12 @@ interface Drag {
 }
 
 /**
- * The Skills tab's centre pane: the chosen chain's header (its slots, payment and rule), its
- * move cards in order (each its kind, element tile and form glyph, element or fusion, socket
+ * The Skills tab's chain pane: the chosen chain's header (its slots, payment and rule) and its
+ * summary line (its moves' names, or what carries it), its move cards in order (each its kind, element tile and form glyph, element or fusion, socket
  * pips and price; the chosen card's ◂ ▸ × toolbar), "+ Move" while a slot is free and "+ Slot"
  * with its price while the chain is under its cap, a refused Apply's or Add slot's reason, and for
- * an ability chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37).
+ * an ability chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37). Focus chooses a card,
+ * and the chosen one leads the pad (`data-pad-first`).
  */
 export function ChainLane({
   ed,
@@ -127,11 +128,9 @@ export function ChainLane({
           </div>
         )}
       </div>
-      {absent && (
-        <p className="m-0 flex items-center gap-2 text-[16px] text-[var(--k-text-2)]">
-          <Glyph id="lock" size={16} /> {absentText?.(skill)}
-        </p>
-      )}
+      <p className="k-caption m-0" data-testid="abilities-summary">
+        {absent ? absentText?.(skill) : chainText(names)}
+      </p>
       {locked && !absent && (
         <div
           className="k-well p-3 text-center text-[16px] text-[var(--k-hot)]"
@@ -183,6 +182,8 @@ export function ChainLane({
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
                   onPointerCancel={() => setDrag(null)}
+                  onFocus={() => ed.select(i)}
+                  data-pad-first={on ? '' : undefined}
                   data-testid={`move-${i}`}
                   data-tutorial={
                     skill !== 'primary'

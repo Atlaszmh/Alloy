@@ -9,14 +9,14 @@ import type { HubTabProps } from '../types';
 import { ApplyBar, APPLY_BINDING, applyChains } from './ApplyBar';
 import { ChainLane } from './ChainLane';
 import { MoveInspector } from './MoveInspector';
-import { SkillList } from './SkillList';
+import { SkillStrip } from './SkillStrip';
 import { useAnvilChains } from './useAnvilChains';
 
 /**
- * The Anvil's Skills tab: the skill list and the mana pair · the chosen chain's lane with its
+ * The Anvil's Skills tab: the skill strip and the mana pair over the chosen chain's lane with its
  * stats and rhythm · the move inspector (or the Mana view, its own scope). Its footer is the
  * Apply bar (none in the pause, whose footer stays). Keys: `[` `]` step the skills (the pad's
- * LT RT step the list), Del or a tap of Y removes the chosen move, Alt+← → move it, X picks it
+ * LT RT step the strip), Del or a tap of Y removes the chosen move, Alt+← → move it, X picks it
  * up on the pad (the D-pad carries it, X drops it, B or Esc puts it back, and another skill or
  * device lets go), Ctrl+Enter or a held Y applies.
  */
@@ -147,7 +147,7 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
     hub.current.setPrompts(prompts);
   }, [mode, prompts]);
   useEffect(() => () => hub.current.setPrompts([]), []);
-  // The keys the prompt bar doesn't draw: the skill list's and the keyboard's reorder.
+  // The keys the prompt bar doesn't draw: the skill strip's and the keyboard's reorder.
   usePrompts(
     [
       {
@@ -181,17 +181,21 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
   return (
     <div
       ref={root}
-      className="grid h-full min-h-0 gap-6 px-8 py-6"
-      style={{ gridTemplateColumns: '340px minmax(0, 1fr) 500px' }}
+      className="flex h-full min-h-0 flex-col gap-5 px-8 py-6"
       data-testid="abilities-panel"
     >
-      <SkillList ed={ed} anvil={anvil} onMana={() => setMana(true)} />
-      <ChainLane ed={ed} anvil={anvil} carrying={carry !== null} />
-      {mana ? (
-        <ManaPanel stats={anvil.editor.stats} onBack={() => setMana(false)} />
-      ) : (
-        <MoveInspector ed={ed} anvil={anvil} />
-      )}
+      <SkillStrip ed={ed} anvil={anvil} onMana={() => setMana(true)} />
+      <div
+        className="grid min-h-0 flex-1 gap-6"
+        style={{ gridTemplateColumns: 'minmax(0, 1fr) 500px' }}
+      >
+        <ChainLane ed={ed} anvil={anvil} carrying={carry !== null} />
+        {mana ? (
+          <ManaPanel stats={anvil.editor.stats} onBack={() => setMana(false)} />
+        ) : (
+          <MoveInspector ed={ed} anvil={anvil} />
+        )}
+      </div>
     </div>
   );
 }
