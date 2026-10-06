@@ -22,7 +22,7 @@ A scripted pad on the pad-nav spec's seeded mid-game save, at 1920×1080 (v0.64.
 | The stop | 7 | 3 or 4 a step |
 | Pause | 32 | 8 (Help joins the list in phase 3) |
 
-Text: at 1920×1080 the smallest text is 14 px and 69–92% of a hub tab's text is under 18 px; at 1280×800 (UI scale 0.75) it is 11–12 px. Settings has no text size.
+Text: at 1920×1080 the smallest text is 14 px and 69–92% of a hub tab's text is under 18 px; at 1280×800 (UI scale 0.75) it is 11–12 px. Settings has no text size. At v0.69.0: at 1920×1080 no text is under 16 px and 33–72% of a hub tab's text is under 18 px (the labels); at 1280×800 the smallest is 12 px; Settings → Text size grows the menus up to 130%.
 
 Buttons today: Y is Lock (Loadout), Remove on a tap and Apply on a hold (Skills), Track (Quests), Inspect (the stop); X is Salvage, Reorder, Reroll, Skip; Menu starts a dive at the Anvil and pauses in one; B is labelled "Menu" at the hub's root; the Loadout's footer shows A twice.
 
@@ -175,11 +175,11 @@ Each item's plan starts by reading its screen's code; what follows is the design
 
 ## 6. Phase 5: reading and options (v0.69.0)
 
-- **Type floor:** 18 design px for anything read, 16 for labels (from 14), applied through the kit's text classes; the screens rebuilt in phases 3 and 4 are laid out for it.
-- **Settings → Text size:** Small, Medium, Large (100, 115, 130%), a multiplier on `--ui-scale` for the menus, separate from HUD scale. Each screen must hold at Large at 1920×1080 and at Medium at 1280×800; the responsive probes check it.
-- **Options:** hold moves by press-to-toggle; swap sticks; stick sensitivity; screen-shake, hit-stop and flash strength; a distinct sound for an upgrade and for an essence.
-- **Onboarding:** a screen's first visit pulses its main prompt with one line above the footer, gone once the action is done; systems the save hasn't met stay folded (a save with no flux sees one line, not a row).
-- **Close:** `CLAUDE.md`, version 0.69.0.
+- **Type floor:** 18 design px for anything read (a sentence, an item's line, a body), 16 for labels (a name, a count, a price, a caption, a prompt), from 14: `k-body-2` and the new `k-note` (a caption that is a sentence) at 18, `k-caption`, `k-label` and the kit's chips, steppers and tile marks at 16, and every hard-coded size swept by screen. Nothing in the Delve is under 16 design px, the HUD included (it keeps its own sizes above that, under HUD scale); the DPS Lab, a dev tool, is left out. The responsive probe's text floor rises to 12 CSS px (16 at the 0.75 zoom floor).
+- **Settings → Text size:** Small, Medium, Large (100, 115, 130%), a multiplier on the menus' zoom only (`--ui-scale`, which `.delve-zoom` reads; the HUD's `--hud-scale` keeps the plain UI scale): `menuScaleFor(w, h, size)` is the UI scale at Small (its quarter steps unchanged), else the UI scale × 1.15 or 1.3, never so large that the window holds less than 1476 × 830 design px (`MENU_MIN`, Large's area at 1920×1080), never under the UI scale, floored to a hundredth (not a quarter step: the kit's sprites snap to device pixels at any zoom). At 1280×800 (UI scale 0.75) Medium is 0.86 and Large is capped to the same 0.86: Settings says so. Each screen must hold at Large at 1920×1080 and at Medium at 1280×800; the responsive probes check it.
+- **Options:** hold moves by press-to-toggle; swap sticks; stick sensitivity; screen-shake, hit-stop and flash strength; a distinct sound for an upgrade and for an essence. Hold moves by press-to-toggle, swap sticks and stick sensitivity (50–150% a stick, a response curve that keeps full tilt full) are `ControlsConfig` fields (`holdToggle`, `swapSticks`, `sensitivity`), in the Controls editor beside Basic attack and the deadzones; press-to-toggle serves the pad's buttons and the keys. Screen shake (the camera kick included), hit-stop and flash (the floor's lightning and light flashes, the hero's hurt flash) are three Settings sliders, 0 to 100%, each off at 0, after the OS's reduced motion. The client tells an upgrade drop by the loot plaque's own test (`isUpgrade`) and an essence by the drop's material, both read from `world.drops` by the event's `dropId`; neither needs an engine field.
+- **Onboarding:** five screens (Loadout, Skills, Forge, Quests, the stop) pulse their main prompt with one line above the footer on their first visit, until that action (equip, open a move's editor, forge, claim, take a power-up) is done once on this device (`alloy:delve:seen`, never the save); the action done during the guided start counts. A guided save shows none of it, and nothing in the pause. The Forge bench folds what the save holds none of: no flux, one line for the Flux row; no shard, the Lines as text, not buttons.
+- **Close:** `CLAUDE.md`, version 0.69.0. Measured on the audit's save at both sizes: every ceiling and allowance held; the Forge with a pattern open fell from 14 stops to 13 (the save holds no flux: its row is one line); the press budgets (PN07): equip an upgrade 0, salvage an item 1, forge an item 2, change a move's element and apply 3.
 
 ## Measures
 
@@ -202,5 +202,7 @@ Each phase is held by `e2e/delve-pad-nav.spec.ts`: the stop allowances it alread
 | 3. Loadout and Forge | 0.67.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui-p3/` (`00` to `07`) |
 | 4. Skills | 0.68.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui-p4/` (`00` to `06`) |
 | 5. Reading and options | 0.69.0 | `docs/superpowers/plans/2026-10-05-delve-pad-first-ui-p5/` (`00` to `07`) |
+
+**The revamp is complete** (v0.69.0): all five phases shipped.
 
 Each phase is its own branch from `padui/main`, ends green (types, unit tests, the Delve E2E at both sizes) and merges back before the next starts.
