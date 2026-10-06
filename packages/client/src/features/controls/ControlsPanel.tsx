@@ -68,7 +68,7 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
   );
   const isCapturing = (kind: Capture['kind'], action: KeyAction) =>
     capturing?.kind === kind && capturing.action === action;
-  const caption = 'text-[14px] uppercase tracking-[0.06em] text-[var(--k-text-3)]';
+  const caption = 'text-[16px] uppercase tracking-[0.06em] text-[var(--k-text-3)]';
   // An action left unbound (a new one whose default the setup already used: see `parseControls`).
   const unbound = CONTROL_ACTIONS.filter(
     (a) => cfg.pad[a] === null || (a !== 'attack' && cfg.keys[a] === null),
@@ -130,7 +130,7 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           {MOVE_KEYS.map((a) => (
             <div key={a} className="contents">
               <span className="text-[var(--k-text)]">{ACTION_LABELS[a]}</span>
-              <span className="text-center text-[14px]">Left stick</span>
+              <span className="text-center text-[16px]">Left stick</span>
               {cell(`bind-key-${a}`, keyLabel(cfg.keys[a]), isCapturing('key', a), () =>
                 setCapturing({ kind: 'key', action: a }),
               )}
@@ -192,7 +192,7 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
         {text && (
           <textarea
             readOnly
-            className="h-40 w-full bg-[var(--k-well)] p-2 font-mono text-[14px] text-[var(--k-text-2)]"
+            className="h-40 w-full bg-[var(--k-well)] p-2 font-mono text-[16px] text-[var(--k-text-2)]"
             value={text}
             onFocus={(e) => e.currentTarget.select()}
             data-testid="controls-text"
@@ -231,7 +231,7 @@ function Slider({
         className="min-w-0 flex-1 accent-[#feae34]"
         data-testid={id}
       />
-      <span className="w-36 shrink-0 text-right text-[14px]">{format(value)}</span>
+      <span className="w-36 shrink-0 text-right text-[16px]">{format(value)}</span>
     </label>
   );
 }

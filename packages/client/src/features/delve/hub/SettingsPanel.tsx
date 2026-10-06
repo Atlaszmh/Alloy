@@ -93,7 +93,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             shown={ui.arenaViewUnits}
             onChange={(v) => ui.setArenaViewUnits(v)}
           />
-          <p className="text-[14px] text-[var(--k-text-3)]" data-testid="view-distance-value">
+          <p className="text-[16px] text-[var(--k-text-3)]" data-testid="view-distance-value">
             {zoom.scale} px per pixel · {Number(zoom.unitsTall.toFixed(1))} units tall
           </p>
         </Section>
@@ -109,12 +109,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               { id: 'full', label: 'Full', testId: 'hud-mode-full' },
             ]}
           />
-          <p className="text-[14px] text-[var(--k-text-3)]">
+          <p className="text-[18px] text-[var(--k-text-3)]">
             Lean: the map, one objective and what you pick up; peek for the rest. Full: the purse,
             the floor and its finds always on screen.
           </p>
         </Section>
-        <p className="text-[14px] text-[var(--k-text-3)]" data-testid="settings-version">
+        <p className="text-[16px] text-[var(--k-text-3)]" data-testid="settings-version">
           Alloy v{version}
         </p>
       </div>
@@ -125,7 +125,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-[14px] uppercase tracking-[0.06em] text-[var(--k-text-3)] [font-family:var(--k-font-label)]">
+      <h3 className="text-[16px] uppercase tracking-[0.06em] text-[var(--k-text-3)] [font-family:var(--k-font-label)]">
         {title}
       </h3>
       {children}

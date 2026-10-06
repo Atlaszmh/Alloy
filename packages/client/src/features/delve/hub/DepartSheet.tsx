@@ -97,7 +97,7 @@ export function DepartSheet({
         {tracked.length > 0 && (
           <ul className="m-0 flex list-none flex-col gap-1 p-0" data-testid="depart-tracked">
             {tracked.map((q) => (
-              <li key={q.id} className="text-[16px] leading-tight text-[var(--k-text-2)]">
+              <li key={q.id} className="text-[18px] leading-tight text-[var(--k-text-2)]">
                 <span className="text-[var(--k-hot-hi)]">{q.name}</span>
                 {' · '}
                 {q.objectives.find((o) => !o.done)?.text ?? 'Ready to claim'}
@@ -112,7 +112,7 @@ export function DepartSheet({
         )}
         {blocked && (
           <div className="flex flex-wrap items-center gap-3" data-testid="draft-block">
-            <div className="flex flex-col text-[16px] leading-tight">
+            <div className="flex flex-col text-[18px] leading-tight">
               <span id={`${id}-draft`} className="text-[var(--k-hot)]" data-testid="draft-warning">
                 Unapplied changes: apply or discard them to delve
               </span>
@@ -148,7 +148,7 @@ export function DepartSheet({
         {lesson && (
           <span
             id={`${id}-lesson`}
-            className="text-[16px] leading-tight text-[var(--k-hot)]"
+            className="text-[18px] leading-tight text-[var(--k-hot)]"
             data-testid="lesson-block"
           >
             {lesson}

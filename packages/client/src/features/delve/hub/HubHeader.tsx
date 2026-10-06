@@ -52,7 +52,7 @@ export function HubHeader({ nav }: { nav: ReactNode }) {
             >
               {formatNumber(shownPower)}
             </span>
-            <span className="text-[14px] uppercase tracking-[0.06em] text-[var(--k-text-3)] [font-family:var(--k-font-label)]">
+            <span className="text-[16px] uppercase tracking-[0.06em] text-[var(--k-text-3)] [font-family:var(--k-font-label)]">
               Power
             </span>
           </span>

@@ -43,7 +43,7 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
   const loss = pct(registry.getDelveBalance().crafting.deathLoss);
   return (
     <div
-      className="flex flex-col gap-2 text-[16px] leading-relaxed text-[var(--k-text-2)]"
+      className="flex flex-col gap-2 text-[18px] leading-relaxed text-[var(--k-text-2)]"
       data-testid="delve-howto"
       data-topic={topic}
     >
