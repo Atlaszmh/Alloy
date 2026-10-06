@@ -1,6 +1,7 @@
 // The forge kit's public surface (Delve UI v1): the contract's types, then every component and hook.
 export type * from './types';
-export { scopedLast, topScope, usePrompts, useUiScale } from './prompts';
+export { MENU_MIN, menuScaleFor, scopedLast, TEXT_SIZES, topScope, usePrompts, useUiScale } from './prompts';
+export type { TextSize } from './prompts';
 export { Glyph, InputGlyph, Keycap, PadGlyph, Price, PromptBar } from './glyphs';
 export { Dialog, Footer, Header, Panel, Screen } from './surfaces';
 export { uiLayer } from './layer';

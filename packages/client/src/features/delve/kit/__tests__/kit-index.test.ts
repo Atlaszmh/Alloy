@@ -7,6 +7,7 @@ const CONTRACT = [
   'topScope',
   'scopedLast',
   'useUiScale',
+  'menuScaleFor',
   'Keycap',
   'PadGlyph',
   'InputGlyph',

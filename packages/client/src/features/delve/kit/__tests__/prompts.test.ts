@@ -3,9 +3,12 @@ import { act, renderHook } from '@testing-library/react';
 import { createRef, type RefObject } from 'react';
 import {
   hudScaleFor,
+  MENU_MIN,
+  menuScaleFor,
   orderPrompts,
   padPrompts,
   scopedLast,
+  TEXT_SIZES,
   topScope,
   uiScaleFor,
   usePrompts,
@@ -357,6 +360,38 @@ describe('the UI scale', () => {
     expect(hudScaleFor(1.25, 1.25)).toBe(1.5);
     expect(hudScaleFor(0.75, 0.8)).toBe(0.75);
     expect(hudScaleFor(2, 0.8)).toBe(1.5);
+  });
+
+  it("menuScaleFor: Small is the UI scale's quarter step; Medium and Large multiply it, capped where the window holds less than MENU_MIN", () => {
+    const { small, medium, large } = TEXT_SIZES;
+    // Small: exactly today's --ui-scale, everywhere.
+    for (const [w, h] of [[1280, 720], [1280, 800], [1920, 1080], [2560, 1440], [3440, 1440], [3840, 2160]])
+      expect(menuScaleFor(w, h, small)).toBe(uiScaleFor(w, h));
+    // 1920×1080: 115% and 130% in full; Large leaves exactly MENU_MIN.
+    expect(menuScaleFor(1920, 1080, medium)).toBe(1.15);
+    expect(menuScaleFor(1920, 1080, large)).toBe(1.3);
+    expect(1920 / 1.3).toBeGreaterThanOrEqual(MENU_MIN.w);
+    expect(1080 / 1.3).toBeGreaterThanOrEqual(MENU_MIN.h);
+    // 1280×800 (UI scale 0.75): Medium in full (0.8625, floored); Large capped to the same.
+    expect(menuScaleFor(1280, 800, medium)).toBe(0.86);
+    expect(menuScaleFor(1280, 800, large)).toBe(0.86);
+    expect(menuScaleFor(1280, 720, large)).toBe(0.86);
+    // Between: 1600×900 (UI scale 0.75) has room for most of Large.
+    expect(menuScaleFor(1600, 900, large)).toBe(0.97);
+    // Larger windows: the quarter step times the size, under the cap.
+    expect(menuScaleFor(2560, 1440, medium)).toBe(1.43);
+    expect(menuScaleFor(2560, 1440, large)).toBe(1.62);
+    expect(menuScaleFor(3840, 2160, large)).toBe(2.6);
+    // Never under the UI scale, and every result leaves at least MENU_MIN (or is the UI scale).
+    for (const [w, h] of [[1024, 640], [1280, 720], [1366, 768], [1600, 900], [1920, 1200], [2560, 1080]])
+      for (const t of [medium, large]) {
+        const z = menuScaleFor(w, h, t);
+        expect(z).toBeGreaterThanOrEqual(uiScaleFor(w, h));
+        if (z > uiScaleFor(w, h)) {
+          expect(w / z).toBeGreaterThanOrEqual(MENU_MIN.w);
+          expect(h / z).toBeGreaterThanOrEqual(MENU_MIN.h);
+        }
+      }
   });
 
   it('useUiScale reads the mirrored UI scale and the HUD setting', () => {

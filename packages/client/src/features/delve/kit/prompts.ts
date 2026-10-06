@@ -267,6 +267,28 @@ export function uiScaleFor(width: number, height: number): number {
   return Math.min(2, Math.max(0.75, fit));
 }
 
+/** Settings → Text size: the menus' zoom over the UI scale. */
+export type TextSize = 'small' | 'medium' | 'large';
+
+/** Each text size's multiplier on the UI scale. */
+export const TEXT_SIZES: Record<TextSize, number> = { small: 1, medium: 1.15, large: 1.3 };
+
+/** The least design box every menu screen holds (Large's at 1920×1080): the text size never zooms past it. */
+export const MENU_MIN = { w: 1476, h: 830 } as const;
+
+/**
+ * The menus' zoom (`--ui-scale`): the UI scale (`uiScaleFor`, quarter steps) at Small; else the UI
+ * scale × `text`, capped where the window would hold less than `MENU_MIN`, never under the UI
+ * scale, floored to a hundredth (no quarter step can hold 115%).
+ */
+export function menuScaleFor(width: number, height: number, text: number): number {
+  const ui = uiScaleFor(width, height);
+  if (text <= 1) return ui;
+  const fit = Math.min(width / MENU_MIN.w, height / MENU_MIN.h);
+  // The epsilon: 1.15 × 100 is 114.99999999999999 in floating point.
+  return Math.max(ui, Math.floor(Math.min(ui * text, fit) * 100 + 1e-9) / 100);
+}
+
 /** `--hud-scale`: the UI scale times Settings → HUD scale, to the nearest quarter, at least 0.75 (the kit's `hudZoom`). */
 export const hudScaleFor = hudZoom;
 
