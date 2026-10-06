@@ -1,5 +1,8 @@
 import '@testing-library/jest-dom';
 
+// Every onboarding hint seen (features/delve/onboarding.ts): a test that wants one clears `seen`.
+localStorage.setItem('alloy:delve:seen', JSON.stringify(['loadout', 'skills', 'forge', 'quests', 'stop']));
+
 // Mock AudioContext for jsdom test environment
 class MockAudioContext {
   state = 'running' as AudioContextState;

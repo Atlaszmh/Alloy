@@ -45,6 +45,8 @@ interface UIStore {
   hitstop: number;
   /** Delve UI: Settings → Effects → Flashes (the floor's light flashes, the hurt flash), 0 (off) to 1 (`alloy:delve:fx:flash`). */
   flash: number;
+  /** Delve UI: the first-visit hints whose action this device has done (`useOnboarding`; `alloy:delve:seen`). */
+  seen: string[];
 
   toggleMute: () => void;
   setVolume: (category: 'master' | SoundCategory, value: number) => void;
@@ -56,6 +58,8 @@ interface UIStore {
   setHudMode: (mode: HudMode) => void;
   /** Settings → Effects: one strength, clamped to 0..1 and kept on this device. */
   setFx: (kind: FxKind, value: number) => void;
+  /** Onboarding: marks a hint's action done on this device, once, and keeps it. */
+  markSeen: (id: string) => void;
 }
 
 /** Settings → HUD scale's range (the spec's 80 to 125%). */
@@ -84,6 +88,16 @@ export function loadTextSize(): TextSize {
   }
 }
 
+/** Delve UI: the onboarding hints done on this device (`alloy:delve:seen`): a JSON array of ids, anything else none. */
+export function loadSeen(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem('alloy:delve:seen') ?? '[]');
+    return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export const useUIStore =createHmrStore<UIStore>('uiStore', (set) => ({
   isMuted: (() => { try { return localStorage.getItem('alloy:muted') === 'true'; } catch { return false; } })(),
   masterVolume: loadVolume('alloy:vol:master', 0.8),
@@ -105,6 +119,7 @@ export const useUIStore =createHmrStore<UIStore>('uiStore', (set) => ({
   shake: loadNumber('alloy:delve:fx:shake', 1, FX_RANGE),
   hitstop: loadNumber('alloy:delve:fx:hitstop', 1, FX_RANGE),
   flash: loadNumber('alloy:delve:fx:flash', 1, FX_RANGE),
+  seen: loadSeen(),
 
   toggleMute: () => set((s) => {
     const next = !s.isMuted;
@@ -154,4 +169,10 @@ export const useUIStore =createHmrStore<UIStore>('uiStore', (set) => ({
     try { localStorage.setItem(`alloy:delve:fx:${kind}`, String(v)); } catch { /* noop */ }
     set({ [kind]: v } as Pick<UIStore, FxKind>);
   },
+  markSeen: (id) => set((s) => {
+    if (s.seen.includes(id)) return s;
+    const seen = [...s.seen, id];
+    try { localStorage.setItem('alloy:delve:seen', JSON.stringify(seen)); } catch { /* noop */ }
+    return { seen };
+  }),
 }));
