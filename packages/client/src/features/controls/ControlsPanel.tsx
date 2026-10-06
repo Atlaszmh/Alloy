@@ -10,12 +10,15 @@ import {
   DEADZONE_LIMITS,
   MOVE_KEYS,
   REPEAT_ACTIONS,
+  SENSITIVITY_LIMITS,
   exportControls,
   keyLabel,
   padLabel,
   type ControlAction,
   type KeyAction,
 } from './controls';
+
+const percent = (v: number) => `${Math.round(v * 100)}%`;
 
 type Capture = { kind: 'pad'; action: ControlAction } | { kind: 'key'; action: KeyAction };
 
@@ -137,7 +140,9 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           {MOVE_KEYS.map((a) => (
             <div key={a} className="contents">
               <span className="text-[var(--k-text)]">{ACTION_LABELS[a]}</span>
-              <span className="text-center text-[16px]">Left stick</span>
+              <span className="text-center text-[16px]">
+                {cfg.swapSticks ? 'Right stick' : 'Left stick'}
+              </span>
               {cell(`bind-key-${a}`, keyLabel(cfg.keys[a]), isCapturing('key', a), () =>
                 setCapturing({ kind: 'key', action: a }),
               )}
@@ -162,6 +167,14 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
         </section>
 
         <section className="flex flex-col gap-2">
+          <Chip
+            className="self-start"
+            pressed={cfg.swapSticks}
+            onClick={() => store().setSwapSticks(!cfg.swapSticks)}
+            testId="swap-sticks"
+          >
+            Swap sticks: move on the right, aim on the left
+          </Chip>
           <Slider
             id="deadzone-left"
             label="Move stick deadzone"
@@ -171,12 +184,28 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
             onChange={(v) => store().setDeadzone('left', v)}
           />
           <Slider
+            id="sensitivity-left"
+            label="Move stick sensitivity"
+            value={cfg.sensitivity.left}
+            limits={SENSITIVITY_LIMITS}
+            format={percent}
+            onChange={(v) => store().setSensitivity('left', v)}
+          />
+          <Slider
             id="deadzone-right"
             label="Aim stick deadzone"
             value={cfg.deadzone.right}
             limits={DEADZONE_LIMITS.right}
             format={(v) => v.toFixed(2)}
             onChange={(v) => store().setDeadzone('right', v)}
+          />
+          <Slider
+            id="sensitivity-right"
+            label="Aim stick sensitivity"
+            value={cfg.sensitivity.right}
+            limits={SENSITIVITY_LIMITS}
+            format={percent}
+            onChange={(v) => store().setSensitivity('right', v)}
           />
           <Slider
             id="aim-reach"
