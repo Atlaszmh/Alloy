@@ -130,6 +130,12 @@ export function ForgeBench({
   const id = useId();
   // A first visit's line rides the forge prompt (under the pad, Select: A on Forge forges).
   const { hint, done } = useOnboarding('forge', !locked);
+  // What the save holds none of folds to one line (a guided save, which Hesta leads through the
+  // Flux row and a line's shard, folds nothing).
+  const guided = useDelveStore((s) => s.profile.tutorial !== null);
+  const anyFlux = guided || FLUX_GRADES.some((g) => fluxHeld[g] > 0);
+  const anyShard =
+    guided || Object.values(profile.materials.shards).some((ns) => ns?.some((n) => n > 0));
 
   const request = (f: FluxGrade | null, e: string | null, s: ShardRef[]): ForgeRequest => ({
     baseId: baseId!,
@@ -142,7 +148,7 @@ export function ForgeBench({
   const req = baseId ? request(flux, essence, shards) : null;
   const preview = req && previewForge(registry, profile, req);
 
-  // A pattern picked puts the focus on the Flux row. A shard picked puts it on Forge, so Enter
+  // A pattern picked puts the focus on the Flux row (folded, the first row). A shard picked puts it on Forge, so Enter
   // or A forges next; refused, on its line (the reason under Forge). A step never moves it.
   const rowsRef = useRef<HTMLDivElement>(null);
   const focusTo = useRef<'rows' | number | null>(null);
@@ -152,7 +158,7 @@ export function ForgeBench({
     focusTo.current = null;
     const el =
       to === 'rows'
-        ? rowsRef.current?.querySelector<HTMLElement>('[data-testid="forge-flux"]')
+        ? rowsRef.current?.querySelector<HTMLElement>('[data-testid="forge-flux"], [role="spinbutton"]')
         : preview && !preview.refused
           ? document.getElementById(`${id}-forge`)
           : rowsRef.current?.querySelector<HTMLElement>(`[data-testid="shard-slot-${to}"]`);
@@ -323,22 +329,28 @@ export function ForgeBench({
           </div>
         ) : (
           <div ref={rowsRef} className="flex flex-col gap-4">
-            <Stepper
-              label="Flux"
-              testId="forge-flux"
-              tutorial="forge.flux"
-              done={flux !== null}
-              value={flux ?? 'none'}
-              onChange={(f) => pickIngot(f === 'none' ? null : f, essence)}
-              options={[
-                { id: 'none' as const, label: 'None · common', text: 'None' },
-                ...FLUX_GRADES.filter((g) => fluxHeld[g] > 0).map((g) => {
-                  const text = `${RARITY_LABEL[g]} ×${fluxHeld[g]}`;
-                  return { id: g, label: text, text };
-                }),
-              ]}
-              note={FLUX_GRADES.some((g) => fluxHeld[g] === 0) ? DROPS_FROM.flux : undefined}
-            />
+            {anyFlux ? (
+              <Stepper
+                label="Flux"
+                testId="forge-flux"
+                tutorial="forge.flux"
+                done={flux !== null}
+                value={flux ?? 'none'}
+                onChange={(f) => pickIngot(f === 'none' ? null : f, essence)}
+                options={[
+                  { id: 'none' as const, label: 'None · common', text: 'None' },
+                  ...FLUX_GRADES.filter((g) => fluxHeld[g] > 0).map((g) => {
+                    const text = `${RARITY_LABEL[g]} ×${fluxHeld[g]}`;
+                    return { id: g, label: text, text };
+                  }),
+                ]}
+                note={FLUX_GRADES.some((g) => fluxHeld[g] === 0) ? DROPS_FROM.flux : undefined}
+              />
+            ) : (
+              <p className="k-note" data-testid="forge-flux-none">
+                Flux: none held. {DROPS_FROM.flux}
+              </p>
+            )}
             {heldMetals.length > 0 ? (
               <Stepper
                 label="Metal"
@@ -404,27 +416,48 @@ export function ForgeBench({
               {preview.lines.length === 0 && (
                 <p className="k-note">A common item rolls no lines: add flux for some.</p>
               )}
-              {preview.lines.map((l, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className="k-well flex items-center justify-between gap-3 p-2 text-left"
-                  onClick={() => setPicking(i)}
-                  data-testid={`shard-slot-${i}`}
-                >
-                  <span className="text-[16px]">
-                    Line {i + 1} ·{' '}
-                    {l.shard
-                      ? `${shardName(registry, l.shard)}: ${
-                          l.range ? valueRange(registry, l.shard.stat, l.range[0], l.range[1]) : ''
-                        }`
-                      : 'Random'}
-                  </span>
-                  <span className="k-caption">
-                    rolls {pct(l.band[0])}–{pct(l.band[1])}
-                  </span>
-                </button>
-              ))}
+              {preview.lines.map((l, i) => {
+                const text = (
+                  <>
+                    <span className="text-[16px]">
+                      Line {i + 1} ·{' '}
+                      {l.shard
+                        ? `${shardName(registry, l.shard)}: ${
+                            l.range ? valueRange(registry, l.shard.stat, l.range[0], l.range[1]) : ''
+                          }`
+                        : 'Random'}
+                    </span>
+                    <span className="k-caption">
+                      rolls {pct(l.band[0])}–{pct(l.band[1])}
+                    </span>
+                  </>
+                );
+                // No shard held: a line is text, not a way into an empty picker.
+                return anyShard ? (
+                  <button
+                    key={i}
+                    type="button"
+                    className="k-well flex items-center justify-between gap-3 p-2 text-left"
+                    onClick={() => setPicking(i)}
+                    data-testid={`shard-slot-${i}`}
+                  >
+                    {text}
+                  </button>
+                ) : (
+                  <p
+                    key={i}
+                    className="k-well flex items-center justify-between gap-3 p-2"
+                    data-testid={`forge-line-${i}`}
+                  >
+                    {text}
+                  </p>
+                );
+              })}
+              {!anyShard && preview.lines.length > 0 && (
+                <p className="k-note" data-testid="forge-lines-none">
+                  Shards set a line: {DROPS_FROM.shard}
+                </p>
+              )}
             </div>
             <Button
               id={`${id}-forge`}

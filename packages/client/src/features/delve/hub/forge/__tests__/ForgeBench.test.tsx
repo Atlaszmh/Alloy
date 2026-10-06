@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { useState } from 'react';
-import { act, render, screen, fireEvent, within } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   emptyMaterials,
@@ -97,6 +97,7 @@ describe('ForgeBench', () => {
   });
 
   it('the bench is rows: Flux, Metal and Element steppers over what the save holds, then the Lines, then Forge', () => {
+    putShard('maxHp', 1); // a shard held: the lines are buttons (none held folds them: its own test)
     bench();
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
     const rows = screen.getByTestId('forge-bench');
@@ -492,10 +493,10 @@ describe('ForgeBench', () => {
     expect(uses()).toHaveTextContent(/^Uses Rusty bar, Uncommon flux$/);
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Uncommon Cuirass');
     expect(screen.getByTestId('forge-button')).toBeEnabled();
-    // The last of every grade forged away: no flux, a common item.
+    // The last of every grade forged away: no flux (the row folds to its line), a common item.
     fireEvent.click(screen.getByTestId('forge-button'));
     fireEvent.click(screen.getByTestId('forge-button'));
-    expect(flux()).toHaveAttribute('aria-valuetext', 'None');
+    expect(screen.getByTestId('forge-flux-none')).toBeInTheDocument();
     expect(uses()).toHaveTextContent(/^Uses Rusty bar$/);
   });
 
@@ -585,5 +586,32 @@ describe('ForgeBench', () => {
     const setPrompts = bench(true);
     expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
     expect(setPrompts).not.toHaveBeenCalled();
+  });
+
+  it('a save with no flux sees one line for Flux, and with no shard the Lines as text; a guided save folds nothing', () => {
+    const rusty = { ...emptyMaterials().metals, rusty: 5 };
+    withMaterials({ metals: rusty });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.queryByTestId('forge-flux')).toBeNull();
+    expect(screen.getByTestId('forge-flux-none')).toHaveTextContent(`Flux: none held. ${DROPS_FROM.flux}`);
+    expect(screen.queryByTestId('shard-slot-0')).toBeNull(); // a common cuirass rolls no lines anyway
+    cleanup();
+    // Uncommon flux and still no shard: the flux row is back, the line is text.
+    withMaterials({ metals: rusty, flux: { ...emptyMaterials().flux, uncommon: 1 } });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.getByTestId('forge-flux')).toBeInTheDocument();
+    stepFluxTo('uncommon');
+    expect(screen.queryByTestId('shard-slot-0')).toBeNull();
+    expect(screen.getByTestId('forge-line-0')).toHaveTextContent(/^Line 1 · Random/);
+    expect(screen.getByTestId('forge-lines-none')).toHaveTextContent(DROPS_FROM.shard);
+    cleanup();
+    // Guided: today's rows, flux or not.
+    act(() => store().startTutorial());
+    withMaterials({ metals: rusty });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.getByTestId('forge-flux')).toBeInTheDocument();
   });
 });
