@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures/responsive-fixture';
-import { PC_VIEWPORTS } from '../viewports';
+import { PC_VIEWPORTS, TEXT_VIEWPORTS, textSizeFor } from '../viewports';
 import { armed, seedProfile, stepTo } from '../../fixtures/delve';
 import {
   applyQuestEvents,
@@ -36,7 +36,7 @@ const JUNK = {
 
 const TABS = ['loadout', 'skills', 'forge', 'codex', 'quests'] as const;
 
-for (const vp of PC_VIEWPORTS) {
+for (const vp of [...PC_VIEWPORTS, ...TEXT_VIEWPORTS]) {
   for (const tab of TABS) {
     test(`Delve Anvil ${tab} @ ${vp.name} (${vp.width}×${vp.height})`, async ({
       page,
@@ -44,6 +44,7 @@ for (const vp of PC_VIEWPORTS) {
     }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await seedProfile(page, 4242, false);
+      await textSizeFor(page, vp);
       await page.goto('/delve');
       await page.getByTestId(`tab-${tab}`).click();
       await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
@@ -59,6 +60,7 @@ for (const vp of PC_VIEWPORTS) {
     }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await seedProfile(page, 4242, false);
+      await textSizeFor(page, vp);
       await page.goto('/delve');
       await page.getByTestId('tab-forge').click();
       if (bench === 'temper') {
@@ -81,6 +83,7 @@ for (const vp of PC_VIEWPORTS) {
     test(`Delve Anvil ${view} @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await seedProfile(page, 4242, false);
+      await textSizeFor(page, vp);
       await page.goto('/delve');
       await page.getByTestId('tab-skills').click();
       await page.getByTestId('move-0').click();
@@ -101,6 +104,7 @@ for (const vp of PC_VIEWPORTS) {
   test(`Delve Anvil help @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await seedProfile(page, 4242, false);
+    await textSizeFor(page, vp);
     await page.goto('/delve');
     await expect(page.getByTestId('depart-button')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -113,6 +117,7 @@ for (const vp of PC_VIEWPORTS) {
   test(`Delve Anvil junk @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await seedProfile(page, 4242, false, undefined, JUNK);
+    await textSizeFor(page, vp);
     await page.goto('/delve');
     await page.getByTestId('salvage-junk').click();
     await expect(page.getByTestId('junk-row')).toHaveCount(2);
@@ -129,6 +134,7 @@ for (const vp of PC_VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       const over = state === 'contract' ? {} : { quests: QUESTS[state] };
       await seedProfile(page, 4242, false, undefined, over);
+      await textSizeFor(page, vp);
       await page.goto('/delve');
       await page.getByTestId('tab-quests').click();
       if (state === 'contract') {

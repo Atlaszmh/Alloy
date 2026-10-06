@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+
 export type DeviceTag =
   | 'mobile'
   | 'mobile-landscape'
@@ -6,11 +8,16 @@ export type DeviceTag =
   | 'desktop'
   | 'ultrawide';
 
+/** Settings → Text size, for the views that carry one (seeded before the page loads). */
+export type TextSizeName = 'medium' | 'large';
+
 export interface Viewport {
   name: string;
   width: number;
   height: number;
   device: DeviceTag;
+  /** The Delve's Text size for this run (none: Small). */
+  text?: TextSizeName;
 }
 
 export const VIEWPORTS: readonly Viewport[] = [
@@ -38,3 +45,17 @@ export const PC_VIEWPORTS: readonly Viewport[] = [
   { name: 'sxga',      width: 1280, height: 1024, device: 'desktop' },
   { name: 'ultrawide', width: 3440, height: 1440, device: 'ultrawide' },
 ] as const;
+
+/**
+ * The text-size runs (the pad-first spec, 6): every Delve screen holds Large at 1920×1080 and
+ * Medium at 1280×800 (where Large is capped to Medium's zoom, so it is the same run).
+ */
+export const TEXT_VIEWPORTS: readonly Viewport[] = [
+  { name: 'fhd-large', width: 1920, height: 1080, device: 'desktop', text: 'large' },
+  { name: 'deck-medium', width: 1280, height: 800, device: 'desktop', text: 'medium' },
+] as const;
+
+/** Set `vp`'s text size before the page loads. Call after `seedProfile`, whose init script clears storage first. */
+export async function textSizeFor(page: Page, vp: Viewport): Promise<void> {
+  if (vp.text) await page.addInitScript((t) => localStorage.setItem('alloy:delve:textSize', t), vp.text);
+}
