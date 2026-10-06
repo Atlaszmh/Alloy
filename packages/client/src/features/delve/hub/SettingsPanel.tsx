@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { HUD_SCALE_RANGE, VIEW_UNITS_RANGE, useUIStore } from '@/stores/uiStore';
+import { HUD_SCALE_RANGE, VIEW_UNITS_RANGE, useUIStore, type FxKind } from '@/stores/uiStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Chip, Dialog, Segmented, TEXT_SIZES, menuScaleFor, type TextSize } from '@/features/delve/kit';
 import { uiScaleFor } from '@/features/delve/kit/prompts';
@@ -25,13 +25,21 @@ const TEXT_SIZE_OPTIONS: { id: TextSize; label: string; testId: string }[] = [
 /** Text size's names, for the line that says a window caps it. */
 const TEXT_SIZE_LABEL: Record<TextSize, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 
+/** Settings → Effects' sliders, each 0 (off) to 100%. */
+const FX: { kind: FxKind; label: string }[] = [
+  { kind: 'shake', label: 'Screen shake' },
+  { kind: 'hitstop', label: 'Hit-stop' },
+  { kind: 'flash', label: 'Flashes' },
+];
+
 /** Settings → HUD scale, in percent (the spec's 80 to 125%). */
 const HUD_PERCENT = HUD_SCALE_RANGE.map((v) => Math.round(v * 100));
 
 /**
  * The Delve's Settings (from the system menu): the same `uiStore` fields as
  * the classic drawer (volumes, mute, colorblind mode), the HUD (Lean or Full),
- * Text size, the HUD scale, View distance, and the version, which the Delve has no TabBar to show.
+ * Text size, the HUD scale, View distance, Effects (shake, hit-stop, flashes), and the version,
+ * which the Delve has no TabBar to show.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const ui = useUIStore();
@@ -125,6 +133,25 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
           <p className="text-[16px] text-[var(--k-text-3)]" data-testid="view-distance-value">
             {zoom.scale} px per pixel · {Number(zoom.unitsTall.toFixed(1))} units tall
+          </p>
+        </Section>
+        <Section title="Effects">
+          {FX.map(({ kind, label }) => (
+            <Slider
+              key={kind}
+              id={`fx-${kind}`}
+              label={label}
+              min={0}
+              max={100}
+              step={10}
+              value={Math.round(ui[kind] * 100)}
+              shown={`${Math.round(ui[kind] * 100)}%`}
+              onChange={(v) => ui.setFx(kind, v / 100)}
+            />
+          ))}
+          <p className="k-note m-0" data-testid="fx-off-note">
+            0 turns an effect off. Your system's reduced motion turns off the shake whatever this
+            says.
           </p>
         </Section>
         {/* Last, full width over Done: the D-pad's way down to Done runs through it. */}

@@ -16,6 +16,11 @@ function loadVolume(key: string, fallback: number): number {
 /** Delve UI: the dive's HUD, Lean (a gain feed, the map and one objective) or Full (the purse bar, the floor column, the Found log). */
 export type HudMode = 'lean' | 'full';
 
+/** Settings → Effects: screen shake (the camera kick too), hit-stop, and flashes. */
+export type FxKind = 'shake' | 'hitstop' | 'flash';
+/** Settings → Effects' range: 0 (off) to 1 (full). */
+export const FX_RANGE = [0, 1] as const;
+
 interface UIStore {
   isMuted: boolean;
   masterVolume: number;
@@ -34,6 +39,12 @@ interface UIStore {
   arenaViewUnits: number;
   /** Delve UI: Settings → HUD, 'lean' by default (`alloy:delve:hud`). */
   hudMode: HudMode;
+  /** Delve UI: Settings → Effects → Screen shake (the camera kick too), 0 (off) to 1 (`alloy:delve:fx:shake`). */
+  shake: number;
+  /** Delve UI: Settings → Effects → Hit-stop, 0 (off) to 1 (`alloy:delve:fx:hitstop`). */
+  hitstop: number;
+  /** Delve UI: Settings → Effects → Flashes (the floor's light flashes, the hurt flash), 0 (off) to 1 (`alloy:delve:fx:flash`). */
+  flash: number;
 
   toggleMute: () => void;
   setVolume: (category: 'master' | SoundCategory, value: number) => void;
@@ -43,6 +54,8 @@ interface UIStore {
   setHudScale: (scale: number) => void;
   setArenaViewUnits: (units: number) => void;
   setHudMode: (mode: HudMode) => void;
+  /** Settings → Effects: one strength, clamped to 0..1 and kept on this device. */
+  setFx: (kind: FxKind, value: number) => void;
 }
 
 /** Settings → HUD scale's range (the spec's 80 to 125%). */
@@ -89,6 +102,9 @@ export const useUIStore =createHmrStore<UIStore>('uiStore', (set) => ({
       return 'lean';
     }
   })() as HudMode,
+  shake: loadNumber('alloy:delve:fx:shake', 1, FX_RANGE),
+  hitstop: loadNumber('alloy:delve:fx:hitstop', 1, FX_RANGE),
+  flash: loadNumber('alloy:delve:fx:flash', 1, FX_RANGE),
 
   toggleMute: () => set((s) => {
     const next = !s.isMuted;
@@ -132,5 +148,10 @@ export const useUIStore =createHmrStore<UIStore>('uiStore', (set) => ({
   setHudMode: (mode) => {
     try { localStorage.setItem('alloy:delve:hud', mode); } catch { /* noop */ }
     set({ hudMode: mode });
+  },
+  setFx: (kind, value) => {
+    const v = clamp(value, FX_RANGE);
+    try { localStorage.setItem(`alloy:delve:fx:${kind}`, String(v)); } catch { /* noop */ }
+    set({ [kind]: v } as Pick<UIStore, FxKind>);
   },
 }));

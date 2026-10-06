@@ -108,4 +108,31 @@ describe('SettingsPanel', () => {
       expect(screen.queryByTestId('text-size-capped')).toBeNull();
     });
   });
+
+  describe('Effects', () => {
+    afterEach(() => {
+      for (const k of ['shake', 'hitstop', 'flash'] as const) {
+        useUIStore.getState().setFx(k, 1);
+        localStorage.removeItem(`alloy:delve:fx:${k}`);
+      }
+    });
+
+    it('Screen shake, Hit-stop and Flashes, 0 to 100%, full by default, saved for this device', () => {
+      render(<SettingsPanel onClose={() => {}} />);
+      for (const [id, kind] of [
+        ['fx-shake', 'shake'],
+        ['fx-hitstop', 'hitstop'],
+        ['fx-flash', 'flash'],
+      ] as const) {
+        const slider = screen.getByTestId(id);
+        expect(slider).toHaveAttribute('min', '0');
+        expect(slider).toHaveAttribute('max', '100');
+        expect(slider).toHaveValue('100');
+        fireEvent.change(slider, { target: { value: '0' } });
+        expect(useUIStore.getState()[kind]).toBe(0);
+        expect(localStorage.getItem(`alloy:delve:fx:${kind}`)).toBe('0');
+      }
+      expect(screen.getByTestId('fx-off-note')).toHaveTextContent('0 turns an effect off');
+    });
+  });
 });
