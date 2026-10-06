@@ -96,12 +96,12 @@ export function TransferNotes({ worn, item }: { worn: GearItem; item: GearItem }
   return (
     <>
       {leaves.length > 0 && (
-        <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-leaves">
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-leaves">
           Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
         </span>
       )}
       {transfer.runes.length > 0 && (
-        <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-runes">
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-runes">
           {pull === 'destroy'
             ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
             : `${runeNames(registry, transfer.runes)} back to your pouch`}
@@ -298,7 +298,7 @@ export function ComparePane({
                 Locked during the dive
               </span>
             </span>
-            <span className="text-[16px] text-[var(--k-wood-text)]">
+            <span className="text-[18px] text-[var(--k-wood-text)]">
               Equip it at the Anvil between dives, or take Equip as is at the next stop.
             </span>
           </div>
@@ -342,7 +342,7 @@ export function ComparePane({
             )}
             {yields && (yields.shards.length > 0 || yields.pattern || yields.essence) && (
               <span
-                className="flex flex-col text-[14px] text-[var(--k-text-2)]"
+                className="flex flex-col text-[18px] text-[var(--k-text-2)]"
                 data-testid="salvage-yield"
               >
                 {yields.shards.length > 0 && (

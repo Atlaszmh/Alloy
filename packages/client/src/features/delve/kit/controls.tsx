@@ -379,7 +379,7 @@ export function Bar({
       {label !== undefined && (
         <span
           className="k-bar-label k-disp"
-          style={{ fontSize: Math.max(14, Math.round(height * 0.7)) }}
+          style={{ fontSize: Math.max(16, Math.round(height * 0.7)) }}
         >
           {label}
         </span>

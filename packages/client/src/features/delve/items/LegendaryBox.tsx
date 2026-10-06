@@ -24,7 +24,7 @@ export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null 
   const dead = !!needs && !carriedSkills(registry, weapon ?? null).includes(needs);
   return (
     <div
-      className="mt-2 rounded-lg px-3 py-2 text-[16px]"
+      className="mt-2 rounded-lg px-3 py-2 text-[18px]"
       style={{
         background: 'rgba(251,146,60,0.1)',
         border: '1px solid rgba(251,146,60,0.45)',
@@ -36,7 +36,7 @@ export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null 
       </div>
       {legendaryText(registry, item.legendary.id, item.legendary.value)}
       {dead && needs && (
-        <div className="mt-1 text-[14px] font-semibold text-amber-200" data-testid="legendary-dead">
+        <div className="mt-1 text-[18px] font-semibold text-amber-200" data-testid="legendary-dead">
           {NEEDS_TEXT[needs]}: your weapon doesn't carry one.
         </div>
       )}

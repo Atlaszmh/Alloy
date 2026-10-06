@@ -28,7 +28,7 @@ function qualityColor(roll: number): string {
 /** Marks an attunement line of an element outside the pair: it grants nothing. */
 function NotMine() {
   return (
-    <span className="ml-1.5 text-[14px] text-[var(--k-text-3)]" data-testid="not-your-element">
+    <span className="ml-1.5 text-[16px] text-[var(--k-text-3)]" data-testid="not-your-element">
       not your element
     </span>
   );
@@ -38,7 +38,7 @@ function NotMine() {
 export function ImplicitLine({ line }: { line: ItemStatLine }) {
   const off = useOffPair(line.stat);
   return (
-    <div className="text-[16px]" style={{ color: off ? '#57534e' : '#d6d3d1' }}>
+    <div className="text-[18px]" style={{ color: off ? '#57534e' : '#d6d3d1' }}>
       {formatStat(getDelveRegistry(), line.stat, line.value)}
       {off && <NotMine />}
     </div>
@@ -50,7 +50,7 @@ export function AffixLine({ line }: { line: ItemStatLine }) {
   const off = useOffPair(line.stat);
   return (
     <>
-      <div className="flex items-center justify-between text-[16px]">
+      <div className="flex items-center justify-between text-[18px]">
         <span style={{ color: off ? '#57534e' : '#93c5fd' }}>
           {formatStat(getDelveRegistry(), line.stat, line.value)}
           {off && <NotMine />}

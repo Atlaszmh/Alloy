@@ -176,7 +176,7 @@ export function EquippedPane({
               Skills ›
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-2 text-[14px] text-[var(--k-text-2)]">
+          <div className="grid grid-cols-4 gap-2 text-[16px] text-[var(--k-text-2)]">
             {CHAIN_SKILLS.map((s) => (
               <span key={s} data-testid={`loadout-moveset-${s}`}>
                 {SKILL_NAME[s]} {carried.includes(s) ? `${slots[s]}/${cap[s]}` : '—'}
