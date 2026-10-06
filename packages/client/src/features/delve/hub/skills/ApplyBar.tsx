@@ -104,7 +104,7 @@ export function ApplyBar({ onDelve, onApply }: { onDelve: () => void; onApply: (
         {applyNote && (
           <span
             id={`${id}-apply`}
-            className="text-[14px] text-[var(--k-bad-text)]"
+            className="text-[18px] text-[var(--k-bad-text)]"
             data-testid="chain-apply-why"
           >
             {applyNote}

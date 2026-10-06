@@ -22,7 +22,7 @@ export function RuneGlyph({
   const color = FAMILY_STYLE[def.family].color;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border text-[14px] leading-none ${size === 'sm' ? 'px-1 py-px' : 'px-1.5 py-1'}`}
+      className={`inline-flex items-center gap-1 rounded-full border text-[16px] leading-none ${size === 'sm' ? 'px-1 py-px' : 'px-1.5 py-1'}`}
       style={{ borderColor: color, opacity: dormant ? 0.4 : 1 }}
       role="img"
       aria-label={`${runeName(registry, rune)}${dormant ? ', dormant' : ''}`}

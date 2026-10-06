@@ -64,14 +64,14 @@ export function FormPicker({ ed, onClose }: { ed: ChainEditorModel; onClose: () 
                   <Glyph id={f.id} size={20} />
                   <span className="k-disp text-[18px]">{f.name}</span>
                 </span>
-                <span className="k-caption">{f.text}</span>
+                <span className="k-note">{f.text}</span>
                 {out.length > 0 ? (
-                  <span className="text-[14px] text-[var(--k-hot)]">
+                  <span className="text-[16px] text-[var(--k-hot)]">
                     {listed(out)} doesn't fit a {f.name}
                   </span>
                 ) : (
                   shift && (
-                    <span className="text-[14px]" data-testid={`form-damage-${f.id}`}>
+                    <span className="text-[16px]" data-testid={`form-damage-${f.id}`}>
                       {shift}
                     </span>
                   )

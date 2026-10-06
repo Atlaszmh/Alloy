@@ -84,7 +84,7 @@ function RuneEffect({
   const { effect, tradeoff, cost } = runeText(getDelveRegistry(), rune, on, terms);
   const price = dimmed ? null : cost;
   return (
-    <span id={id} className="text-[14px] leading-snug text-stone-400">
+    <span id={id} className="text-[18px] leading-snug text-stone-400">
       {effect}
       {tradeoff && ' · '}
       {tradeoff && <span className="text-amber-200/80">{tradeoff}</span>}
@@ -177,7 +177,7 @@ export function RunePicker({
             <RuneEffect rune={current} on={on} terms={terms} dimmed={dormant} />
           </div>
           {dormant && (
-            <span className="text-[14px] text-amber-200/90" data-testid="rune-dormant">
+            <span className="text-[18px] text-amber-200/90" data-testid="rune-dormant">
               {dormantText(registry.getRune(current.id))}
             </span>
           )}
@@ -214,12 +214,12 @@ export function RunePicker({
         </div>
       )}
       {current && rows.length > 0 && (
-        <div className="delve-display text-[14px] font-bold uppercase tracking-widest text-amber-300/80">
+        <div className="delve-display text-[16px] font-bold uppercase tracking-widest text-amber-300/80">
           Replace with
         </div>
       )}
       {rows.length === 0 && (
-        <div className="text-[14px] text-stone-400" data-testid="rune-none">
+        <div className="text-[18px] text-stone-400" data-testid="rune-none">
           {tierChoice ? 'No rune fits this move.' : 'No rune in your pouch fits this move.'}
         </div>
       )}
@@ -246,7 +246,7 @@ export function RunePicker({
               <span className="flex items-center gap-2">
                 <RuneGlyph rune={rune} dormant={idle} />
                 <span className="flex-1">{runeName(registry, rune)}</span>
-                {count !== null && <span className="text-[14px] text-stone-400">×{count}</span>}
+                {count !== null && <span className="text-[16px] text-stone-400">×{count}</span>}
               </span>
               <RuneEffect
                 rune={rune}
@@ -258,7 +258,7 @@ export function RunePicker({
               />
               {shift && (
                 <span
-                  className="text-[14px] text-[var(--k-text-2)]"
+                  className="text-[16px] text-[var(--k-text-2)]"
                   data-testid={`rune-damage-${rune.id}`}
                 >
                   {shift}

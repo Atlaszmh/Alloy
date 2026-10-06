@@ -57,7 +57,7 @@ export function ApplySheet({ skill, onClose: close }: { skill: ChainSkill; onClo
               {l.before && <span className="text-[var(--k-text-3)] line-through">{l.before}</span>}
               <span>{l.after}</span>
               {l.notes.map((n) => (
-                <span key={n} className="text-[14px] text-[var(--k-text-3)]">
+                <span key={n} className="text-[18px] text-[var(--k-text-3)]">
                   {n}
                 </span>
               ))}
@@ -117,7 +117,7 @@ export function ApplySheet({ skill, onClose: close }: { skill: ChainSkill; onClo
             Discard changes
           </Button>
         </div>
-        <span className="text-[14px] text-[var(--k-text-3)]">
+        <span className="text-[18px] text-[var(--k-text-3)]">
           Try in Training loads this build into the Training Grounds without applying it.
         </span>
       </div>

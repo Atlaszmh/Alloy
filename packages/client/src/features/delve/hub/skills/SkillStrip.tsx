@@ -48,7 +48,7 @@ export function SkillStrip({
                   </span>
                 ) : (
                   <span
-                    className="k-caption max-w-[220px] whitespace-normal opacity-60"
+                    className="k-note max-w-[220px] whitespace-normal opacity-60"
                     data-absent=""
                   >
                     {absentText?.(s)}
@@ -88,7 +88,7 @@ function ManaPair({ stats, onMana }: { stats: HeroStats; onMana: () => void }) {
           []
         ),
       )}
-      <span className="k-caption min-w-0">
+      <span className="k-note min-w-0">
         {secondary
           ? `${style(secondary).name} overtakes ${style(primary).name} past ${+overtake.need.toFixed(1)} (now ${overtake.have}). Reaction: ${registry.getReactionFor(primary, secondary).name}.`
           : 'No second element yet: bind one in the Mana view.'}

@@ -43,7 +43,7 @@ export function MoveInspector({
   if (ed.absent || !move)
     return (
       <Panel as="aside" aria-label="Move inspector">
-        <p className="m-0 text-[16px] text-[var(--k-text-3)]">
+        <p className="m-0 text-[18px] text-[var(--k-text-3)]">
           This weapon doesn't carry this skill.
         </p>
       </Panel>
@@ -75,7 +75,7 @@ export function MoveInspector({
             Move {index + 1} · {ed.names[index]}
           </h2>
           {anvil.changed[ed.skill] && (
-            <span className="text-[14px] text-[var(--k-text-3)]" data-testid="move-edited">
+            <span className="text-[16px] text-[var(--k-text-3)]" data-testid="move-edited">
               edited
             </span>
           )}
@@ -83,7 +83,7 @@ export function MoveInspector({
         {editing ? (
           <MoveRows ed={ed} anvil={anvil} onClose={onClose} onApply={onApply} />
         ) : (
-          <div className="flex min-w-0 flex-col gap-2 text-[14px] text-[var(--k-text-3)]">
+          <div className="flex min-w-0 flex-col gap-2 text-[16px] text-[var(--k-text-3)]">
             <span data-testid="detail-kind">
               {'form' in move
                 ? KIND_HINT[move.kind]

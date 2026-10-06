@@ -195,7 +195,7 @@ export function MoveRows({
         }
       />
       {off.length > 0 && (
-        <span className="text-[14px] text-[var(--k-hot)]" data-testid="off-pair-note">
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="off-pair-note">
           {off.map(name).join(' and ')} off-pair: no attunement. Keep it, or pick from your two
           elements.
         </span>
@@ -223,16 +223,16 @@ export function MoveRows({
               {r ? (
                 <RuneGlyph rune={r} dormant={idle} />
               ) : (
-                <span aria-hidden className="text-[14px] text-[var(--k-steel-3)]">
+                <span aria-hidden className="text-[16px] text-[var(--k-steel-3)]">
                   ◇
                 </span>
               )}
               <span className="font-semibold">{r ? runeName(registry, r) : 'Empty socket'}</span>
-              <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--k-text-3)]">
+              <span className="min-w-0 flex-1 truncate text-[16px] text-[var(--k-text-3)]">
                 {r ? (idle ? dormantText(registry.getRune(r.id)) : text!.effect) : 'pick a rune'}
               </span>
               {text?.cost && !idle && (
-                <span className="text-[14px] text-[var(--k-hot-hi)]">{text.cost}</span>
+                <span className="text-[16px] text-[var(--k-hot-hi)]">{text.cost}</span>
               )}
             </button>
           );
@@ -260,7 +260,7 @@ export function MoveRows({
           {ed.openWhy && (
             <span
               id="socket-open-why"
-              className="text-[14px] text-[var(--k-hot)]"
+              className="text-[18px] text-[var(--k-hot)]"
               data-testid="socket-open-why"
             >
               {ed.openWhy}

@@ -112,12 +112,12 @@ export function ChainLane({
           </span>
         )}
       </div>
-      <p className="k-caption m-0" data-testid="abilities-summary">
+      <p className="k-note m-0" data-testid="abilities-summary">
         {absent ? absentText?.(skill) : chainText(names)}
       </p>
       {locked && !absent && (
         <div
-          className="k-well p-3 text-center text-[16px] text-[var(--k-hot)]"
+          className="k-well p-3 text-center text-[18px] text-[var(--k-hot)]"
           data-testid="abilities-locked"
         >
           {ed.lockedText}
@@ -195,13 +195,13 @@ export function ChainLane({
                       <span className="k-disp truncate text-[21px]">
                         {'form' in e ? registry.getForm(e.form).name : ed.weapon}
                       </span>
-                      <span className="text-[14px]" style={{ color }}>
+                      <span className="text-[16px]" style={{ color }}>
                         {ab?.fusion?.name ?? manaStyle(registry, el).name}
                       </span>
                     </span>
                   </span>
                   {off && (
-                    <span className="text-[14px] text-[var(--k-hot)]" data-testid="card-off-pair">
+                    <span className="text-[16px] text-[var(--k-hot)]" data-testid="card-off-pair">
                       off-pair
                     </span>
                   )}
@@ -221,7 +221,7 @@ export function ChainLane({
                     </span>
                   )}
                   {ab && (
-                    <span className="ml-auto whitespace-nowrap text-[14px] text-[var(--k-text-3)]">
+                    <span className="ml-auto whitespace-nowrap text-[16px] text-[var(--k-text-3)]">
                       {ab.payment === 'charge'
                         ? `Charge ${Math.round(ab.chargeNeed)}`
                         : `${Math.round(ab.cost)} mana`}
@@ -235,7 +235,7 @@ export function ChainLane({
         {!absent && entries.length < slots && (
           <button
             type="button"
-            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[14px] text-[var(--k-text-3)]"
+            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[16px] text-[var(--k-text-3)]"
             disabled={locked}
             aria-label="Add a move"
             onClick={ed.add}
@@ -248,7 +248,7 @@ export function ChainLane({
         {!absent && offer.price && (
           <button
             type="button"
-            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[14px] text-[var(--k-text-3)]"
+            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[16px] text-[var(--k-text-3)]"
             disabled={locked || !!offer.why}
             aria-describedby={offer.why && !locked ? `${id}-slot` : undefined}
             onClick={() => anvil.buySlot(skill)}
@@ -264,7 +264,7 @@ export function ChainLane({
       {offer.why && !locked && (
         <span
           id={`${id}-slot`}
-          className="text-[14px] text-[var(--k-hot)]"
+          className="text-[18px] text-[var(--k-hot)]"
           data-testid="add-slot-why"
         >
           {offer.why}
@@ -273,7 +273,7 @@ export function ChainLane({
       {message && (
         <span
           role="status"
-          className="text-[14px] text-[var(--k-bad-text)]"
+          className="text-[18px] text-[var(--k-bad-text)]"
           data-testid="chain-message"
         >
           {message}
@@ -315,7 +315,7 @@ function Tile({
       <span className="k-disp text-[26px]" style={hot ? { color: 'var(--k-hot-hi)' } : undefined}>
         {value}
       </span>
-      <span className="text-[14px]" style={{ color: hot ? 'var(--k-hot-hi)' : 'var(--k-text-3)' }}>
+      <span className="text-[16px]" style={{ color: hot ? 'var(--k-hot-hi)' : 'var(--k-text-3)' }}>
         {caption}
       </span>
     </div>
@@ -426,11 +426,11 @@ export function RhythmStrip({ cycle }: { cycle: ChainCycle }) {
           className="border-t-[3px] border-dashed border-[var(--k-steel-2)]"
           style={{ width: width(cycle.restart) }}
         />
-        <span className="ml-2.5 whitespace-nowrap text-[14px] text-[var(--k-text-3)]">
+        <span className="ml-2.5 whitespace-nowrap text-[16px] text-[var(--k-text-3)]">
           pause {cycle.restart.toFixed(1)} s restarts
         </span>
       </div>
-      <span className="text-[14px] text-[var(--k-text-3)]">
+      <span className="text-[16px] text-[var(--k-text-3)]">
         Each block is a cast, each line a beat.
       </span>
     </div>

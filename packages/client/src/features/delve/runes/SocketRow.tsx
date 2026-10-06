@@ -54,7 +54,7 @@ export function SocketRow({
         const pip = r ? (
           <RuneGlyph rune={r} dormant={off} size="sm" />
         ) : (
-          <span className="px-1 text-[14px] leading-none text-stone-500">◇</span>
+          <span className="px-1 text-[16px] leading-none text-stone-500">◇</span>
         );
         return tap && !(emptyOnly && r) ? (
           <button
@@ -85,7 +85,7 @@ export function SocketRow({
       {open && (
         <button
           type="button"
-          className="delve-chip inline-flex flex-wrap items-center justify-center gap-x-1 px-1.5 py-0 text-[14px] [&_.k-price]:flex-wrap"
+          className="delve-chip inline-flex flex-wrap items-center justify-center gap-x-1 px-1.5 py-0 text-[16px] [&_.k-price]:flex-wrap"
           disabled={!!whyId}
           aria-describedby={whyId}
           onClick={onOpenSocket}
