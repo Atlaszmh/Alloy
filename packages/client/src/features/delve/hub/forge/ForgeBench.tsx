@@ -226,7 +226,7 @@ export function ForgeBench({
   const status = message && !locked && (
     <p
       role="status"
-      className="text-[16px]"
+      className="text-[18px]"
       style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
     >
       {message.text}
@@ -349,7 +349,7 @@ export function ForgeBench({
                 note={heldMetals.length < METAL_IDS.length ? DROPS_FROM.metal : undefined}
               />
             ) : (
-              <p className="k-caption" data-tutorial="forge.bar" data-tutorial-done="false">
+              <p className="k-note" data-tutorial="forge.bar" data-tutorial-done="false">
                 Metal: none held. {DROPS_FROM.metal}
               </p>
             )}
@@ -397,7 +397,7 @@ export function ForgeBench({
             >
               <span className="k-label">Lines</span>
               {preview.lines.length === 0 && (
-                <p className="k-caption">A common item rolls no lines: add flux for some.</p>
+                <p className="k-note">A common item rolls no lines: add flux for some.</p>
               )}
               {preview.lines.map((l, i) => (
                 <button
@@ -438,7 +438,7 @@ export function ForgeBench({
             {preview.refused && (
               <p
                 id={`${id}-why`}
-                className="k-caption"
+                className="k-note"
                 style={{ color: 'var(--k-bad-text)' }}
                 data-testid="forge-refused"
               >
@@ -489,26 +489,26 @@ export function ForgeBench({
                 ))}
               </div>
               {preview.floor > 0 && (
-                <p className="k-caption" data-testid="forge-floor">
+                <p className="k-note" data-testid="forge-floor">
                   Your {manaStyle(registry, preview.element).name} attunement lifts every roll: each
                   starts at least {pct(preview.floor)} up its band.
                 </p>
               )}
               {legend && (
-                <p className="text-[16px]" data-testid="forge-legendary">
+                <p className="text-[18px]" data-testid="forge-legendary">
                   <span style={{ color: RARITY_TEXT.legendary }}>{legend.name}:</span>{' '}
                   {legend.text.replace('{v}', preview.legendary!.range.join('–'))}
                 </p>
               )}
               {preview.weapon && (
-                <p className="k-caption" data-testid="forge-weapon">
+                <p className="k-note" data-testid="forge-weapon">
                   Carries {preview.weapon.carries.map((s) => SKILL_NAME[s]).join(', ')}
                   {extras.length > 0 && ` · extra slots: ${extras.join(', ')}`}
                   {preview.weapon.sockets > 0 &&
                     ` · ${preview.weapon.sockets} open socket${preview.weapon.sockets === 1 ? '' : 's'}`}
                 </p>
               )}
-              <p className="k-caption" data-testid="forge-uses">
+              <p className="k-note" data-testid="forge-uses">
                 Uses {uses.map((u) => materialLabel(registry, u)).join(', ')}
               </p>
               <div className="k-caption flex items-center gap-2" data-testid="forge-purse">

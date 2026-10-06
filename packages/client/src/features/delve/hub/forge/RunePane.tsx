@@ -57,7 +57,7 @@ export function RunePane({ pouch, fuseCount, fusePrice, scrap, locked, onFuse }:
               <span className="text-[18px] text-[var(--k-text)]">
                 {runeName(registry, rune)} ×{n}
               </span>
-              <span className="k-caption">
+              <span className="k-note">
                 {text.effect}
                 {text.cost && ' · '}
                 {text.cost && <span className="text-[var(--k-hot)]">{text.cost}</span>}

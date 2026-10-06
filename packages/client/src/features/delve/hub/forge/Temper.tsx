@@ -253,7 +253,7 @@ export function Temper({ item }: { item: GearItem }) {
           {message && (
             <p
               role="status"
-              className="text-[16px]"
+              className="text-[18px]"
               style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
             >
               {message.text}
@@ -355,7 +355,7 @@ export function Temper({ item }: { item: GearItem }) {
                   {o.why !== null && (
                     <span
                       id={`${id}-${o.id}`}
-                      className="k-caption w-[200px] flex-none [@media(max-height:809px)]:w-auto"
+                      className="k-note w-[200px] flex-none [@media(max-height:809px)]:w-auto"
                       style={{ color: 'var(--k-bad-text)' }}
                     >
                       {o.why}
@@ -374,16 +374,16 @@ export function Temper({ item }: { item: GearItem }) {
           <div ref={statsRef}>
             <ItemStatLines item={item} />
           </div>
-          <p className="k-caption">
+          <p className="k-note">
             Each forge level adds +{Math.round(upgradeStep * 100)}% to every stat on the item.
           </p>
           {item.hones > 0 && (
-            <p className="k-caption" data-testid="hone-count">
+            <p className="k-note" data-testid="hone-count">
               Honed {item.hones} {item.hones === 1 ? 'time' : 'times'}: each hone costs more.
             </p>
           )}
           {item.awakened && (
-            <p className="k-caption" data-testid="awakened">
+            <p className="k-note" data-testid="awakened">
               Awakened: it carries the Ultimate.
             </p>
           )}

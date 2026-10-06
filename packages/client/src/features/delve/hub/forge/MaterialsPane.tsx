@@ -196,11 +196,11 @@ export function MaterialsPane({ locked }: { locked: boolean }) {
             </p>
           )}
           <Section title="Bars" testId="materials-bars" tutorial="forge.refine">
-            {bars.length === 0 && <p className="k-caption">None yet: {DROPS_FROM.metal}</p>}
+            {bars.length === 0 && <p className="k-note">None yet: {DROPS_FROM.metal}</p>}
             {bars.map((m) => row({ kind: 'metal', metal: m }, metals[m]))}
           </Section>
           <Section title="Flux" testId="materials-flux">
-            {grades.length === 0 && <p className="k-caption">None yet: {DROPS_FROM.flux}</p>}
+            {grades.length === 0 && <p className="k-note">None yet: {DROPS_FROM.flux}</p>}
             {grades.map((g) => row({ kind: 'flux', grade: g }, flux[g]))}
           </Section>
           <Section title="Shards" testId="materials-shards">
@@ -227,18 +227,18 @@ export function MaterialsPane({ locked }: { locked: boolean }) {
               );
             })}
             {Object.values(shards).every((ns) => !ns?.some((n) => n > 0)) && (
-              <p className="k-caption">None yet: {DROPS_FROM.shard}</p>
+              <p className="k-note">None yet: {DROPS_FROM.shard}</p>
             )}
           </Section>
           <Section title="Essences" testId="materials-essences">
-            {held.length === 0 && <p className="k-caption">None yet: {DROPS_FROM.essence}</p>}
+            {held.length === 0 && <p className="k-note">None yet: {DROPS_FROM.essence}</p>}
             {held.map(([e, n]) => row({ kind: 'essence', essence: e }, n))}
           </Section>
         </div>
       </Panel>
       <Panel title="Shard bench" testId="shard-bench">
         <div className="flex flex-col gap-4">
-          <p className="k-caption">
+          <p className="k-note">
             Buy a tier I shard of any affix: <Price scrap={bench.scrap} dust={bench.dust} />
           </p>
           <Stepper

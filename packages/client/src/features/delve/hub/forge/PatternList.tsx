@@ -78,7 +78,7 @@ export function PatternList({
               </span>
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="text-[18px] text-[var(--k-text-3)]">{b.name}</span>
-                <span className="k-caption">
+                <span className="k-note">
                   Unknown · salvage a {b.name}, or find its pattern on elites and bosses
                 </span>
               </span>
