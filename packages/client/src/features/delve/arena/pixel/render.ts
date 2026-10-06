@@ -594,7 +594,7 @@ function buildLight(F: Frame): void {
       );
     }
   }
-  for (const f of pw.flashes) splat(F, f, f.life * 0.5);
+  for (const f of pw.flashes) splat(F, f, f.life * 0.5 * pw.flashStrength);
   for (const l of pw.lights) splat(F, l, 0.35);
 
   for (let pass = 0; pass < 2; pass++) {
@@ -604,7 +604,7 @@ function buildLight(F: Frame): void {
   }
 
   // Sample the light at each view cell's centre.
-  const flash = pw.flash;
+  const flash = pw.flash * pw.flashStrength;
   const ar = th.ambient[0] + flash * 0.9;
   const ag = th.ambient[1] + flash * 0.9;
   const ab = th.ambient[2] + flash;

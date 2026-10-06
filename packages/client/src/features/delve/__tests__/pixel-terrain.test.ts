@@ -233,6 +233,39 @@ describe("a floor painted from its map's cells", { timeout: 20000 }, () => {
     expect(Math.max(...fern.map((v, k) => Math.abs(v - leaves[k])))).toBeGreaterThan(15);
     expect(Math.max(...fungus.map((v, k) => Math.abs(v - leaves[k])))).toBeGreaterThan(15);
   });
+
+  it("Settings → Effects → Flashes scales the lightning's light over the floor: at 0 it draws as with none", () => {
+    const pw = floor(furnished());
+    const light = (o: Uint8ClampedArray) => o.reduce((s, v, i) => (i % 4 === 3 ? s : s + v), 0);
+    const draw = () => {
+      const out = new Uint8ClampedArray(pw.size * 4);
+      renderPixelWorld(pw, out, 1);
+      return light(out);
+    };
+    const calm = draw();
+    expect(draw()).toBe(calm); // the same state draws the same
+    pw.flash = 1;
+    const full = draw();
+    expect(full).toBeGreaterThan(calm * 1.05);
+    pw.flashStrength = 0;
+    expect(draw()).toBe(calm);
+    pw.flashStrength = 0.5;
+    const half = draw();
+    expect(half).toBeGreaterThan(calm);
+    expect(half).toBeLessThan(full);
+    // A blast's flash too.
+    pw.flash = 0;
+    pw.flashes.push({
+      x: pw.width / 2,
+      y: pw.height / 2,
+      radius: 30,
+      color: [1, 1, 1],
+      intensity: 1.5,
+      life: 1,
+    });
+    pw.flashStrength = 0;
+    expect(draw()).toBe(calm);
+  });
 });
 
 describe('crumbling cover on the pixel floor', { timeout: 20000 }, () => {
