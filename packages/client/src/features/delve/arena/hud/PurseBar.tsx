@@ -74,7 +74,7 @@ export function PurseBar({
         const entry = (
           <span
             key={r.id}
-            className="flex items-center gap-2 whitespace-nowrap text-[15px]"
+            className="flex items-center gap-2 whitespace-nowrap text-[16px]"
             data-testid={`purse-${r.id}`}
           >
             <Glyph id={r.glyph} size={18} title={r.name} />
@@ -94,14 +94,14 @@ export function PurseBar({
           </Tooltip>
         );
       })}
-      <span className="whitespace-nowrap text-[14px] text-[var(--k-text-3)]">
+      <span className="whitespace-nowrap text-[16px] text-[var(--k-text-3)]">
         <b className="text-[var(--k-hot)]" data-testid="bounty">
           +{n(dive.bounty)}
         </b>{' '}
         banks on extract
       </span>
       {controls && (
-        <span className="ml-auto flex items-center gap-4 whitespace-nowrap text-[14px] text-[var(--k-text-2)]">
+        <span className="ml-auto flex items-center gap-4 whitespace-nowrap text-[16px] text-[var(--k-text-2)]">
           {onPeek && (
             <button
               type="button"

@@ -80,7 +80,7 @@ export function InteractPlaque({
               {prompt.channel === null ? INTERACT_VERB[prompt.interactable] : 'Praying'}
             </span>
           </span>
-          {prompt.text && <span className="text-[14px] text-[var(--k-text-2)]">{prompt.text}</span>}
+          {prompt.text && <span className="text-[16px] text-[var(--k-text-2)]">{prompt.text}</span>}
           {prompt.channel !== null && (
             <Bar
               kind="progress"

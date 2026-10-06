@@ -47,7 +47,7 @@ export function BuffRow({ buffs }: { buffs: readonly HudBuff[] }) {
             style={{ border: `2px solid ${color}`, color }}
           >
             <Glyph id={b.id} size={16} />
-            <span className="k-disp text-[14px]">{secs}s</span>
+            <span className="k-disp text-[16px]">{secs}s</span>
           </span>
         );
       })}

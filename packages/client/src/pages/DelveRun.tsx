@@ -93,7 +93,7 @@ function Banner({ banner, onDone }: { banner: BannerState; onDone: () => void })
         {banner.title}
       </div>
       {banner.sub && (
-        <div className="delve-display mt-1 text-sm font-semibold text-stone-100 [text-shadow:2px_2px_0_#181425]">
+        <div className="delve-display mt-1 text-[16px] font-semibold text-stone-100 [text-shadow:2px_2px_0_#181425]">
           {banner.sub}
         </div>
       )}

@@ -53,10 +53,10 @@ export function FloorColumn({
         scroll={false}
         className="pointer-events-auto"
         title={<span data-testid="depth-label">DEPTH {dive?.depth}</span>}
-        aside={<span className="text-[14px] text-[var(--k-text-2)]">{biome.name}</span>}
+        aside={<span className="text-[16px] text-[var(--k-text-2)]">{biome.name}</span>}
       >
         <Minimap map={hud?.map ?? null} />
-        <div className="grid grid-cols-2 gap-2 text-[14px]" data-testid="biome-element">
+        <div className="grid grid-cols-2 gap-2 text-[16px]" data-testid="biome-element">
           {(
             [
               ['Resists', biome.mana],
@@ -77,14 +77,14 @@ export function FloorColumn({
           })}
         </div>
         {hud?.map.floor && (
-          <span className="text-[15px] text-[var(--k-text-3)]" data-testid="rooms-explored">
+          <span className="text-[16px] text-[var(--k-text-3)]" data-testid="rooms-explored">
             Rooms explored{' '}
             <b className="k-disp text-[20px] text-[var(--k-text)]">
               {hud.map.floor.explored} / {hud.map.floor.total}
             </b>
           </span>
         )}
-        <div className="flex items-baseline justify-between text-[15px] text-[var(--k-text-3)]">
+        <div className="flex items-baseline justify-between text-[16px] text-[var(--k-text-3)]">
           {hud && !hud.map.floor && (
             <span data-testid="monsters-left">
               <b className="k-disp text-[20px] text-[var(--k-text)]">{hud.monstersLeft}</b> foes

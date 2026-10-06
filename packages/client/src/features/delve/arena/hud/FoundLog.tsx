@@ -15,7 +15,7 @@ import { noFocus } from './SkillSlot';
 const ROW = 32;
 const GAP = 6;
 const ROW_CLASS =
-  'flex h-8 w-full flex-none items-center gap-[10px] bg-[var(--k-well)] px-2 text-left text-[14px]';
+  'flex h-8 w-full flex-none items-center gap-[10px] bg-[var(--k-well)] px-2 text-left text-[16px]';
 
 /** A find's mark against what you wear (`deltaMark`), here and on the stop's found panel. */
 export const MARK = {
@@ -201,12 +201,12 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
       testId="pickup-feed"
     >
       {upgrades > 0 && (
-        <span className="text-[14px] text-[var(--k-ok)]" data-testid="upgrades-locked">
+        <span className="text-[16px] text-[var(--k-ok)]" data-testid="upgrades-locked">
           ▲ {upgrades} to equip at the Anvil
         </span>
       )}
       {potential > 0 && (
-        <span className="text-[14px] text-[var(--k-mana)]" data-testid="upgrades-potential">
+        <span className="text-[16px] text-[var(--k-mana)]" data-testid="upgrades-potential">
           ◇ {potential} potential: Transfer at the Anvil
         </span>
       )}

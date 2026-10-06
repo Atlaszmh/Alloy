@@ -41,11 +41,11 @@ export function LeanCorner({
         material="glass"
         scroll={false}
         title={<span data-testid="depth-label">DEPTH {dive.depth}</span>}
-        aside={<span className="text-[14px] text-[var(--k-text-2)]">{biome.name}</span>}
+        aside={<span className="text-[16px] text-[var(--k-text-2)]">{biome.name}</span>}
       >
         <Minimap map={map} />
         <QuestTracker quests={quests} compact />
-        <div className="flex items-center justify-end gap-4 text-[14px] text-[var(--k-text-2)]">
+        <div className="flex items-center justify-end gap-4 text-[16px] text-[var(--k-text-2)]">
           <button
             type="button"
             className={small}

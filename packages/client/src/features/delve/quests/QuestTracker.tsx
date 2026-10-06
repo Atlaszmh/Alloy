@@ -27,9 +27,9 @@ export function QuestTracker({
     const q = shown[0];
     const o = q.objectives.find((x) => !x.done);
     return (
-      <div className="flex min-w-0 text-[15px]" data-testid="quest-tracker">
+      <div className="flex min-w-0 text-[16px]" data-testid="quest-tracker">
         <div className="flex min-w-0 items-baseline gap-2" data-testid={`tracked-${q.id}`}>
-          <span className="k-disp truncate text-[17px]" style={{ color: QUEST_KIND[q.kind].text }}>
+          <span className="k-disp truncate text-[18px]" style={{ color: QUEST_KIND[q.kind].text }}>
             {q.name}
           </span>
           <span className="truncate">{o ? o.text : 'Ready to claim'}</span>
@@ -47,7 +47,7 @@ export function QuestTracker({
       Journal
     </>
   );
-  const hintClass = 'flex items-center gap-2 text-[14px] text-[var(--k-text-3)]';
+  const hintClass = 'flex items-center gap-2 text-[16px] text-[var(--k-text-3)]';
   return (
     <Panel
       as="div"
@@ -81,7 +81,7 @@ export function QuestTracker({
           </div>
           {q.objectives.map((o) => (
             <div key={o.id} className="flex flex-col gap-1">
-              <div className="grid grid-cols-[12px_1fr_auto] items-center gap-2 text-[14px]">
+              <div className="grid grid-cols-[12px_1fr_auto] items-center gap-2 text-[16px]">
                 <Box done={o.done} size={10} />
                 <span className={o.done ? 'text-[var(--k-text-3)]' : ''}>{o.text}</span>
                 {o.done ? (
