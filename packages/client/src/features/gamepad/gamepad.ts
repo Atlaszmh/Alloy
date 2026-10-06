@@ -37,7 +37,10 @@ export const PAD_BUTTONS = [
 export type PadButton = (typeof PAD_BUTTONS)[number];
 
 export interface PadState {
-  /** Sticks after their deadzones, magnitude 0..1. */
+  /**
+   * Sticks after their deadzones, magnitude 0..1: `left` is the move stick and `right` the aim
+   * stick, whichever physical stick each is (`swapSticks`).
+   */
   left: Vec;
   right: Vec;
   buttons: Record<PadButton, boolean>;
@@ -47,17 +50,31 @@ export const LEFT_DEADZONE = 0.2;
 export const RIGHT_DEADZONE = 0.35;
 const TRIGGER_THRESHOLD = 0.4;
 
-/** Zero a stick inside the deadzone and rescale the rest so the edge of it is 0 and full tilt is 1. */
-export function radialDeadzone(x: number, y: number, deadzone: number): Vec {
+/**
+ * Zero a stick inside the deadzone and rescale the rest so the edge of it is 0 and full tilt is
+ * 1, along the response curve `r ^ (1 / sensitivity)` (1: linear; more: quicker off the centre;
+ * less: finer near it). The direction never changes.
+ */
+export function radialDeadzone(x: number, y: number, deadzone: number, sensitivity = 1): Vec {
   const len = Math.hypot(x, y);
   if (len <= deadzone) return { x: 0, y: 0 };
-  const scaled = Math.min(1, (len - deadzone) / (1 - deadzone));
+  const scaled = Math.min(1, (len - deadzone) / (1 - deadzone)) ** (1 / sensitivity);
   return { x: (x / len) * scaled, y: (y / len) * scaled };
 }
 
+/** How the sticks are read: the deadzones, and (from the Controls editor) the curve and the swap. */
+export interface StickSetup {
+  deadzone: { left: number; right: number };
+  /** Each stick's response, 0.5 to 1.5: `r ^ (1 / s)` past the deadzone (1: linear). */
+  sensitivity?: { left: number; right: number };
+  /** Move on the right stick and aim on the left; L3 and R3 swap with them. */
+  swapSticks?: boolean;
+}
+
+/** The pad's state through the player's stick setup (`ControlsConfig` is one). */
 export function readPad(
   pad: GamepadLike,
-  deadzone: { left: number; right: number } = { left: LEFT_DEADZONE, right: RIGHT_DEADZONE },
+  setup: StickSetup = { deadzone: { left: LEFT_DEADZONE, right: RIGHT_DEADZONE } },
 ): PadState {
   const axis = (i: number) => pad.axes[i] ?? 0;
   const buttons = {} as Record<PadButton, boolean>;
@@ -66,9 +83,13 @@ export function readPad(
     const trigger = name === 'lt' || name === 'rt';
     buttons[name] = !!b && (b.pressed || (trigger && b.value > TRIGGER_THRESHOLD));
   });
+  const swap = !!setup.swapSticks;
+  if (swap) [buttons.ls, buttons.rs] = [buttons.rs, buttons.ls];
+  const [mx, my, ax, ay] = swap ? [2, 3, 0, 1] : [0, 1, 2, 3];
+  const { deadzone, sensitivity } = setup;
   return {
-    left: radialDeadzone(axis(0), axis(1), deadzone.left),
-    right: radialDeadzone(axis(2), axis(3), deadzone.right),
+    left: radialDeadzone(axis(mx), axis(my), deadzone.left, sensitivity?.left ?? 1),
+    right: radialDeadzone(axis(ax), axis(ay), deadzone.right, sensitivity?.right ?? 1),
     buttons,
   };
 }

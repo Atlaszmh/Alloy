@@ -28,7 +28,8 @@ import {
 import { getDelveRegistry } from '@/features/delve/registry';
 import { DEFAULT_CONTROLS, bindPad } from '@/features/controls/controls';
 import { pickNext, type NavRect } from '../spatial-nav';
-import { startGamepad } from '../gamepad-hub';
+import { padState, startGamepad } from '../gamepad-hub';
+import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 
 /** A standard-mapping pad with the given buttons held and stick axes. */
@@ -485,7 +486,7 @@ describe('custom controls', () => {
   it('reads the sticks with the configured deadzones', () => {
     const pad = fakePad([], [0.3, 0, 0, 0]);
     expect(readPad(pad).left.x).toBeGreaterThan(0);
-    expect(readPad(pad, { left: 0.4, right: 0.35 }).left.x).toBe(0);
+    expect(readPad(pad, { deadzone: { left: 0.4, right: 0.35 } }).left.x).toBe(0);
   });
 
   it('aim reach scales how far placed abilities land at full tilt', () => {
@@ -517,6 +518,48 @@ describe('pickNext (spatial focus)', () => {
     const far: NavRect = { id: 'far', x: 900, y: 200, w: 40, h: 20 };
     expect(pickNext(chip, [chip, delve, far], 'down')?.id).toBe('delve');
     expect(pickNext(far, [chip, delve, far], 'up')?.id).toBe('delve');
+  });
+});
+
+describe('stick sensitivity', () => {
+  it('curves the tilt past the deadzone, keeping the deadzone, full tilt and the direction', () => {
+    const at = (x: number, s: number) => radialDeadzone(x, 0, 0.2, s).x;
+    expect(at(0.6, 1)).toBeCloseTo(0.5); // linear
+    expect(at(0.6, 1.5)).toBeCloseTo(0.5 ** (1 / 1.5)); // 0.63: quicker off the centre
+    expect(at(0.6, 0.5)).toBeCloseTo(0.25); // finer near it
+    for (const s of [0.5, 1, 1.5]) {
+      expect(at(1, s)).toBeCloseTo(1);
+      expect(at(0.2, s)).toBe(0);
+    }
+    const d = radialDeadzone(0.5, 0.5, 0.2, 1.5);
+    expect(d.y / d.x).toBeCloseTo(1); // the direction holds
+  });
+
+  it('readPad applies each stick its own', () => {
+    const s = readPad(fakePad([], [0.6, 0, 0.6, 0]), {
+      deadzone: { left: 0.2, right: 0.2 },
+      sensitivity: { left: 0.5, right: 1.5 },
+    });
+    expect(s.left.x).toBeCloseTo(0.25);
+    expect(s.right.x).toBeCloseTo(0.5 ** (1 / 1.5));
+  });
+});
+
+describe('swap sticks', () => {
+  it("moves on the right stick and aims on the left, each with its role's deadzone and curve; the clicks swap", () => {
+    // The right stick pushed, L3 (10) held.
+    const pad = fakePad([10], [0, 0, 0.9, 0]);
+    const plain = readPad(pad, { deadzone: { left: 0.2, right: 0.35 } });
+    expect([plain.left.x, plain.right.x > 0.8, plain.buttons.ls, plain.buttons.rs]).toEqual([
+      0,
+      true,
+      true,
+      false,
+    ]);
+    const swapped = readPad(pad, { deadzone: { left: 0.2, right: 0.35 }, swapSticks: true });
+    expect(swapped.left.x).toBeCloseTo((0.9 - 0.2) / 0.8); // the move stick's deadzone, 0.2
+    expect(swapped.right).toEqual({ x: 0, y: 0 });
+    expect([swapped.buttons.ls, swapped.buttons.rs]).toEqual([false, true]);
   });
 });
 
@@ -589,6 +632,15 @@ describe('the hub claims the input lock for the pad on a change, not a steady st
     pad = fakePad([], [0, 0, 0.4, 0]); // the right stick, just out of its deadzone
     tick();
     expect(device()).toBe('gamepad');
+  });
+
+  it("reads the sticks through the player's setup: swapped, the right stick moves", () => {
+    useControlsStore.getState().setSwapSticks(true);
+    pad = fakePad([], [0, 0, 0.9, 0]);
+    tick();
+    expect(padState()!.left.x).toBeGreaterThan(0.8);
+    expect(padState()!.right).toEqual({ x: 0, y: 0 });
+    useControlsStore.getState().reset();
   });
 });
 
