@@ -33,6 +33,8 @@ export interface Prompt {
   padBack?: boolean;
   /** The guided-start target the prompt bar puts on this prompt's item (`data-tutorial`): under the pad, the button to press. */
   tutorial?: string;
+  /** Onboarding: this screen's first-visit line (`useOnboarding`); the prompt pulses while it shows. */
+  hint?: string;
 }
 
 export type GlyphId =

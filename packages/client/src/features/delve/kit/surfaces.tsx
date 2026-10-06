@@ -118,8 +118,14 @@ export function Footer({
   prompts: Prompt[];
   children?: ReactNode;
 }): ReactElement {
+  const hint = prompts.find((p) => p.hint)?.hint;
   return (
     <div className="k-footer" data-pad-group="">
+      {hint && (
+        <p className="k-footer-hint" data-testid="onboarding-hint">
+          {hint}
+        </p>
+      )}
       <PromptBar prompts={prompts} />
       {children !== undefined && <div className="k-footer-aside">{children}</div>}
     </div>

@@ -763,6 +763,7 @@ html[data-input='gamepad'] .delve-ui :focus {
 }
 
 .k-screen-foot {
+  position: relative;
   display: flex;
   align-items: center;
   padding: 0 32px;
@@ -821,6 +822,38 @@ html[data-input='gamepad'] .delve-ui :focus {
   align-items: center;
   gap: 28px;
   width: 100%;
+}
+
+/* Onboarding's line (the pad-first spec, 6): over the plank, out of the layout, never in the way of a click. */
+.k-footer-hint {
+  position: absolute;
+  left: 32px;
+  bottom: 100%;
+  margin: 0 0 8px;
+  padding: 6px 14px;
+  font-size: 18px;
+  color: var(--k-text);
+  background: var(--k-well);
+  border-left: 4px solid var(--k-hot-hi);
+  pointer-events: none;
+}
+
+.k-prompt[data-pulse] {
+  animation: k-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes k-pulse {
+  50% {
+    color: var(--k-hot-hi);
+    filter: brightness(1.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .k-prompt[data-pulse] {
+    animation: none;
+    color: var(--k-hot-hi);
+  }
 }
 
 .k-footer-aside {

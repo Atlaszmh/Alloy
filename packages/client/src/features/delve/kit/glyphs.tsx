@@ -200,6 +200,7 @@ export function PromptBar({
             data-pad-skip
             data-pad-back={p.padBack ? '' : undefined}
             data-tutorial={p.tutorial}
+            data-pulse={p.hint ? '' : undefined}
             disabled={p.disabled}
             onClick={p.onPress}
             onPointerUp={blurAfterMouse}
@@ -213,6 +214,7 @@ export function PromptBar({
             className="k-prompt"
             aria-disabled={p.disabled || undefined}
             data-tutorial={p.tutorial}
+            data-pulse={p.hint ? '' : undefined}
           >
             <InputGlyph binding={p.binding} size="sm" />
             {p.label}
