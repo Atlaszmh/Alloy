@@ -17,6 +17,7 @@ async function seed(page: Page): Promise<void> {
   await page.addInitScript((value) => {
     if (sessionStorage.getItem('training-e2e')) return;
     localStorage.clear();
+    localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
     localStorage.setItem('alloy:delve:v2', value);
     localStorage.setItem('alloy:delve:manualAttack', '1');
     localStorage.setItem('alloy:muted', 'true');

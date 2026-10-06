@@ -85,6 +85,7 @@ async function setup(
       navigator.getGamepads = () => [w.__pad as Gamepad];
       if (sessionStorage.getItem('pad-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem('alloy:delve:v2', value);
       if (bot) localStorage.setItem('alloy:delve:autopilot', '1');
       localStorage.setItem('alloy:muted', 'true');

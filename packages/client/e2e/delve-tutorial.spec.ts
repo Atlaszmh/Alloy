@@ -49,6 +49,7 @@ async function fresh(page: Page, bot: boolean): Promise<void> {
     });
     if (sessionStorage.getItem('delve-e2e')) return;
     localStorage.clear();
+    localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
     if (autopilot) localStorage.setItem('alloy:delve:autopilot', '1');
     localStorage.setItem('alloy:delve:timescale', '2');
     localStorage.setItem('alloy:muted', 'true');

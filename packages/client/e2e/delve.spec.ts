@@ -3,6 +3,7 @@ import {
   ARENA_READY,
   FLOOR_CLEAR,
   seedProfile,
+  showOnboarding,
   startDive,
   stepTo,
   toRoad,
@@ -314,6 +315,7 @@ test.describe('Delve loot loop', () => {
     await page.addInitScript(() => {
       if (sessionStorage.getItem('delve-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem('alloy:muted', 'true');
       sessionStorage.setItem('delve-e2e', '1');
     });
@@ -433,5 +435,28 @@ test.describe('Delve loot loop', () => {
     expect(used).toContain('chest');
     expect(asked).toBe(2);
     await expect(door.getByRole('heading', { level: 1 })).toHaveText('Depth 1 cleared');
+  });
+
+  test('D13: a first visit pulses its main prompt with a line over the footer, gone once that is done, and after a reload', async ({
+    page,
+  }) => {
+    await seedProfile(page, 4242, false);
+    await showOnboarding(page);
+    await page.goto('/delve');
+    await page.getByTestId('tab-skills').click();
+    const hint = page.getByTestId('onboarding-hint');
+    await expect(hint).toContainText("Open a move's editor");
+    await expect(page.locator('.k-prompt[data-pulse]')).toContainText('Edit move');
+    await page.getByTestId('move-0').click();
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await page.getByTestId('move-editor-back').click();
+    await expect(hint).toHaveCount(0);
+    await page.reload();
+    await page.getByTestId('tab-skills').click();
+    await expect(page.getByTestId('move-0')).toBeVisible();
+    await expect(hint).toHaveCount(0);
+    // Another screen's hint is its own.
+    await page.getByTestId('tab-quests').click();
+    await expect(hint).toContainText('Claim a finished quest');
   });
 });

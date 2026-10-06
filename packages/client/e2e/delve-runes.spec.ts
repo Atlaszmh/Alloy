@@ -66,6 +66,7 @@ async function seed(page: Page, profile: DelveProfile, autopilot = false): Promi
     ([key, value, bot]) => {
       if (sessionStorage.getItem('runes-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem(key, value);
       if (bot) localStorage.setItem('alloy:delve:autopilot', '1');
       localStorage.setItem('alloy:delve:timescale', '2');

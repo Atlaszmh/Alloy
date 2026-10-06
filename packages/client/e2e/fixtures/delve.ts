@@ -48,6 +48,7 @@ export async function seedProfile(
     ([key, value, bot]) => {
       if (sessionStorage.getItem('delve-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem(key, value);
       if (bot) localStorage.setItem('alloy:delve:autopilot', bot === 'ask' ? 'ask' : '1');
       localStorage.setItem('alloy:delve:timescale', '2');
@@ -56,6 +57,15 @@ export async function seedProfile(
     },
     [SAVE_KEY, save, autopilot] as const,
   );
+}
+
+/** The onboarding hints back, for the test that reads them. Call after `seedProfile`; once a session, like it, so a reload keeps what the test did. */
+export async function showOnboarding(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('delve-e2e-onboarding')) return;
+    localStorage.removeItem('alloy:delve:seen');
+    sessionStorage.setItem('delve-e2e-onboarding', '1');
+  });
 }
 
 /** The dive's full HUD (the purse bar, the floor column and the Found log), for a test that reads it. Call after `seedProfile`. */

@@ -20,6 +20,7 @@ async function seedSave(page: Page, profile: DelveProfile): Promise<void> {
     ([key, value]) => {
       if (sessionStorage.getItem('delve-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem(key, value);
       localStorage.setItem('alloy:muted', 'true');
       sessionStorage.setItem('delve-e2e', '1');

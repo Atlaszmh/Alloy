@@ -140,6 +140,7 @@ async function seed(page: Page, atStop = false): Promise<void> {
       navigator.getGamepads = () => [w.__pad as Gamepad];
       if (sessionStorage.getItem('pad-nav-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem(key, value);
       localStorage.setItem('alloy:muted', 'true');
       sessionStorage.setItem('pad-nav-e2e', '1');
@@ -467,7 +468,7 @@ test.describe('Delve pad navigation', () => {
     expect(await marked(page)).toBe('card');
   });
 
-  test('PN04: Forge by the pad: A on a pattern lands on the Flux row, right steps a row, down reaches Forge and left the patterns; RT goes to Temper, then Materials', async ({ page }) => {
+  test('PN04: Forge by the pad: A on a pattern lands on the first row (Flux, or Metal with no flux held), right steps a row, down reaches Forge and left the patterns; RT goes to Temper, then Materials', async ({ page }) => {
     await seed(page);
     await page.goto('/delve');
     await click(page, 'tab-forge');
@@ -476,9 +477,11 @@ test.describe('Delve pad navigation', () => {
     await page.getByTestId('pattern-cuirass').focus();
     await mark(page, 'pattern');
     await tap(page, BUTTON.a);
-    expect((await where(page)).id).toBe('forge-flux');
-    // The save holds no flux (None alone): down to the Metal row, whose right steps Rusty to Iron.
-    await tap(page, BUTTON.down);
+    // A save with no flux sees its Flux row as one line, and A lands on the Metal row; with flux,
+    // on the Flux row, and down reaches the Metal row, whose right steps Rusty to Iron.
+    const fluxRow = (await page.getByTestId('forge-flux').count()) > 0;
+    expect((await where(page)).id).toBe(fluxRow ? 'forge-flux' : 'forge-metal');
+    if (fluxRow) await tap(page, BUTTON.down);
     expect((await where(page)).id).toBe('forge-metal');
     const metal = page.getByTestId('forge-metal');
     await expect(metal).toHaveAttribute('aria-valuetext', /^Rusty bar/);
@@ -626,8 +629,11 @@ test.describe('Delve pad navigation', () => {
     const pattern = await presses(page, '[data-testid^="pattern-"][data-pad-first]');
     await page.locator('[data-testid^="pattern-"][data-pad-first]').focus();
     await tap(page, BUTTON.a);
-    await expect(page.getByTestId('forge-flux')).toBeFocused();
-    const flux = (await page.getByTestId('forge-flux').getAttribute('aria-valuemax')) !== '0' ? 1 : 0;
+    // The first row takes the focus: Flux, or Metal when the save holds no flux (its row folded).
+    const fluxRow = (await page.getByTestId('forge-flux').count()) > 0;
+    await expect(page.getByTestId(fluxRow ? 'forge-flux' : 'forge-metal')).toBeFocused();
+    const flux =
+      fluxRow && (await page.getByTestId('forge-flux').getAttribute('aria-valuemax')) !== '0' ? 1 : 0;
     if (flux) await tap(page, BUTTON.right);
     const toForge = await presses(page, '[data-testid="forge-button"]');
     const forge = pattern + flux + toForge;
