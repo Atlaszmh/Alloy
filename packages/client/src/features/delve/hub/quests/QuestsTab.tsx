@@ -329,7 +329,7 @@ function Journal({
             ) : (
               <p
                 key={`empty-${i}`}
-                className="k-caption m-0 px-[14px] py-3"
+                className="k-note m-0 px-[14px] py-3"
                 style={DASHED}
                 data-testid={`contract-slot-${i}`}
               >
@@ -434,7 +434,7 @@ function QuestRow({
             DONE
           </span>
         )}
-        {q.tracked && <span className="text-[14px] text-[var(--k-ok)]">tracked</span>}
+        {q.tracked && <span className="text-[16px] text-[var(--k-ok)]">tracked</span>}
       </span>
     </button>
   );
@@ -463,7 +463,7 @@ function Detail({ quest }: { quest: QuestView }) {
           </span>
           <h2 className="k-disp m-0 text-[44px] text-[var(--k-hot-hi)]">{quest.name}</h2>
           {quest.story && (
-            <p className="m-0 max-w-[640px] text-[16px] leading-[1.55] text-[var(--k-text-2)]">
+            <p className="m-0 max-w-[640px] text-[18px] leading-[1.55] text-[var(--k-text-2)]">
               {quest.story}
             </p>
           )}
@@ -479,10 +479,10 @@ function Detail({ quest }: { quest: QuestView }) {
           >
             <Box done={o.done} size={14} />
             <span className="flex flex-col gap-[2px]">
-              <span className={`text-[17px] ${o.done ? 'text-[var(--k-text-3)]' : ''}`}>
+              <span className={`text-[18px] ${o.done ? 'text-[var(--k-text-3)]' : ''}`}>
                 {o.text}
               </span>
-              {o.hint && <span className="k-caption">{o.hint}</span>}
+              {o.hint && <span className="k-note">{o.hint}</span>}
             </span>
             <span className="flex flex-col items-end gap-1">
               <b
@@ -564,7 +564,7 @@ function Rewards({
         {message && (
           <p
             role="status"
-            className="m-0 text-[16px]"
+            className="m-0 text-[18px]"
             style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
             data-testid="quest-message"
           >
@@ -585,7 +585,7 @@ function Rewards({
             >
               {quest.tracked ? 'Tracked on the HUD' : 'Track on the HUD'}
             </Button>
-            <span className="k-caption text-center">
+            <span className="k-note text-center">
               Up to {maxTracked} quests show under the minimap during a dive.
             </span>
           </>
@@ -601,7 +601,7 @@ function Rewards({
               Reroll · <Price scrap={rerollScrap} />
             </Button>
             {!reroll.ok && (
-              <span className="k-caption text-center" data-testid="quest-reroll-why">
+              <span className="k-note text-center" data-testid="quest-reroll-why">
                 {reroll.reason}
               </span>
             )}

@@ -56,7 +56,7 @@ export function ReactionsGrid({
                 >
                   {seen ? r.name : '???'}
                 </span>
-                <span className="k-caption">
+                <span className="k-note">
                   {seen
                     ? r.text
                     : 'Stack one element on a foe, then hit it with another, to discover.'}

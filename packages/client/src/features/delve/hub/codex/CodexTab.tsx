@@ -348,7 +348,7 @@ function LegendaryDetail({ def, count }: { def: LegendaryDef; count?: number }) 
         {count ? def.name : '???'}
       </span>
       {count && <p className="text-[18px]">{def.text.replace('{v}', `${def.min}–${def.max}`)}</p>}
-      <p className="k-caption">{count ? `Found ×${count} · ${dropsOn(def)}` : dropsOn(def)}</p>
+      <p className="k-note">{count ? `Found ×${count} · ${dropsOn(def)}` : dropsOn(def)}</p>
     </div>
   );
 }
@@ -443,7 +443,7 @@ function PatternDetail({ def, known }: { def: GearBaseDef; known: boolean }) {
       <p className="text-[18px]">
         {SLOT_LABEL[def.slot]} · {known ? 'Learned' : 'Not learned'}
       </p>
-      <p className="k-caption">{known ? 'Forge it at the Forge bench' : PATTERN_SOURCE}</p>
+      <p className="k-note">{known ? 'Forge it at the Forge bench' : PATTERN_SOURCE}</p>
     </div>
   );
 }
@@ -465,8 +465,8 @@ function EssenceDetail({ def, seen, held }: { def: LegendaryDef; seen: boolean; 
         {seen ? `${def.name} essence` : '???'}
       </span>
       {seen && <p className="text-[18px]">{def.text.replace('{v}', `${def.min}–${def.max}`)}</p>}
-      <p className="k-caption">{seen ? `Held ×${held} · ${forgesOnto(def)}` : forgesOnto(def)}</p>
-      <p className="k-caption">{ESSENCE_SOURCE}</p>
+      <p className="k-note">{seen ? `Held ×${held} · ${forgesOnto(def)}` : forgesOnto(def)}</p>
+      <p className="k-note">{ESSENCE_SOURCE}</p>
     </div>
   );
 }
