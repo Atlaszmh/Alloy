@@ -344,6 +344,8 @@ export interface DelveBalance {
     baseDmg: number;
     /** Softening multipliers for depths 1..n so the first floors are gentle. */
     earlyRamp: number[];
+    /** Life multipliers for depths 1..n for normal and elite foes, in place of `earlyRamp` (bosses keep it). */
+    hpRamp: number[];
     /** Boss fight length (s) after which boss damage starts doubling. */
     enrageSeconds: number;
     /** Seconds between each further doubling. */
@@ -357,6 +359,8 @@ export interface DelveBalance {
     aggroRadius: number;
     /** Damage taken from the monster's own element is multiplied by (1 - resist). */
     resist: number;
+    /** Foes resist their element only from this depth (the first biome's don't). */
+    resistFromDepth: number;
     /** Damage taken from the element it's weak to is multiplied by (1 + weakness). */
     weakness: number;
     elite: { hp: number; dmg: number; minTraits: number; maxTraits: number };

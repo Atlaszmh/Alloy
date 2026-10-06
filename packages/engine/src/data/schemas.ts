@@ -1043,6 +1043,7 @@ const DelveBalanceSchema = z.object({
     baseHp: z.number().positive(),
     baseDmg: z.number().positive(),
     earlyRamp: z.array(z.number().positive()),
+    hpRamp: z.array(z.number().positive()),
     enrageSeconds: z.number().positive(),
     enrageInterval: z.number().positive(),
     speed: z.number().positive(),
@@ -1051,6 +1052,7 @@ const DelveBalanceSchema = z.object({
     meleeRange: z.number().positive(),
     aggroRadius: z.number().positive(),
     resist: z.number().min(0).max(1),
+    resistFromDepth: z.number().int().min(1),
     weakness: z.number().min(0),
     elite: z.object({
       hp: z.number().positive(),

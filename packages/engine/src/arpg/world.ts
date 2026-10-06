@@ -135,20 +135,22 @@ export function biomeCycle(registry: DataRegistry, depth: number): number {
 
 /**
  * A depth's growth for foes (see the room objects spec): `growth.monsterHp`
- * and `monsterDmg` to the power depth − 1, and `monster.earlyRamp`. A foe's
- * life is `baseHp × hp × def.hp × ramp`; a crumbling structure's life scales
+ * and `monsterDmg` to the power depth − 1, `monster.earlyRamp` (`ramp`) and
+ * `monster.hpRamp`. A foe's life is `baseHp × hp × def.hp × hpRamp` (a boss's
+ * × `ramp`), its damage × `ramp`; a crumbling structure's life scales
  * by `hp × ramp` and a hazard's burst by `dmg × ramp`.
  */
 export function depthGrowth(
   registry: DataRegistry,
   depth: number,
-): { hp: number; dmg: number; ramp: number } {
+): { hp: number; dmg: number; ramp: number; hpRamp: number } {
   const bal = registry.getDelveBalance();
   const d = Math.max(0, depth - 1);
   return {
     hp: Math.pow(bal.growth.monsterHp, d),
     dmg: Math.pow(bal.growth.monsterDmg, d),
     ramp: bal.monster.earlyRamp[depth - 1] ?? 1,
+    hpRamp: bal.monster.hpRamp[depth - 1] ?? 1,
   };
 }
 
@@ -181,7 +183,7 @@ export function createMonsterEntity(
   const growth = depthGrowth(registry, spawn.depth);
   const def = spawn.def;
 
-  let hp = m.baseHp * growth.hp * def.hp * growth.ramp;
+  let hp = m.baseHp * growth.hp * def.hp * (spawn.kind === 'boss' ? growth.ramp : growth.hpRamp);
   let damage = m.baseDmg * growth.dmg * def.dmg * growth.ramp;
   let interval = def.interval;
   let speed = m.speed * (def.speed ?? 1);

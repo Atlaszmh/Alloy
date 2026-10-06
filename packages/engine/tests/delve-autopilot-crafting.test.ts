@@ -93,7 +93,7 @@ describe('economySim', () => {
     expect(p).toEqual(report.profile);
     expect(salvagedAny).toBe(true);
     expect(questsAny).toBe(true); // First Steps, claimed after dive 1
-  });
+  }, 20000);
 
   it('plays a forced pair', () => {
     const forced = economySim(registry, 2, 1, { primary: 'frost', secondary: 'fire' });

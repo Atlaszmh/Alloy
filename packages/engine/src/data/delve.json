@@ -1036,7 +1036,7 @@
           "id": "slag_beetle",
           "name": "Slag Beetle",
           "icon": "🪲",
-          "hp": 1.4,
+          "hp": 1.1,
           "dmg": 0.9,
           "interval": 1.4,
           "ai": "melee",

@@ -7,7 +7,8 @@ import {
   TerrainBalanceSchema,
 } from '../src/data/schemas.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import { bal, registry } from './fixtures/arena.js';
+import { arena, bal, dummy, registry } from './fixtures/arena.js';
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 
 // See the room objects spec: `delve.terrain` and `delve.ai.pack` (schema-checked), maps at most
 // 96 × 96, and the depth's foe growth that crumbling structures and hazards scale by.
@@ -23,8 +24,8 @@ describe('delve.terrain and delve.ai.pack', () => {
   it("make a burst worth luring a pack onto: 40–50% of a normal foe's life at depth 1, resisted", () => {
     const g = depthGrowth(registry, 1);
     const { hazardDamage, hazardFoeMult } = bal.terrain;
-    const burst = hazardDamage * bal.monster.baseDmg * g.dmg * g.ramp * hazardFoeMult;
-    const life = bal.monster.baseHp * g.hp * g.ramp;
+    const burst = (hazardDamage * bal.monster.baseDmg * g.dmg * g.ramp * hazardFoeMult * g.hpRamp) / g.ramp;
+    const life = bal.monster.baseHp * g.hp * g.hpRamp;
     const share = (burst * (1 - bal.monster.resist)) / life;
     expect(share).toBeGreaterThanOrEqual(0.4);
     expect(share).toBeLessThanOrEqual(0.5);
@@ -60,10 +61,34 @@ describe('depthGrowth', () => {
         { id: 1, def, kind: 'normal', depth, door: null, element: 'fire', x: 0, y: 0, packId: 1 },
         new SeededRNG(1),
       );
-      expect(m.maxHp).toBe(Math.round(bal.monster.baseHp * g.hp * def.hp * g.ramp));
+      expect(m.maxHp).toBe(Math.round(bal.monster.baseHp * g.hp * def.hp * g.hpRamp));
       expect(m.damage).toBe(Math.round(bal.monster.baseDmg * g.dmg * def.dmg * g.ramp));
     }
-    expect(depthGrowth(registry, 1)).toEqual({ hp: 1, dmg: 1, ramp: bal.monster.earlyRamp[0] });
+    expect(depthGrowth(registry, 1)).toEqual({
+      hp: 1,
+      dmg: 1,
+      ramp: bal.monster.earlyRamp[0],
+      hpRamp: bal.monster.hpRamp[0],
+    });
     expect(depthGrowth(registry, 9).ramp).toBe(1);
+    expect(depthGrowth(registry, bal.monster.hpRamp.length + 1).hpRamp).toBe(1);
+  });
+});
+
+describe('monster.resistFromDepth', () => {
+  // The first biome's foes don't resist their element, so no starting element is punished.
+  const fireHit = (depth: number, source: 'skill' | 'hazard' = 'skill') => {
+    const w = arena([dummy(13, 20)], { depth });
+    w.monsters[0].dummy = null;
+    w.monsters[0].element = 'fire';
+    w.hero.stats.elementPower.fire = 0;
+    return hitMonster(makeCtx(registry, w, []), w.monsters[0], 100, 'fire', { source });
+  };
+
+  it("resists the hero's hits only from its depth, a hazard's burst at every depth", () => {
+    const resisted = 100 * (1 - bal.monster.resist);
+    expect(fireHit(bal.monster.resistFromDepth - 1)).toBeCloseTo(100);
+    expect(fireHit(bal.monster.resistFromDepth)).toBeCloseTo(resisted);
+    expect(fireHit(1, 'hazard')).toBeCloseTo(resisted);
   });
 });

@@ -320,10 +320,10 @@ describe('the first boss, and when pickups bank', () => {
 describe('the E2E dives', () => {
   // The E2E's hero is armed (its seedProfile), and its sim runs at 2× (alloy:delve:timescale),
   // a step a frame: a browser at 60 to 20 frames a second steps 1/30 to 1/10 s.
-  it("seed 11's first floor, played by the bot with the E2E's armed hero, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
+  it("seed 3's first floor, played by the bot with the E2E's armed hero, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
     const p = startDive(
       registry,
-      armed(registry, createDelveProfile(registry, 11, { primary: 'fire' })),
+      armed(registry, createDelveProfile(registry, 3, { primary: 'fire' })),
       1,
     );
     for (const fps of [60, 30, 20, 15, 10]) {

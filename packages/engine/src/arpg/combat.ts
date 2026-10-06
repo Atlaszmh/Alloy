@@ -561,7 +561,11 @@ export function hitMonster(
     // A DoT's power was in when it was applied; a hazard's burst is nobody's (none of the hero's).
     if (opts.source !== 'dot' && opts.source !== 'hazard')
       amount *= 1 + stats.elementPower[element];
-    if (resists && element === resists) amount *= 1 - bal.monster.resist;
+    // The first biome's foes don't resist the hero (`resistFromDepth`); a hazard's burst and a
+    // dummy always are resisted as set.
+    const resisting =
+      m.dummy || opts.source === 'hazard' || world.depth >= bal.monster.resistFromDepth;
+    if (resisting && resists && element === resists) amount *= 1 - bal.monster.resist;
     if (resists && element === ctx.data.weakness[resists]) amount *= 1 + bal.monster.weakness;
   }
   if (opts.source === 'basic' && m.traits.includes('armored'))

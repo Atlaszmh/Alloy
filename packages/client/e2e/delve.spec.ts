@@ -69,9 +69,9 @@ test.describe('Delve loot loop', () => {
   }) => {
     // A floor and a half on a loaded machine.
     test.setTimeout(360_000);
-    // Only elites and bosses drop gear: seed 11's first floor, played by the bot to the exit,
+    // Only elites and bosses drop gear: seed 3's first floor, played by the bot to the exit,
     // drops gear at every steady step (pinned in the engine's delve-banking test).
-    await seedProfile(page, 11);
+    await seedProfile(page, 3);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
 

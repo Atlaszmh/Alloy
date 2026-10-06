@@ -45,6 +45,7 @@ export function FloorColumn({
 }: FloorColumnProps): ReactElement {
   const registry = getDelveRegistry();
   const weak = registry.getArpgData().weakness[biome.mana];
+  const { resistFromDepth } = registry.getDelveBalance().monster;
   return (
     <aside className="flex h-full min-h-0 flex-col gap-4" aria-label="Floor, quests and finds">
       <Panel
@@ -59,8 +60,9 @@ export function FloorColumn({
         <div className="grid grid-cols-2 gap-2 text-[14px]" data-testid="biome-element">
           {(
             [
-              ['Resists', biome.mana],
-              ['Weak to', weak],
+              // The first biome's foes don't resist (the engine's `resistFromDepth`).
+              ...((dive?.depth ?? 1) >= resistFromDepth ? [['Resists', biome.mana] as const] : []),
+              ['Weak to', weak] as const,
             ] as const
           ).map(([label, mana]) => {
             const { color, name } = manaStyle(registry, mana);

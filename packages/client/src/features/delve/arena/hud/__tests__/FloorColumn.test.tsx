@@ -65,6 +65,14 @@ describe('FloorColumn', () => {
     expect(screen.queryByTestId('bounty')).toBeNull();
   });
 
+  it("shows no Resists tile in the first biome, whose foes don't resist (resistFromDepth)", () => {
+    const depth = registry.getDelveBalance().monster.resistFromDepth - 1;
+    const biome = registry.getBiomeForDepth(depth);
+    const weak = registry.getArpgData().mana[registry.getArpgData().weakness[biome.mana]].name;
+    render(<FloorColumn {...props} dive={{ ...props.dive!, depth }} biome={biome} />);
+    expect(screen.getByTestId('biome-element')).toHaveTextContent(new RegExp(`^Weak to ${weak}$`));
+  });
+
   it('tints the Resists and Weak to tiles by element: its colour on a dark tint of it, at 4.5:1 or more', () => {
     /** `rgb(r, g, b)` as `#rrggbb`. */
     const hex = (rgb: string) =>

@@ -309,7 +309,7 @@ export function referenceMonster(
   const d = Math.max(0, depth - 1);
   const ramp = bal.monster.earlyRamp[depth - 1] ?? 1;
   return {
-    hp: bal.monster.baseHp * Math.pow(bal.growth.monsterHp, d) * ramp,
+    hp: bal.monster.baseHp * Math.pow(bal.growth.monsterHp, d) * (bal.monster.hpRamp[depth - 1] ?? 1),
     damage: bal.monster.baseDmg * Math.pow(bal.growth.monsterDmg, d) * ramp,
     interval: 1.3,
   };

@@ -15,8 +15,8 @@
     },
     "growth": { "item": 1.13, "monsterHp": 1.17, "monsterDmg": 1.15 },
     "monster": {
-      "baseHp": 100, "baseDmg": 12, "earlyRamp": [0.5, 0.65, 0.8, 0.9], "enrageSeconds": 60, "enrageInterval": 10,
-      "speed": 2.6, "radius": 0.55, "windup": 0.4, "meleeRange": 1.1, "aggroRadius": 8, "resist": 0.4, "weakness": 0.35,
+      "baseHp": 100, "baseDmg": 12, "earlyRamp": [0.5, 0.65, 0.8, 0.9], "hpRamp": [0.25, 0.25, 0.24, 0.23, 0.22, 0.27, 0.33, 0.39, 0.47, 0.57, 0.69, 0.83], "enrageSeconds": 60, "enrageInterval": 10,
+      "speed": 2.6, "radius": 0.55, "windup": 0.4, "meleeRange": 1.1, "aggroRadius": 8, "resist": 0.4, "resistFromDepth": 6, "weakness": 0.35,
       "elite": { "hp": 3.0, "dmg": 1.4, "minTraits": 1, "maxTraits": 2 },
       "boss": { "hp": 25, "dmg": 1.8 },
       "traits": {

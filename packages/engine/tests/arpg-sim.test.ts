@@ -192,12 +192,13 @@ describe('abilities in the sim', () => {
 });
 
 describe('elemental reactions', () => {
-  function target(element: ManaType = 'shadow'): {
+  function target(element: ManaType = 'shadow', depth?: number): {
     ctx: ReturnType<typeof makeCtx>;
     m: MonsterEntity;
     w: ArpgWorld;
   } {
     const w = arena([{ x: 13, y: 20, maxHp: 1e6, hp: 1e6, element }]);
+    if (depth) w.depth = depth;
     return { ctx: makeCtx(registry, w, []), m: w.monsters[0], w };
   }
   const reactionOf = (events: ArpgEvent[]) => events.find((e) => e.kind === 'reaction');
@@ -251,7 +252,8 @@ describe('elemental reactions', () => {
   });
 
   it('monsters resist their own element and are weak to their counter', () => {
-    const own = target('fire');
+    // From `resistFromDepth`: the first biome's foes don't resist.
+    const own = target('fire', bal.monster.resistFromDepth);
     const weak = target('frost');
     const resisted = hitMonster(own.ctx, own.m, 100, 'fire', { source: 'skill' });
     const boosted = hitMonster(weak.ctx, weak.m, 100, 'fire', { source: 'skill' });

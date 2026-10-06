@@ -790,28 +790,28 @@
           "monster": "slag_beetle",
           "at": { "x": 16.5, "y": 6.5 },
           "room": 1,
-          "hpMult": 2
+          "hpMult": 5
         },
         {
           "id": "rat1",
           "monster": "mine_rat",
           "at": { "x": 14.5, "y": 3.5 },
           "room": 1,
-          "hpMult": 1.5
+          "hpMult": 3
         },
         {
           "id": "rat2",
           "monster": "mine_rat",
           "at": { "x": 14.5, "y": 9.5 },
           "room": 1,
-          "hpMult": 1.5
+          "hpMult": 3
         },
         {
           "id": "rat3",
           "monster": "mine_rat",
           "at": { "x": 18.5, "y": 6.5 },
           "room": 1,
-          "hpMult": 1.5
+          "hpMult": 3
         }
       ],
       "markers": [],
@@ -854,42 +854,42 @@
           "monster": "slag_beetle",
           "at": { "x": 14.5, "y": 6.5 },
           "room": 1,
-          "hpMult": 2.5
+          "hpMult": 8
         },
         {
           "id": "rat1",
           "monster": "mine_rat",
           "at": { "x": 12.5, "y": 3.5 },
           "room": 1,
-          "hpMult": 1.5
+          "hpMult": 4
         },
         {
           "id": "rat2",
           "monster": "mine_rat",
           "at": { "x": 12.5, "y": 9.5 },
           "room": 1,
-          "hpMult": 1.5
+          "hpMult": 4
         },
         {
           "id": "beetle2",
           "monster": "slag_beetle",
           "at": { "x": 26.5, "y": 6.5 },
           "room": 2,
-          "hpMult": 2.5
+          "hpMult": 8
         },
         {
           "id": "bat1",
           "monster": "soot_bat",
           "at": { "x": 24.5, "y": 3.5 },
           "room": 2,
-          "hpMult": 1.5
+          "hpMult": 4
         },
         {
           "id": "bat2",
           "monster": "soot_bat",
           "at": { "x": 24.5, "y": 9.5 },
           "room": 2,
-          "hpMult": 1.5
+          "hpMult": 4
         }
       ],
       "markers": [],

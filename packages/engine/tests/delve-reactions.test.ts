@@ -546,14 +546,14 @@ describe('Obsidian', () => {
       applyStatus(ctx, m, 'stagger', 0, true);
       hitMonster(ctx, m, base, 'fire', { source: 'skill' });
     };
-    obsidian(1e6);
+    obsidian(1e5);
     expect(h.barrier).toEqual({ hp: cap, max: cap, until: w.t + r.obsidianDuration });
     h.barrier!.hp = cap / 2;
     w.t += r.reactionCooldown;
     obsidian(1);
     expect(h.barrier).toEqual({ hp: cap / 2, max: cap, until: w.t + r.obsidianDuration });
     w.t += r.reactionCooldown;
-    obsidian(1e6);
+    obsidian(1e5);
     expect(h.barrier).toEqual({ hp: cap, max: cap, until: w.t + r.obsidianDuration });
   });
 
