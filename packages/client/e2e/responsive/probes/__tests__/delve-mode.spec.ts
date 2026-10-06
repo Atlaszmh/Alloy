@@ -16,15 +16,15 @@ const frame = (body: string) => `
     <div class="app-frame" style="width:1280px;height:720px;position:relative;overflow:hidden">${body}</div>
   </body></html>`;
 
-test('min-size: 14 design px under the 0.75 zoom passes, 12 fails', async ({ page }) => {
+test('min-size: 16 design px under the 0.75 zoom passes (12 CSS px, the floor), 14 fails', async ({ page }) => {
   await page.setContent(frame(`
     <div style="zoom:0.75">
-      <span id="ok" style="font-size:14px">ok</span>
-      <button id="big" style="width:32px;height:32px">A</button>
+      <span id="ok" style="font-size:16px">ok</span>
+      <button id="big" style="width:32px;height:32px;font-size:16px">A</button>
     </div>`));
   expect(await minSize(page, CTX)).toEqual([]);
   await page.setContent(frame(`
-    <div style="zoom:0.75"><span id="small" style="font-size:12px">small</span></div>`));
+    <div style="zoom:0.75"><span id="small" style="font-size:14px">small</span></div>`));
   const findings = await minSize(page, CTX);
   expect(findings.some((f) => f.detail.includes('#small') && f.severity === 'fail')).toBe(true);
 });
@@ -32,15 +32,15 @@ test('min-size: 14 design px under the 0.75 zoom passes, 12 fails', async ({ pag
 test('min-size: a form control and display:contents text take the floor too', async ({ page }) => {
   await page.setContent(frame(`
     <div style="zoom:0.75">
-      <select id="ok" style="font-size:14px;height:32px"><option>ok</option></select>
-      <span style="display:contents;font-size:14px">fine</span>
+      <select id="ok" style="font-size:16px;height:32px"><option>ok</option></select>
+      <span style="display:contents;font-size:16px">fine</span>
     </div>`));
   expect(await minSize(page, CTX)).toEqual([]);
   await page.setContent(frame(`
     <div style="zoom:0.75">
-      <select id="small" style="font-size:12px;height:32px"><option>small</option></select>
-      <input id="field" value="v" style="font-size:12px;height:32px">
-      <span id="contents" style="display:contents;font-size:12px">tiny</span>
+      <select id="small" style="font-size:14px;height:32px"><option>small</option></select>
+      <input id="field" value="v" style="font-size:14px;height:32px">
+      <span id="contents" style="display:contents;font-size:14px">tiny</span>
     </div>`));
   const details = (await minSize(page, CTX)).map((f) => f.detail);
   for (const id of ['#small', '#field', '#contents']) {
