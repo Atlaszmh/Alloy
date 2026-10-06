@@ -594,6 +594,7 @@ export function useArenaCore(
             const input = frameInput(registry, world, inputRef.current, pad, padMem, {
               manual: manualRef.current,
               aimReach: useControlsStore.getState().config.aimReach,
+              holdToggle: useControlsStore.getState().config.holdToggle,
               toWorld: (p) => renderer.screenToWorld(p.x, p.y),
               device: useInputDeviceStore.getState().device,
             });

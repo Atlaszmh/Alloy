@@ -11,6 +11,7 @@ import { aimMarkerFor, classifyPress } from './aim';
 import { useControlsStore } from '@/stores/controlsStore';
 import type { KeyAction, MoveKey } from '@/features/controls/controls';
 import {
+  latchHolds,
   padFrameCast,
   padMemory,
   stickAimPoint,
@@ -99,6 +100,8 @@ export interface FrameOpts {
   aimReach: number;
   toWorld: (screen: Vec) => Vec;
   device: InputDevice;
+  /** Press-to-toggle hold moves (`ControlsConfig.holdToggle`). */
+  holdToggle?: boolean;
 }
 
 /** Whether the loot labels show: the keys' Alt under the keys or mouse, the pad's L3 under the pad. */
@@ -189,7 +192,8 @@ function padInput(
     const none = { move: { x: 0, y: 0 }, cast: null, holding: null };
     return o.manual ? { ...none, attack: false, attackTap: false, attackAim: null } : none;
   }
-  const frame = padFrameCast(registry, world, pad, mem);
+  const acts = o.holdToggle ? { ...pad, ...latchHolds(registry, world, pad, mem) } : pad;
+  const frame = padFrameCast(registry, world, acts, mem);
   const comboWindow = registry.getDelveBalance().abilities.comboWindow;
   // A skill the weapon doesn't carry has no move: its button casts nothing.
   const ab = frame.cast && pressMove(h, frame.cast.slot, world.t, comboWindow);
