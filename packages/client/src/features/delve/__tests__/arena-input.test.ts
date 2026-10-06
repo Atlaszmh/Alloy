@@ -748,6 +748,75 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       expect(frameInput(registry, w, input, pad(), mem, opts).cast).toEqual({ slot: 0, aim: null });
     });
   });
+
+  describe('press-to-toggle hold moves on the keys', () => {
+    let detach = () => {};
+    beforeEach(() => useControlsStore.getState().setHoldToggle(true));
+    afterEach(() => {
+      detach();
+      useControlsStore.getState().reset();
+    });
+    const holdBolt = {
+      moves: [{ kind: 'hold', form: 'bolt', elements: ['fire'] }],
+      payment: 'mana',
+    } as Chain;
+
+    it('Q tapped starts the hold and its key let go keeps it; Q again releases it', () => {
+      const w = world(holdBolt);
+      const input = createArenaInput();
+      detach = attachKeyboard(input, () => true);
+      const STEP = registry.getDelveBalance().arena.step;
+      const mem = padMemory();
+      const frame = () => {
+        const out = frameInput(registry, w, input, null, mem, keys);
+        stepWorld(registry, w, out, STEP);
+        return out;
+      };
+      key('keydown', 'KeyQ');
+      key('keyup', 'KeyQ');
+      for (let i = 0; i < 5; i++) expect(frame()).toMatchObject({ cast: null, holding: 0 });
+      expect(w.hero.hold?.slot).toBe(0);
+      key('keydown', 'KeyQ');
+      expect(frame()).toMatchObject({ cast: { slot: 0 }, holding: null });
+      key('keyup', 'KeyQ');
+      expect(frame()).toMatchObject({ cast: null, holding: null });
+      expect(w.hero.hold).toBeNull();
+    });
+
+    it('a move that is not a hold casts as its key goes up, as without the toggle', () => {
+      const w = world();
+      const input = createArenaInput();
+      detach = attachKeyboard(input, () => true);
+      key('keydown', 'KeyQ');
+      key('keyup', 'KeyQ');
+      expect(frameInput(registry, w, input, null, padMemory(), keys)).toMatchObject({
+        cast: { slot: 0, aim: null },
+        holding: null,
+      });
+    });
+
+    it('a hold that fires by itself lets go of the key without a cast', () => {
+      const w = world(holdBolt);
+      spawnDummies(registry, w, { layout: 'single', element: null });
+      const input = createArenaInput();
+      detach = attachKeyboard(input, () => true);
+      const STEP = registry.getDelveBalance().arena.step;
+      const mem = padMemory();
+      key('keydown', 'KeyQ');
+      key('keyup', 'KeyQ');
+      let fired = false;
+      for (let i = 0; i < 600 && !fired; i++) {
+        const out = frameInput(registry, w, input, null, mem, keys);
+        fired = stepWorld(registry, w, out, STEP).some((e) => e.kind === 'cast');
+      }
+      expect(fired).toBe(true);
+      expect(frameInput(registry, w, input, null, mem, keys)).toMatchObject({
+        cast: null,
+        holding: null,
+      });
+      expect(input.aiming).toBeNull();
+    });
+  });
 });
 
 describe('interact', () => {
