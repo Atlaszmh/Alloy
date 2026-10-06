@@ -30,6 +30,7 @@ interface ControlsStore {
   setRepeat: (action: RepeatAction, on: boolean) => void;
   setDeadzone: (stick: 'left' | 'right', value: number) => void;
   setAimReach: (value: number) => void;
+  setHoldToggle: (on: boolean) => void;
   reset: () => void;
 }
 
@@ -53,6 +54,7 @@ export const useControlsStore = createHmrStore<ControlsStore>('controlsStore', (
         parseControls({ ...get().config, deadzone: { ...get().config.deadzone, [stick]: value } }),
       ),
     setAimReach: (value) => commit(parseControls({ ...get().config, aimReach: value })),
+    setHoldToggle: (on) => commit({ ...get().config, holdToggle: on }),
     reset: () => commit(DEFAULT_CONTROLS),
   };
 });

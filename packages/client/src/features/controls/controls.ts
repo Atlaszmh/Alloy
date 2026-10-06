@@ -38,6 +38,11 @@ export interface ControlsConfig {
   deadzone: { left: number; right: number };
   /** How far placed abilities land at full right-stick tilt, as a fraction of their range. */
   aimReach: number;
+  /**
+   * Hold moves by press-to-toggle: a press starts a hold move charging and the next press of its
+   * button or key releases it (the pad and the keys; the HUD's slots and the attack keep holding).
+   */
+  holdToggle: boolean;
 }
 
 export const DEADZONE_LIMITS = { left: [0.05, 0.5], right: [0.1, 0.6] } as const;
@@ -80,6 +85,7 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
   repeat: { primary: true, defensive: false, ultimate: false },
   deadzone: { left: 0.2, right: 0.35 },
   aimReach: 1,
+  holdToggle: false,
 };
 
 export const ACTION_LABELS: Record<KeyAction, string> = {
@@ -172,6 +178,7 @@ export function parseControls(raw: unknown): ControlsConfig {
       right: inRange(dz.right, DEADZONE_LIMITS.right) ? dz.right : d.deadzone.right,
     },
     aimReach: inRange(r.aimReach, AIM_REACH_LIMITS) ? r.aimReach : d.aimReach,
+    holdToggle: typeof r.holdToggle === 'boolean' ? r.holdToggle : d.holdToggle,
   };
 }
 

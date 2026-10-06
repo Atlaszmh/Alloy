@@ -64,6 +64,17 @@ describe('controls config', () => {
     expect(parseControls(JSON.parse(exportControls(c)))).toEqual(c);
   });
 
+  it('reads holdToggle: false by default, a saved boolean kept, anything else the default', () => {
+    expect(DEFAULT_CONTROLS.holdToggle).toBe(false);
+    expect(parseControls({}).holdToggle).toBe(false);
+    expect(parseControls({ holdToggle: true }).holdToggle).toBe(true);
+    expect(parseControls({ holdToggle: 'yes' }).holdToggle).toBe(false);
+    // An older setup, saved before the field, keeps its bindings and gets the default.
+    const old = JSON.parse(exportControls(DEFAULT_CONTROLS));
+    delete old.holdToggle;
+    expect(parseControls(old)).toEqual(DEFAULT_CONTROLS);
+  });
+
   it('names buttons and keys for people', () => {
     expect(padLabel('rs')).toBe('R3');
     expect(padLabel('down')).toBe('D-pad ▼');
