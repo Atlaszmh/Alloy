@@ -57,7 +57,6 @@ test.describe('the type floor', () => {
   test.skip(({ viewport }) => viewport?.width !== 1920, 'measured at 1920×1080 (desktop-1080)');
 
   test('TY01: the Anvil: every tab, the benches, the editor, the sheets and the dialogs', async ({ page }) => {
-    test.fail(); // the floor lands in Task 6
     await seedProfile(page, 4242, false);
     await page.goto('/delve');
     for (const tab of ['loadout', 'skills', 'forge', 'codex', 'quests'] as const) {
@@ -100,7 +99,6 @@ test.describe('the type floor', () => {
   });
 
   test('TY02: the dive: the lean HUD, the pause list and the stop', async ({ page }) => {
-    test.fail(); // the floor lands in Task 6
     await seedProfile(page); // the bot clears depth 1
     await page.goto('/delve');
     await startDive(page);

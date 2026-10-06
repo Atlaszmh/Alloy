@@ -15,10 +15,10 @@ const MIN_GEM_SIZE = 80;
 const MIN_SOCKET_SIZE = 40;
 const MIN_TEXT_PX = 8;
 
-// The Delve's floors (Delve UI v1, Accessibility): nothing under 14 design px, which is 10.5
-// CSS px at the 0.75 zoom floor, so 10 with rounding slack; click targets at least 24×24
-// (WCAG 2.5.8). Both are CSS px as drawn: font-size × the element's effective zoom.
-const DELVE_MIN_TEXT_PX = 10;
+// The Delve's floors (the pad-first spec's type floor): nothing under 16 design px, which is 12
+// CSS px at the 0.75 zoom floor; click targets at least 24×24 (WCAG 2.5.8). Both are CSS px as
+// drawn: font-size × the element's effective zoom.
+const DELVE_MIN_TEXT_PX = 12;
 const DELVE_MIN_TARGET_PX = 24;
 
 /** What a player clicks: shared with the Delve's page-scroll probe. */
