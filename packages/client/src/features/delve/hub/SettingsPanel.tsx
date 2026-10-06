@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { HUD_SCALE_RANGE, VIEW_UNITS_RANGE, useUIStore } from '@/stores/uiStore';
 import { playSound } from '@/shared/utils/sound-manager';
-import { Button, Chip, Dialog, Segmented } from '@/features/delve/kit';
+import { Button, Chip, Dialog, Segmented, TEXT_SIZES, menuScaleFor, type TextSize } from '@/features/delve/kit';
+import { uiScaleFor } from '@/features/delve/kit/prompts';
 import { arenaResolution, arenaZoom } from '@/features/delve/arena/camera';
 import { version } from '../../../../package.json';
 
@@ -14,13 +15,23 @@ const COLORBLIND: { id: Colorblind; label: string }[] = [
   { id: 'tritanopia', label: 'Tritanopia' },
 ];
 
+/** Settings → Text size's three choices, by their percentage. */
+const TEXT_SIZE_OPTIONS: { id: TextSize; label: string; testId: string }[] = [
+  { id: 'small', label: 'Small · 100%', testId: 'text-size-small' },
+  { id: 'medium', label: 'Medium · 115%', testId: 'text-size-medium' },
+  { id: 'large', label: 'Large · 130%', testId: 'text-size-large' },
+];
+
+/** Text size's names, for the line that says a window caps it. */
+const TEXT_SIZE_LABEL: Record<TextSize, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
+
 /** Settings → HUD scale, in percent (the spec's 80 to 125%). */
 const HUD_PERCENT = HUD_SCALE_RANGE.map((v) => Math.round(v * 100));
 
 /**
  * The Delve's Settings (from the system menu): the same `uiStore` fields as
  * the classic drawer (volumes, mute, colorblind mode), the HUD (Lean or Full),
- * the HUD scale, View distance, and the version, which the Delve has no TabBar to show.
+ * Text size, the HUD scale, View distance, and the version, which the Delve has no TabBar to show.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const ui = useUIStore();
@@ -40,6 +51,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     />
   );
   const hud = Math.round(ui.hudScale * 100);
+  // What this window gives the chosen text size: under its full percentage, the cap (menuScaleFor).
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const shown = Math.round((menuScaleFor(w, h, TEXT_SIZES[ui.textSize]) / uiScaleFor(w, h)) * 100);
+  const capped = shown < Math.round(TEXT_SIZES[ui.textSize] * 100) - 1 ? shown : null;
   // What View distance gives in this window: its whole scale and the units it shows.
   const zoom = arenaZoom(window.innerHeight, arenaResolution(), ui.arenaViewUnits);
   return (
@@ -73,6 +89,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
         </Section>
         <Section title="Display">
+          <span className="text-[var(--k-text)]">Text size</span>
+          <Segmented
+            aria-label="Text size"
+            columns={3}
+            value={ui.textSize}
+            onChange={(size) => ui.setTextSize(size)}
+            options={TEXT_SIZE_OPTIONS}
+          />
+          {capped && (
+            <p className="k-note m-0" data-testid="text-size-capped">
+              This window shows {TEXT_SIZE_LABEL[ui.textSize]} at {capped}%: the screens can grow no
+              further here.
+            </p>
+          )}
           <Slider
             id="hud-scale"
             label="HUD scale"

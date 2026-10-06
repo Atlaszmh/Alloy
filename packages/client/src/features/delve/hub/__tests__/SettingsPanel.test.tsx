@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { SettingsPanel } from '../SettingsPanel';
 import { useUIStore } from '@/stores/uiStore';
 import { version } from '../../../../../package.json';
@@ -80,5 +80,32 @@ describe('SettingsPanel', () => {
     expect(screen.getByTestId('settings-version')).toHaveTextContent(`v${version}`);
     fireEvent.click(screen.getByTestId('settings-close'));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  describe('Text size', () => {
+    afterEach(() => {
+      Object.assign(window, { innerWidth: 1024, innerHeight: 768 });
+      useUIStore.getState().setTextSize('small');
+      localStorage.removeItem('alloy:delve:textSize');
+    });
+
+    it('Display holds Text size: Small, Medium, Large, saved for this device; a window too small for it says so', () => {
+      Object.assign(window, { innerWidth: 1920, innerHeight: 1080 });
+      render(<SettingsPanel onClose={() => {}} />);
+      expect(screen.getByTestId('text-size-small')).toHaveAttribute('aria-checked', 'true');
+      fireEvent.click(screen.getByTestId('text-size-large'));
+      expect(useUIStore.getState().textSize).toBe('large');
+      expect(localStorage.getItem('alloy:delve:textSize')).toBe('large');
+      expect(screen.getByTestId('text-size-large')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.queryByTestId('text-size-capped')).toBeNull();
+      cleanup();
+      Object.assign(window, { innerWidth: 1280, innerHeight: 800 });
+      render(<SettingsPanel onClose={() => {}} />);
+      expect(screen.getByTestId('text-size-capped')).toHaveTextContent(
+        'This window shows Large at 115%: the screens can grow no further here.',
+      );
+      fireEvent.click(screen.getByTestId('text-size-medium'));
+      expect(screen.queryByTestId('text-size-capped')).toBeNull();
+    });
   });
 });
