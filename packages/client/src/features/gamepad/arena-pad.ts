@@ -211,9 +211,10 @@ export function latchHolds(
     return acts.held.includes(latched)
       ? acts
       : { ...acts, held: [...acts.held, latched].sort((a, b) => a - b) };
-  // The latest press is the one `padFrameCast` makes `holding`.
-  const press = [...acts.cast].reverse().find((s) => castsOnRelease(registry, world, s));
-  if (press !== undefined) mem.latch = { slot: press, started: false };
+  // Only the latest press, the one `padFrameCast` makes `holding`: an earlier one taps.
+  const press = acts.cast.at(-1);
+  if (press !== undefined && castsOnRelease(registry, world, press))
+    mem.latch = { slot: press, started: false };
   return acts;
 }
 
