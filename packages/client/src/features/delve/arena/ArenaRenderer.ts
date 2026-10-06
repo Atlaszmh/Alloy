@@ -430,17 +430,20 @@ export class ArenaRenderer {
 
   // ── Effects ──────────────────────────────────────────────────────────────
 
+  /** Shake the screen by `amount` × Settings → Effects → Screen shake (none at 0 or under reduced motion). */
   addShake(amount: number): void {
-    if (this.still) return;
-    this.shake = Math.min(0.6, this.shake + amount);
+    const strength = useUIStore.getState().shake;
+    if (this.still || strength <= 0) return;
+    this.shake = Math.min(0.6, this.shake + amount * strength);
   }
 
-  /** Nudge the camera toward a strike, by its heft; heavy ones shake too. */
+  /** Nudge the camera toward a strike, by its heft and Settings → Effects → Screen shake; heavy ones shake too. */
   private kickCamera(dir: Vec, heft: number): void {
-    if (this.still) return;
+    const strength = useUIStore.getState().shake;
+    if (this.still || strength <= 0) return;
     const len = Math.hypot(dir.x, dir.y) || 1;
-    this.kick.x += (dir.x / len) * 0.12 * heft;
-    this.kick.y += (dir.y / len) * 0.12 * heft;
+    this.kick.x += (dir.x / len) * 0.12 * heft * strength;
+    this.kick.y += (dir.y / len) * 0.12 * heft * strength;
     if (heft >= 0.7) this.addShake(0.15 * heft);
   }
 
@@ -489,7 +492,9 @@ export class ArenaRenderer {
             this.floatText(e.x, e.y - 0.3, `-${formatShort(e.amount)}`, 0x9ca3af, 20);
           else {
             this.floatText(e.x, e.y - 0.3, `-${formatShort(e.amount)}`, 0xf87171, 20);
-            this.heroFlashUntil = this.time + 0.12;
+            // Settings → Effects → Flashes: its time × the strength, none at 0.
+            const flash = useUIStore.getState().flash;
+            if (flash > 0) this.heroFlashUntil = this.time + 0.12 * flash;
             this.addShake(Math.min(0.35, 0.08 + (e.amount / w.hero.stats.maxHp) * 1.5));
           }
           break;
