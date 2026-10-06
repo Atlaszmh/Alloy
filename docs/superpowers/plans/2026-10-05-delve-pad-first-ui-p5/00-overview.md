@@ -68,6 +68,8 @@ All from `/c/Projects/alloy-padui` in Git Bash.
 (cd packages/client && npx tsc --noEmit -p . && npx vitest run)
 ```
 
+Baseline (recorded 2026-10-05 on `padui/main` at `eacaf5fb`): client `tsc` clean, `vitest run` 145 files, 1323 tests; all passing.
+
 and write the count into this section ("Baseline (recorded <date> on `padui/main` at `<sha>`): client `tsc` clean, `vitest run` N files, M tests; all passing"). Phase 4 started at 139 files and 1293 tests and added its own; read the real numbers. If the baseline is not green, stop: phase 4 did not close. Plan 01's Task 1 also records the type baseline (TY01's shares at v0.68.0) before any text changes.
 
 ## Conventions

@@ -153,7 +153,7 @@ test.describe('the type floor', () => {
 
   Expected: FAIL (soft: every screen lists its runs under 16). Copy the `TY …` lines into this plan's Baseline below and into the commit message's body. The spec's Evidence reads "69–92% of a hub tab's text is under 18 px" at v0.64.1; record what v0.68.0 reads.
 
-  Baseline (recorded <date> at `<sha>`): _the TY lines_.
+  Baseline (recorded 2026-10-05 at `eacaf5fb`, v0.68.0; runs · <14 · <16 · <18, smallest 14 everywhere): loadout 98 · 0 · 46 · 74%; skills 93 · 0 · 59 · 77%; forge 57 · 0 · 35 · 54%; codex 62 · 0 · 39 · 52%; quests 54 · 0 · 41 · 63%; skills-editor 119 · 0 · 61 · 77%; forge-pattern 91 · 0 · 52 · 66%; temper 71 · 0 · 44 · 58%; materials 71 · 0 · 34 · 58%; depart 79 · 0 · 32 · 58%; system-menu 81 · 0 · 33 · 56%; help 92 · 0 · 37 · 60%; settings 99 · 0 · 39 · 68%; controls 137 · 0 · 47 · 74%; hud 16 · 0 · 75 · 94%; pause-list 32 · 0 · 44 · 56%; stop 19 · 0 · 58 · 74%.
 
 - [ ] **Step 3: Commit** (the spec fails until Task 6: commit it with `test.fail()` on both tests and a comment "the floor lands in Task 6", removed there).
 
