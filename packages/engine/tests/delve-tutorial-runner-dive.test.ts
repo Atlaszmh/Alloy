@@ -99,7 +99,7 @@ describe('the guided dive', () => {
     expect(res.profile).toEqual(p);
     expect([res.scrap, res.kept]).toEqual([0, []]);
     // Skipped, the depth is an ordinary one: a death is a death.
-    const dead = failFloor(script, skipTutorial(later), floorOn(p, 'rats')).profile;
+    const dead = failFloor(script, skipTutorial(script, later), floorOn(p, 'rats')).profile;
     expect([dead.dive!.phase, dead.stats.deaths]).toEqual(['dead', 1]);
   });
 
@@ -108,12 +108,12 @@ describe('the guided dive', () => {
     expect(closeDive(script, { ...p, scrap: 1, tutorial: st('rats') })).toEqual(p);
     const stopped = completeFloor(script, p, floorOn(p, 'exit')).profile;
     expect(() => closeDive(script, stopped)).toThrow('Hesta holds the stop');
-    expect(closeDive(script, skipTutorial(stopped)).dive).toBeNull();
+    expect(closeDive(script, skipTutorial(script, stopped)).dive).toBeNull();
   });
 
   it('a skip at a stop lets the doors open, and the next depth is an ordinary one', () => {
     const p = diving();
-    const stopped = skipTutorial(completeFloor(script, p, floorOn(p, 'exit')).profile);
+    const stopped = skipTutorial(script, completeFloor(script, p, floorOn(p, 'exit')).profile);
     const next = chooseDoor(script, stopped, 'winding');
     expect([next.tutorial, next.dive!.tutorialEntry]).toEqual([null, null]);
     expect(beginFloor(script, next).tutorialFloor).toBeNull();

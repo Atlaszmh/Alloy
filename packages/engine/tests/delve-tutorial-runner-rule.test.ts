@@ -278,7 +278,7 @@ describe('skip and retry', () => {
   }
 
   it("skipTutorial drops the profile's state, its depth's entry and the stop's requirement", () => {
-    const p = skipTutorial(guided());
+    const p = skipTutorial(script, guided());
     expect(p.tutorial).toBeNull();
     expect(p.dive!.tutorialEntry).toBeNull();
     expect(p.dive!.stop).toEqual({ offers: ['equip'], taken: false, required: false });
@@ -289,7 +289,7 @@ describe('skip and retry', () => {
     w.tutorialFloor = 'd1-1';
     w.tutorial = { ...st('walk'), tally: {} };
     w.map.doors[0].held = true;
-    skipTutorial(guided(), w);
+    skipTutorial(script, guided(), w);
     expect([w.tutorial, w.tutorialFloor, w.map.doors[0].held]).toEqual([null, 'd1-1', false]);
   });
 

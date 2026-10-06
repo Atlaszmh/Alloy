@@ -745,7 +745,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     startTutorial: () => commit(engineStartTutorial(registry(), get().profile)),
 
-    skipTutorial: (world) => commit(engineSkipTutorial(get().profile, world)),
+    skipTutorial: (world) => commit(engineSkipTutorial(registry(), get().profile, world)),
 
     tutorialEvents: (events) => commit(applyTutorialEvents(registry(), get().profile, events)),
 

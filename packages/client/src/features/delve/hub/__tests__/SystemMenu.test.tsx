@@ -13,7 +13,7 @@ import { UNSOCKET_KEY, useDelveStore } from '@/stores/delveStore';
 // Skipping is the tutorial's B1: here it clears the save's tutorial.
 vi.mock('@alloy/engine', async (orig) => ({
   ...(await orig<typeof import('@alloy/engine')>()),
-  skipTutorial: vi.fn((p: DelveProfile) => ({ ...p, tutorial: null })),
+  skipTutorial: vi.fn((_r: unknown, p: DelveProfile) => ({ ...p, tutorial: null })),
   // The skip rule and the runner are B1's too: each test says whether the step may be skipped.
   tutorialSkippable: vi.fn(),
   applyTutorialEvents: vi.fn((_r: unknown, p: DelveProfile) => p),

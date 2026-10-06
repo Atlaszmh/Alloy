@@ -43,7 +43,7 @@ vi.mock('@alloy/engine', async (orig) => ({
   questStates: vi.fn(),
   applyTutorialEvents: vi.fn((_r: unknown, p: DelveProfile) => p),
   retryTutorialDepth: vi.fn((_r: unknown, p: DelveProfile) => p),
-  skipTutorial: vi.fn((p: DelveProfile) => ({ ...p, tutorial: null })),
+  skipTutorial: vi.fn((_r: unknown, p: DelveProfile) => ({ ...p, tutorial: null })),
   settleDive: vi.fn((_r: unknown, p: DelveProfile) => p),
 }));
 

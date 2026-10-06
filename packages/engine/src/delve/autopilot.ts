@@ -188,7 +188,7 @@ function playFloor(
     run.retries++;
     if (deaths >= TUTORIAL_RETRIES) {
       run.skipped = p.tutorial!.step;
-      p = skipTutorial(p);
+      p = skipTutorial(registry, p);
     }
   }
 }
@@ -1082,7 +1082,7 @@ function lessonVisit(
       p = applyTutorialEvents(registry, p, [{ type: 'skipStep' }]);
     } else {
       run.skipped = step.id;
-      p = skipTutorial(p);
+      p = skipTutorial(registry, p);
     }
   }
   return { profile: p, quests, spent, forged: held(p).filter((i) => !before.has(i.uid)) };

@@ -14,7 +14,7 @@ import type { SetChainsOptions } from './runes.js';
 import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
 import { emptyMaterials } from '../loot/materials.js';
 import { applyQuestEvents, emptyQuests } from './quests.js';
-import { applyTutorialEvents } from './tutorial.js';
+import { applyTutorialEvents, learnWeaponPatterns } from './tutorial.js';
 import { refillBoard } from './contracts.js';
 import { rollFloor } from '../loot/forge.js';
 import { applySalvage, salvageRng } from '../loot/salvage-yield.js';
@@ -97,7 +97,10 @@ export function createDelveProfile(
     links: 0,
     runes: {},
     materials,
-    patterns: [...kit.startingPatterns],
+    // The kit's and every weapon's: a weapon is the hero's identity (`learnWeaponPatterns`).
+    patterns: [
+      ...new Set([...kit.startingPatterns, ...registry.getGearBasesForSlot('weapon').map((b) => b.id)]),
+    ],
     essencesSeen: [],
     reactionsSeen: [],
     quests: emptyQuests(registry),
@@ -216,7 +219,10 @@ export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedD
   if (typeof raw !== 'object' || raw === null) return null;
   if ((raw as { version?: unknown }).version !== 12) return { reset: true };
   const parsed = DelveProfileSchema.safeParse(raw);
-  return parsed.success ? { profile: fitMovesets(registry, parsed.data as DelveProfile) } : null;
+  if (!parsed.success) return null;
+  const profile = fitMovesets(registry, parsed.data as DelveProfile);
+  // Outside the guided start every weapon's pattern is known (a save from before that rule too).
+  return { profile: profile.tutorial ? profile : learnWeaponPatterns(registry, profile) };
 }
 
 /** Depth used as the yardstick for Power and comparisons. */

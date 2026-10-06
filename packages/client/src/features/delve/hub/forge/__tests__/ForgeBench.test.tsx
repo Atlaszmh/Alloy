@@ -184,10 +184,10 @@ describe('ForgeBench', () => {
     const list = screen.getByTestId('pattern-list');
     const learned = store().profile.patterns;
     for (const id of learned) expect(within(list).getByTestId(`pattern-${id}`)).toBeInTheDocument();
-    expect(screen.getByTestId('pattern-unknown-bow')).toHaveTextContent(
-      'Unknown · salvage a Bow, or find its pattern on elites and bosses',
+    expect(screen.getByTestId('pattern-unknown-helm')).toHaveTextContent(
+      'Unknown · salvage a Helm, or find its pattern on elites and bosses',
     );
-    expect(within(screen.getByTestId('pattern-unknown-bow')).queryByRole('button')).toBeNull();
+    expect(within(screen.getByTestId('pattern-unknown-helm')).queryByRole('button')).toBeNull();
     // Nothing is forged from nothing: no preview until a pattern is picked.
     expect(screen.getByTestId('forge-empty')).toHaveTextContent('Pick a pattern to forge');
     // The pad lands on the first learned row while none is picked, on the picked one after.

@@ -152,9 +152,9 @@ describe('CodexTab', () => {
     expect(screen.queryByTestId('codex-unknown')).toBeNull();
     rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'essences' } })} />);
     expect(screen.getAllByTestId('essence-unknown')).toHaveLength(12);
-    // A new save knows three patterns: the sword's, the cuirass's and the dagger's.
+    // A new save knows the kit's patterns and every weapon's: the armour and jewellery's are left.
     rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'patterns' } })} />);
-    expect(screen.getAllByTestId('pattern-unknown')).toHaveLength(10);
+    expect(screen.getAllByTestId('pattern-unknown')).toHaveLength(5);
   });
 
   it("Help: one card a topic, the focused one's page in the detail; a link opens it", () => {

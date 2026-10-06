@@ -200,15 +200,15 @@
       "id": "collector",
       "kind": "side",
       "name": "Collector",
-      "line": "A smith is only as good as the shapes she knows. Bring me patterns.",
+      "line": "Every blade's shape is yours already. A smith needs more: bring me the armour's patterns.",
       "unlock": { "after": "strike_the_anvil" },
       "objectives": [
         {
           "id": "patterns",
           "type": "knowPatterns",
-          "count": 6,
+          "count": 10,
           "scope": "total",
-          "text": "Know 6 patterns"
+          "text": "Know 10 patterns"
         }
       ],
       "rewards": [

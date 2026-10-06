@@ -44,6 +44,8 @@ describe.each(PAIRS)('the bot plays the guided start, %s with %s', (primary, sec
       const { profile: p, reports, tutorial: run } = runAutopilot(registry, opts);
       // Done by completion: no tutorial skipped, no death, every floor once at its depth.
       expect(p.tutorial).toBeNull();
+      // Its end opens every weapon's pattern (`learnWeaponPatterns`).
+      for (const b of registry.getGearBasesForSlot('weapon')) expect(p.patterns).toContain(b.id);
       expect(run).toMatchObject({ floors: FLOORS, retries: 0, skipped: null });
       expect(run!.skippedSteps.filter((s) => !SKIPPABLE.includes(s))).toEqual([]);
       expect(reports.map((d) => [d.result, d.timedOut])).toEqual([
@@ -84,7 +86,7 @@ describe('where the script meets the floors', () => {
     const w = beginFloor(registry, p);
     stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
     expect([w.tutorialFloor, w.map.doors[0].held]).toEqual(['d1-2', true]);
-    skipTutorial(p, w);
+    skipTutorial(registry, p, w);
     expect([w.tutorial, w.tutorialFloor, w.map.doors[0].held, tutorialExitHeld(w)]).toEqual([
       null,
       'd1-2',

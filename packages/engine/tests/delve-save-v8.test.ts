@@ -11,10 +11,10 @@ const registry = createDefaultRegistry();
 const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 
 describe('save v8', () => {
-  it('starts with the starter kit: three patterns, 5 Rusty bars, 5 uncommon flux and 50 scrap', () => {
+  it('starts with the starter kit: its patterns and every weapon\'s, 5 Rusty bars, 5 uncommon flux and 50 scrap', () => {
     const p = createDelveProfile(registry, 7, { primary: 'fire' });
     expect(p.version).toBe(12);
-    expect(p.patterns).toEqual(['sword', 'cuirass', 'dagger']);
+    expect(p.patterns).toEqual(['sword', 'cuirass', 'dagger', 'axe', 'maul', 'staff', 'wand', 'bow']);
     expect(p.materials.metals).toMatchObject({ rusty: 5, iron: 0 });
     expect(p.materials.flux).toEqual({ uncommon: 5, magic: 0, rare: 0, epic: 0 });
     expect(p.scrap).toBe(50);

@@ -233,14 +233,14 @@ describe('quest events at the Anvil', () => {
   });
 
   it('a pattern learned by salvage counts at once', () => {
-    const axe = generateItem(
+    const helm = generateItem(
       reg,
-      { uid: 'b0', ilvl: 1, rarity: 'common', slot: 'weapon', baseId: 'axe', mana: 'fire' },
+      { uid: 'b0', ilvl: 1, rarity: 'common', slot: 'helm', baseId: 'helm', mana: 'fire' },
       new SeededRNG(1),
     );
     const p = smith();
-    const melted = salvageItems(reg, { ...p, bag: [axe] }, ['b0']).profile;
-    expect(melted.patterns).toContain('axe');
+    const melted = salvageItems(reg, { ...p, bag: [helm] }, ['b0']).profile;
+    expect(melted.patterns).toContain('helm');
     expect(value(melted, 'patterns')).toBe(p.patterns.length + 1);
   });
 });

@@ -27,7 +27,7 @@ import type {
   TutorialTextPart,
 } from '../types/tutorial.js';
 import { movesOf, slotPrice } from './moveset.js';
-import { questStates } from './quests.js';
+import { applyQuestEvents, questStates } from './quests.js';
 
 /**
  * The guided start on the profile (see the tutorial spec): starting and
@@ -36,6 +36,19 @@ import { questStates } from './quests.js';
  * ops import this module and it imports them back: keep to function
  * declarations.
  */
+
+/**
+ * Every weapon's pattern learned: a weapon is the hero's identity, so outside
+ * the guided start every one is forgeable from the first visit (a Jump in
+ * save, a finished or skipped guided start, and any such save at load). The
+ * guided start itself keeps to the kit's patterns. Quests read the new count.
+ */
+export function learnWeaponPatterns(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const weapons = registry.getGearBasesForSlot('weapon').map((b) => b.id);
+  const missing = weapons.filter((id) => !profile.patterns.includes(id));
+  if (missing.length === 0) return profile;
+  return applyQuestEvents(registry, { ...profile, patterns: [...profile.patterns, ...missing] }, []);
+}
 
 /** Why the Anvil's Delve waits while a lesson runs (`tutorialBlocksDive`). */
 export const LESSON_UNFINISHED = "Finish Hesta's lesson or skip it";
@@ -84,12 +97,16 @@ export function triggerMatches(
   );
 }
 
-/** A new save's guided start: its first step (`tutorial.json → steps[0]`). */
+/**
+ * A new save's guided start: its first step (`tutorial.json → steps[0]`), the
+ * patterns back to the kit's (`startingPatterns`) until it ends.
+ */
 export function startTutorial(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const first = registry.getTutorialData().steps[0];
+  const patterns = [...registry.getCraftingData().startingPatterns];
   return applyTutorialEvents(
     registry,
-    { ...profile, tutorial: { step: first.id, count: 0, misses: 0 } },
+    { ...profile, patterns, tutorial: { step: first.id, count: 0, misses: 0 } },
     [],
   );
 }
@@ -97,15 +114,20 @@ export function startTutorial(registry: DataRegistry, profile: DelveProfile): De
 /**
  * Drop the rails: the profile's tutorial cleared, with its depth's entry and a
  * stop's required power-up, and `world`'s (a floor in progress plays out, its
- * held doors let go); the save is ordinary from here.
+ * held doors let go); the save is ordinary from here, every weapon's pattern
+ * learned (`learnWeaponPatterns`).
  */
-export function skipTutorial(profile: DelveProfile, world?: ArpgWorld | null): DelveProfile {
+export function skipTutorial(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world?: ArpgWorld | null,
+): DelveProfile {
   if (world) {
     world.tutorial = null;
     for (const d of world.map.doors) setDoor(world.map, d, 'held', false);
   }
   const dive = profile.dive;
-  return {
+  return learnWeaponPatterns(registry, {
     ...profile,
     tutorial: null,
     dive: dive && {
@@ -113,7 +135,7 @@ export function skipTutorial(profile: DelveProfile, world?: ArpgWorld | null): D
       tutorialEntry: null,
       stop: dive.stop && { ...dive.stop, required: false },
     },
-  };
+  });
 }
 
 /**
@@ -178,7 +200,9 @@ export function applyTutorialEvents(
     step = tutorialStep(registry, state)
   )
     state = tutorialNext(registry, state);
-  return state === profile.tutorial ? profile : { ...profile, tutorial: state };
+  if (state === profile.tutorial) return profile;
+  // The guided start's end: the save is ordinary from here.
+  return state ? { ...profile, tutorial: state } : learnWeaponPatterns(registry, { ...profile, tutorial: null });
 }
 
 /** What the hero has: worn, then the bag. */

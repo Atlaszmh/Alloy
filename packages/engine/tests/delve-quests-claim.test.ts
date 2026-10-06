@@ -35,8 +35,8 @@ const reg = questRegistry([
   }),
   quest('side', [obj('refine', 1)]),
   quest('m2', [obj('bind', 1)], { kind: 'main', unlock: { after: 'm1' } }),
-  quest('teach', [obj('refine', 1)], { rewards: [{ kind: 'pattern', id: 'axe', count: 1 }] }),
-  quest('collector', [obj('knowPatterns', 4)], { unlock: { after: 'teach' } }),
+  quest('teach', [obj('refine', 1)], { rewards: [{ kind: 'pattern', id: 'helm', count: 1 }] }),
+  quest('collector', [obj('knowPatterns', 12)], { unlock: { after: 'teach' } }),
 ]);
 /** At the Anvil: side tracked, every refine quest done (m2 and collector unlocked, m2 in m1's slot). */
 function done(): DelveProfile {
@@ -88,7 +88,7 @@ describe('claiming', () => {
 
   it('reads the state types again: a pattern its rewards teach counts at once', () => {
     const r = claimQuest(reg, done(), 'teach');
-    expect(r.rewards).toEqual([{ ref: { kind: 'pattern', pattern: 'axe' }, count: 1 }]);
+    expect(r.rewards).toEqual([{ ref: { kind: 'pattern', pattern: 'helm' }, count: 1 }]);
     expect(r.profile.quests.unlocked).toContain('collector');
     expect(value(r.profile, 'collector')).toBe(r.profile.patterns.length);
   });

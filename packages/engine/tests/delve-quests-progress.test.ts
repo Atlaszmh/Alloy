@@ -112,7 +112,7 @@ describe('objectives', () => {
   it('the state types read the profile on every call, with events or none', () => {
     const reg = questRegistry([
       quest('bind', [obj('bind', 1)]),
-      quest('patterns', [obj('knowPatterns', 6)]),
+      quest('patterns', [obj('knowPatterns', 20)]),
       quest('reactions', [obj('discoverReaction', 5)]),
     ]);
     let p = createDelveProfile(reg, 1, { primary: 'fire' });
@@ -120,7 +120,7 @@ describe('objectives', () => {
     expect([value(p, 'bind'), value(p, 'patterns'), value(p, 'reactions')]).toEqual([0, known, 0]);
     p = applyQuestEvents(
       reg,
-      { ...p, pair: BOUND, patterns: [...p.patterns, 'axe'], reactionsSeen: ['melt', 'overload'] },
+      { ...p, pair: BOUND, patterns: [...p.patterns, 'helm'], reactionsSeen: ['melt', 'overload'] },
       [],
     );
     expect([value(p, 'bind'), value(p, 'patterns'), value(p, 'reactions')]).toEqual([
@@ -193,7 +193,7 @@ describe('unlocks', () => {
     const reg = questRegistry([
       quest('deep', o, { unlock: { bestDepth: 6 } }),
       quest('seen', o, { unlock: { reactionsSeen: 2 } }),
-      quest('known', o, { unlock: { patterns: 4 } }),
+      quest('known', o, { unlock: { patterns: 9 } }),
       quest('bound', o, { unlock: { pair: true } }),
       quest('both', o, { unlock: { bestDepth: 6, pair: true } }),
     ]);
@@ -203,7 +203,7 @@ describe('unlocks', () => {
     expect(p.quests.unlocked).toEqual(['deep']);
     p = applyQuestEvents(
       reg,
-      { ...p, reactionsSeen: ['melt', 'overload'], patterns: [...p.patterns, 'axe'] },
+      { ...p, reactionsSeen: ['melt', 'overload'], patterns: [...p.patterns, 'helm'] },
       [],
     );
     expect(p.quests.unlocked).toEqual(['deep', 'seen', 'known']);

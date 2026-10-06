@@ -56,7 +56,7 @@ describe('banking a floor', () => {
       scrap: 12,
       runes: [SPLIT_I],
       haul: addMaterial(addMaterial(emptyHaul(), IRON, 2), EMBER),
-      patterns: ['axe', 'axe'],
+      patterns: ['helm', 'helm'],
     };
     const res = bankWorld(registry, p, world);
     expect(res.profile.bag.map((i) => i.uid)).toEqual(['x1']);
@@ -70,8 +70,8 @@ describe('banking a floor', () => {
     expect(haul).toMatchObject({ scrap: 12, runes: { split: [1, 0, 0, 0, 0] } });
     expect(haul.metals.iron).toBe(2);
     expect(haul.essences).toEqual({ pyroclasm: 1 });
-    expect(res.profile.patterns).toEqual([...p.patterns, 'axe']);
-    expect(res.patterns).toEqual(['axe']);
+    expect(res.profile.patterns).toEqual([...p.patterns, 'helm']);
+    expect(res.patterns).toEqual(['helm']);
     expect(res.profile.essencesSeen).toEqual(['pyroclasm']);
     // A second bank adds only what came since.
     world.pending.haul = addMaterial(emptyHaul(), IRON);
