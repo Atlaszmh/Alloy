@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useUIStore } from './uiStore';
+import { loadTextSize, useUIStore } from './uiStore';
 
 describe('uiStore', () => {
   beforeEach(() => {
@@ -43,6 +43,15 @@ describe('uiStore', () => {
       localStorage.setItem('alloy:delve:viewUnits', '');
       const s = (await fresh()).getState();
       expect([s.hudScale, s.arenaViewUnits]).toEqual([1, 27]);
+    });
+
+    it('reads a saved text size, and anything else as Small', () => {
+      for (const [saved, size] of [['large', 'large'], ['medium', 'medium'], ['huge', 'small'], [null, 'small']] as const) {
+        if (saved) localStorage.setItem('alloy:delve:textSize', saved);
+        else localStorage.removeItem('alloy:delve:textSize');
+        expect(loadTextSize()).toBe(size);
+      }
+      localStorage.removeItem('alloy:delve:textSize');
     });
 
     it('the HUD is lean by default, persists a choice of full, and reads anything else as lean', async () => {

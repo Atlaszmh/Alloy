@@ -1,4 +1,5 @@
 import { createHmrStore } from './hmr-store';
+import type { TextSize } from '@/features/delve/kit/prompts';
 
 type SoundCategory = 'sfx' | 'ui';
 
@@ -21,8 +22,12 @@ interface UIStore {
   sfxVolume: number;
   uiVolume: number;
   colorblindMode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia';
-  /** Delve UI: the computed `--ui-scale` (quarter steps), mirrored here by AppShell. Not persisted. */
+  /** Delve UI: the UI scale (`uiScaleFor`, quarter steps), the HUD's base, mirrored here by AppShell. Not persisted. */
   uiScale: number;
+  /** Delve UI: the menus' zoom, `--ui-scale` (the UI scale × Text size: `menuScaleFor`), mirrored here by AppShell. Not persisted. */
+  menuScale: number;
+  /** Delve UI: Settings → Text size (`alloy:delve:textSize`), 'small' unless saved. */
+  textSize: TextSize;
   /** Delve UI: Settings → HUD scale, 0.8 to 1.25 (`alloy:delve:hudScale`). */
   hudScale: number;
   /** Delve UI: Settings → View distance, the arena's target view height in units, 20 to 30 (`alloy:delve:viewUnits`). */
@@ -33,7 +38,8 @@ interface UIStore {
   toggleMute: () => void;
   setVolume: (category: 'master' | SoundCategory, value: number) => void;
   setColorblindMode: (mode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia') => void;
-  setUiScale: (scale: number) => void;
+  setUiScale: (ui: number, menu?: number) => void;
+  setTextSize: (size: TextSize) => void;
   setHudScale: (scale: number) => void;
   setArenaViewUnits: (units: number) => void;
   setHudMode: (mode: HudMode) => void;
@@ -55,13 +61,25 @@ function loadNumber(key: string, fallback: number, range: readonly [number, numb
   }
 }
 
-export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
+/** Delve UI: Settings → Text size (`alloy:delve:textSize`), 'small' unless saved. */
+export function loadTextSize(): TextSize {
+  try {
+    const v = localStorage.getItem('alloy:delve:textSize');
+    return v === 'medium' || v === 'large' ? v : 'small';
+  } catch {
+    return 'small';
+  }
+}
+
+export const useUIStore =createHmrStore<UIStore>('uiStore', (set) => ({
   isMuted: (() => { try { return localStorage.getItem('alloy:muted') === 'true'; } catch { return false; } })(),
   masterVolume: loadVolume('alloy:vol:master', 0.8),
   sfxVolume: loadVolume('alloy:vol:sfx', 1.0),
   uiVolume: loadVolume('alloy:vol:ui', 1.0),
   colorblindMode: (() => { try { return (localStorage.getItem('alloy:colorblindMode') as UIStore['colorblindMode']) ?? 'none'; } catch { return 'none' as const; } })(),
   uiScale: 1,
+  menuScale: 1,
+  textSize: loadTextSize(),
   hudScale: loadNumber('alloy:delve:hudScale', 1, HUD_SCALE_RANGE),
   arenaViewUnits: loadNumber('alloy:delve:viewUnits', 27, VIEW_UNITS_RANGE),
   hudMode: (() => {
@@ -96,7 +114,11 @@ export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
     try { localStorage.setItem('alloy:colorblindMode', mode); } catch { /* noop */ }
     set({ colorblindMode: mode });
   },
-  setUiScale: (scale) => set({ uiScale: scale }),
+  setUiScale: (ui, menu = ui) => set({ uiScale: ui, menuScale: menu }),
+  setTextSize: (size) => {
+    try { localStorage.setItem('alloy:delve:textSize', size); } catch { /* noop */ }
+    set({ textSize: size });
+  },
   setHudScale: (value) => {
     const scale = clamp(value, HUD_SCALE_RANGE);
     try { localStorage.setItem('alloy:delve:hudScale', String(scale)); } catch { /* noop */ }

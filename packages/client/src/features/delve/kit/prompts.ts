@@ -292,9 +292,10 @@ export function menuScaleFor(width: number, height: number, text: number): numbe
 /** `--hud-scale`: the UI scale times Settings → HUD scale, to the nearest quarter, at least 0.75 (the kit's `hudZoom`). */
 export const hudScaleFor = hudZoom;
 
-/** The zooms `.delve-zoom` and `.delve-hud-zoom` apply (AppShell keeps `uiScale` current). */
+/** The zooms `.delve-zoom` and `.delve-hud-zoom` apply (AppShell keeps `uiScale` and `menuScale` current). */
 export function useUiScale(): { ui: number; hud: number } {
-  const ui = useUIStore((s) => s.uiScale);
+  const menu = useUIStore((s) => s.menuScale);
+  const base = useUIStore((s) => s.uiScale);
   const setting = useUIStore((s) => s.hudScale);
-  return { ui, hud: hudScaleFor(ui, setting) };
+  return { ui: menu, hud: hudScaleFor(base, setting) };
 }

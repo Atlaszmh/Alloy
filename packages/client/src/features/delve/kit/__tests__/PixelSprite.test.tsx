@@ -21,7 +21,7 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 afterEach(() => {
-  useUIStore.setState({ uiScale: 1, hudScale: 1 });
+  useUIStore.setState({ uiScale: 1, menuScale: 1, hudScale: 1 });
 });
 
 describe('PixelSprite', () => {
@@ -47,7 +47,7 @@ describe('PixelSprite', () => {
   });
 
   it('snaps to whole device pixels under the zoom of its context', async () => {
-    useUIStore.setState({ uiScale: 1, hudScale: 1.25 });
+    useUIStore.setState({ uiScale: 1, menuScale: 1, hudScale: 1.25 });
     render(
       <>
         <PixelSprite id="hero" scale={3.3} context="ui" label="ui" />
@@ -59,7 +59,7 @@ describe('PixelSprite', () => {
     const width = (el: HTMLElement) => parseFloat(el.style.width);
     await waitFor(() => expect(width(ui)).toBe(48)); // 3.3 device px → 3 a sprite pixel
     expect(width(hud)).toBeCloseTo(16 * (4 / 1.25), 5); // zoom 1.25: 4.125 → 4 device px
-    act(() => useUIStore.setState({ uiScale: 1.5 }));
+    act(() => useUIStore.setState({ uiScale: 1.5, menuScale: 1.5 }));
     expect(width(ui)).toBeCloseTo(16 * (5 / 1.5), 5); // 4.95 → 5
     expect(width(hud)).toBeCloseTo(16 * (7 / 2), 5); // zoom 1.875 → 2: 6.6 → 7
   });
