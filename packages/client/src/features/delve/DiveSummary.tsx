@@ -79,7 +79,7 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
           </div>
         ))}
         {totalFound > 0 && (
-          <div className="col-span-3 flex flex-wrap justify-center gap-x-4 gap-y-1 bg-[var(--k-well)] px-3 py-2 text-[14px]">
+          <div className="col-span-3 flex flex-wrap justify-center gap-x-4 gap-y-1 bg-[var(--k-well)] px-3 py-2 text-[16px]">
             {RARITY_ORDER.filter((r) => dive.found[r] > 0).map((r) => (
               <span key={r} style={{ color: RARITY_TEXT[r] }}>
                 {dive.found[r]} {RARITY_LABEL[r]}

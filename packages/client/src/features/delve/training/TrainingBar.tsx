@@ -56,7 +56,7 @@ export function TrainingBar({
         <MeterChip meter={meter} onReset={onResetMeter} />
       </div>
       <LabButton />
-      <span className="flex items-center gap-4 whitespace-nowrap text-[14px] text-[var(--k-text-2)]">
+      <span className="flex items-center gap-4 whitespace-nowrap text-[16px] text-[var(--k-text-2)]">
         <button
           type="button"
           className="flex min-h-8 items-center gap-[6px]"

@@ -75,7 +75,7 @@ export function ToastContainer() {
           }}
         >
           <span
-            className="text-sm"
+            className="text-[16px]"
             style={{
               color:
                 msg.variant === 'discovery'

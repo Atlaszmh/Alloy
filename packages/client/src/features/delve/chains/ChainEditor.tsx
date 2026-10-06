@@ -71,7 +71,7 @@ export function ChainEditor(props: ChainEditorProps) {
                   {SKILL_NAME[s]}
                   {SKILL_KEY[s] && <span className="hidden sm:inline"> · {SKILL_KEY[s]}</span>}
                 </span>
-                <span className="text-[14px] font-semibold text-stone-200">
+                <span className="text-[16px] font-semibold text-stone-200">
                   {chains[s]
                     ? `${(s === 'basic' ? chains.basic! : chains[s].moves).length} of ${caps[s]}`
                     : 'Locked'}
@@ -82,7 +82,7 @@ export function ChainEditor(props: ChainEditorProps) {
         })}
       </div>
 
-      <div className="k-caption flex items-center gap-1.5" data-testid="abilities-summary">
+      <div className="k-note flex items-center gap-1.5" data-testid="abilities-summary">
         {absent ? (
           <>
             <Glyph id="lock" size={14} /> {absentText?.(skill) ?? ''}
@@ -94,7 +94,7 @@ export function ChainEditor(props: ChainEditorProps) {
 
       {locked && !absent && (
         <div
-          className="delve-panel p-2 text-center text-[14px] text-amber-200"
+          className="delve-panel p-2 text-center text-[18px] text-amber-200"
           data-testid="abilities-locked"
         >
           {ed.lockedText}
@@ -121,7 +121,7 @@ export function ChainEditor(props: ChainEditorProps) {
                 onClick={() => ed.select(i)}
                 data-testid={`move-${i}`}
               >
-                <span className="text-[14px] font-bold leading-none text-amber-200/90">
+                <span className="text-[16px] font-bold leading-none text-amber-200/90">
                   {KIND_ICON[e.kind]}
                 </span>
                 <Glyph
@@ -129,7 +129,7 @@ export function ChainEditor(props: ChainEditorProps) {
                   size={24}
                   color={manaStyle(registry, els[0]).color}
                 />
-                <span className="text-center text-[14px] font-semibold leading-tight text-stone-200">
+                <span className="text-center text-[16px] font-semibold leading-tight text-stone-200">
                   {'form' in e ? registry.getForm(e.form).name : ed.weapon}
                 </span>
                 <span className="flex gap-0.5">
@@ -139,7 +139,7 @@ export function ChainEditor(props: ChainEditorProps) {
                 </span>
                 {off && (
                   <span
-                    className="text-[14px] leading-none text-amber-300/80"
+                    className="text-[16px] leading-none text-amber-300/80"
                     data-testid="card-off-pair"
                   >
                     off-pair
@@ -210,7 +210,7 @@ export function ChainEditor(props: ChainEditorProps) {
         )}
         {runes && runes.socketCap > 0 && move && (
           <div
-            className="flex w-full flex-wrap items-center gap-2 text-[14px] text-stone-400"
+            className="flex w-full flex-wrap items-center gap-2 text-[16px] text-stone-400"
             data-testid="socket-bar"
           >
             <span data-testid="socket-count">
@@ -244,7 +244,7 @@ export function ChainEditor(props: ChainEditorProps) {
       </div>
       {support && (
         <div
-          className={`text-[14px] ${spends > refills ? 'text-amber-200/90' : 'text-stone-400'}`}
+          className={`text-[16px] ${spends > refills ? 'text-amber-200/90' : 'text-stone-400'}`}
           data-testid="mana-support"
         >
           Spends {spends}/s · your build refills {refills}/s
@@ -287,7 +287,7 @@ export function ChainEditor(props: ChainEditorProps) {
                 </Chip>
               ))}
             </div>
-            <div className="k-caption">
+            <div className="k-note">
               {PAYMENTS.find(([p]) => p === chain.payment)![2]} One payment for every move.
             </div>
           </section>

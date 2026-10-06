@@ -54,11 +54,11 @@ export function ManaChoice() {
                 <span className="flex items-center gap-2 text-[24px] [font-family:var(--k-font-display)]">
                   <Glyph id={m} size={24} color={st.color} /> {st.name}
                 </span>
-                <span className="text-[16px] text-[var(--k-text)]">{PLAY_STYLE[m]}</span>
-                <span className="text-[14px] text-[var(--k-text-2)]">
+                <span className="text-[18px] text-[var(--k-text)]">{PLAY_STYLE[m]}</span>
+                <span className="text-[16px] text-[var(--k-text-2)]">
                   Every blow applies a stack of {st.name}: {title(BASIC_STATUS[m])}
                 </span>
-                <span className="text-[14px] text-[var(--k-text-3)]">
+                <span className="text-[16px] text-[var(--k-text-3)]">
                   Fusions: {mixes.map((f) => f.name).join(' · ')}
                 </span>
               </button>

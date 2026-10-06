@@ -140,7 +140,7 @@ export function blowRows(blow: HeroBlow, stats: HeroStats): NumberRow[] {
 /** Numbers as a two-column table, each value `num-<id>`. */
 export function NumberTable({ rows }: { rows: readonly NumberRow[] }) {
   return (
-    <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[15px]">
+    <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[16px]">
       {rows.map((r) => (
         <div key={r.id} className="contents">
           <dt className="text-[var(--k-text-3)]">{r.label}</dt>
@@ -165,13 +165,13 @@ export function MoveNumbers(props: {
     <>
       <NumberTable rows={rows} />
       {ease && (
-        <div className="text-[14px] text-[var(--k-text-2)]" data-testid="rune-ease">
+        <div className="text-[18px] text-[var(--k-text-2)]" data-testid="rune-ease">
           {ease}
         </div>
       )}
       {warning && (
         <div
-          className="text-[14px] font-semibold text-[var(--k-bad-text)]"
+          className="text-[18px] font-semibold text-[var(--k-bad-text)]"
           data-testid="cost-warning"
         >
           {warning}
@@ -328,7 +328,7 @@ export function MoveEditor({
             </Chip>
           ))}
         </div>
-        <div className="k-caption">
+        <div className="k-note">
           {'form' in move
             ? KIND_HINT[move.kind]
             : move.kind === 'hold' &&
@@ -377,12 +377,12 @@ export function MoveEditor({
                 })}
             </div>
             {blocking.length > 0 && (
-              <div className="text-[14px] text-amber-200/90" data-testid="form-rune-note">
+              <div className="text-[18px] text-amber-200/90" data-testid="form-rune-note">
                 {listed(blocking)} {blocking.length > 1 ? "don't" : "doesn't"} fit every form: pull{' '}
                 {blocking.length > 1 ? 'them' : 'it'} to pick another.
               </div>
             )}
-            <div className="k-caption">{registry.getForm(move.form).text}</div>
+            <div className="k-note">{registry.getForm(move.form).text}</div>
           </section>
 
           <section className="flex flex-col gap-1.5">
@@ -441,7 +441,7 @@ export function MoveEditor({
                 </button>
               )}
             </div>
-            <div className="k-caption" data-testid="element-effect">
+            <div className="k-note" data-testid="element-effect">
               {resolved?.fusion ? (
                 <>
                   <b className="text-stone-200">
@@ -464,7 +464,7 @@ export function MoveEditor({
       )}
 
       {off.length > 0 && (
-        <div className="text-[14px] text-amber-200/90" data-testid="off-pair-note">
+        <div className="text-[18px] text-amber-200/90" data-testid="off-pair-note">
           {off.map((m) => manaStyle(registry, m).name).join(' and ')} off-pair: no attunement. Keep
           it, or pick from your two elements.
         </div>

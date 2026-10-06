@@ -87,7 +87,7 @@ export function LegendaryFanfare({ item, firstTime, onDone }: LegendaryFanfarePr
           <div className="k-disp text-[44px]" data-testid="fanfare-name">
             {item.name}
           </div>
-          <div className="text-[16px] text-[var(--k-wood-text)]">
+          <div className="text-[18px] text-[var(--k-wood-text)]">
             Legendary {baseDisplayName(registry, item)}
           </div>
         </div>

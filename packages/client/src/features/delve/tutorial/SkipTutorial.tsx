@@ -15,7 +15,7 @@ export function SkipTutorialConfirm({
   return (
     <Dialog title="Skip the guided start?" onClose={onClose} width={560} testId="skip-tutorial">
       <div className="flex flex-col gap-4">
-        <p className="m-0 text-[16px] text-[var(--k-text-2)]">
+        <p className="m-0 text-[18px] text-[var(--k-text-2)]">
           Hesta's steps stop here and the save goes on as an ordinary one: everything you found and
           made stays yours. The guided start can't be taken up again on this save.
         </p>

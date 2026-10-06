@@ -266,7 +266,7 @@ export function TutorialPanel({
           )}
         </p>
         <p
-          className="m-0 min-w-0 flex-1 text-[16px] leading-[1.35] text-[var(--k-text)]"
+          className="m-0 min-w-0 flex-1 text-[18px] leading-[1.35] text-[var(--k-text)]"
           hidden={foldedId === shown.id}
           data-testid="tutorial-line"
         >
@@ -276,7 +276,7 @@ export function TutorialPanel({
       {(beat || skippable) && (
         <div className="flex flex-none items-center gap-3">
           {skippable && (
-            <span className="flex items-center gap-2 text-[14px] text-[var(--k-text-3)]" data-pad-skip>
+            <span className="flex items-center gap-2 text-[16px] text-[var(--k-text-3)]" data-pad-skip>
               Stuck? Skip this step from the
               <InputGlyph binding={menu} size="sm" />
               Menu

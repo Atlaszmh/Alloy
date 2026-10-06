@@ -207,19 +207,19 @@ export function DoorPane({
                   </span>
                   {cost.length > 0 && (
                     <span
-                      className="text-[16px] leading-tight text-[var(--k-bad-text)]"
+                      className="text-[18px] leading-tight text-[var(--k-bad-text)]"
                       data-door-cost
                     >
                       Cost: {cost.join(' · ')}
                     </span>
                   )}
                   {gain.length > 0 && (
-                    <span className="text-[16px] leading-tight text-[var(--k-ok)]" data-door-gain>
+                    <span className="text-[18px] leading-tight text-[var(--k-ok)]" data-door-gain>
                       Gain: {gain.join(' · ')}
                     </span>
                   )}
                   {cost.length + gain.length === 0 && (
-                    <span className="text-[16px] leading-tight text-[var(--k-text-3)]">
+                    <span className="text-[18px] leading-tight text-[var(--k-text-3)]">
                       {door.text}
                     </span>
                   )}
@@ -246,7 +246,7 @@ export function DoorPane({
           }
           title="Extract"
           lines={
-            <span className="text-[16px] leading-tight text-[var(--k-ok)]">
+            <span className="text-[18px] leading-tight text-[var(--k-ok)]">
               Leave with {formatNumber(dive.bounty)} scrap and {finds} finds.
             </span>
           }
@@ -266,7 +266,7 @@ export function DoorPane({
         >
           <Glyph id="potion" size={40} />
           <span className="k-disp text-[22px]">Drink a potion</span>
-          <span className="text-[16px] text-[var(--k-text-2)]">
+          <span className="text-[18px] text-[var(--k-text-2)]">
             Life {Math.round(dive.heroHpFrac * 100)}% · {dive.potions} potion
             {dive.potions === 1 ? '' : 's'}
           </span>

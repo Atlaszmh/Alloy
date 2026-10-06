@@ -153,7 +153,7 @@ function PauseList({
             ) : (
               <span className="flex flex-col items-start">
                 Anvil · floor restarts
-                <span className="k-caption" style={CAPTION}>
+                <span className="k-note" style={CAPTION}>
                   {guided ? 'The depth restarts as you entered it' : "This floor's unbanked haul is lost"}
                 </span>
               </span>
@@ -169,7 +169,7 @@ function PauseList({
             {guided ? 'Abandon · the depth restarts' : 'Abandon · counts as a death'}
           </Button>
           {held && (
-            <span id={why} className="k-caption" style={CAPTION}>
+            <span id={why} className="k-note" style={CAPTION}>
               Not while the guided start runs
             </span>
           )}

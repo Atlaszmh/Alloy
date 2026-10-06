@@ -84,7 +84,7 @@ function FindsList({
   return (
     <div className="flex flex-col gap-4">
       {items.length + runes.length + materials.length + essences.length === 0 && (
-        <span className="k-caption">Nothing found on this floor.</span>
+        <span className="k-note">Nothing found on this floor.</span>
       )}
       {materials.length > 0 && (
         <div className="flex flex-col gap-4" data-testid="loot-materials">
@@ -330,7 +330,7 @@ export const StopScreen = memo(function StopScreen({
               </span>
             )}
             <span
-              className="text-[16px] text-[var(--k-text-3)]"
+              className="text-[18px] text-[var(--k-text-3)]"
               data-testid="risk-line"
               data-tutorial="stop.risk"
             >
@@ -369,7 +369,7 @@ export const StopScreen = memo(function StopScreen({
             data-testid="stop-powerup"
           >
             {required && (
-              <span className="text-[16px] text-[var(--k-hot)]" data-testid="roads-held">
+              <span className="text-[18px] text-[var(--k-hot)]" data-testid="roads-held">
                 Take the power-up to go on
               </span>
             )}
@@ -385,7 +385,7 @@ export const StopScreen = memo(function StopScreen({
               <h2 className="k-section m-0 text-[26px]">
                 {dive.doorChoices.length > 0 ? 'Choose your road' : 'The way home'}
               </h2>
-              {note && <span className="text-[16px] text-[var(--k-text-3)]">{note}</span>}
+              {note && <span className="text-[18px] text-[var(--k-text-3)]">{note}</span>}
             </div>
             <DoorPane dive={dive} onChoose={onChoose} onExtract={onExtract} onPotion={onPotion} />
           </section>

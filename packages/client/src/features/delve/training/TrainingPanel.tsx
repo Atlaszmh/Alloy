@@ -103,7 +103,7 @@ function ManaName({ mana }: { mana: ManaType }) {
   );
 }
 
-const SELECT = 'k-well px-2 py-1.5 text-[14px] text-[var(--k-text)]';
+const SELECT = 'k-well px-2 py-1.5 text-[16px] text-[var(--k-text)]';
 
 const LoadoutTab = memo(function LoadoutTab() {
   const registry = getDelveRegistry();
@@ -162,7 +162,7 @@ const LoadoutTab = memo(function LoadoutTab() {
             ))}
           </div>
         </fieldset>
-        <div className="k-well flex flex-col gap-1 p-3 text-[14px]" data-testid="weapon-lines">
+        <div className="k-well flex flex-col gap-1 p-3 text-[16px]" data-testid="weapon-lines">
           <div
             className="k-disp text-[20px]"
             style={{ color: weapon ? RARITY_TEXT[weapon.rarity] : 'var(--k-text)' }}
@@ -182,12 +182,12 @@ const LoadoutTab = memo(function LoadoutTab() {
             </div>
           )}
           {s.loadedWeapon ? (
-            <div className="k-caption">
+            <div className="k-note">
               Your own weapon, from Load my build. Change any option for a clean one.
             </div>
           ) : (
             weapon && (
-              <div className="k-caption">
+              <div className="k-note">
                 A clean weapon: its base line, scaled by rarity and depth. Powers are below.
               </div>
             )
@@ -208,7 +208,7 @@ const LoadoutTab = memo(function LoadoutTab() {
             </Chip>
           ))}
         </div>
-        <p className="k-caption m-0">
+        <p className="k-note m-0">
           Your primary: your basic blows strike with it, except where they pick your secondary.
         </p>
       </Section>
@@ -230,7 +230,7 @@ const LoadoutTab = memo(function LoadoutTab() {
             </Chip>
           ))}
         </div>
-        <p className="k-caption m-0">
+        <p className="k-note m-0">
           The second element your basic blows can pick (in Abilities, Basic). The default basic
           chain follows your weapon and pair, so binding one gives it the last blow; a chain you
           built keeps its blows.
@@ -265,7 +265,7 @@ const LoadoutTab = memo(function LoadoutTab() {
                   </span>
                   {fromGear && <span className="k-caption">from your gear</span>}
                 </span>
-                <span className="k-caption">
+                <span className="k-note">
                   {legendaryText(registry, l.id, fromGear ? stats.legendaries[l.id] : l.max)}
                 </span>
               </button>
@@ -280,7 +280,7 @@ const LoadoutTab = memo(function LoadoutTab() {
           {MANA_TYPES.map((m) => {
             const extra = s.attunement[m] ?? 0;
             return (
-              <label key={m} className="flex items-center gap-2 text-[14px]">
+              <label key={m} className="flex items-center gap-2 text-[16px]">
                 <span className="flex w-24 shrink-0 items-center gap-1">
                   <ManaName mana={m} />
                 </span>
@@ -311,7 +311,7 @@ const LoadoutTab = memo(function LoadoutTab() {
       >
         Load my build
       </Button>
-      <p className="k-caption m-0">
+      <p className="k-note m-0">
         Copies your equipped gear, your weapon's chains with their runes, and your pair in. Nothing
         here ever changes your save.
       </p>
@@ -416,7 +416,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
           ))}
         </div>
         {full && (
-          <div className="k-caption text-[var(--k-hot)]" data-testid="dummies-full">
+          <div className="k-note text-[var(--k-hot)]" data-testid="dummies-full">
             {MAX_DUMMY_GROUPS} groups at most: clear the dummies to add more.
           </div>
         )}
@@ -468,7 +468,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
             </Chip>
           ))}
         </div>
-        <label className="flex items-center gap-2 text-[14px] text-[var(--k-text-2)]">
+        <label className="flex items-center gap-2 text-[16px] text-[var(--k-text-2)]">
           Count
           <input
             type="range"
@@ -521,7 +521,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
               </option>
             ))}
           </select>
-          <span className="k-caption">
+          <span className="k-note">
             {registry.getBiomeForDepth(depth).name}: monsters, dummies and your weapon&apos;s item
             level follow depth. A new depth restarts the arena (dummies come back, spawned monsters
             don&apos;t).
