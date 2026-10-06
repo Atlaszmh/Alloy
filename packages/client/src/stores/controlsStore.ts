@@ -31,6 +31,8 @@ interface ControlsStore {
   setDeadzone: (stick: 'left' | 'right', value: number) => void;
   setAimReach: (value: number) => void;
   setHoldToggle: (on: boolean) => void;
+  setSensitivity: (stick: 'left' | 'right', value: number) => void;
+  setSwapSticks: (on: boolean) => void;
   reset: () => void;
 }
 
@@ -55,6 +57,14 @@ export const useControlsStore = createHmrStore<ControlsStore>('controlsStore', (
       ),
     setAimReach: (value) => commit(parseControls({ ...get().config, aimReach: value })),
     setHoldToggle: (on) => commit({ ...get().config, holdToggle: on }),
+    setSensitivity: (stick, value) =>
+      commit(
+        parseControls({
+          ...get().config,
+          sensitivity: { ...get().config.sensitivity, [stick]: value },
+        }),
+      ),
+    setSwapSticks: (on) => commit({ ...get().config, swapSticks: on }),
     reset: () => commit(DEFAULT_CONTROLS),
   };
 });

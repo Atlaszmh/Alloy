@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ACTION_LABELS,
   DEFAULT_CONTROLS,
+  SENSITIVITY_LIMITS,
   bindKey,
   bindPad,
   exportControls,
@@ -72,6 +73,23 @@ describe('controls config', () => {
     // An older setup, saved before the field, keeps its bindings and gets the default.
     const old = JSON.parse(exportControls(DEFAULT_CONTROLS));
     delete old.holdToggle;
+    expect(parseControls(old)).toEqual(DEFAULT_CONTROLS);
+  });
+
+  it("reads swapSticks and each stick's sensitivity: defaults, kept values, and out-of-range ones refused", () => {
+    expect(DEFAULT_CONTROLS).toMatchObject({ swapSticks: false, sensitivity: { left: 1, right: 1 } });
+    expect(SENSITIVITY_LIMITS).toEqual([0.5, 1.5]);
+    const cfg = parseControls({ swapSticks: true, sensitivity: { left: 0.5, right: 1.5 } });
+    expect(cfg).toMatchObject({ swapSticks: true, sensitivity: { left: 0.5, right: 1.5 } });
+    expect(
+      parseControls({ swapSticks: 1, sensitivity: { left: 0.2, right: 'fast' } }),
+    ).toMatchObject({
+      swapSticks: false,
+      sensitivity: { left: 1, right: 1 },
+    });
+    const old = JSON.parse(exportControls(DEFAULT_CONTROLS));
+    delete old.swapSticks;
+    delete old.sensitivity;
     expect(parseControls(old)).toEqual(DEFAULT_CONTROLS);
   });
 
