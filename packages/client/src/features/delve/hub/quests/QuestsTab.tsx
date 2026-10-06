@@ -34,6 +34,7 @@ import { Box } from '../../quests/QuestTracker';
 import { rewardView } from '../../quests/quest-view';
 import { QUEST_KIND, objectiveCount, type QuestView } from '../../quests/types';
 import type { HubTabProps } from '../types';
+import { useOnboarding } from '../../onboarding';
 
 const COLUMNS = '400px minmax(0,1fr) 440px';
 export const TRACK_BINDING: Binding = { key: 'KeyG', pad: 'y' };
@@ -67,6 +68,8 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
   const markQuestSeen = useDelveStore((s) => s.markQuestSeen);
   // A claim waits for the dive to end: in the pause, and at the Anvil mid-dive (a floor restart).
   const diving = mode === 'pause' || isDiveActive(profile);
+  // A first visit's line rides Claim (else Select), until a claim.
+  const { hint, done } = useOnboarding('quests', mode === 'anvil' && !diving);
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const [openId, setOpenId] = useState(link?.tab === 'quests' ? link.questId : undefined);
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
@@ -109,6 +112,7 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
         : { good: false, text: res.reason ?? '' },
     );
     if (!res.ok) return;
+    done();
     // The next quest that waits opens (and, under the pad, takes the focus): A, A, A. With none
     // left the claimed one stays open while it is in the journal.
     const next = quests.find((q) => q.status === 'complete' && q.id !== quest.id);
@@ -133,7 +137,10 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
       names.push(q.name);
     }
     playSound(names.length > 0 ? 'upgradeTier' : 'combineFail');
-    if (names.length > 0) vibrate('success');
+    if (names.length > 0) {
+      vibrate('success');
+      done();
+    }
     const claimed = `Claimed ${names.length} quest${names.length === 1 ? '' : 's'}: ${names.join(', ')}`;
     setMessage(
       names.length === 0
@@ -176,17 +183,23 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
       setPrompts([]);
       return;
     }
+    const claim = quest.status === 'complete' && !pad;
     const prompts: Prompt[] = [
-      { ...SELECT_PROMPT, label: rowClaims ? 'Claim' : SELECT_PROMPT.label },
+      {
+        ...SELECT_PROMPT,
+        label: rowClaims ? 'Claim' : SELECT_PROMPT.label,
+        hint: claim ? undefined : hint,
+      },
     ];
     // On the pad, A presses the focused Claim button, or the open quest's row.
-    if (quest.status === 'complete' && !pad)
+    if (claim)
       prompts.push({
         id: 'claim',
         label: 'Claim',
         binding: { key: ['Enter', 'NumpadEnter'] },
         onPress: () => act.current.onClaim(),
         disabled: diving,
+        hint,
       });
     if (quest.status !== 'claimed')
       prompts.push({
@@ -205,7 +218,7 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
         disabled: !rerollOk,
       });
     setPrompts(prompts);
-  }, [setPrompts, setTracked, quest, canTrack, pad, diving, rowClaims, hasReroll, rerollOk]);
+  }, [setPrompts, setTracked, quest, canTrack, pad, diving, rowClaims, hasReroll, rerollOk, hint]);
   useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (

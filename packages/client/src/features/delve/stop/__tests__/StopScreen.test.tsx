@@ -16,6 +16,8 @@ import { padPrompts, scopedLast } from '../../kit/prompts';
 import type { PadButton } from '@/features/gamepad/gamepad';
 import { getDelveRegistry } from '../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../onboarding';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -235,11 +237,17 @@ describe('StopScreen (between depths)', () => {
   });
 
   it('a take moves to step 2 for good: the first road focused, and no way back', () => {
+    useUIStore.setState({ seen: [] });
     atStop(['equip', 'upgrade']);
     arm();
+    // A first stop: Take pulses with the screen's line, until a power-up is taken.
+    expect(screen.getByTestId('onboarding-hint')).toHaveTextContent(ONBOARDING.stop);
+    expect(document.querySelector('.k-prompt[data-pulse]')).toHaveTextContent('Take');
     fireEvent.click(screen.getByTestId('stop-equip'));
     fireEvent.click(screen.getAllByTestId('stop-equip-item')[0]);
     expect(store().profile.dive!.stop!.taken).toBe(true);
+    expect(useUIStore.getState().seen).toContain('stop');
+    expect(screen.queryByTestId('onboarding-hint')).toBeNull();
     expect(screen.getByTestId('stop-taken')).toHaveTextContent('Power-up taken.');
     expect(firstDoor()).toHaveFocus();
     expect(screen.queryByRole('button', { name: 'Power-ups' })).toBeNull();

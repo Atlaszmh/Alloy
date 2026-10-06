@@ -12,6 +12,8 @@ import { padPrompts } from '@/features/delve/kit/prompts';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../../onboarding';
 import { renderSkills } from './harness';
 
 vi.mock('react-router', async () => {
@@ -68,6 +70,18 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
     const bar = screen.getByTestId('hub-footer');
     for (const label of ['Edit move', 'Remove', 'Next skill']) expect(bar).toHaveTextContent(label);
     expect(bar).not.toHaveTextContent('Reorder');
+  });
+
+  it("a first visit pulses Edit move with its line, until a move's editor opens once", () => {
+    useUIStore.setState({ seen: [] });
+    roomy();
+    renderSkills();
+    expect(screen.getByTestId('onboarding-hint')).toHaveTextContent(ONBOARDING.skills);
+    expect(document.querySelector('.k-prompt[data-pulse]')).toHaveTextContent('Edit move');
+    fireEvent.click(screen.getByTestId('move-0'));
+    expect(screen.getByTestId('move-editor')).toBeInTheDocument();
+    expect(useUIStore.getState().seen).toContain('skills');
+    expect(screen.queryByTestId('onboarding-hint')).toBeNull();
   });
 
   it('a link picks the skill', () => {

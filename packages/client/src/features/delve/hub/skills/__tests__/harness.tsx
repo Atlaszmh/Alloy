@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, type RenderResult } from '@testing-libr
 import { expect } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { useDelveStore } from '@/stores/delveStore';
-import { PromptBar, usePrompts, type Prompt } from '@/features/delve/kit';
+import { Footer, usePrompts, type Prompt } from '@/features/delve/kit';
 import { useChainEditor, type ChainEditorProps } from '../../../chains/useChainEditor';
 import type { HubLink, HubMode } from '../../types';
 import { ChainLane } from '../ChainLane';
@@ -28,8 +28,7 @@ function Hub({ mode, link }: { mode: HubMode; link?: HubLink }) {
         onDelve={() => {}}
       />
       <footer data-testid="hub-footer">
-        <PromptBar prompts={prompts} />
-        {footer}
+        <Footer prompts={prompts}>{footer}</Footer>
       </footer>
     </MemoryRouter>
   );

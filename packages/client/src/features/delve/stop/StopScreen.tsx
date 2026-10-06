@@ -22,6 +22,7 @@ import { StopPanel } from '../StopPanel';
 import { TutorialPanel } from '../tutorial/TutorialPanel';
 import { SHOWN_AT } from '../tutorial/tutorial-view';
 import { DoorPane } from './DoorPane';
+import { useOnboarding } from '../onboarding';
 
 /** A stop step's "Skip this step" (a stop has no beats): to the save. */
 const sendTutorial = (event: TutorialEvent): void =>
@@ -240,6 +241,8 @@ export const StopScreen = memo(function StopScreen({
   const runeCount = runes.reduce((n, r) => n + r.count, 0);
   const menuKey = useControlsStore((s) => s.config.keys.menu);
   const tutorial = useDelveStore((s) => s.profile.tutorial);
+  // A first stop's line rides Take; the picker marks it done (StopPanel's StopPicker).
+  const { hint } = useOnboarding('stop');
 
   // A move between the steps (a skip, a take, a back) puts the focus on the new step's first
   // control: the first card, or the first road. The first step's own first focus is the screen's.
@@ -253,7 +256,7 @@ export const StopScreen = memo(function StopScreen({
   const prompts: Prompt[] =
     step === 'powerup'
       ? [
-          { id: 'take', label: 'Take', binding: { mouse: 'click', pad: 'a' } },
+          { id: 'take', label: 'Take', binding: { mouse: 'click', pad: 'a' }, hint },
           {
             id: 'skip',
             label: 'Skip power-up',

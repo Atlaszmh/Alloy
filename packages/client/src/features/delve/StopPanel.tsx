@@ -44,6 +44,7 @@ import { SKILL_NAME, blowText, markIdle, moveText, runeCandidates } from './chai
 import { ChainEditor } from './chains/ChainEditor';
 import { RunePicker } from './runes/RunePicker';
 import { SocketRow } from './runes/SocketRow';
+import { useUIStore } from '@/stores/uiStore';
 
 /** Each power-up kind as its card says it: its glyph, its name, what it does and what it costs. */
 export const STOP_TEXT: Record<
@@ -211,6 +212,8 @@ function StopPicker({
       playSound('upgradeTier');
       vibrate('success');
       showToast(`${STOP_TEXT[kind].name}: done`);
+      // The stop's onboarding hint is done (an alcove's take counts too).
+      useUIStore.getState().markSeen('stop');
       onTaken();
     } else {
       playSound('combineFail');

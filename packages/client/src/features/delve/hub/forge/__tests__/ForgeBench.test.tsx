@@ -16,6 +16,8 @@ import { MaterialsPane } from '../MaterialsPane';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../../onboarding';
 import { usePrompts, type Prompt } from '../../../kit';
 import { formatDelta } from '../../../format';
 import { DROPS_FROM, pct, shardName, statRange, valueRange } from '../materials-text';
@@ -313,11 +315,15 @@ describe('ForgeBench', () => {
   });
 
   it('Forge (or Enter) forges: the item comes marked new, and the bench says so', () => {
+    useUIStore.setState({ seen: [] });
     withMaterials({ metals: { ...emptyMaterials().metals, rusty: 2 } });
     const setPrompts = bench();
+    // A first visit: the forge prompt carries the screen's line, until a forge.
+    expect(setPrompts.mock.lastCall![0].find((p) => p.id === 'forge')!.hint).toBe(ONBOARDING.forge);
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
     const bag = store().profile.bag.length;
     fireEvent.click(screen.getByTestId('forge-button'));
+    expect(useUIStore.getState().seen).toContain('forge');
     const made = store().profile.bag.at(-1)!;
     expect(store().profile.bag).toHaveLength(bag + 1);
     expect(made).toMatchObject({ baseId: 'cuirass', rarity: 'common', mana: 'fire' });

@@ -4,6 +4,8 @@ import { defaultMoveset, generateItem, SeededRNG, type GearItem } from '@alloy/e
 import { useDelveStore, UNDO_MS } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../../onboarding';
 import { ToastContainer } from '@/components/Toast';
 import type { Prompt } from '../../../kit';
 import { LoadoutTab } from '../LoadoutTab';
@@ -117,10 +119,15 @@ describe('LoadoutTab', () => {
   });
 
   it('a right-click equips; gear outside the pair asks first, with the focus on Bind', () => {
+    useUIStore.setState({ seen: [] });
     put(gear('h1', 'helm'), gear('r1', 'ring', 'storm'));
-    open();
+    const { props } = open();
+    // A first visit: Equip carries the screen's line, until an equip.
+    expect(prompt(props, 'equip').hint).toBe(ONBOARDING.loadout);
     fireEvent.contextMenu(tile('h1'));
     expect(store().profile.equipped.helm?.uid).toBe('h1');
+    expect(useUIStore.getState().seen).toContain('loadout');
+    expect(prompt(props, 'equip').hint).toBeUndefined();
     fireEvent.contextMenu(tile('r1'));
     expect(store().profile.equipped.ring).toBeUndefined();
     expect(screen.getByTestId('bind-prompt-confirm')).toHaveFocus();

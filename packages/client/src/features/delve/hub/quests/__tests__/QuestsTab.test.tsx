@@ -4,6 +4,8 @@ import { rerollContract, startDive, type Contract, type ProfileActionResult } fr
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../../onboarding';
 import { QuestsTab } from '../QuestsTab';
 import { SAMPLE_QUESTS } from '../../../quests/__tests__/quest-fixture';
 import type { QuestView } from '../../../quests/types';
@@ -214,12 +216,16 @@ describe('QuestsTab', () => {
         ],
       }),
     );
+    useUIStore.setState({ seen: [] });
     const { setPrompts } = renderTab();
+    // A first visit: Claim carries the screen's line, until a claim.
+    expect(lastPrompts(setPrompts).find((p) => p.id === 'claim')!.hint).toBe(ONBOARDING.quests);
     const claim = screen.getByTestId('quest-claim');
     expect(claim).toHaveTextContent('Claim');
     expect(claim).toBeEnabled();
     fireEvent.click(claim);
     expect(useDelveStore.getState().claimQuest).toHaveBeenCalledWith('frozen-foreman');
+    expect(useUIStore.getState().seen).toContain('quests');
     expect(screen.getByTestId('quest-message')).toHaveTextContent(
       'Claimed The Frozen Foreman: 40 scrap, 1 × Uncommon flux',
     );

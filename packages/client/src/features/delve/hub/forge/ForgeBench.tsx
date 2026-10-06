@@ -36,6 +36,7 @@ import {
 import { SKILL_NAME } from '../../chains/chain-text';
 import { PatternList } from './PatternList';
 import { ShardPicker, heldShards } from './ShardPicker';
+import { useOnboarding } from '../../onboarding';
 import {
   DROPS_FROM,
   materialLabel,
@@ -127,6 +128,8 @@ export function ForgeBench({
   const [fanfare, setFanfare] = useState<{ item: GearItem; firstTime: boolean } | null>(null);
   const endFanfare = useCallback(() => setFanfare(null), []);
   const id = useId();
+  // A first visit's line rides the forge prompt (under the pad, Select: A on Forge forges).
+  const { hint, done } = useOnboarding('forge', !locked);
 
   const request = (f: FluxGrade | null, e: string | null, s: ShardRef[]): ForgeRequest => ({
     baseId: baseId!,
@@ -189,6 +192,7 @@ export function ForgeBench({
       return say(res.reason ?? 'Cannot forge', false);
     }
     const item = res.item;
+    done();
     setShards([]);
     if (item.legendary) {
       playSound('lootLegendary');
@@ -209,7 +213,7 @@ export function ForgeBench({
     if (locked) return; // the Forge tab shows Select alone
     setPrompts(
       pad
-        ? [SELECT_PROMPT]
+        ? [{ ...SELECT_PROMPT, hint }]
         : [
             SELECT_PROMPT,
             {
@@ -217,10 +221,11 @@ export function ForgeBench({
               label: 'Forge',
               binding: { key: ['Enter', 'NumpadEnter'] },
               onPress: () => forgeNow.current(),
+              hint,
             },
           ],
     );
-  }, [pad, locked, setPrompts]);
+  }, [pad, locked, setPrompts, hint]);
 
   // The bench's last word: beside the Forge button (where a forge leaves the eye), else on top.
   const status = message && !locked && (

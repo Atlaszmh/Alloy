@@ -13,6 +13,7 @@ import { BagPane } from './BagPane';
 import { ComparePane, type LoadoutActions } from './ComparePane';
 import { needsBind } from './BindChoice';
 import { TakeSheet, canTake } from './TakeSheet';
+import { useOnboarding } from '../../onboarding';
 
 /**
  * The Anvil's Loadout tab: the equipped pane, the bag and the compare pane (430 / flexible / 470
@@ -42,6 +43,8 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
   const locked = mode === 'pause' || isDiveActive(profile);
   // Salvage's Undo, while the store still offers it.
   const undoLive = useDelveStore((s) => !!s.undo && s.profile === s.undo.after);
+  // A first visit's line rides Equip; the store marks it done on any equip or transfer.
+  const { hint } = useOnboarding('loadout', mode === 'anvil');
 
   const has = (uid: string | null): uid is string => !!uid && !!findItem(profile, uid);
   // Under the pad only the focus (the selection) counts: a mouse hover left behind never does.
@@ -152,8 +155,9 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
           label: worn ? 'Select' : takes ? 'Equip or transfer' : 'Equip',
           binding: { mouse: 'rmb', pad: 'a' },
           tutorial: worn ? undefined : takes ? 'loadout.transfer' : 'loadout.equip',
+          hint,
         }
-      : { id: 'equip', label: 'Equip', binding: { mouse: 'rmb', pad: 'a' } };
+      : { id: 'equip', label: 'Equip', binding: { mouse: 'rmb', pad: 'a' }, hint };
     setPrompts([
       ...(pad ? [] : [select]),
       a,
@@ -188,7 +192,7 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
           ]
         : []),
     ]);
-  }, [mode, setPrompts, pad, worn, takes, targetLocked, hasTarget, undoLive]);
+  }, [mode, setPrompts, pad, worn, takes, targetLocked, hasTarget, undoLive, hint]);
   useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (

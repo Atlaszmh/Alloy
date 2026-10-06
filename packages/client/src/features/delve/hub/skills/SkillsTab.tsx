@@ -11,6 +11,7 @@ import { ChainLane } from './ChainLane';
 import { MoveInspector } from './MoveInspector';
 import { SkillStrip } from './SkillStrip';
 import { useAnvilChains } from './useAnvilChains';
+import { useOnboarding } from '../../onboarding';
 
 /**
  * The Anvil's Skills tab: the skill strip and the mana pair over the chosen chain's lane with its
@@ -68,12 +69,14 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
   const canEdit = !locked && !absent && !fixedShape;
   // The move editor is open on the chosen move.
   const [editing, setEditing] = useState(false);
+  const { hint, done } = useOnboarding('skills', mode === 'anvil');
   /** A or a click on card `i` (with `socket`, a pip: its rune grid too): its editor, unless the chain is read-only. */
   const onEdit = (i: number, socket?: number) => {
     if (!canEdit) return ed.select(i);
     if (socket === undefined) ed.select(i);
     else ed.openPicker(i, socket);
     setEditing(true);
+    done();
   };
   // Another skill, a link, the Mana view or a lock closes it.
   useEffect(() => setEditing(false), [ed.skill, link, mana, canEdit]);
@@ -105,7 +108,7 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
               { id: 'back', label: 'Back', binding: { key: 'Escape', pad: 'b' } },
             ]
           : [
-              { id: 'edit', label: 'Edit move', binding: { mouse: 'click', pad: 'a' } },
+              { id: 'edit', label: 'Edit move', binding: { mouse: 'click', pad: 'a' }, hint },
               {
                 id: 'remove',
                 label: 'Remove',
@@ -116,7 +119,7 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: 
               { id: 'skill', label: 'Next skill', binding: { key: 'BracketRight', pad: 'rt' } },
             ],
     // The handlers read `live`: only what the prompts show re-makes them.
-    [mana, editing, canEdit, entries.length],
+    [mana, editing, canEdit, entries.length, hint],
   );
   useEffect(() => {
     if (mode === 'pause') return;

@@ -74,6 +74,7 @@ import { SKILL_NAME, listed } from '@/features/delve/chains/chain-text';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { runeName } from '@/features/delve/runes/rune-style';
 import { createHmrStore } from './hmr-store';
+import { useUIStore } from './uiStore';
 
 /**
  * Delve save + UI prefs. All game rules live in @alloy/engine — every action
@@ -670,6 +671,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     equip: (uid) => {
       commit(equipItem(registry(), get().profile, uid));
       set({ newUids: withoutUids(get().newUids, [uid]) });
+      // The Loadout's onboarding hint is done, by whichever control equipped (features/delve/onboarding.ts).
+      useUIStore.getState().markSeen('loadout');
     },
 
     unequip: (slot) => commit(unequipSlot(registry(), get().profile, slot)),
@@ -879,7 +882,10 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     transfer: (uid) => {
       const res = applyResult(transferMoveset(registry(), get().profile, uid, pull()));
-      if (res.ok) set({ newUids: withoutUids(get().newUids, [uid]) });
+      if (res.ok) {
+        set({ newUids: withoutUids(get().newUids, [uid]) });
+        useUIStore.getState().markSeen('loadout');
+      }
       return res;
     },
 
