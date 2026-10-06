@@ -194,7 +194,7 @@ export function BagPane({
               },
             ]}
           />
-          <span className="k-caption ml-2">Sort</span>
+          <span className="k-caption">Sort</span>
           <Chip
             onClick={() => setSort((sort + 1) % SORTS.length)}
             aria-label={`Sorted by ${SORTS[sort].label}: next sort`}
