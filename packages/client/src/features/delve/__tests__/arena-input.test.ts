@@ -740,6 +740,14 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       expect(again.out).toMatchObject({ cast: null, holding: 0 });
     });
 
+    it('two pressed in one frame latch only the latest, the one that holds: a lower hold taps', () => {
+      const w = world(holdBolt); // the Primary a hold, the Defensive not
+      const mem = padMemory();
+      const frame = run(w, mem);
+      expect(frame({ cast: [0, 1], held: [0, 1] }).out.cast).toEqual({ slot: 0, aim: null });
+      expect(mem.latch).toBeNull();
+    });
+
     it('off by default: the button let go releases the hold, as ever', () => {
       const w = world(holdBolt);
       const input = createArenaInput();
