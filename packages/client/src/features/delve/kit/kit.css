@@ -135,18 +135,24 @@
 }
 
 .k-body-2 {
-  font-size: 16px;
+  font-size: 18px;
   color: var(--k-text-2);
 }
 
 .k-caption {
-  font-size: 14px;
+  font-size: 16px;
+  color: var(--k-text-3);
+}
+
+/* A caption that is a sentence: read, so 18, in the caption's colour (the pad-first spec, 6). */
+.k-note {
+  font-size: 18px;
   color: var(--k-text-3);
 }
 
 .k-label {
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--k-text-3);
@@ -346,7 +352,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   min-width: 28px;
   height: 28px;
   padding: 0 7px;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .k-glyph-md {
@@ -358,7 +364,7 @@ html[data-input='gamepad'] .delve-ui :focus {
 
 .k-hold {
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--k-text-2);
   text-transform: uppercase;
 }
@@ -496,7 +502,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 6px 12px;
   font-family: var(--k-font-body);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   color: #ffffff;
   background: #3a4466;
   border: 2px solid #5a6988;
@@ -578,7 +584,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 1px 4px;
   vertical-align: 3px;
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   font-size-adjust: none;
   line-height: 1.2;
   text-transform: none;
@@ -602,11 +608,53 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 6px 10px;
   min-height: 36px;
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   color: #ffffff;
   background: #3a4466;
   border: 2px solid #5a6988;
   cursor: pointer;
+}
+
+/* The Stepper: its label over a raised-steel well, the value centred between ◂ ▸ (the mouse's). */
+.k-stepper-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.k-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 2px;
+  font-family: var(--k-font-label);
+  font-size: 16px;
+  color: #ffffff;
+  background: #3a4466;
+  border: 2px solid #5a6988;
+}
+
+.k-stepper > button {
+  /* 32 design px: 24 px, a target's least, at the smallest UI scale (0.75). */
+  flex: none;
+  width: 32px;
+  height: 32px;
+  color: #fee761;
+  background: #262b44;
+  border: 0;
+  cursor: pointer;
+}
+
+.k-stepper > button:disabled {
+  color: #5a6988;
+  cursor: not-allowed;
+}
+
+.k-stepper-value {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
 }
 
 .k-swatch {
@@ -715,6 +763,7 @@ html[data-input='gamepad'] .delve-ui :focus {
 }
 
 .k-screen-foot {
+  position: relative;
   display: flex;
   align-items: center;
   padding: 0 32px;
@@ -775,6 +824,38 @@ html[data-input='gamepad'] .delve-ui :focus {
   width: 100%;
 }
 
+/* Onboarding's line (the pad-first spec, 6): over the plank, out of the layout, never in the way of a click. */
+.k-footer-hint {
+  position: absolute;
+  left: 32px;
+  bottom: 100%;
+  margin: 0 0 8px;
+  padding: 6px 14px;
+  font-size: 18px;
+  color: var(--k-text);
+  background: var(--k-well);
+  border-left: 4px solid var(--k-hot-hi);
+  pointer-events: none;
+}
+
+.k-prompt[data-pulse] {
+  animation: k-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes k-pulse {
+  50% {
+    color: var(--k-hot-hi);
+    filter: brightness(1.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .k-prompt[data-pulse] {
+    animation: none;
+    color: var(--k-hot-hi);
+  }
+}
+
 .k-footer-aside {
   margin-left: auto;
   display: flex;
@@ -830,7 +911,7 @@ html[data-input='gamepad'] .delve-ui :focus {
 .k-tile-delta {
   right: 6px;
   bottom: 5px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -839,7 +920,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   top: 6px;
   padding: 1px 3px;
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   color: #3e2731;
   background: #fee761;
 }

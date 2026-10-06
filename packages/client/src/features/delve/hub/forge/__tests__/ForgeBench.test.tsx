@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { useState } from 'react';
-import { act, render, screen, fireEvent, within } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   emptyMaterials,
+  forgePowerRange,
   previewForge,
+  withMaterial,
   type ForgeRequest,
+  type HeroStatKey,
   type MaterialsPouch,
 } from '@alloy/engine';
 import { ForgeBench } from '../ForgeBench';
@@ -13,8 +16,11 @@ import { MaterialsPane } from '../MaterialsPane';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../../onboarding';
 import { usePrompts, type Prompt } from '../../../kit';
-import { pct, shardName, statRange, valueRange } from '../materials-text';
+import { formatDelta } from '../../../format';
+import { DROPS_FROM, pct, shardName, statRange, valueRange } from '../materials-text';
 
 // The bench runs on the real engine: what it shows is `previewForge`, what it makes is `forge`.
 
@@ -26,20 +32,53 @@ const withMaterials = (over: Partial<MaterialsPouch>, scrap = 1000) =>
     scrap,
     materials: { ...emptyMaterials(), ...over },
   });
+/** One more shard of `stat` at `tier` in the save as it stands (the kit's bars and flux kept). */
+const putShard = (stat: HeroStatKey, tier: number) =>
+  store().setProfile({
+    ...store().profile,
+    scrap: 1000,
+    materials: withMaterial(store().profile.materials, { kind: 'shard', stat, tier }, 1),
+  });
 /** The engine's preview of `req` for the profile as it stands. */
 const preview = (req: Partial<ForgeRequest> & { baseId: string; metal: ForgeRequest['metal'] }) =>
   previewForge(registry, store().profile, { element: 'fire', shards: [], ...req });
 const uses = () => screen.getByTestId('forge-uses');
+const right = (el: HTMLElement) => fireEvent.keyDown(el, { key: 'ArrowRight' });
+const left = (el: HTMLElement) => fireEvent.keyDown(el, { key: 'ArrowLeft' });
+const flux = () => screen.getByTestId('forge-flux');
+const metal = () => screen.getByTestId('forge-metal');
+const element = () => screen.getByTestId('forge-element');
+/** Step a stepper right until its value reads `value`. */
+function stepTo(testId: string, value: RegExp) {
+  const el = screen.getByTestId(testId);
+  for (let i = 0; i < 12 && !value.test(el.getAttribute('aria-valuetext') ?? ''); i++) right(el);
+  expect(el.getAttribute('aria-valuetext')).toMatch(value);
+}
+const stepFluxTo = (grade: string) =>
+  stepTo('forge-flux', new RegExp(`^${grade[0].toUpperCase()}${grade.slice(1)}`));
+
+/** The bench as the tab holds it: the chosen pattern is the tab's. */
+function Bench(props: { locked?: boolean; setPrompts: (p: Prompt[]) => void }) {
+  const [b, setB] = useState<string | null>(null);
+  return <ForgeBench locked={props.locked ?? false} setPrompts={props.setPrompts} baseId={b} onBase={setB} />;
+}
 
 function bench(locked = false, pane = false) {
   const setPrompts = vi.fn<(p: Prompt[]) => void>();
   render(
     <div style={{ display: 'grid' }}>
-      <ForgeBench locked={locked} setPrompts={setPrompts} />
+      <Bench locked={locked} setPrompts={setPrompts} />
       {pane && <MaterialsPane locked={locked} />}
     </div>,
   );
   return setPrompts;
+}
+
+/** The bench with its prompts bound as the hub binds them: Enter forges. */
+function Hub() {
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  usePrompts(prompts);
+  return <Bench setPrompts={setPrompts} />;
 }
 
 describe('ForgeBench', () => {
@@ -57,29 +96,63 @@ describe('ForgeBench', () => {
     useInputDeviceStore.setState({ device: 'keyboard' });
   });
 
-  it("carries the guided start's trail: a keyed pattern, bar and flux, and the Lines field done once a line holds a shard", () => {
-    withMaterials({
-      metals: { ...emptyMaterials().metals, rusty: 5 },
-      flux: { ...emptyMaterials().flux, uncommon: 2 },
-      shards: { maxHp: [1] },
-    });
+  it('the bench is rows: Flux, Metal and Element steppers over what the save holds, then the Lines, then Forge', () => {
+    putShard('maxHp', 1); // a shard held: the lines are buttons (none held folds them: its own test)
     bench();
-    const pattern = screen.getByTestId('pattern-cuirass');
-    expect(pattern).toHaveAttribute('data-tutorial', 'forge.pattern:cuirass');
-    fireEvent.click(pattern);
-    expect(pattern).toHaveAttribute('aria-pressed', 'true');
-    // The first bar held is the bench's own pick: chosen from the start.
-    expect(screen.getByTestId('metal-rusty')).toHaveAttribute('data-tutorial', 'forge.bar:rusty');
-    expect(screen.getByTestId('metal-rusty')).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('flux-none')).not.toHaveAttribute('data-tutorial');
-    const flux = screen.getByTestId('flux-uncommon');
-    expect(flux).toHaveAttribute('data-tutorial', 'forge.flux:uncommon');
-    fireEvent.click(flux);
-    expect(screen.getByTestId('flux-uncommon')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    const rows = screen.getByTestId('forge-bench');
+    const order = () =>
+      [...rows.querySelectorAll<HTMLElement>('[data-testid]')]
+        .map((e) => e.dataset.testid!)
+        .filter((id) => /^(forge-(flux|metal|element|button)|shard-slot-\d)$/.test(id));
+    expect(order()).toEqual(['forge-flux', 'forge-metal', 'forge-element', 'forge-button']); // common: no lines
+    // The kit: 5 Rusty bars, 5 uncommon flux. The metal holds Rusty only; the flux None and Uncommon.
+    expect(metal()).toHaveAttribute('aria-valuetext', 'Rusty bar ×5');
+    expect(Number(metal().getAttribute('aria-valuemax'))).toBe(0);
+    expect(flux()).toHaveAttribute('aria-valuetext', 'None');
+    right(flux());
+    expect(flux()).toHaveAttribute('aria-valuetext', 'Uncommon ×5');
+    expect(screen.getByTestId('forge-title')).toHaveTextContent('Uncommon Cuirass');
+    expect(order()).toEqual(['forge-flux', 'forge-metal', 'forge-element', 'shard-slot-0', 'forge-button']);
+    // The element: the pair first, the others with their Mana Dust.
+    expect(element()).toHaveAttribute('aria-valuetext', 'Fire');
+    right(element());
+    expect(element().getAttribute('aria-valuetext')).toMatch(/· \d+ Mana Dust$/);
+  });
+
+  it('what the save lacks is one line under its row, saying where it drops', () => {
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.getByTestId('forge-bench')).toHaveTextContent(DROPS_FROM.metal);
+    expect(screen.getByTestId('forge-bench')).toHaveTextContent(DROPS_FROM.flux);
+    // No bars at all: the Metal row is that line alone, and the forge says why it can't.
+    act(() =>
+      store().setProfile({
+        ...store().profile,
+        materials: { ...store().profile.materials, metals: emptyMaterials().metals },
+      }),
+    );
+    expect(screen.queryByTestId('forge-metal')).toBeNull();
+    expect(screen.getByTestId('forge-refused')).toHaveTextContent('Missing materials');
+  });
+
+  it("carries the guided start's trail: the bar and flux rows say they are done from the bench's state", () => {
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.getByTestId('pattern-cuirass')).toHaveAttribute('data-tutorial', 'forge.pattern:cuirass');
+    expect(metal()).toHaveAttribute('data-tutorial', 'forge.bar');
+    expect(metal()).toHaveAttribute('data-tutorial-done', 'true'); // a held bar is chosen
+    expect(flux()).toHaveAttribute('data-tutorial', 'forge.flux');
+    expect(flux()).toHaveAttribute('data-tutorial-done', 'false'); // None
+    right(flux());
+    expect(flux()).toHaveAttribute('data-tutorial-done', 'true');
+    // The Lines field: done at once when no shard held fits (the kit holds none).
     const lines = () => document.querySelector('[data-tutorial="forge.shard"]')!;
+    expect(lines()).toHaveAttribute('data-tutorial-done', 'true');
+    // With one that fits, done once a line holds it; in the picker's own scope the picker is the target.
+    act(() => putShard('maxHp', 1));
     expect(lines()).toHaveAttribute('data-tutorial-done', 'false');
     fireEvent.click(screen.getByTestId('shard-slot-0'));
-    // In the picker's own scope the picker is the target.
     expect(lines()).toBe(screen.getByTestId('shard-picker'));
     fireEvent.click(screen.getByTestId('shard-pick-maxHp-1'));
     expect(lines()).toHaveAttribute('data-tutorial-done', 'true');
@@ -96,7 +169,7 @@ describe('ForgeBench', () => {
     holding({ critChance: [2] });
     bench();
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
-    fireEvent.click(screen.getByTestId('flux-uncommon'));
+    stepFluxTo('uncommon');
     const lines = () => document.querySelector('[data-tutorial="forge.shard"]')!;
     expect(lines()).toHaveAttribute('data-tutorial-done', 'true');
     expect(screen.getByTestId('forge-button')).toBeEnabled();
@@ -109,14 +182,20 @@ describe('ForgeBench', () => {
   it('lists the learned patterns, then the unknown ones greyed with where they come from', () => {
     bench();
     const list = screen.getByTestId('pattern-list');
-    for (const id of store().profile.patterns)
-      expect(within(list).getByTestId(`pattern-${id}`)).toBeInTheDocument();
+    const learned = store().profile.patterns;
+    for (const id of learned) expect(within(list).getByTestId(`pattern-${id}`)).toBeInTheDocument();
     expect(screen.getByTestId('pattern-unknown-bow')).toHaveTextContent(
       'Unknown · salvage a Bow, or find its pattern on elites and bosses',
     );
     expect(within(screen.getByTestId('pattern-unknown-bow')).queryByRole('button')).toBeNull();
     // Nothing is forged from nothing: no preview until a pattern is picked.
     expect(screen.getByTestId('forge-empty')).toHaveTextContent('Pick a pattern to forge');
+    // The pad lands on the first learned row while none is picked, on the picked one after.
+    const firsts = () => [...list.querySelectorAll('[data-pad-first]')].map((e) => e.getAttribute('data-testid'));
+    const top = list.querySelector('[data-testid^="pattern-"]:not([data-testid^="pattern-unknown"])')!;
+    expect(firsts()).toEqual([top.getAttribute('data-testid')]);
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(firsts()).toEqual(['pattern-cuirass']);
   });
 
   it("a pattern shows the engine's preview: the item, the floor, implicits, a weapon's skills, the price", () => {
@@ -126,12 +205,11 @@ describe('ForgeBench', () => {
     expect(screen.getByTestId('pattern-sword')).toHaveAttribute('aria-pressed', 'true');
     // The first metal held, the primary, no flux and no shards.
     const prev = preview({ baseId: 'sword', metal: 'iron' });
-    expect(screen.getByTestId('metal-iron')).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('element-fire')).toHaveAttribute('aria-checked', 'true');
+    expect(metal()).toHaveAttribute('aria-valuetext', 'Iron bar ×2');
+    expect(Number(metal().getAttribute('aria-valuemax'))).toBe(0); // the one bar held
+    expect(element()).toHaveAttribute('aria-valuetext', 'Fire');
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Common Sword');
-    expect(screen.getByTestId('forge-bench')).toHaveTextContent(`item level ${prev.ilvl}`);
-    expect(screen.getByTestId('metal-iron')).toHaveTextContent('Iron bar ×2');
-    expect(screen.getByTestId('metal-rusty')).toBeDisabled();
+    expect(screen.getByTestId('forge-preview')).toHaveTextContent(`item level ${prev.ilvl}`);
     expect(
       screen.getByText('A common item rolls no lines: add flux for some.'),
     ).toBeInTheDocument();
@@ -162,9 +240,9 @@ describe('ForgeBench', () => {
     });
     bench();
     fireEvent.click(screen.getByTestId('pattern-sword'));
-    fireEvent.click(screen.getByTestId('flux-rare'));
+    stepFluxTo('rare');
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Rare Sword');
-    expect(screen.getByTestId('shard-slot-2')).toHaveTextContent('Random line');
+    expect(screen.getByTestId('shard-slot-2')).toHaveTextContent('Line 3 · Random');
     const minRare = registry.getDelveBalance().loot.minRoll.rare;
     expect(screen.getByTestId('shard-slot-0')).toHaveTextContent(`rolls ${pct(minRare)}–100%`);
     fireEvent.click(screen.getByTestId('shard-slot-0'));
@@ -180,7 +258,7 @@ describe('ForgeBench', () => {
     const crit = { stat: 'critChance' as const, tier: 2 };
     const [line] = preview({ baseId: 'sword', metal: 'rusty', flux: 'rare', shards: [crit] }).lines;
     expect(screen.getByTestId('shard-slot-0')).toHaveTextContent(
-      `Crit Chance II: ${valueRange(registry, 'critChance', ...line.range!)}`,
+      `Line 1 · Crit Chance II: ${valueRange(registry, 'critChance', ...line.range!)}`,
     );
     expect(uses()).toHaveTextContent('Uses Rusty bar, Rare flux, Crit Chance II');
     // The next line can't take the same affix again.
@@ -204,14 +282,16 @@ describe('ForgeBench', () => {
     });
     bench();
     fireEvent.click(screen.getByTestId('pattern-sword'));
-    fireEvent.click(screen.getByTestId('flux-magic'));
+    stepFluxTo('magic');
     fireEvent.click(screen.getByTestId('shard-slot-0'));
     fireEvent.click(screen.getByTestId('shard-pick-critChance-1'));
     fireEvent.click(screen.getByTestId('shard-slot-1'));
     fireEvent.click(screen.getByTestId('shard-pick-firePower-1'));
-    fireEvent.click(screen.getByTestId('flux-uncommon'));
+    left(flux());
+    expect(flux()).toHaveAttribute('aria-valuetext', 'Uncommon ×1');
     expect(uses()).toHaveTextContent(/^Uses Rusty bar, Uncommon flux, Crit Chance I$/);
-    fireEvent.click(screen.getByTestId('flux-none'));
+    left(flux());
+    expect(flux()).toHaveAttribute('aria-valuetext', 'None');
     expect(uses()).toHaveTextContent(/^Uses Rusty bar$/);
   });
 
@@ -220,9 +300,10 @@ describe('ForgeBench', () => {
     bench();
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
     const dust = registry.getDelveBalance().crafting.offPairDust;
-    expect(screen.getByTestId('element-fire')).toHaveTextContent(/^Fire$/);
-    expect(screen.getByTestId('element-storm')).toHaveTextContent(`Storm · ${dust} Mana Dust`);
-    fireEvent.click(screen.getByTestId('element-storm'));
+    expect(element()).toHaveAttribute('aria-valuetext', 'Fire');
+    stepTo('forge-element', /^Storm/);
+    expect(element()).toHaveAttribute('aria-valuetext', `Storm · ${dust} Mana Dust`);
+    expect(element()).toHaveTextContent(`Storm · ${dust} Mana Dust`);
     expect(screen.queryByTestId('forge-floor')).toBeNull();
     const prev = preview({ baseId: 'cuirass', metal: 'rusty', element: 'storm' });
     expect(screen.getByTestId('forge-button')).toHaveTextContent(
@@ -235,11 +316,15 @@ describe('ForgeBench', () => {
   });
 
   it('Forge (or Enter) forges: the item comes marked new, and the bench says so', () => {
+    useUIStore.setState({ seen: [] });
     withMaterials({ metals: { ...emptyMaterials().metals, rusty: 2 } });
     const setPrompts = bench();
+    // A first visit: the forge prompt carries the screen's line, until a forge.
+    expect(setPrompts.mock.lastCall![0].find((p) => p.id === 'forge')!.hint).toBe(ONBOARDING.forge);
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
     const bag = store().profile.bag.length;
     fireEvent.click(screen.getByTestId('forge-button'));
+    expect(useUIStore.getState().seen).toContain('forge');
     const made = store().profile.bag.at(-1)!;
     expect(store().profile.bag).toHaveLength(bag + 1);
     expect(made).toMatchObject({ baseId: 'cuirass', rarity: 'common', mana: 'fire' });
@@ -264,7 +349,7 @@ describe('ForgeBench', () => {
     });
     bench(false, true);
     fireEvent.click(screen.getByTestId('pattern-sword'));
-    fireEvent.click(screen.getByTestId('flux-magic'));
+    stepFluxTo('magic');
     fireEvent.click(screen.getByTestId('shard-slot-0'));
     fireEvent.click(screen.getByTestId('shard-pick-critChance-2'));
     const req: ForgeRequest = {
@@ -277,11 +362,11 @@ describe('ForgeBench', () => {
     const shown = previewForge(registry, store().profile, req);
     const [crit, random] = shown.lines;
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Magic Sword');
-    expect(screen.getByTestId('forge-bench')).toHaveTextContent(`item level ${shown.ilvl}`);
+    expect(screen.getByTestId('forge-preview')).toHaveTextContent(`item level ${shown.ilvl}`);
     expect(screen.getByTestId('shard-slot-0')).toHaveTextContent(
-      `Crit Chance II: ${valueRange(registry, 'critChance', ...crit.range!)}rolls 20%–50%`,
+      `Line 1 · Crit Chance II: ${valueRange(registry, 'critChance', ...crit.range!)}rolls 20%–50%`,
     );
-    expect(screen.getByTestId('shard-slot-1')).toHaveTextContent('Random linerolls 0%–100%');
+    expect(screen.getByTestId('shard-slot-1')).toHaveTextContent('Line 2 · Randomrolls 0%–100%');
     const scrap = store().profile.scrap;
     fireEvent.click(screen.getByTestId('forge-button'));
 
@@ -313,9 +398,10 @@ describe('ForgeBench', () => {
     });
     bench();
     fireEvent.click(screen.getByTestId('pattern-sword'));
-    expect(screen.queryByTestId('essence-pyroclasm')).toBeNull(); // epic flux first
-    fireEvent.click(screen.getByTestId('flux-epic'));
-    fireEvent.click(screen.getByTestId('essence-pyroclasm'));
+    expect(screen.queryByTestId('forge-essence')).toBeNull(); // epic flux first
+    stepFluxTo('epic');
+    expect(screen.getByTestId('forge-essence')).toHaveAttribute('aria-valuetext', 'None');
+    stepTo('forge-essence', /^Pyroclasm ×1$/);
     expect(uses()).toHaveTextContent('Uses Rusty bar, Epic flux, Pyroclasm essence');
     // Pyroclasm fits a weapon, an amulet or a helm.
     expect(screen.getByTestId('pattern-sword')).toHaveTextContent('Fits the essence');
@@ -349,16 +435,10 @@ describe('ForgeBench', () => {
       flux: { ...emptyMaterials().flux, epic: 2 },
       essences: { pyroclasm: 2 },
     });
-    // The bench's prompts bound as the hub binds them: Enter forges.
-    function Hub() {
-      const [prompts, setPrompts] = useState<Prompt[]>([]);
-      usePrompts(prompts);
-      return <ForgeBench locked={false} setPrompts={setPrompts} />;
-    }
     render(<Hub />);
     fireEvent.click(screen.getByTestId('pattern-sword'));
-    fireEvent.click(screen.getByTestId('flux-epic'));
-    fireEvent.click(screen.getByTestId('essence-pyroclasm'));
+    stepFluxTo('epic');
+    stepTo('forge-essence', /^Pyroclasm/);
     const bag = store().profile.bag.length;
     fireEvent.click(screen.getByTestId('forge-button'));
     expect(store().profile.bag).toHaveLength(bag + 1);
@@ -376,11 +456,13 @@ describe('ForgeBench', () => {
     withMaterials({ metals: { ...emptyMaterials().metals, rusty: 1, iron: 2 } });
     bench();
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
-    fireEvent.click(screen.getByTestId('metal-iron'));
-    fireEvent.click(screen.getByTestId('metal-rusty'));
+    right(metal());
+    expect(metal()).toHaveAttribute('aria-valuetext', 'Iron bar ×2');
+    left(metal());
+    expect(metal()).toHaveAttribute('aria-valuetext', 'Rusty bar ×1');
     fireEvent.click(screen.getByTestId('forge-button'));
     expect(store().profile.materials.metals.rusty).toBe(0);
-    expect(screen.getByTestId('metal-iron')).toHaveAttribute('aria-checked', 'true');
+    expect(metal()).toHaveAttribute('aria-valuetext', 'Iron bar ×2');
     expect(uses()).toHaveTextContent(/^Uses Iron bar$/);
     expect(screen.getByTestId('forge-button')).toBeEnabled();
   });
@@ -404,17 +486,17 @@ describe('ForgeBench', () => {
     });
     bench();
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
-    fireEvent.click(screen.getByTestId('flux-rare'));
+    stepFluxTo('rare');
     fireEvent.click(screen.getByTestId('forge-button'));
     expect(store().profile.materials.flux.rare).toBe(0);
-    expect(screen.getByTestId('flux-uncommon')).toHaveAttribute('aria-checked', 'true');
+    expect(flux()).toHaveAttribute('aria-valuetext', 'Uncommon ×2');
     expect(uses()).toHaveTextContent(/^Uses Rusty bar, Uncommon flux$/);
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Uncommon Cuirass');
     expect(screen.getByTestId('forge-button')).toBeEnabled();
-    // The last of every grade forged away: no flux, a common item.
+    // The last of every grade forged away: no flux (the row folds to its line), a common item.
     fireEvent.click(screen.getByTestId('forge-button'));
     fireEvent.click(screen.getByTestId('forge-button'));
-    expect(screen.getByTestId('flux-none')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('forge-flux-none')).toBeInTheDocument();
     expect(uses()).toHaveTextContent(/^Uses Rusty bar$/);
   });
 
@@ -426,60 +508,110 @@ describe('ForgeBench', () => {
     });
     bench();
     fireEvent.click(screen.getByTestId('pattern-sword'));
-    fireEvent.click(screen.getByTestId('flux-epic'));
-    fireEvent.click(screen.getByTestId('essence-pyroclasm'));
+    stepFluxTo('epic');
+    stepTo('forge-essence', /^Pyroclasm/);
     fireEvent.click(screen.getByTestId('forge-button'));
     fireEvent.click(screen.getByTestId('legendary-fanfare'));
-    expect(screen.queryByTestId('essence-pyroclasm')).toBeNull();
-    expect(screen.getByTestId('essence-none')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('forge-essence')).toHaveAttribute('aria-valuetext', 'None');
+    expect(screen.getByTestId('forge-bench')).toHaveTextContent(DROPS_FROM.essence);
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Epic Sword');
     expect(uses()).toHaveTextContent(/^Uses Rusty bar, Epic flux$/);
     expect(screen.getByTestId('forge-button')).toBeEnabled();
   });
 
-  it('a pick moves the focus to Forge, so Enter forges next; a refused forge leaves it where it was', async () => {
-    withMaterials({
-      metals: { ...emptyMaterials().metals, rusty: 2, iron: 1 },
-      flux: { ...emptyMaterials().flux, rare: 1 },
-      shards: { armor: [1] },
-    });
-    store().setProfile({ ...store().profile, manaDust: 0 });
-    function Hub() {
-      const [prompts, setPrompts] = useState<Prompt[]>([]);
-      usePrompts(prompts);
-      return <ForgeBench locked={false} setPrompts={setPrompts} />;
-    }
+  it('a pattern picked moves the focus to the Flux row; a shard picked moves it to Forge, unless refused', () => {
+    putShard('maxHp', 1);
     render(<Hub />);
-    const forgeButton = () => screen.getByTestId('forge-button');
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
-    expect(forgeButton()).toHaveFocus();
-    // Off the pair with no Mana Dust: refused, so the focus stays on the pick.
-    screen.getByTestId('element-storm').focus();
-    fireEvent.click(screen.getByTestId('element-storm'));
-    expect(screen.getByTestId('forge-refused')).toHaveTextContent('Not enough Mana Dust');
-    expect(screen.getByTestId('element-storm')).toHaveFocus();
-    fireEvent.click(screen.getByTestId('element-fire'));
-    expect(forgeButton()).toHaveFocus();
-    screen.getByTestId('flux-rare').focus();
-    fireEvent.click(screen.getByTestId('flux-rare'));
-    expect(forgeButton()).toHaveFocus();
+    expect(flux()).toHaveFocus();
+    right(flux());
+    expect(flux()).toHaveFocus(); // a step never moves the focus
     fireEvent.click(screen.getByTestId('shard-slot-0'));
-    fireEvent.click(screen.getByTestId('shard-pick-armor-1'));
-    expect(forgeButton()).toHaveFocus();
-    // A metal picked with the keys: Enter picks it, the next Enter forges.
-    screen.getByTestId('metal-iron').focus();
-    const bag = store().profile.bag.length;
-    await userEvent.keyboard('{Enter}');
-    expect(screen.getByTestId('metal-iron')).toHaveAttribute('aria-checked', 'true');
-    expect(forgeButton()).toHaveFocus();
-    await userEvent.keyboard('{Enter}');
-    expect(store().profile.bag).toHaveLength(bag + 1);
-    expect(store().profile.bag.at(-1)).toMatchObject({ baseId: 'cuirass', rarity: 'rare' });
+    fireEvent.click(screen.getByTestId('shard-pick-maxHp-1'));
+    expect(screen.getByTestId('forge-button')).toHaveFocus();
+    // Off the pair with no Mana Dust: refused, so a shard pick leaves the focus on its line.
+    act(() => store().setProfile({ ...store().profile, manaDust: 0 }));
+    element().focus();
+    stepTo('forge-element', /Mana Dust$/);
+    expect(element()).toHaveFocus();
+    expect(screen.getByTestId('forge-refused')).toHaveTextContent('Not enough Mana Dust');
+    fireEvent.click(screen.getByTestId('shard-slot-0'));
+    fireEvent.click(screen.getByTestId('shard-pick-maxHp-1'));
+    expect(screen.getByTestId('shard-slot-0')).toHaveFocus();
+  });
+
+  it('the preview beside the rows shows the item the forge would make, with no stops; it scrolls on the right stick', () => {
+    bench();
+    expect(screen.getByTestId('forge-preview')).toHaveTextContent('The item you forge shows here.');
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    const pane = screen.getByTestId('forge-preview');
+    expect(within(pane).getByTestId('forge-title')).toHaveTextContent('Common Cuirass');
+    expect(within(pane).getByTestId('forge-implicits')).toBeInTheDocument();
+    expect(within(pane).getByTestId('forge-uses')).toHaveTextContent('Rusty bar');
+    expect(within(pane).getByTestId('forge-purse')).toBeInTheDocument();
+    expect(pane.querySelectorAll('button, [tabindex="0"]')).toHaveLength(0);
+    expect(pane.querySelector('[data-pad-scroll]')).not.toBeNull();
+    expect(within(screen.getByTestId('forge-bench')).queryByTestId('forge-title')).toBeNull();
+  });
+
+  it("shows the item's Power against what is worn as a range, the engine's (forgePowerRange)", () => {
+    putShard('maxHp', 1);
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    stepFluxTo('uncommon');
+    const req: ForgeRequest = { baseId: 'cuirass', metal: 'rusty', flux: 'uncommon', element: 'fire', shards: [] };
+    const random = forgePowerRange(registry, store().profile, req);
+    const power = screen.getByTestId('forge-power');
+    const span = (r: { low: number; high: number }) =>
+      formatDelta(r.low) === formatDelta(r.high)
+        ? formatDelta(r.high)
+        : `${formatDelta(r.low)} to ${formatDelta(r.high)}`;
+    expect(power).toHaveTextContent(`${span(random)} Power against your chest`);
+    expect(power).toHaveTextContent('before 1 random line');
+    // A shard on the line: the range is the shard's, with no random line left.
+    fireEvent.click(screen.getByTestId('shard-slot-0'));
+    fireEvent.click(screen.getByTestId('shard-pick-maxHp-1'));
+    const shard = forgePowerRange(registry, store().profile, { ...req, shards: [{ stat: 'maxHp', tier: 1 }] });
+    expect(power).toHaveTextContent(`${span(shard)} Power against your chest`);
+    expect(power).not.toHaveTextContent('random');
+  });
+
+  it("a weapon's range says it is valued as a home for your moveset", () => {
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-sword'));
+    expect(screen.getByTestId('forge-power')).toHaveTextContent('against your weapon, as a home for your moveset');
   });
 
   it('mid-dive the forge waits, with Select alone left to the tab', () => {
     const setPrompts = bench(true);
     expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
     expect(setPrompts).not.toHaveBeenCalled();
+  });
+
+  it('a save with no flux sees one line for Flux, and with no shard the Lines as text; a guided save folds nothing', () => {
+    const rusty = { ...emptyMaterials().metals, rusty: 5 };
+    withMaterials({ metals: rusty });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.queryByTestId('forge-flux')).toBeNull();
+    expect(screen.getByTestId('forge-flux-none')).toHaveTextContent(`Flux: none held. ${DROPS_FROM.flux}`);
+    expect(screen.queryByTestId('shard-slot-0')).toBeNull(); // a common cuirass rolls no lines anyway
+    cleanup();
+    // Uncommon flux and still no shard: the flux row is back, the line is text.
+    withMaterials({ metals: rusty, flux: { ...emptyMaterials().flux, uncommon: 1 } });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.getByTestId('forge-flux')).toBeInTheDocument();
+    stepFluxTo('uncommon');
+    expect(screen.queryByTestId('shard-slot-0')).toBeNull();
+    expect(screen.getByTestId('forge-line-0')).toHaveTextContent(/^Line 1 · Random/);
+    expect(screen.getByTestId('forge-lines-none')).toHaveTextContent(DROPS_FROM.shard);
+    cleanup();
+    // Guided: today's rows, flux or not.
+    act(() => store().startTutorial());
+    withMaterials({ metals: rusty });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(screen.getByTestId('forge-flux')).toBeInTheDocument();
   });
 });

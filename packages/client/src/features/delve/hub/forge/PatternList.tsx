@@ -6,7 +6,8 @@ import { getDelveRegistry } from '../../registry';
 /**
  * The Forge bench's patterns: the learned ones (a row picks the pattern), then
  * the unknown ones greyed with where they come from. With an essence chosen,
- * each learned pattern says whether its legendary fits that slot.
+ * each learned pattern says whether its legendary fits that slot. The pad lands on the
+ * picked pattern, else the first learned (`data-pad-first`).
  */
 export function PatternList({
   known,
@@ -28,10 +29,11 @@ export function PatternList({
       <div className="flex flex-col gap-2">
         {bases
           .filter((b) => known.includes(b.id))
-          .map((b) => (
+          .map((b, i) => (
             <button
               key={b.id}
               type="button"
+              data-pad-first={(selected ? b.id === selected : i === 0) || undefined}
               className="flex items-center gap-3 p-2 text-left"
               style={{ boxShadow: selected === b.id ? 'inset 4px 0 0 var(--k-hot)' : undefined }}
               aria-pressed={selected === b.id}
@@ -76,7 +78,7 @@ export function PatternList({
               </span>
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="text-[18px] text-[var(--k-text-3)]">{b.name}</span>
-                <span className="k-caption">
+                <span className="k-note">
                   Unknown · salvage a {b.name}, or find its pattern on elites and bosses
                 </span>
               </span>

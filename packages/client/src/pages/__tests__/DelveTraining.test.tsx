@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useState } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { padPrompts } from '@/features/delve/kit/prompts';
 import type { PadButton } from '@/features/gamepad/gamepad';
@@ -211,6 +211,45 @@ describe('DelveTraining', () => {
     fireEvent.click(screen.getByTestId('training-menu'));
     fireEvent.click(screen.getByTestId('menu-anvil'));
     expect(screen.getByTestId('anvil')).toBeInTheDocument();
+  });
+
+  it("its way back to the Anvil carries the link it came with (Try in Training's skill)", () => {
+    function Anvil() {
+      const state = useLocation().state as { link?: unknown } | null;
+      return <div data-testid="anvil-state">{JSON.stringify(state)}</div>;
+    }
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/delve/training', state: { back: { tab: 'skills', skill: 'ultimate' } } },
+        ]}
+      >
+        <Routes>
+          <Route path="/delve/training" element={<DelveTraining />} />
+          <Route path="/delve" element={<Anvil />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('training-back'));
+    expect(screen.getByTestId('anvil-state')).toHaveTextContent(
+      '{"link":{"tab":"skills","skill":"ultimate"}}',
+    );
+  });
+
+  it('with no link, its way back opens the Anvil plain', () => {
+    function Anvil() {
+      return <div data-testid="anvil-state">{JSON.stringify(useLocation().state)}</div>;
+    }
+    render(
+      <MemoryRouter initialEntries={['/delve/training']}>
+        <Routes>
+          <Route path="/delve/training" element={<DelveTraining />} />
+          <Route path="/delve" element={<Anvil />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('training-back'));
+    expect(screen.getByTestId('anvil-state')).toHaveTextContent('null');
   });
 
   it('pauses the arena while a rune picker is open in the dock', () => {

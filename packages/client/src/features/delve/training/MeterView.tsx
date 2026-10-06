@@ -7,7 +7,7 @@ import { BUCKET_LABEL, METER_BUCKETS, METER_WINDOW, type MeterSummary } from './
 export function MeterChip({ meter, onReset }: { meter: MeterSummary; onReset: () => void }) {
   return (
     <div
-      className="k-well flex items-center gap-3 whitespace-nowrap px-3 py-0.5 text-[14px]"
+      className="k-well flex items-center gap-3 whitespace-nowrap px-3 py-0.5 text-[16px]"
       data-testid="meter-chip"
     >
       <span className="k-disp text-[20px] text-[var(--k-hot)]" data-testid="meter-dps">
@@ -41,7 +41,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function MeterTab({ meter, onReset }: { meter: MeterSummary; onReset: () => void }) {
   const reactions = getDelveRegistry().getArpgData().reactions;
   return (
-    <div className="flex flex-col gap-3 text-[14px]" data-testid="meter-tab">
+    <div className="flex flex-col gap-3 text-[16px]" data-testid="meter-tab">
       <div className="grid grid-cols-3 gap-2 text-center">
         <Stat label={`DPS (last ${METER_WINDOW}s)`} value={formatNumber(meter.dps)} />
         <Stat label="Total" value={formatNumber(meter.total)} />
@@ -88,7 +88,7 @@ export function MeterTab({ meter, onReset }: { meter: MeterSummary; onReset: () 
           </span>
         ))}
       </div>
-      <p className="k-caption">
+      <p className="k-note">
         Each reaction counts the pairs of stacks it used up. Melt, Shatter, Soulfire, Combust and
         Crystallize multiply the hit that set them off, so their damage stays in that hit&apos;s
         row; Sunder&apos;s bonus shows in later hits&apos; rows. Time is the fight&apos;s own, so

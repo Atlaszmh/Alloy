@@ -1,11 +1,14 @@
 import { test, expect } from '../fixtures/responsive-fixture';
-import { PC_VIEWPORTS } from '../viewports';
-import { seedProfile } from '../../fixtures/delve';
+import { PC_VIEWPORTS, TEXT_VIEWPORTS, textSizeFor } from '../viewports';
+import { armed, seedProfile, stepTo } from '../../fixtures/delve';
 import {
   applyQuestEvents,
   claimQuest,
   createDefaultRegistry,
   createDelveProfile,
+  generateItem,
+  SeededRNG,
+  type Rarity,
 } from '@alloy/engine';
 
 // The fixture's save (seed 4242, fire) with First Steps done, claimed or not.
@@ -20,9 +23,20 @@ const QUESTS = {
   done: claimQuest(registry, firstStepsDone, 'first_steps').profile.quests,
 };
 
+// Two common helms under a worn epic one: Salvage junk's sheet has rows to review.
+const helm = (rarity: Rarity, i: number) =>
+  generateItem(registry, { uid: `junk-${i}`, ilvl: 4, rarity, slot: 'helm', mana: 'fire' }, new SeededRNG(300 + i));
+const JUNK = {
+  equipped: {
+    ...armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' })).equipped,
+    helm: helm('epic', 0),
+  },
+  bag: [helm('common', 1), helm('common', 2)],
+};
+
 const TABS = ['loadout', 'skills', 'forge', 'codex', 'quests'] as const;
 
-for (const vp of PC_VIEWPORTS) {
+for (const vp of [...PC_VIEWPORTS, ...TEXT_VIEWPORTS]) {
   for (const tab of TABS) {
     test(`Delve Anvil ${tab} @ ${vp.name} (${vp.width}×${vp.height})`, async ({
       page,
@@ -30,6 +44,7 @@ for (const vp of PC_VIEWPORTS) {
     }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await seedProfile(page, 4242, false);
+      await textSizeFor(page, vp);
       await page.goto('/delve');
       await page.getByTestId(`tab-${tab}`).click();
       await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
@@ -37,27 +52,77 @@ for (const vp of PC_VIEWPORTS) {
     });
   }
 
-  // The Forge tab's three panes with the most in them: a forge's preview, and the Temper bench.
-  for (const bench of ['forge-preview', 'temper'] as const) {
+  // The Forge tab's benches with the most in them: a forge's preview, Temper and Materials.
+  for (const bench of ['forge-preview', 'temper', 'materials'] as const) {
     test(`Delve Anvil ${bench} @ ${vp.name} (${vp.width}×${vp.height})`, async ({
       page,
       runProbes,
     }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await seedProfile(page, 4242, false);
+      await textSizeFor(page, vp);
       await page.goto('/delve');
       await page.getByTestId('tab-forge').click();
       if (bench === 'temper') {
         await page.getByTestId('bench-temper').click();
         await expect(page.getByTestId('temper')).toBeVisible();
+      } else if (bench === 'materials') {
+        await page.getByTestId('bench-materials').click();
+        await expect(page.getByTestId('materials-pane')).toBeVisible();
       } else {
         await page.getByTestId('pattern-cuirass').click();
-        await page.getByTestId('flux-uncommon').click();
+        await stepTo(page, 'forge-flux', /^Uncommon/);
         await expect(page.getByTestId('forge-title')).toHaveText('Uncommon Cuirass');
       }
       await runProbes(`delve-anvil-${bench}`, vp, { delve: {} });
     });
   }
+
+  // The Skills tab's move editor with its form grid open (its tallest state), and the Apply sheet.
+  for (const view of ['skills-editor', 'apply-sheet'] as const) {
+    test(`Delve Anvil ${view} @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await seedProfile(page, 4242, false);
+      await textSizeFor(page, vp);
+      await page.goto('/delve');
+      await page.getByTestId('tab-skills').click();
+      await page.getByTestId('move-0').click();
+      if (view === 'skills-editor') {
+        await page.getByTestId('move-form').click();
+        await expect(page.getByTestId('form-picker')).toBeVisible();
+      } else {
+        await stepTo(page, 'move-kind', /^Heavy$/);
+        await page.getByTestId('move-editor-back').click();
+        await page.getByTestId('chain-apply').click();
+        await expect(page.getByTestId('apply-sheet')).toBeVisible();
+      }
+      await runProbes(`delve-anvil-${view}`, vp, { delve: {} });
+    });
+  }
+
+  // Help over the system menu: its longest topic scrolls inside its body.
+  test(`Delve Anvil help @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await seedProfile(page, 4242, false);
+    await textSizeFor(page, vp);
+    await page.goto('/delve');
+    await expect(page.getByTestId('depart-button')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('open-help').click();
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    await runProbes('delve-anvil-help', vp, { delve: {} });
+  });
+
+  // Salvage junk's review sheet.
+  test(`Delve Anvil junk @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await seedProfile(page, 4242, false, undefined, JUNK);
+    await textSizeFor(page, vp);
+    await page.goto('/delve');
+    await page.getByTestId('salvage-junk').click();
+    await expect(page.getByTestId('junk-row')).toHaveCount(2);
+    await runProbes('delve-anvil-junk', vp, { delve: {} });
+  });
 
   // The Quests tab's fuller states: a contract open on the board (Reroll), a quest to claim, and
   // the Done group open on a claimed one.
@@ -69,6 +134,7 @@ for (const vp of PC_VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       const over = state === 'contract' ? {} : { quests: QUESTS[state] };
       await seedProfile(page, 4242, false, undefined, over);
+      await textSizeFor(page, vp);
       await page.goto('/delve');
       await page.getByTestId('tab-quests').click();
       if (state === 'contract') {

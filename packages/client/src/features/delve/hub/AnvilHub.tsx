@@ -1,13 +1,15 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { isDiveActive, startDepthOptions } from '@alloy/engine';
 import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
+import { useControlsStore } from '@/stores/controlsStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { Screen, Tabs, usePrompts, type Prompt } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
 import { HubHeader } from './HubHeader';
-import { HubFooter, TRAINING_BINDING } from './HubFooter';
+import { HubFooter } from './HubFooter';
+import { DepartSheet, TRAINING_BINDING } from './DepartSheet';
 import { SystemMenu } from './SystemMenu';
 import { LoadoutTab } from './loadout/LoadoutTab';
 import { SkillsTab } from './skills/SkillsTab';
@@ -17,7 +19,7 @@ import { QuestsTab } from './quests/QuestsTab';
 import { useQuests } from '../quests/useQuests';
 import { TutorialPanel } from '../tutorial/TutorialPanel';
 import { SHOWN_AT, stepIn } from '../tutorial/tutorial-view';
-import type { HubLink, HubMode, HubTab, HubTabProps } from './types';
+import type { HubLink, HubMemory, HubMode, HubTab, HubTabProps } from './types';
 
 const TABS: { id: HubTab; label: string }[] = [
   { id: 'loadout', label: 'Loadout' },
@@ -40,7 +42,9 @@ const TAB_VIEWS: Record<HubTab, (props: HubTabProps) => ReactNode> = {
  * (`initial` at first), the tab's prompts and footer action, the header's Tabs (`nav`), the
  * open tab's view (`view`) and the digit keys (`digits`, for the screen's usePrompts). In
  * `mode: 'pause'` the Forge is disabled ("Forge at the Anvil"): LB/RB and the digits skip it.
- * The Quests tab's pip counts the quests waiting to be claimed (`claimable`, for the footer too).
+ * The Quests tab's pip counts the quests waiting to be claimed (`claimable`). `onDelve` is every
+ * tab's Delve: at the Anvil it opens the Depart sheet, in the pause it resumes. Each tab's
+ * selection lives in `memory` across its remounts.
  */
 export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink) {
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
@@ -51,6 +55,7 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
   const [link, setLink] = useState<HubLink | undefined>(initial);
   const [tabPrompts, setTabPrompts] = useState<Prompt[]>([]);
   const [footerAction, setFooterAction] = useState<ReactNode>(null);
+  const memory = useRef<HubMemory>({}).current;
   const tabs = TABS.map((t) => {
     const locked = mode === 'pause' && t.id === 'forge';
     return { ...t, disabled: locked, title: locked ? 'Forge at the Anvil' : undefined };
@@ -110,6 +115,7 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
       go={go}
       link={link?.tab === tab ? link : undefined}
       onDelve={onDelve}
+      memory={memory}
     />
   );
   return { nav, view, tabPrompts, footerAction, digits, claimable, go };
@@ -117,46 +123,62 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
 
 /**
  * The Anvil hub: a kit Screen with the steel header (tabs 1–5 or LB/RB), the
- * wood footer (the tab's prompts and Menu, then Training, the start depths and
- * Delve, or the tab's own footer action) and the system menu on Esc / B. Each
- * tab draws its own grid of panes in the main.
+ * wood footer (the tab's prompts and Menu, then Delve, which opens the Depart
+ * sheet, or the tab's own footer action) and the system menu on Esc / Menu. The
+ * Depart sheet (View, Enter with nothing focused, or a click on any tab's Delve)
+ * holds the start depths, Training and the Delve that starts the dive. B does
+ * nothing at the hub's root. Each tab draws its own grid of panes in the main.
  */
 export function AnvilHub({ mode }: { mode: HubMode }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [departOpen, setDepartOpen] = useState(false);
+  const openDepart = () => setDepartOpen(true);
   const mainRef = useRef<HTMLDivElement>(null);
-  // The start depth the footer's chips pick (the deepest at first), for every Delve button.
+  const menuKey = useControlsStore((s) => s.config.keys.menu);
+  // The start depth the Depart sheet's chips pick (the deepest at first), for the footer's label too.
   const profile = useDelveStore((s) => s.profile);
   const starts = startDepthOptions(getDelveRegistry(), profile);
   const [start, setStart] = useState(starts[starts.length - 1]);
   const depth = starts.includes(start) ? start : 1;
 
   const onTraining = () => navigate('/delve/training');
-  const onDelve = () => {
+  /** Start the dive at the chosen depth, or resume the one open (the sheet's Delve). */
+  const startDelve = () => {
     const s = useDelveStore.getState();
     if (!isDiveActive(s.profile) && !s.startDive(depth)) return;
     playSound('phaseTransition');
     vibrate('medium');
     navigate('/delve/run');
   };
-  const hub = useHubTabs(mode, onDelve);
+  // A link the route brings (Try in Training's way back), read once.
+  const location = useLocation();
+  const [initial] = useState(() => (location.state as { link?: HubLink } | null)?.link);
+  // Every Delve button at the Anvil (the footer's, the Skills tab's) opens the sheet.
+  const hub = useHubTabs(mode, openDepart, initial);
 
-  // The footer's prompts: the tab's, then the hub's Menu. The hub also binds Training (its
-  // button draws the glyph) and the digits.
+  // The footer's prompts: the tab's, then the hub's Menu (Esc, or Menu on the pad: B does
+  // nothing at the root). The hub also binds View to the Depart sheet (the footer's button
+  // draws it), T to Training and the digits.
   const prompts: Prompt[] = [
     ...hub.tabPrompts,
     {
       id: 'menu',
       label: 'Menu',
-      binding: { key: 'Escape', pad: 'b' },
+      // The configured menu key too (as the stop's Menu binds it): with no [data-pad-back] in the
+      // hub, the runtime's fallback for it would press [data-pad-menu], the Delve button.
+      binding: {
+        key: menuKey && menuKey !== 'Escape' ? ['Escape', menuKey] : 'Escape',
+        pad: 'menu',
+      },
       onPress: () => setMenuOpen(true),
       asButton: true,
-      padBack: true,
     },
   ];
   usePrompts(
     [
       ...prompts,
+      { id: 'depart', label: 'Delve', binding: { pad: 'view' }, onPress: openDepart },
       { id: 'training', label: 'Training', binding: TRAINING_BINDING, onPress: onTraining },
       ...hub.digits,
     ],
@@ -173,13 +195,9 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
         footer={
           <HubFooter
             prompts={prompts}
-            onTraining={onTraining}
             start={depth}
-            onStart={setStart}
-            onDelve={onDelve}
+            onDepart={openDepart}
             action={hub.footerAction}
-            toClaim={hub.claimable}
-            onToClaim={() => hub.go({ tab: 'quests' })}
           />
         }
       >
@@ -202,6 +220,19 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
         </div>
       </Screen>
       {menuOpen && <SystemMenu onClose={() => setMenuOpen(false)} />}
+      {departOpen && (
+        <DepartSheet
+          start={depth}
+          onStart={setStart}
+          onDelve={startDelve}
+          onTraining={onTraining}
+          onQuests={() => {
+            setDepartOpen(false);
+            hub.go({ tab: 'quests' });
+          }}
+          onClose={() => setDepartOpen(false)}
+        />
+      )}
     </>
   );
 }

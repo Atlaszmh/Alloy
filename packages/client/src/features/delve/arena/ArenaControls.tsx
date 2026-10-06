@@ -88,7 +88,7 @@ export function ArenaControls({
     >
       {!input.moved && (
         <div
-          className="delve-display pointer-events-none absolute bottom-[34%] left-0 right-0 text-center text-[14px] uppercase tracking-[0.25em] text-white/40"
+          className="delve-display pointer-events-none absolute bottom-[34%] left-0 right-0 text-center text-[16px] uppercase tracking-[0.25em] text-white/40"
           data-testid="move-hint"
         >
           {device === 'gamepad'

@@ -13,7 +13,11 @@ const FILTERS: { id: Filter; label: string; slots: readonly GearSlot[] }[] = [
   { id: 'jewelry', label: 'Jewelry', slots: ['amulet', 'ring'] },
 ];
 
-/** The Forge's gear: what you wear first, then the bag, one row each (`temper-row`); a row picks the item for the bench. */
+/**
+ * The Forge's gear: what you wear first, then the bag, one row each (`temper-row`); a row picks
+ * the item for the bench, and the picked one is where the pad lands (`data-pad-first`). The kind
+ * chips are the mouse's (`data-pad-skip`): the D-pad walks the rows.
+ */
 export function GearList({
   equipped,
   bag,
@@ -35,7 +39,7 @@ export function GearList({
   ];
   return (
     <Panel title="Gear" testId="gear-list">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" data-pad-skip="">
         {FILTERS.map((f) => (
           <Chip
             key={f.id}
@@ -56,6 +60,7 @@ export function GearList({
             // The selected row: a hot-metal bar at its left (raised steel would fail its text's contrast).
             style={{ boxShadow: selected === item.uid ? 'inset 4px 0 0 var(--k-hot)' : undefined }}
             aria-pressed={selected === item.uid}
+            data-pad-first={selected === item.uid ? '' : undefined}
             onClick={() => onSelect(item.uid)}
             data-testid="temper-row"
           >

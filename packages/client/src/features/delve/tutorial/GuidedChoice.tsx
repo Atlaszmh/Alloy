@@ -39,8 +39,8 @@ export function GuidedChoice({ onJumpIn }: { onJumpIn: () => void }): ReactEleme
             data-testid="guided-start"
           >
             <span className="text-[24px] [font-family:var(--k-font-display)]">Guided start</span>
-            <span className="text-[14px] text-[var(--k-hot-hi)]">Recommended for new players</span>
-            <span className="text-[16px] text-[var(--k-text)]">
+            <span className="text-[16px] text-[var(--k-hot-hi)]">Recommended for new players</span>
+            <span className="text-[18px] text-[var(--k-text)]">
               Fight, bank and forge with {giver.name} at your side: hand-built depths, one step at a
               time. Everything you find and make is yours to keep.
             </span>
@@ -52,8 +52,8 @@ export function GuidedChoice({ onJumpIn }: { onJumpIn: () => void }): ReactEleme
             data-testid="guided-jump"
           >
             <span className="text-[24px] [font-family:var(--k-font-display)]">Jump in</span>
-            <span className="text-[14px] text-[var(--k-text-3)]">You know your way around</span>
-            <span className="text-[16px] text-[var(--k-text)]">
+            <span className="text-[16px] text-[var(--k-text-3)]">You know your way around</span>
+            <span className="text-[18px] text-[var(--k-text)]">
               Straight to the Anvil and the open depths, with How to delve to read.
             </span>
           </button>

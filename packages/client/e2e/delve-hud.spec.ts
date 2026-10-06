@@ -1,0 +1,87 @@
+import { test, expect } from '@playwright/test';
+import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive } from './fixtures/delve';
+import { BUTTON, installPad, tap } from './fixtures/pad';
+
+// The lean HUD (the pad-first spec, 3): the default; the gain feed, the corner, Full by choice.
+test.describe('Delve HUD', () => {
+  test.describe.configure({ timeout: 240_000 });
+
+  test('H01: lean by default: the corner and a gain feed that grows with the pickups; Settings → Full brings back the purse', async ({
+    page,
+  }) => {
+    await seedProfile(page);
+    await page.goto('/delve');
+    await startDive(page);
+    const corner = page.getByTestId('lean-corner');
+    await expect(corner).toBeVisible({ timeout: ARENA_READY });
+    await expect(corner.getByTestId('depth-label')).toHaveText('DEPTH 1');
+    await expect(corner.getByTestId('minimap')).toBeVisible();
+    await expect(page.getByTestId('purse-bar')).toHaveCount(0);
+    await expect(page.getByTestId('pickup-feed')).toHaveCount(0);
+    // The bot picks things up: a count line top left ("+12 Scrap"), one line a kind.
+    const feed = page.getByTestId('gain-feed');
+    await expect(feed.getByTestId('feed-line').filter({ hasText: /^\+[\d,.]+k? / }).first()).toBeVisible({
+      timeout: FLOOR_CLEAR,
+    });
+    const keys = await feed
+      .getByTestId('feed-line')
+      .evaluateAll((ls) => ls.map((l) => l.getAttribute('data-key')));
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.length).toBeLessThanOrEqual(5);
+    expect(await feed.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+    // Settings → HUD → Full, from the pause list.
+    await page.keyboard.press('Escape');
+    await page.getByTestId('open-settings').click();
+    await page.getByTestId('hud-mode-full').click();
+    await page.keyboard.press('Escape'); // Settings
+    await page.keyboard.press('Escape'); // the list: Resume
+    await expect(page.getByTestId('purse-bar')).toBeVisible();
+    await expect(corner).toHaveCount(0);
+  });
+
+  test('H02: M or the D-pad up toggles the peek over the running fight; it takes no pointer', async ({ page }) => {
+    await installPad(page);
+    // No bot: the hero stands, the fight runs.
+    await seedProfile(page, 4242, false);
+    await page.goto('/delve');
+    await startDive(page);
+    await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
+    const peek = page.getByTestId('peek-overlay');
+    await page.keyboard.press('m');
+    await expect(peek).toBeVisible();
+    await expect(peek.getByTestId('peek-map')).toBeVisible();
+    await expect(peek.getByTestId('purse-bar')).toBeVisible();
+    await expect(peek.getByTestId('pickup-feed')).toBeVisible();
+    // Not a pause: no pause screen, and the HUD stays live.
+    await expect(page.getByTestId('pause-screen')).toHaveCount(0);
+    await expect(page.getByTestId('dive-hud')).not.toHaveAttribute('inert', '');
+    // The pointer passes through it to what lies under.
+    const box = (await peek.getByTestId('peek-map').boundingBox())!;
+    const caught = await page.evaluate(
+      ([x, y]) => !!document.elementFromPoint(x, y)?.closest('[data-testid="peek-overlay"]'),
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    expect(caught).toBe(false);
+    // It sits in the clear part of the screen: under the corner (still clickable) and right of the dock.
+    const body = (await peek.getByTestId('peek-body').boundingBox())!;
+    for (const id of ['[data-testid="lean-corner"]', '[data-hud="dock"]']) {
+      const other = (await page.locator(id).boundingBox())!;
+      const overlaps =
+        body.x < other.x + other.width &&
+        other.x < body.x + body.width &&
+        body.y < other.y + other.height &&
+        other.y < body.y + body.height;
+      expect(overlaps, `the peek clears ${id}`).toBe(false);
+    }
+    // And the large map stays inside it, on screen.
+    const viewport = page.viewportSize()!;
+    expect(box.y + box.height).toBeLessThanOrEqual(Math.min(body.y + body.height, viewport.height) + 1);
+    await page.keyboard.press('m');
+    await expect(peek).toBeHidden();
+    // The pad: D-pad up opens it (taking the input lock), and again closes it.
+    await tap(page, BUTTON.up);
+    await expect(peek).toBeVisible();
+    await tap(page, BUTTON.up);
+    await expect(peek).toBeHidden();
+  });
+});

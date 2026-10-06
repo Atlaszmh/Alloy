@@ -46,6 +46,7 @@ import {
   labelsHeld,
   pressJournal,
   pressMenu,
+  pressPeek,
   type Aiming,
   type ArenaInput,
 } from './input';
@@ -63,6 +64,7 @@ import { rumble } from '@/features/gamepad/rumble';
 import { HitStop } from './fx/hitstop';
 import { arenaResolution, type Insets } from './camera';
 import { useUIStore } from '@/stores/uiStore';
+import { lootCues, type LootCue } from './arena-sounds';
 
 export type { Insets } from './camera';
 
@@ -204,7 +206,7 @@ export interface ArenaHud {
 /** What the core reports to the page, from any fight. */
 export type CoreUiEvent =
   | { kind: 'noMana'; slot: number }
-  | { kind: 'events'; events: ArpgEvent[] };
+  | { kind: 'events'; events: ArpgEvent[]; cues: Record<number, LootCue> };
 
 /** What runs in the arena. The core reads the latest one on every frame. */
 export interface ArenaMode {
@@ -593,6 +595,7 @@ export function useArenaCore(
             const input = frameInput(registry, world, inputRef.current, pad, padMem, {
               manual: manualRef.current,
               aimReach: useControlsStore.getState().config.aimReach,
+              holdToggle: useControlsStore.getState().config.holdToggle,
               toWorld: (p) => renderer.screenToWorld(p.x, p.y),
               device: useInputDeviceStore.getState().device,
             });
@@ -612,7 +615,8 @@ export function useArenaCore(
             if (events.length > 0) {
               renderer.handleEvents(events);
               // The bot-driven E2E runs would otherwise spend a large share of wall time frozen.
-              if (!flags.autopilot) hitstopRef.current.onEvents(events, performance.now());
+              if (!flags.autopilot)
+                hitstopRef.current.onEvents(events, performance.now(), useUIStore.getState().hitstop);
               handleEvents(world, events);
             }
             if (!wasDead && world.heroDead) mode.onHeroDead(world);
@@ -637,7 +641,7 @@ export function useArenaCore(
 
     /**
      * The controller's part of this frame (see gamepad-hub), or null with none
-     * or while paused; Menu opens the dive menu and View the journal.
+     * or while paused; Menu opens the dive menu, View the journal and D-pad up the peek.
      * `frameInput` turns it into the step's input (a press, a hold's release,
      * `holding`: see `padFrameCast`).
      */
@@ -647,6 +651,7 @@ export function useArenaCore(
       const acts = padToArena(state, takeArenaPresses(), useControlsStore.getState().config);
       if (acts.menu) pressMenu();
       if (acts.journal) pressJournal();
+      if (acts.peek) pressPeek();
       return acts;
     }
 
@@ -681,7 +686,11 @@ export function useArenaCore(
     }
 
     function handleEvents(world: ArpgWorld, events: ArpgEvent[]) {
-      onUiRef.current({ kind: 'events', events });
+      onUiRef.current({
+        kind: 'events',
+        events,
+        cues: lootCues(world, events, modeRef.current.isUpgrade),
+      });
       for (const e of events) {
         if (e.kind === 'noMana') onUiRef.current({ kind: 'noMana', slot: e.slot });
         if (e.kind === 'pay') floatPay(e);

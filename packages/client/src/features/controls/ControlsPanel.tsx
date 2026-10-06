@@ -10,12 +10,15 @@ import {
   DEADZONE_LIMITS,
   MOVE_KEYS,
   REPEAT_ACTIONS,
+  SENSITIVITY_LIMITS,
   exportControls,
   keyLabel,
   padLabel,
   type ControlAction,
   type KeyAction,
 } from './controls';
+
+const percent = (v: number) => `${Math.round(v * 100)}%`;
 
 type Capture = { kind: 'pad'; action: ControlAction } | { kind: 'key'; action: KeyAction };
 
@@ -68,7 +71,7 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
   );
   const isCapturing = (kind: Capture['kind'], action: KeyAction) =>
     capturing?.kind === kind && capturing.action === action;
-  const caption = 'text-[14px] uppercase tracking-[0.06em] text-[var(--k-text-3)]';
+  const caption = 'text-[16px] uppercase tracking-[0.06em] text-[var(--k-text-3)]';
   // An action left unbound (a new one whose default the setup already used: see `parseControls`).
   const unbound = CONTROL_ACTIONS.filter(
     (a) => cfg.pad[a] === null || (a !== 'attack' && cfg.keys[a] === null),
@@ -101,13 +104,20 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           </p>
         )}
 
-        <Button
-          className="self-start"
-          onClick={() => useDelveStore.getState().setManualAttack(!manual)}
-          testId="attack-mode-toggle"
-        >
-          Basic attack: {manual ? 'Manual' : 'Auto'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => useDelveStore.getState().setManualAttack(!manual)}
+            testId="attack-mode-toggle"
+          >
+            Basic attack: {manual ? 'Manual' : 'Auto'}
+          </Button>
+          <Button
+            onClick={() => store().setHoldToggle(!cfg.holdToggle)}
+            testId="hold-mode-toggle"
+          >
+            Hold moves: {cfg.holdToggle ? 'Press to toggle' : 'Hold'}
+          </Button>
+        </div>
 
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-2">
           <span className={caption}>Action</span>
@@ -130,7 +140,9 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           {MOVE_KEYS.map((a) => (
             <div key={a} className="contents">
               <span className="text-[var(--k-text)]">{ACTION_LABELS[a]}</span>
-              <span className="text-center text-[14px]">Left stick</span>
+              <span className="text-center text-[16px]">
+                {cfg.swapSticks ? 'Right stick' : 'Left stick'}
+              </span>
               {cell(`bind-key-${a}`, keyLabel(cfg.keys[a]), isCapturing('key', a), () =>
                 setCapturing({ kind: 'key', action: a }),
               )}
@@ -155,6 +167,14 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
         </section>
 
         <section className="flex flex-col gap-2">
+          <Chip
+            className="self-start"
+            pressed={cfg.swapSticks}
+            onClick={() => store().setSwapSticks(!cfg.swapSticks)}
+            testId="swap-sticks"
+          >
+            Swap sticks: move on the right, aim on the left
+          </Chip>
           <Slider
             id="deadzone-left"
             label="Move stick deadzone"
@@ -164,12 +184,28 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
             onChange={(v) => store().setDeadzone('left', v)}
           />
           <Slider
+            id="sensitivity-left"
+            label="Move stick sensitivity"
+            value={cfg.sensitivity.left}
+            limits={SENSITIVITY_LIMITS}
+            format={percent}
+            onChange={(v) => store().setSensitivity('left', v)}
+          />
+          <Slider
             id="deadzone-right"
             label="Aim stick deadzone"
             value={cfg.deadzone.right}
             limits={DEADZONE_LIMITS.right}
             format={(v) => v.toFixed(2)}
             onChange={(v) => store().setDeadzone('right', v)}
+          />
+          <Slider
+            id="sensitivity-right"
+            label="Aim stick sensitivity"
+            value={cfg.sensitivity.right}
+            limits={SENSITIVITY_LIMITS}
+            format={percent}
+            onChange={(v) => store().setSensitivity('right', v)}
           />
           <Slider
             id="aim-reach"
@@ -192,7 +228,7 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
         {text && (
           <textarea
             readOnly
-            className="h-40 w-full bg-[var(--k-well)] p-2 font-mono text-[14px] text-[var(--k-text-2)]"
+            className="h-40 w-full bg-[var(--k-well)] p-2 font-mono text-[16px] text-[var(--k-text-2)]"
             value={text}
             onFocus={(e) => e.currentTarget.select()}
             data-testid="controls-text"
@@ -231,7 +267,7 @@ function Slider({
         className="min-w-0 flex-1 accent-[#feae34]"
         data-testid={id}
       />
-      <span className="w-36 shrink-0 text-right text-[14px]">{format(value)}</span>
+      <span className="w-36 shrink-0 text-right text-[16px]">{format(value)}</span>
     </label>
   );
 }

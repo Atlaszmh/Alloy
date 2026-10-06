@@ -11,6 +11,8 @@ import { aimMarkerFor, classifyPress } from './aim';
 import { useControlsStore } from '@/stores/controlsStore';
 import type { KeyAction, MoveKey } from '@/features/controls/controls';
 import {
+  castsOnRelease,
+  latchHolds,
   padFrameCast,
   padMemory,
   stickAimPoint,
@@ -32,6 +34,10 @@ export interface Aiming {
   slot: number;
   since: number;
   at: Vec | null;
+  /** Press-to-toggle: its key went up while the move charges on (`frameInput` decides). */
+  up?: boolean;
+  /** Press-to-toggle: the world's hold is this slot's. */
+  started?: boolean;
 }
 
 /** Live controller state shared between the controls and the game loop. */
@@ -99,6 +105,8 @@ export interface FrameOpts {
   aimReach: number;
   toWorld: (screen: Vec) => Vec;
   device: InputDevice;
+  /** Press-to-toggle hold moves (`ControlsConfig.holdToggle`). */
+  holdToggle?: boolean;
 }
 
 /** Whether the loot labels show: the keys' Alt under the keys or mouse, the pad's L3 under the pad. */
@@ -146,6 +154,7 @@ export function frameInput(
   else if (switched) Object.assign(mem, padMemory());
   // Unmarked: the new device's own press of that slot charges anew.
   if (switched) dropHold(world, false);
+  if (!padLive) latchKeys(registry, world, input);
   const out = padLive ? padInput(registry, world, pad, mem, o) : keysInput(input, o);
   if (out.move.x !== 0 || out.move.y !== 0) input.moved = true;
   input.cast = null;
@@ -154,6 +163,19 @@ export function frameInput(
   input.interact = false;
   input.attackTap = false;
   return out;
+}
+
+/**
+ * Press-to-toggle on the keys: an ability key that went up (`aiming.up`) casts now unless its
+ * move is a hold (`castsOnRelease`), which charges on until the key's next press releases it; a
+ * hold that ends by itself (full charge, a dodge) lets go without a cast.
+ */
+function latchKeys(registry: DataRegistry, world: ArpgWorld, input: ArenaInput): void {
+  const a = input.aiming;
+  if (!a?.up) return;
+  if (world.hero.hold?.slot === a.slot) a.started = true;
+  else if (a.started) input.aiming = null;
+  else if (!castsOnRelease(registry, world, a.slot)) releaseAiming(input);
 }
 
 /** The keys', mouse's and HUD's part: a key or button held is `holding`. */
@@ -189,7 +211,8 @@ function padInput(
     const none = { move: { x: 0, y: 0 }, cast: null, holding: null };
     return o.manual ? { ...none, attack: false, attackTap: false, attackAim: null } : none;
   }
-  const frame = padFrameCast(registry, world, pad, mem);
+  const acts = o.holdToggle ? { ...pad, ...latchHolds(registry, world, pad, mem) } : pad;
+  const frame = padFrameCast(registry, world, acts, mem);
   const comboWindow = registry.getDelveBalance().abilities.comboWindow;
   // A skill the weapon doesn't carry has no move: its button casts nothing.
   const ab = frame.cast && pressMove(h, frame.cast.slot, world.t, comboWindow);
@@ -265,6 +288,11 @@ export function pressJournal(): void {
   scopedLast('[data-pad-journal]')?.click();
 }
 
+/** The peek, from its key or the pad's button: the topmost scope's `[data-pad-peek]` (the HUD's Map). */
+export function pressPeek(): void {
+  scopedLast('[data-pad-peek]')?.click();
+}
+
 /** Text entry keeps every key, the menu key included. */
 function isText(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && t.type !== 'range');
@@ -284,6 +312,15 @@ function isField(t: EventTarget | null): boolean {
   );
 }
 
+/** Cast the key-held ability: a tap auto-aims, a hold aims at the mouse. */
+export function releaseAiming(input: ArenaInput): void {
+  const a = input.aiming;
+  if (!a) return;
+  input.aiming = null;
+  const tap = classifyPress(performance.now() - a.since) === 'tap' || !input.mouse;
+  input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
+}
+
 /**
  * Wire keyboard controls to `input`, following the player's key bindings.
  * Ability keys: a quick tap auto-aims; holding shows the aim marker at the
@@ -293,6 +330,8 @@ function isField(t: EventTarget | null): boolean {
  */
 export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () => void {
   const held = new Set<string>();
+  const toggle = () => useControlsStore.getState().config.holdToggle;
+  const release = () => releaseAiming(input);
   const recompute = () => {
     let x = 0;
     let y = 0;
@@ -334,7 +373,12 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     if (!action || e.repeat) return;
     const slot = ABILITY_SLOT[action];
     if (slot !== undefined) {
-      // Another ability key is still held: use it now rather than drop it.
+      // Press-to-toggle: the second press of a latched key releases its hold.
+      if (input.aiming?.up && input.aiming.slot === slot) {
+        release();
+        return;
+      }
+      // Another ability key is still held (or latched): use it now rather than drop it.
       if (input.aiming?.at === null) release();
       input.aiming = { slot, since: performance.now(), at: null };
     } else if (action === 'dodge') {
@@ -349,15 +393,9 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       input.attackAim = input.mouse;
     } else if (action === 'journal') {
       pressJournal();
+    } else if (action === 'peek') {
+      pressPeek();
     }
-  };
-  /** Cast the key-held ability: a tap auto-aims, a hold aims at the mouse. */
-  const release = () => {
-    const a = input.aiming;
-    if (!a) return;
-    input.aiming = null;
-    const tap = classifyPress(performance.now() - a.since) === 'tap' || !input.mouse;
-    input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
   };
   const up = (e: KeyboardEvent) => {
     if (held.delete(e.code)) recompute();
@@ -368,7 +406,10 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       e.preventDefault();
     }
     const a = input.aiming;
-    if (a && a.at === null && action && ABILITY_SLOT[action] === a.slot) release();
+    if (a && a.at === null && action && ABILITY_SLOT[action] === a.slot) {
+      if (toggle()) a.up = true;
+      else release();
+    }
   };
   const move = (e: MouseEvent) => {
     input.mouse = { x: e.clientX, y: e.clientY };

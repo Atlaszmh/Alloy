@@ -129,6 +129,23 @@ describe('HudGrid', () => {
     await act(async () => {});
     expect(onInsets).toHaveBeenLastCalledWith({ top: 72, right: 0, bottom: 90, left: 0 });
   });
+
+  it("with insetRight off (the lean HUD) the right column takes no inset, however full; on again, it does", () => {
+    const onInsets = vi.fn();
+    const at = (insetRight: boolean) => (
+      <HudGrid
+        onInsets={onInsets}
+        insetRight={insetRight}
+        top={<div />}
+        right={<div />}
+        dock={<div data-testid="hero-hp" />}
+      />
+    );
+    const { rerender } = render(at(false));
+    expect(onInsets).toHaveBeenLastCalledWith({ top: 72, right: 0, bottom: 90, left: 0 });
+    rerender(at(true));
+    expect(onInsets).toHaveBeenLastCalledWith({ top: 72, right: 364, bottom: 90, left: 0 });
+  });
 });
 
 describe('PurseBar', () => {

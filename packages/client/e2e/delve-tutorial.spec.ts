@@ -1,5 +1,20 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { ARENA_READY, SAVE_KEY, seedProfile } from './fixtures/delve';
+import {
+  addSlot,
+  createDefaultRegistry,
+  createDelveProfile,
+  defaultMoveset,
+  generateItem,
+  SeededRNG,
+} from '@alloy/engine';
+import {
+  ARENA_READY,
+  SAVE_KEY,
+  armed,
+  seedProfile,
+  startDive,
+  stepTo,
+} from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
@@ -34,6 +49,7 @@ async function fresh(page: Page, bot: boolean): Promise<void> {
     });
     if (sessionStorage.getItem('delve-e2e')) return;
     localStorage.clear();
+    localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
     if (autopilot) localStorage.setItem('alloy:delve:autopilot', '1');
     localStorage.setItem('alloy:delve:timescale', '2');
     localStorage.setItem('alloy:muted', 'true');
@@ -51,6 +67,24 @@ async function step(page: Page): Promise<string | null> {
 
 const steps = (page: Page) =>
   page.evaluate(() => (window as unknown as { __steps: string[] }).__steps);
+
+/**
+ * What the Depart sheet says of a new dive (the footer's Delve opens it, Esc shuts it): while a
+ * lesson holds it, its Delve waits beside the reason; else no reason, and Delve is ready.
+ */
+async function expectDiveHeld(page: Page, held: boolean): Promise<void> {
+  await page.getByTestId('depart-button').click();
+  const sheet = page.getByTestId('depart-sheet');
+  if (held) {
+    await expect(sheet.getByTestId('delve-button')).toBeDisabled();
+    await expect(sheet.getByTestId('lesson-block')).toHaveText("Finish Hesta's lesson or skip it");
+  } else {
+    await expect(sheet.getByTestId('lesson-block')).toHaveCount(0);
+    await expect(sheet.getByTestId('delve-button')).toBeEnabled();
+  }
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+}
 
 /** Claim every completed quest and contract on the Quests tab. */
 async function claimAll(page: Page): Promise<void> {
@@ -98,7 +132,7 @@ test.describe('Delve guided start', () => {
     await expect(panel).toHaveAttribute('data-place', 'anvil');
     await expect(highlight).toBeVisible();
     expect(await step(page)).toBe('begin');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     // In the dive, the one under the top bar.
     await expect(panel).toHaveAttribute('data-place', 'hud', { timeout: ARENA_READY });
@@ -128,21 +162,24 @@ test.describe('Delve guided start', () => {
           // One strip, the stop's own, in its header row; the dive's HUD is not drawn under it.
           await expect(panel).toHaveCount(1);
           await expect(door.getByTestId('tutorial-panel')).toHaveAttribute('data-place', 'stop');
-          await expect(page.getByTestId('purse-bar')).toBeHidden();
+          await expect(page.getByTestId('dive-hud')).toBeHidden();
           await expect(door.getByTestId('roads-held')).toBeVisible();
-          await expect(roads.first()).toBeDisabled();
-          await expect(door.getByTestId('extract-button')).toHaveCount(0);
+          await expect(door.getByRole('button', { name: 'Skip power-up' })).toBeDisabled();
+          await expect(roads).toHaveCount(0);
           // The marker leads both clicks: the card, then its picker.
           await marked('stop.card:equip');
           await door.getByTestId('stop-equip').click();
           await marked('stop.pick');
           await door.getByTestId('stop-equip-item').first().click();
           await expect(door.getByTestId('stop-taken')).toBeVisible();
+          await marked('stop.doors');
+          // The step's stop doesn't extract.
+          await expect(door.getByTestId('extract-button')).toHaveCount(0);
           await expect(roads.first()).toBeEnabled();
           await roads.first().click();
         } else if (stops === 2) {
           // Stop 2: Adjust a move, paid with the chest's Mana Dust.
-          await expect(roads.first()).toBeDisabled();
+          await expect(roads).toHaveCount(0);
           await marked('stop.card:move');
           await door.getByTestId('stop-move').click();
           await marked('stop.pick');
@@ -181,11 +218,18 @@ test.describe('Delve guided start', () => {
     await expect(summary).toContainText('EXTRACTED');
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
+    // A step completes by what holds, so an Iron bar from the floors (a bar's chance of the next
+    // metal) would pass the refine unplayed: the save drops any, and the refine is always played.
+    await page.evaluate((key) => {
+      const save = JSON.parse(localStorage.getItem(key)!);
+      save.materials.metals.iron = 0;
+      localStorage.setItem(key, JSON.stringify(save));
+    }, SAVE_KEY);
+    await page.reload();
+    await expect(page.getByTestId('delve-camp')).toBeVisible();
 
-    // Anvil lesson 1: Delve waits for it, saying why.
-    const delve = page.getByTestId('delve-button');
-    await expect(delve).toBeDisabled();
-    await expect(page.getByTestId('lesson-block')).toHaveText("Finish Hesta's lesson or skip it");
+    // Anvil lesson 1: the Depart sheet's Delve waits for it, saying why.
+    await expectDiveHeld(page, true);
     expect(await step(page)).toBe('l1-claim');
     await claimAll(page);
 
@@ -195,9 +239,9 @@ test.describe('Delve guided start', () => {
     await page.getByTestId('tab-forge').click();
     await marked('forge.pattern:cuirass');
     await page.getByTestId('pattern-cuirass').click();
-    // The Rusty bar is the bench's own first pick, done already: on to the flux.
-    await marked('forge.flux:uncommon');
-    await page.getByTestId('flux-uncommon').click();
+    // The Rusty bar is the bench's own first pick, done already: on to the flux row.
+    await marked('forge.flux');
+    await stepTo(page, 'forge-flux', /^Uncommon/);
     await marked('forge.shard');
     await page.getByTestId('shard-slot-0').click();
     // In the shard picker's own scope the picker is the target (the chest's Max Life shard).
@@ -209,7 +253,8 @@ test.describe('Delve guided start', () => {
 
     // Wear it, by the pad: LB steps to the Loadout (the first press takes the input lock). The
     // marker's focus lands on the cuirass, a focused tile is selected, so that entry is done and
-    // the marker and the focus move on to Equip; A equips.
+    // the marker moves on to Equip: under the pad, the footer's A. The focus stays on the tile,
+    // where A equips.
     await expect.poll(() => step(page)).toBe('l1-equip');
     await marked('hub.tab.loadout');
     await tap(page, BUTTON.lb);
@@ -217,7 +262,7 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('loadout-tab')).toBeVisible();
     await marked('loadout.equip');
     await expect(page.getByTestId('item-sheet')).toContainText('Cuirass');
-    await expect(page.getByTestId('equip-button')).toBeFocused();
+    await expect(page.locator('[data-testid="bag-item"][aria-pressed="true"]')).toBeFocused();
     await tap(page, BUTTON.a);
 
     // Bind the second element (Hesta's partner for fire is frost).
@@ -230,17 +275,33 @@ test.describe('Delve guided start', () => {
     await expect.poll(() => step(page)).toBe('l1-skills');
     await page.getByTestId('mana-back').click();
 
-    // The Primary: a slot, the new move in frost, a socket on the first move and the rune; Apply.
-    await page.getByTestId('chain-skill-primary').click();
-    const cards = page.getByTestId('chain-cards');
+    // The Primary: the marker leads through the editor, entry by entry: the slot, the new move
+    // in frost, the way out; the first move's socket and its rune, the way out; Apply, then the
+    // sheet's Apply.
+    await marked('skills.addSlot');
     await page.getByTestId('add-slot').click();
-    await cards.getByTestId('move-2').click();
-    await page.getByTestId('element-frost').click();
-    await cards.getByTestId('move-0').click();
-    await cards.getByTestId('sockets-0').getByTestId('socket-open').click();
-    await cards.getByTestId('sockets-0').getByTestId('socket-0').click();
+    await marked('skills.card:last');
+    await page.getByTestId('move-2').click();
+    await marked('skills.elements');
+    await stepTo(page, 'move-elements', /^Frost$/);
+    await marked('back');
+    await page.getByTestId('move-editor-back').click();
+    await marked('skills.card:first');
+    await page.getByTestId('move-0').click();
+    await marked('skills.socket');
+    await page.getByTestId('socket-open').click();
+    await marked('skills.rune');
+    await page.getByTestId('inspect-socket-0').click();
+    await expect(page.getByTestId('rune-picker')).toBeVisible();
+    await marked('skills.rune');
     await page.getByTestId('rune-picker').locator('[data-testid^="rune-pick-"]').first().click();
+    await marked('back');
+    await page.getByTestId('move-editor-back').click();
+    await marked('skills.apply');
     await page.getByTestId('chain-apply').click();
+    await expect(page.getByTestId('apply-sheet')).toBeVisible();
+    await marked('skills.apply');
+    await page.getByTestId('apply-sheet-confirm').click();
     await expect.poll(() => step(page)).toBe('l1-salvage');
 
     // Salvage the old common sword, refine three Rusty bars into Iron.
@@ -248,21 +309,20 @@ test.describe('Delve guided start', () => {
     await page.locator('[data-testid="bag-item"][aria-label*="Sword, common"]').first().click();
     await expect(page.getByTestId('item-sheet')).toContainText('Common Rusty Sword');
     await page.getByTestId('salvage-button').click();
-    await expect.poll(() => step(page)).not.toBe('l1-salvage');
-    await expect(delve).toBeDisabled();
-    // A step completes by what holds: an Iron bar from the floors (a bar's chance of the next
-    // metal) passes the refine at once.
-    if ((await step(page)) === 'l1-refine') {
-      await page.getByTestId('tab-forge').click();
-      await page.getByTestId('refine-metal-rusty').click();
-    }
+    await expect.poll(() => step(page)).toBe('l1-refine');
+    await expectDiveHeld(page, true);
+    await page.getByTestId('tab-forge').click();
+    // The Materials bench is the way to the refine: its sub tab is marked first.
+    await marked('forge.materials');
+    await page.getByTestId('bench-materials').click();
+    await marked('forge.refine:rusty');
+    await page.getByTestId('refine-metal-rusty').click();
     await expect.poll(() => step(page)).toBe('l1-claim2');
     await claimAll(page);
 
     // The lesson is done: Delve opens for dive 2.
     await expect.poll(() => step(page)).toBe('delve-2');
-    await expect(page.getByTestId('lesson-block')).toHaveCount(0);
-    await expect(delve).toBeEnabled();
+    await expectDiveHeld(page, false);
   });
 
   test('TU03: a view left open over the next step shows its way out, and the pad follows the marker', async ({
@@ -305,6 +365,79 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('add-slot')).toBeFocused();
   });
 
+  test("TU04: lesson 2 by the pad: the rare's Transfer through the take sheet, then a Hone on Temper's list", async ({
+    page,
+  }) => {
+    const registry = createDefaultRegistry();
+    // Grask's set drop: a rare sword in the primary.
+    const rare = generateItem(
+      registry,
+      { uid: 'grask-sword', ilvl: 5, rarity: 'rare', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(5),
+    );
+    // The worn sword as lesson 1 left it: a Primary past its base slots, so the Transfer has a
+    // moveset to move (the step holds once the rare is worn with more moves than its base).
+    const built = addSlot(
+      registry,
+      { ...armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' })), links: 9, scrap: 2000 },
+      'primary',
+    );
+    expect(built.ok).toBe(true);
+    // A save at the lesson's Transfer, Grask's rare in the bag, the scrap for the move and a hone.
+    await seedProfile(page, 4242, false, 'frost', {
+      scrap: 2000,
+      equipped: built.profile.equipped,
+      bag: [{ ...rare, moveset: defaultMoveset(registry, rare, 'fire') }],
+      tutorial: { step: 'l2-transfer', count: 0, misses: 0 },
+    });
+    await installPad(page);
+    await page.goto('/delve');
+    const marker = page.getByTestId('tutorial-highlight');
+    const marked = (target: string) => expect(marker).toHaveAttribute('data-target', target);
+    await expect(page.getByTestId('loadout-tab')).toBeVisible();
+    await marked('loadout.bag:weapon.rare');
+    // The pad takes the input lock on RB (to Skills, where the marker's way is the Loadout's
+    // tab) and LB comes back. The marker moves the focus only as its target changes, and the
+    // page loaded under the keys, so this is what puts the pad's focus on the marked tile.
+    await tap(page, BUTTON.rb);
+    await marked('hub.tab.loadout');
+    await tap(page, BUTTON.lb);
+
+    // The rare's tile first: the marker's focus lands on it, which selects it under the pad.
+    await expect(page.locator('[data-uid="grask-sword"]')).toBeFocused();
+    await expect(page.getByTestId('item-verdict')).toBeVisible();
+    // Then the footer's A, which on this weapon is "Equip or transfer".
+    await marked('loadout.transfer');
+    await expect(page.locator('.k-prompt[data-tutorial="loadout.transfer"]')).toContainText(
+      'Equip or transfer',
+    );
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('take-sheet')).toBeVisible();
+    // In the sheet, its Transfer: marked and focused.
+    await marked('loadout.transfer');
+    await expect(page.getByTestId('take-transfer')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect.poll(() => step(page)).toBe('l2-hone');
+
+    // The Hone: the Forge tab, then its Temper bench, then the Hone row, a line and Hone.
+    await marked('hub.tab.forge');
+    await tap(page, BUTTON.rb);
+    await tap(page, BUTTON.rb);
+    await marked('forge.temper');
+    await tap(page, BUTTON.rt);
+    await marked('temper.hone');
+    await expect(page.getByTestId('temper-op-hone')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await marked('temper.line');
+    await expect(page.getByTestId('hone-line-0')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await marked('temper.go');
+    await expect(page.getByTestId('hone-button')).toBeFocused();
+    await tap(page, BUTTON.a);
+    // The seeded save has no quest to claim, so l2-claim holds at once: on to the board.
+    await expect.poll(() => step(page)).toBe('l2-board');
+  });
+
   test('TU02: a Jump in save has only the Basic until its first forge gives it a Primary', async ({
     page,
   }) => {
@@ -312,28 +445,32 @@ test.describe('Delve guided start', () => {
     await page.goto('/delve');
     await page.getByTestId('guided-jump').click();
     await page.getByTestId('mana-choice-fire').click();
+    // Jump in promised How to delve: it opens once.
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('help-dialog')).toHaveCount(0);
     expect(await step(page)).toBeNull();
     await expect(page.getByTestId('tutorial-panel')).toHaveCount(0);
 
     // The common sword carries the Basic alone: no Primary slot in the dive.
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
     await expect(page.getByTestId('attack-button')).toBeVisible();
     await expect(page.getByTestId('ability-0')).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await page.getByTestId('dive-pause').getByTestId('pause-abandon').click();
+    await page.getByTestId('pause-screen').getByTestId('pause-abandon').click();
     await page.getByTestId('return-camp').click();
 
     // The kit forges an uncommon sword: worn, it carries the Primary.
     await page.getByTestId('tab-forge').click();
     await page.getByTestId('pattern-sword').click();
-    await page.getByTestId('flux-uncommon').click();
+    await stepTo(page, 'forge-flux', /^Uncommon/);
     await page.getByTestId('forge-button').click();
     await expect(page.getByTestId('forge-bench').getByRole('status')).toContainText('Forged');
     await page.getByTestId('tab-loadout').click();
     await page.locator('[data-testid="bag-item"][aria-label*=", uncommon"]').first().click();
     await page.getByTestId('equip-button').click();
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', /^Primary: /, {
       timeout: ARENA_READY,
     });

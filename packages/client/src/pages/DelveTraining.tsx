@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useDelveStore } from '@/stores/delveStore';
 import { useSandboxStore } from '@/stores/sandboxStore';
 import { useControlsStore } from '@/stores/controlsStore';
@@ -23,6 +23,7 @@ import { useRunePickerOpen } from '@/features/delve/runes/RunePicker';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { TutorialPanel } from '@/features/delve/tutorial/TutorialPanel';
 import { SHOWN_AT, stepIn } from '@/features/delve/tutorial/tutorial-view';
+import type { HubLink } from '@/features/delve/hub/types';
 import '@/features/delve/delve.css';
 
 /** The Training dock's width in design px (the HUD grid's right column). */
@@ -119,7 +120,12 @@ export function DelveTraining() {
     setPadFocus(false);
   }, []);
   const openControls = useCallback(() => setControlsOpen(true), []);
-  const exit = useCallback(() => navigate('/delve'), [navigate]);
+  // Try in Training's way back: the Anvil opens on the Skills tab it came from.
+  const back = (useLocation().state as { back?: HubLink } | null)?.back;
+  const exit = useCallback(
+    () => navigate('/delve', back ? { state: { link: back } } : undefined),
+    [navigate, back],
+  );
   /** The Attack slot's click in Manual: one blow, as a tap of the attack input. */
   const tapAttack = () => {
     arena.attack(true);

@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { ARENA_READY, FLOOR_CLEAR, seedProfile } from './fixtures/delve';
+import {
+  ARENA_READY,
+  FLOOR_CLEAR,
+  seedProfile,
+  showOnboarding,
+  startDive,
+  stepTo,
+  toRoad,
+  useFullHud,
+  applyDraft,
+} from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
   // A floor's clear may take most of the default two minutes under load.
@@ -11,9 +21,16 @@ test.describe('Delve loot loop', () => {
 
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     await expect(page.getByTestId('paper-doll')).toBeVisible();
+    // How to delve is Help now: the pane shows the worn weapon, and the system menu holds Help.
+    await expect(page.getByTestId('item-sheet')).toContainText('Your weapon');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('open-help').click();
     await expect(page.getByTestId('delve-howto')).toBeVisible();
+    await page.keyboard.press('Escape'); // Help's Back: the menu
+    await page.keyboard.press('Escape'); // the menu's Back
+    await expect(page.getByTestId('system-menu')).toHaveCount(0);
 
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
     await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible({
@@ -52,7 +69,8 @@ test.describe('Delve loot loop', () => {
     await expect(door.or(summary)).toBeVisible({ timeout: FLOOR_CLEAR });
 
     if (await door.isVisible()) {
-      await expect(page.getByTestId('bounty')).toHaveText(/[1-9]\d*/);
+      await expect(door.getByTestId('stop-finds')).toHaveText(/^[1-9][\d,]* scrap bounty/);
+      await toRoad(page);
       await page.getByTestId('extract-button').click();
       await expect(summary).toContainText('EXTRACTED');
     }
@@ -60,8 +78,6 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     await expect(page.getByTestId('scrap-count')).toHaveText(/[1-9][\d,]* scrap/);
-    // How to delve stays until Strike the Anvil is claimed (a forge, after Bring It Home).
-    await expect(page.getByTestId('delve-howto')).toBeVisible();
   });
 
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
@@ -72,8 +88,9 @@ test.describe('Delve loot loop', () => {
     // Only elites and bosses drop gear: seed 3's first floor, played by the bot to the exit,
     // drops gear at every steady step (pinned in the engine's delve-banking test).
     await seedProfile(page, 3);
+    await useFullHud(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     // Inspected from the right column's "Found this floor" log: the pause opens on Loadout.
     const loot = page.getByTestId('pickup-feed').getByTestId('loot-item').first();
@@ -82,6 +99,7 @@ test.describe('Delve loot loop', () => {
     const door = page.getByTestId('door-choice');
     await expect(loot.or(door)).toBeVisible({ timeout: FLOOR_CLEAR });
     if (!(await loot.isVisible())) {
+      await toRoad(page);
       await door.getByTestId('door-list').locator('[data-door]').first().click();
       await expect(door).toBeHidden();
     }
@@ -99,7 +117,10 @@ test.describe('Delve loot loop', () => {
     // Abandon the dive (items are kept; it counts as a death: the summary, then the Anvil), and
     // equip it at the Anvil (answering an off-pair item's bind choice, which the compare pane
     // shows in place of Equip; the pane stays).
-    await pause.getByRole('button', { name: 'Abandon · counts as a death' }).click();
+    await page.keyboard.press('Escape'); // the hub's Back: the list
+    const list = page.getByTestId('pause-screen');
+    await expect(list).toBeVisible();
+    await list.getByRole('button', { name: 'Abandon · counts as a death' }).click();
     await expect(page.getByTestId('dive-summary')).toContainText('ABANDONED');
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
@@ -111,12 +132,12 @@ test.describe('Delve loot loop', () => {
     await expect(sheet).toContainText('Equipped · your');
   });
 
-  test('D03: the stop shows the floor, a power-up expanding in place, and a door to the next depth', async ({
+  test('D03: the stop asks for a power-up, then a road, and the road leads to the next depth', async ({
     page,
   }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
@@ -124,38 +145,45 @@ test.describe('Delve loot loop', () => {
     await expect(door.getByTestId('risk-line')).toHaveText(
       /^Banked this dive · dying loses \d+% of it$/,
     );
-    // At 1280×720 every door fits in its list, above Extract, without scrolling.
+    // Step 1, when the stop offers a power-up: the first card expands in place; Esc presses the
+    // picker's Back and the focus returns to the card. Then Skip: the road.
+    const stop = door.getByTestId('stop');
+    if (await door.getByTestId('stop-powerup').isVisible()) {
+      await expect(door.getByTestId('door-list')).toHaveCount(0);
+      const card = stop.locator('[data-testid^="stop-"]').first();
+      await card.click();
+      const picker = stop.getByTestId('stop-picker');
+      await expect(picker).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(picker).toBeHidden();
+      await expect(card).toBeFocused();
+    }
+    await toRoad(page);
+    // At 1280×720 every road sits in one row on screen, the row unscrolled.
     await page.setViewportSize({ width: 1280, height: 720 });
     const list = door.getByTestId('door-list');
     await expect
-      .poll(() => list.evaluate((el) => el.scrollHeight - el.clientHeight))
+      .poll(() => list.evaluate((el) => el.scrollWidth - el.clientWidth))
       .toBeLessThanOrEqual(0);
-    const doors = list.locator('[data-door]');
-    const lastDoor = (await doors.nth((await doors.count()) - 1).boundingBox())!;
-    const extract = (await door.getByTestId('extract-button').boundingBox())!;
-    expect(lastDoor.y + lastDoor.height).toBeLessThanOrEqual(extract.y);
+    const roads = door.getByTestId('stop-road').locator('[data-door], [data-testid="door-potion"]');
+    for (let i = 0; i < (await roads.count()); i++) {
+      const box = (await roads.nth(i).boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(1280);
+      expect(box.y + box.height).toBeLessThanOrEqual(720);
+    }
     await page.setViewportSize({ width: 1280, height: 800 });
-    // The first card expands in place to its picker; Esc presses the picker's Back and the
-    // focus returns to the card. Skipping the power-up is taking a door.
-    const stop = door.getByTestId('stop');
-    const card = stop.locator('[data-testid^="stop-"]').first();
-    await card.click();
-    const picker = stop.getByTestId('stop-picker');
-    await expect(picker).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(picker).toBeHidden();
-    await expect(card).toBeFocused();
-    await door.locator('[data-testid^="door-"]').first().click();
+    await list.locator('[data-door]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
-    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored');
+    await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
   });
 
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: FLOOR_CLEAR });
+    await toRoad(page);
     await page.getByTestId('extract-button').click();
     const summary = page.getByTestId('dive-summary');
     await expect(summary).toContainText('EXTRACTED');
@@ -163,17 +191,16 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('dive-again').click();
     await expect(summary).toBeHidden();
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
-    await expect(page.getByTestId('rooms-explored')).toContainText('Rooms explored', {
-      timeout: ARENA_READY,
-    });
+    await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
   });
 
   test("D11: materials ride the floor's haul, bank at the stop, and an abandon loses a share", async ({
     page,
   }) => {
     await seedProfile(page);
+    await useFullHud(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     // Picked up mid-floor: the purse counts this dive's materials, the Found log groups them.
     await expect(page.getByTestId('purse-materials')).toContainText(/\+[1-9]/, {
@@ -183,16 +210,20 @@ test.describe('Delve loot loop', () => {
       page.getByTestId('pickup-feed').getByTestId('feed-material').first(),
     ).toBeVisible();
 
-    // Banked at the clear: the stop lists the floor's materials over the risk line.
+    // Banked at the clear: the stop's finds sheet lists the floor's materials; the risk line shows.
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: FLOOR_CLEAR });
-    await expect(door.getByTestId('loot-material').first()).toBeVisible();
+    await door.getByTestId('stop-finds').click();
+    const sheet = page.getByTestId('floor-finds');
+    await expect(sheet.getByTestId('loot-material').first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
     await expect(door.getByTestId('risk-line')).toBeVisible();
 
     // Abandon counts as a death: the summary shows what the dive brought home and what it lost.
     await door.getByRole('button', { name: 'Menu' }).click();
     await page
-      .getByTestId('dive-pause')
+      .getByTestId('pause-screen')
       .getByRole('button', { name: 'Abandon · counts as a death' })
       .click();
     const summary = page.getByTestId('dive-summary');
@@ -207,7 +238,7 @@ test.describe('Delve loot loop', () => {
     // No bot, so the fight (and the HUD) stays up while we measure.
     await seedProfile(page, 4242, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const bar = page.getByTestId('skill-bar');
     await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
     const box = (await bar.boundingBox())!;
@@ -223,7 +254,7 @@ test.describe('Delve loot loop', () => {
   }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     await page.getByRole('button', { name: 'Dive menu' }).click();
     await page.getByTestId('open-controls').click();
@@ -249,12 +280,15 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('abilities-panel')).toBeVisible();
     await expect(page.getByTestId('mana-view')).toBeVisible();
     await page.getByTestId('mana-back').click();
-    // The Primary's one move becomes a Wildfire Burst: a draft, free before the first dive.
+    // The Primary's one move becomes a Wildfire Burst: its editor's Form grid, then its
+    // Elements; a draft, free before the first dive.
+    await page.getByTestId('move-0').click();
+    await page.getByTestId('move-form').click();
     await page.getByTestId('form-burst').click();
-    await page.getByTestId('infusion-nature').click();
+    await stepTo(page, 'move-elements', /^Fire \+ Nature$/);
     await expect(page.getByTestId('ability-readout')).toContainText('light Wildfire Burst');
     await expect(page.getByTestId('chain-price')).toContainText('free until your first dive');
-    await page.getByTestId('chain-apply').click();
+    await applyDraft(page);
     await expect(page.getByTestId('chain-price')).toHaveText('No changes');
     const summary = page.getByTestId('abilities-summary');
     await expect(summary).toHaveText('light Wildfire Burst');
@@ -281,6 +315,7 @@ test.describe('Delve loot loop', () => {
     await page.addInitScript(() => {
       if (sessionStorage.getItem('delve-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem('alloy:muted', 'true');
       sessionStorage.setItem('delve-e2e', '1');
     });
@@ -291,6 +326,10 @@ test.describe('Delve loot loop', () => {
     await expect(choice).toBeVisible();
     await page.getByTestId('mana-choice-frost').click();
     await expect(choice).toBeHidden();
+    // Jump in promised How to delve: it opens once.
+    await expect(page.getByTestId('help-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('help-dialog')).toHaveCount(0);
     await page.getByTestId('tab-skills').click();
     // The common sword carries the Basic alone: the others show locked.
     const summary = page.getByTestId('abilities-summary');
@@ -309,7 +348,7 @@ test.describe('Delve loot loop', () => {
   }) => {
     await seedProfile(page, 4242, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     const menu = page.getByTestId('pause-screen');
     await page.keyboard.press('Escape');
@@ -335,12 +374,12 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('bench-forge')).toHaveAttribute('aria-selected', 'true');
     await page.getByTestId('pattern-cuirass').click();
-    await page.getByTestId('flux-uncommon').click();
+    await stepTo(page, 'forge-flux', /^Uncommon/);
     await expect(page.getByTestId('forge-title')).toHaveText('Uncommon Cuirass');
     await expect(page.getByTestId('forge-refused')).toHaveCount(0);
     await page.getByTestId('forge-button').click();
     await expect(page.getByTestId('forge-bench').getByRole('status')).toContainText('Forged');
-    await expect(page.getByTestId('material-metal-rusty')).toContainText('Rusty bar ×4');
+    await expect(page.getByTestId('forge-metal')).toHaveAttribute('aria-valuetext', 'Rusty bar ×4');
     await page.getByTestId('tab-loadout').click();
     await expect(page.getByTestId('tab-loadout')).toContainText('NEW 1');
   });
@@ -352,7 +391,7 @@ test.describe('Delve loot loop', () => {
     // interactable until C is pressed, and the gate and an alcove open their dialogs.
     await seedProfile(page, 4, 'ask');
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
 
     const plaque = page.getByTestId('interact-plaque');
     const confirm = page.getByTestId('exit-confirm');
@@ -396,5 +435,28 @@ test.describe('Delve loot loop', () => {
     expect(used).toContain('chest');
     expect(asked).toBe(2);
     await expect(door.getByRole('heading', { level: 1 })).toHaveText('Depth 1 cleared');
+  });
+
+  test('D13: a first visit pulses its main prompt with a line over the footer, gone once that is done, and after a reload', async ({
+    page,
+  }) => {
+    await seedProfile(page, 4242, false);
+    await showOnboarding(page);
+    await page.goto('/delve');
+    await page.getByTestId('tab-skills').click();
+    const hint = page.getByTestId('onboarding-hint');
+    await expect(hint).toContainText("Open a move's editor");
+    await expect(page.locator('.k-prompt[data-pulse]')).toContainText('Edit move');
+    await page.getByTestId('move-0').click();
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await page.getByTestId('move-editor-back').click();
+    await expect(hint).toHaveCount(0);
+    await page.reload();
+    await page.getByTestId('tab-skills').click();
+    await expect(page.getByTestId('move-0')).toBeVisible();
+    await expect(hint).toHaveCount(0);
+    // Another screen's hint is its own.
+    await page.getByTestId('tab-quests').click();
+    await expect(hint).toContainText('Claim a finished quest');
   });
 });

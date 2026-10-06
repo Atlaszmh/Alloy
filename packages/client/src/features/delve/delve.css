@@ -21,112 +21,6 @@
   letter-spacing: 0.05em;
 }
 
-/* ── Item tiles ── */
-
-.delve-tile {
-  position: relative;
-  flex-shrink: 0;
-  border: 3px solid;
-  border-radius: 0;
-  padding: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* A socket's steel insets, drawn over the tile's own (inline) background. */
-.delve-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  box-shadow:
-    inset 0 0 0 3px #262b44,
-    inset 0 0 0 5px #3a4466;
-  pointer-events: none;
-}
-
-.delve-tile:active {
-  transform: translateY(2px);
-}
-
-.delve-tile-icon {
-  position: absolute;
-  inset: 16%;
-  display: block;
-  filter: drop-shadow(2px 2px 0 #181425);
-}
-
-.delve-tile-upgrade {
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  font-family: 'Jersey 10', sans-serif;
-  font-size: 14px;
-  line-height: 1;
-  color: #fee761;
-  text-shadow: 1px 1px 0 #181425;
-}
-
-.delve-tile-lock {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  color: #c0cbdc;
-}
-
-.delve-tile-new {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 8px;
-  height: 8px;
-  background: #fee761;
-  box-shadow: 0 0 0 2px #181425;
-}
-
-.delve-tile-equipped {
-  position: absolute;
-  bottom: 2px;
-  left: 4px;
-  font-family: 'Jersey 10', sans-serif;
-  font-size: 14px;
-  color: #feae34;
-  text-shadow: 1px 1px 0 #181425;
-}
-
-.delve-tile-delta {
-  position: absolute;
-  bottom: -3px;
-  right: -3px;
-  min-width: 16px;
-  height: 16px;
-  font-size: 10px;
-  line-height: 16px;
-  text-align: center;
-  font-weight: 700;
-  box-shadow: 2px 2px 0 #181425;
-}
-
-.delve-tile-delta.up {
-  background: #63c74d;
-  color: #193c3e;
-}
-
-.delve-tile-delta.down {
-  background: #3e2731;
-  color: #f6757a;
-}
-
-/* A legendary's stepped orange glow (it was a spinning ring). */
-.delve-tile-legendary::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  box-shadow:
-    0 0 0 3px rgba(247, 118, 34, 0.55),
-    0 0 0 8px rgba(247, 118, 34, 0.18);
-  pointer-events: none;
-}
-
 /* An ability button waiting (a cooldown or its beat): a dark sweep over `--delve-sweep`, an
    angle registered so the sweep can glide between the HUD's refreshes. */
 @property --delve-sweep {
@@ -195,7 +89,7 @@
 .delve-chip {
   font-family: 'Pixelify Sans', sans-serif;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   border-radius: 0;
   /* 24 CSS px each way at the 0.75 zoom floor (WCAG 2.5.8 target size). */
   min-height: 32px;
@@ -252,43 +146,6 @@
 
 /* ── Dive stage ── */
 
-.delve-hpbar {
-  position: relative;
-  height: 14px;
-  background: #181425;
-  box-shadow:
-    0 0 0 2px #181425,
-    0 0 0 4px #5a6988;
-  overflow: hidden;
-}
-
-.delve-hpbar > .lag {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: #ead4aa;
-  opacity: 0.55;
-  transition: width 0.5s ease 0.25s;
-}
-
-.delve-hpbar > .fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  transition: width 0.12s ease-out;
-}
-
-.delve-hpbar > .text {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Jersey 10', sans-serif;
-  font-weight: 400;
-  font-size: 12px;
-  font-size-adjust: 0.56;
-  text-shadow: 1px 1px 0 #181425;
-}
-
 .delve-monster {
   position: relative;
   line-height: 1;
@@ -323,39 +180,6 @@
     0 2px 0 #000,
     0 0 8px rgba(0, 0, 0, 0.8);
   will-change: transform, opacity;
-}
-
-.delve-slam-btn {
-  position: relative;
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-family-display);
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 0.06em;
-  color: #fff;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.delve-slam-btn.ready {
-  animation: delve-ready 0.9s ease-in-out infinite;
-}
-
-@keyframes delve-ready {
-  0%,
-  100% {
-    box-shadow:
-      0 0 10px rgba(251, 146, 60, 0.5),
-      0 0 0 0 rgba(251, 146, 60, 0.5);
-  }
-  50% {
-    box-shadow:
-      0 0 24px rgba(251, 146, 60, 0.9),
-      0 0 0 8px rgba(251, 146, 60, 0);
-  }
 }
 
 .delve-embers {
@@ -425,4 +249,12 @@
   text-transform: uppercase;
   color: var(--k-wood-text);
   text-shadow: 2px 2px 0 var(--k-well);
+}
+
+/* ── The peek (arena/hud/PeekOverlay.tsx) ── */
+
+/* The peek takes no pointer: its panels' own pointer-events-auto included. */
+.delve-peek,
+.delve-peek * {
+  pointer-events: none !important;
 }

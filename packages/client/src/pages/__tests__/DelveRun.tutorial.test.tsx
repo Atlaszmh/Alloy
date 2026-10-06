@@ -219,7 +219,7 @@ describe('DelveRun: the guided start', () => {
     // Inside the stop's own pad scope, so the pad reaches it.
     expect(panel.closest('[data-pad-scope]')).toBe(screen.getByTestId('door-choice'));
     // The dive's HUD is not drawn under the stop.
-    expect(screen.getByTestId('purse-bar').closest('.delve-hud-zoom')).toHaveStyle({
+    expect(screen.getByTestId('dive-hud')).toHaveStyle({
       visibility: 'hidden',
     });
     vi.mocked(tutorialSkippable).mockReturnValue(true);

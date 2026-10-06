@@ -127,3 +127,15 @@ export function countRunes(refs: readonly RuneRef[]): { rune: RuneRef; count: nu
   }
   return out;
 }
+
+/**
+ * What an option does to the chain's damage a second (the move editor's grids): "+8% chain
+ * damage a second", "−3% …", or "… unchanged"; null when either side is unknown or the chain
+ * deals none.
+ */
+export function damageShift(now: number | null, then: number | null): string | null {
+  if (now === null || then === null || now <= 0) return null;
+  const pct = Math.round((then / now - 1) * 100);
+  if (pct === 0) return 'Chain damage a second unchanged';
+  return `${pct > 0 ? '+' : '−'}${Math.abs(pct)}% chain damage a second`;
+}

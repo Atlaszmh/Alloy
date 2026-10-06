@@ -15,12 +15,12 @@ import {
   type ManaSupport,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { Glyph, Panel, Price, Segmented, layerZoom } from '@/features/delve/kit';
+import { Glyph, Panel, Price, layerZoom } from '@/features/delve/kit';
 import { formatNumber, manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import { SocketRow } from '../../runes/SocketRow';
-import { KIND_NAME, SKILL_NAME } from '../../chains/chain-text';
-import { PAYMENTS, offPair, type ChainEditorModel } from '../../chains/useChainEditor';
+import { KIND_NAME, SKILL_NAME, chainText } from '../../chains/chain-text';
+import { offPair, type ChainEditorModel } from '../../chains/useChainEditor';
 import { useTutorialStep } from '../../tutorial/tutorial-view';
 import { useChainMessage, type AnvilChains } from './useAnvilChains';
 
@@ -38,21 +38,22 @@ interface Drag {
 }
 
 /**
- * The Skills tab's centre pane: the chosen chain's header (its slots, payment and rule), its
- * move cards in order (each its kind, element tile and form glyph, element or fusion, socket
- * pips and price; the chosen card's ◂ ▸ × toolbar), "+ Move" while a slot is free and "+ Slot"
+ * The Skills tab's chain pane: the chosen chain's header (its slots, payment and rule) and its
+ * summary line (its moves' names, or what carries it), its move cards in order (each its kind, element tile and form glyph, element or fusion, socket
+ * pips and price; a click on a card, or A, opens its move's editor, a pip's at its socket), "+ Move" while a slot is free and "+ Slot"
  * with its price while the chain is under its cap, a refused Apply's or Add slot's reason, and for
- * an ability chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37).
+ * an ability chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37). Focus chooses a card,
+ * and the chosen one leads the pad (`data-pad-first`).
  */
 export function ChainLane({
   ed,
   anvil,
-  carrying,
+  onEdit,
 }: {
   ed: ChainEditorModel;
   anvil: AnvilChains;
-  /** The pad has the chosen card picked up (X): it rides raised. */
-  carrying: boolean;
+  /** A click (or A) on card `i`, or on its pip `socket`: its editor (the move pane's). */
+  onEdit: (i: number, socket?: number) => void;
 }) {
   const registry = getDelveRegistry();
   const { skill, entries, index, names, locked, absent, chain, resolved } = ed;
@@ -110,31 +111,13 @@ export function ChainLane({
               : ' · free · each swing strikes the next blow'}
           </span>
         )}
-        {chain && (
-          <div className="ml-auto">
-            <Segmented
-              aria-label="Payment"
-              value={chain.payment}
-              onChange={(p: AbilityPayment) => ed.setPayment(p)}
-              options={PAYMENTS.map(([p, label, text]) => ({
-                id: p,
-                label,
-                title: text,
-                disabled: locked,
-                testId: `payment-${p}`,
-              }))}
-            />
-          </div>
-        )}
       </div>
-      {absent && (
-        <p className="m-0 flex items-center gap-2 text-[16px] text-[var(--k-text-2)]">
-          <Glyph id="lock" size={16} /> {absentText?.(skill)}
-        </p>
-      )}
+      <p className="k-note m-0" data-testid="abilities-summary">
+        {absent ? absentText?.(skill) : chainText(names)}
+      </p>
       {locked && !absent && (
         <div
-          className="k-well p-3 text-center text-[16px] text-[var(--k-hot)]"
+          className="k-well p-3 text-center text-[18px] text-[var(--k-hot)]"
           data-testid="abilities-locked"
         >
           {ed.lockedText}
@@ -157,15 +140,10 @@ export function ChainLane({
               )}
               <div
                 className="k-well flex min-w-0 flex-1 flex-col gap-3 p-4"
-                data-carried={on && carrying ? '' : undefined}
                 style={{
                   borderColor: on ? 'var(--k-hot-hi)' : undefined,
                   background: on ? 'var(--k-wood-0)' : undefined,
-                  transform: moving
-                    ? `translateX(${drag.dx}px)`
-                    : on && carrying
-                      ? 'translateY(-8px)'
-                      : undefined,
+                  transform: moving ? `translateX(${drag.dx}px)` : undefined,
                   zIndex: moving ? 1 : undefined,
                 }}
               >
@@ -176,13 +154,15 @@ export function ChainLane({
                   aria-pressed={on}
                   aria-label={off ? `${names[i]}, off-pair` : names[i]}
                   onClick={() => {
-                    if (!dragged.current) ed.select(i);
+                    if (!dragged.current) onEdit(i);
                     dragged.current = false;
                   }}
                   onPointerDown={onPointerDown(i)}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
                   onPointerCancel={() => setDrag(null)}
+                  onFocus={() => ed.select(i)}
+                  data-pad-first={on ? '' : undefined}
                   data-testid={`move-${i}`}
                   data-tutorial={
                     skill !== 'primary'
@@ -215,85 +195,39 @@ export function ChainLane({
                       <span className="k-disp truncate text-[21px]">
                         {'form' in e ? registry.getForm(e.form).name : ed.weapon}
                       </span>
-                      <span className="text-[14px]" style={{ color }}>
+                      <span className="text-[16px]" style={{ color }}>
                         {ab?.fusion?.name ?? manaStyle(registry, el).name}
                       </span>
                     </span>
                   </span>
                   {off && (
-                    <span className="text-[14px] text-[var(--k-hot)]" data-testid="card-off-pair">
+                    <span className="text-[16px] text-[var(--k-hot)]" data-testid="card-off-pair">
                       off-pair
                     </span>
                   )}
                 </button>
                 <span className="flex flex-wrap items-center gap-2">
                   {runes && (
-                    <span
-                      data-testid={`sockets-${i}`}
-                      data-tutorial={skill === 'primary' && i === 0 ? 'skills.socket' : undefined}
-                      data-tutorial-done={socketsOf(e).length > 0}
-                    >
+                    // The pips are the mouse's: a click opens the editor at that socket's grid.
+                    <span data-testid={`sockets-${i}`} data-pad-skip="">
                       <SocketRow
                         runes={socketsOf(e)}
                         cap={runes.socketCap}
-                        nextPrice={
-                          on && ed.nextSocket !== undefined
-                            ? (ed.nextSocket ?? { links: 0, scrap: 0 })
-                            : null
-                        }
+                        nextPrice={null}
                         dormant={ed.dormant(i)}
                         locked={locked}
-                        onSocketTap={(s) => ed.openPicker(i, s)}
-                        onOpenSocket={ed.openSocket}
-                        whyId={on && ed.openWhy ? `${id}-socket` : undefined}
+                        onSocketTap={(s) => onEdit(i, s)}
                       />
                     </span>
                   )}
                   {ab && (
-                    <span className="ml-auto whitespace-nowrap text-[14px] text-[var(--k-text-3)]">
+                    <span className="ml-auto whitespace-nowrap text-[16px] text-[var(--k-text-3)]">
                       {ab.payment === 'charge'
                         ? `Charge ${Math.round(ab.chargeNeed)}`
                         : `${Math.round(ab.cost)} mana`}
                     </span>
                   )}
                 </span>
-                {on && (
-                  // The mouse's: the pad carries with X and removes with Y (SkillsTab's prompts).
-                  <span className="flex gap-1.5" role="group" aria-label="Reorder" data-pad-skip>
-                    <button
-                      type="button"
-                      className="k-chip h-8 min-w-8 justify-center"
-                      disabled={locked || i === 0}
-                      aria-label={`Move ${names[i]} earlier`}
-                      onClick={() => ed.shift(i, -1)}
-                      data-earlier={i}
-                      data-testid={`move-left-${i}`}
-                    >
-                      ◂
-                    </button>
-                    <button
-                      type="button"
-                      className="k-chip h-8 min-w-8 justify-center"
-                      disabled={locked || i === entries.length - 1}
-                      aria-label={`Move ${names[i]} later`}
-                      onClick={() => ed.shift(i, 1)}
-                      data-later={i}
-                      data-testid={`move-right-${i}`}
-                    >
-                      ▸
-                    </button>
-                    <button
-                      type="button"
-                      className="k-chip h-8 min-w-8 justify-center"
-                      disabled={locked || entries.length === 1}
-                      aria-label={`Remove ${names[i]}`}
-                      onClick={() => ed.remove(i)}
-                      data-testid={`move-remove-${i}`}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
               </div>
             </Fragment>
           );
@@ -301,7 +235,7 @@ export function ChainLane({
         {!absent && entries.length < slots && (
           <button
             type="button"
-            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[14px] text-[var(--k-text-3)]"
+            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[16px] text-[var(--k-text-3)]"
             disabled={locked}
             aria-label="Add a move"
             onClick={ed.add}
@@ -314,7 +248,7 @@ export function ChainLane({
         {!absent && offer.price && (
           <button
             type="button"
-            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[14px] text-[var(--k-text-3)]"
+            className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[16px] text-[var(--k-text-3)]"
             disabled={locked || !!offer.why}
             aria-describedby={offer.why && !locked ? `${id}-slot` : undefined}
             onClick={() => anvil.buySlot(skill)}
@@ -330,7 +264,7 @@ export function ChainLane({
       {offer.why && !locked && (
         <span
           id={`${id}-slot`}
-          className="text-[14px] text-[var(--k-hot)]"
+          className="text-[18px] text-[var(--k-hot)]"
           data-testid="add-slot-why"
         >
           {offer.why}
@@ -339,19 +273,10 @@ export function ChainLane({
       {message && (
         <span
           role="status"
-          className="text-[14px] text-[var(--k-bad-text)]"
+          className="text-[18px] text-[var(--k-bad-text)]"
           data-testid="chain-message"
         >
           {message}
-        </span>
-      )}
-      {ed.openWhy && (
-        <span
-          id={`${id}-socket`}
-          className="text-[14px] text-[var(--k-hot)]"
-          data-testid="socket-open-why"
-        >
-          {ed.openWhy}
         </span>
       )}
       {cycle && chain && (
@@ -390,7 +315,7 @@ function Tile({
       <span className="k-disp text-[26px]" style={hot ? { color: 'var(--k-hot-hi)' } : undefined}>
         {value}
       </span>
-      <span className="text-[14px]" style={{ color: hot ? 'var(--k-hot-hi)' : 'var(--k-text-3)' }}>
+      <span className="text-[16px]" style={{ color: hot ? 'var(--k-hot-hi)' : 'var(--k-text-3)' }}>
         {caption}
       </span>
     </div>
@@ -501,11 +426,11 @@ export function RhythmStrip({ cycle }: { cycle: ChainCycle }) {
           className="border-t-[3px] border-dashed border-[var(--k-steel-2)]"
           style={{ width: width(cycle.restart) }}
         />
-        <span className="ml-2.5 whitespace-nowrap text-[14px] text-[var(--k-text-3)]">
+        <span className="ml-2.5 whitespace-nowrap text-[16px] text-[var(--k-text-3)]">
           pause {cycle.restart.toFixed(1)} s restarts
         </span>
       </div>
-      <span className="text-[14px] text-[var(--k-text-3)]">
+      <span className="text-[16px] text-[var(--k-text-3)]">
         Each block is a cast, each line a beat.
       </span>
     </div>

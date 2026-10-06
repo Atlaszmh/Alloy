@@ -45,6 +45,25 @@ describe('AppShell', () => {
     resize(1024, 768);
     act(() => useUIStore.getState().setHudScale(1));
     localStorage.removeItem('alloy:delve:hudScale');
+    act(() => useUIStore.getState().setTextSize('small'));
+    localStorage.removeItem('alloy:delve:textSize');
+  });
+
+  it('Text size zooms the menus only: --ui-scale follows it, --hud-scale keeps the plain UI scale, and it persists', () => {
+    resize(1920, 1080);
+    renderAt('/delve');
+    expect([rootVar('--ui-scale'), rootVar('--hud-scale')]).toEqual(['1', '1']);
+    act(() => useUIStore.getState().setTextSize('large'));
+    expect([rootVar('--ui-scale'), rootVar('--hud-scale')]).toEqual(['1.3', '1']);
+    expect(useUIStore.getState()).toMatchObject({ uiScale: 1, menuScale: 1.3, textSize: 'large' });
+    expect(localStorage.getItem('alloy:delve:textSize')).toBe('large');
+    // At 1280×800 Large is capped to Medium's zoom; the HUD stays at the floor.
+    resize(1280, 800);
+    expect([rootVar('--ui-scale'), rootVar('--hud-scale')]).toEqual(['0.86', '0.75']);
+    act(() => useUIStore.getState().setTextSize('medium'));
+    expect(rootVar('--ui-scale')).toBe('0.86');
+    act(() => useUIStore.getState().setTextSize('small'));
+    expect(rootVar('--ui-scale')).toBe('0.75');
   });
 
   it('sets --ui-scale and --hud-scale in quarter steps on resize and on a HUD scale change, mirrored in uiStore', () => {

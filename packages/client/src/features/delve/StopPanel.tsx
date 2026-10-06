@@ -44,6 +44,7 @@ import { SKILL_NAME, blowText, markIdle, moveText, runeCandidates } from './chai
 import { ChainEditor } from './chains/ChainEditor';
 import { RunePicker } from './runes/RunePicker';
 import { SocketRow } from './runes/SocketRow';
+import { useUIStore } from '@/stores/uiStore';
 
 /** Each power-up kind as its card says it: its glyph, its name, what it does and what it costs. */
 export const STOP_TEXT: Record<
@@ -132,7 +133,7 @@ export function StopPanel({ stop, ops = STOP_OPS }: { stop: DiveStop; ops?: Stop
     >
       <div className="flex items-baseline justify-between">
         <h2 className="k-section m-0 text-[26px] text-[var(--k-hot-hi)]">Take one power-up</h2>
-        <span className="text-[15px] text-[var(--k-text-3)]">or skip it</span>
+        <span className="text-[16px] text-[var(--k-text-3)]">or skip it</span>
       </div>
       {open ? (
         <StopPicker kind={open} onClose={close} onTaken={taken} ops={ops} />
@@ -148,15 +149,16 @@ export function StopPanel({ stop, ops = STOP_OPS }: { stop: DiveStop; ops?: Stop
                 setOpen(kind);
               }}
               data-pad-first={i === 0 || undefined}
+              data-primary-action={i === 0 ? 'powerup' : undefined}
               data-testid={`stop-${kind}`}
               data-tutorial={`stop.card:${kind}`}
             >
               <Glyph id={STOP_TEXT[kind].glyph} size={32} />
               <span className="k-disp text-[30px]">{STOP_TEXT[kind].name}</span>
-              <span className="text-[15px] leading-normal text-[var(--k-text-2)]">
+              <span className="text-[18px] leading-normal text-[var(--k-text-2)]">
                 {STOP_TEXT[kind].text}
               </span>
-              <span className="mt-auto flex justify-between gap-2 bg-[var(--k-well)] px-[14px] py-3 text-[15px]">
+              <span className="mt-auto flex justify-between gap-2 bg-[var(--k-well)] px-[14px] py-3 text-[16px]">
                 <span className="text-[var(--k-text-3)]">Price</span>
                 <b className="text-[var(--k-hot-hi)]" data-testid="stop-price">
                   {kind === 'upgrade' && upgradeCosts.length > 0 ? (
@@ -210,6 +212,8 @@ function StopPicker({
       playSound('upgradeTier');
       vibrate('success');
       showToast(`${STOP_TEXT[kind].name}: done`);
+      // The stop's onboarding hint is done (an alcove's take counts too).
+      useUIStore.getState().markSeen('stop');
       onTaken();
     } else {
       playSound('combineFail');
@@ -255,7 +259,7 @@ function StopPicker({
         {kind === 'rune' && <RunePick take={take} />}
       </div>
       {message && (
-        <p className="m-0 text-[15px] text-[var(--k-bad-text)]" role="status">
+        <p className="m-0 text-[18px] text-[var(--k-bad-text)]" role="status">
           {message}
         </p>
       )}
@@ -270,7 +274,7 @@ type DryRun = StopOps['dry'];
 function Wallet() {
   const profile = useDelveStore((s) => s.profile);
   return (
-    <div className="flex items-center gap-2 text-[14px] text-[var(--k-text-3)]">
+    <div className="flex items-center gap-2 text-[16px] text-[var(--k-text-3)]">
       You have <Price links={profile.links} scrap={profile.scrap} dust={profile.manaDust} />
     </div>
   );
@@ -306,7 +310,7 @@ function EquipPick({ take }: { take: Take }) {
         ))}
       </div>
       {worn && profile.bag.some((i) => i.slot === 'weapon') && (
-        <p className="m-0 text-[14px] text-[var(--k-hot)]" data-testid="stop-equip-weapon-note">
+        <p className="m-0 text-[18px] text-[var(--k-hot)]" data-testid="stop-equip-weapon-note">
           A weapon brings its own moves; yours stay on {worn.name}.
         </p>
       )}
@@ -351,7 +355,7 @@ function SlotPick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
               )}
             </Button>
             {why && (
-              <span id={`${id}-${s}`} className="text-[14px] text-[var(--k-hot)]">
+              <span id={`${id}-${s}`} className="text-[18px] text-[var(--k-hot)]">
                 {why}
               </span>
             )}
@@ -441,7 +445,7 @@ function MovePick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
         )}
       </Button>
       {why && (
-        <span id={whyId} className="text-[14px] text-[var(--k-hot)]">
+        <span id={whyId} className="text-[18px] text-[var(--k-hot)]">
           {why}
         </span>
       )}

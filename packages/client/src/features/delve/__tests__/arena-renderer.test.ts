@@ -882,3 +882,51 @@ describe("the foliage's canopy", () => {
     expect(root.getChildIndex(dropLayer)).toBeGreaterThan(canopy);
   });
 });
+
+describe("Settings → Effects' strengths", () => {
+  afterEach(() => {
+    for (const k of ['shake', 'hitstop', 'flash'] as const) useUIStore.getState().setFx(k, 1);
+  });
+
+  it('scales the screen shake and the camera kick; at 0 neither moves', () => {
+    const { r } = stage();
+    show(r, floor());
+    const view = r as unknown as {
+      shake: number;
+      kick: { x: number; y: number };
+      kickCamera(dir: { x: number; y: number }, heft: number): void;
+    };
+    useUIStore.getState().setFx('shake', 0.5);
+    r.addShake(0.2);
+    expect(view.shake).toBeCloseTo(0.1);
+    view.kickCamera({ x: 1, y: 0 }, 1);
+    expect(view.kick.x).toBeCloseTo(0.06); // 0.12 × heft × 0.5
+    view.shake = 0;
+    view.kick = { x: 0, y: 0 };
+    useUIStore.getState().setFx('shake', 0);
+    r.addShake(0.5);
+    view.kickCamera({ x: 1, y: 0 }, 1);
+    expect([view.shake, view.kick.x]).toEqual([0, 0]);
+  });
+
+  it("the hero's hurt flash lasts its time × the strength, and is off at 0", () => {
+    const { r } = stage();
+    const w = floor();
+    show(r, w);
+    const view = r as unknown as { heroFlashUntil: number; time: number };
+    const hurt: ArpgEvent = {
+      kind: 'heroHit',
+      x: w.hero.x,
+      y: w.hero.y,
+      amount: 5,
+      dodged: false,
+      element: null,
+    };
+    useUIStore.getState().setFx('flash', 0);
+    r.handleEvents([hurt]);
+    expect(view.heroFlashUntil).toBe(0);
+    useUIStore.getState().setFx('flash', 0.5);
+    r.handleEvents([hurt]);
+    expect(view.heroFlashUntil).toBeCloseTo(view.time + 0.06);
+  });
+});

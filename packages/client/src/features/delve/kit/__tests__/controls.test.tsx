@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
-import { Bar, Button, Chip, contrast, Segmented, Tabs } from '../controls';
+import { PAD_STEP } from '@/features/gamepad/use-gamepad-nav';
+import { Bar, Button, Chip, contrast, Segmented, Stepper, Tabs } from '../controls';
 
 afterEach(() => act(() => useInputDeviceStore.getState().setDevice('keyboard')));
 
@@ -197,5 +199,71 @@ describe('the kit controls', () => {
     expect(parseFloat(fill.style.width)).toBeCloseTo((226 / 289) * 100, 5);
     expect(extra.style.left).toBe(fill.style.width);
     expect(parseFloat(extra.style.width)).toBeCloseTo((34 / 289) * 100, 5);
+  });
+});
+
+describe('Stepper', () => {
+  const OPTIONS = [
+    { id: 'none', label: 'None', text: 'None' },
+    { id: 'uncommon', label: 'Uncommon ×5', text: 'Uncommon ×5' },
+    { id: 'magic', label: 'Magic ×1', text: 'Magic ×1' },
+  ] as const;
+  type Id = (typeof OPTIONS)[number]['id'];
+  function Harness({ start = 'none' as Id, onChange = (_: Id) => {} }) {
+    const [value, setValue] = useState<Id>(start);
+    return (
+      <Stepper
+        label="Flux"
+        options={[...OPTIONS]}
+        value={value}
+        onChange={(v) => {
+          setValue(v);
+          onChange(v);
+        }}
+        tutorial="forge.flux"
+        done={value !== 'none'}
+        note="Better flux drops deeper"
+        testId="forge-flux"
+      />
+    );
+  }
+  const stepper = () => screen.getByTestId('forge-flux');
+
+  it('is one focusable control that says its value; the arrows are the mouse’s, off the D-pad', () => {
+    render(<Harness />);
+    expect(stepper()).toHaveAttribute('role', 'spinbutton');
+    expect(stepper()).toHaveAttribute('tabindex', '0');
+    expect(stepper()).toHaveAttribute('data-pad-step');
+    expect(stepper()).toHaveAttribute('aria-valuetext', 'None');
+    expect(stepper()).toHaveAccessibleName('Flux');
+    for (const b of within(stepper()).getAllByRole('button')) {
+      expect(b).toHaveAttribute('tabindex', '-1');
+      expect(b.closest('[data-pad-skip]')).not.toBeNull();
+    }
+    expect(screen.getByText('Better flux drops deeper')).toBeInTheDocument();
+  });
+
+  it('steps right and left, clamped at its ends: by the arrow keys, by the pad (PAD_STEP) and by its arrows', () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    fireEvent.keyDown(stepper(), { key: 'ArrowLeft' }); // at the start: nothing
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.keyDown(stepper(), { key: 'ArrowRight' });
+    expect(stepper()).toHaveAttribute('aria-valuetext', 'Uncommon ×5');
+    act(() => void stepper().dispatchEvent(new CustomEvent(PAD_STEP, { detail: 1 })));
+    expect(stepper()).toHaveAttribute('aria-valuetext', 'Magic ×1');
+    act(() => void stepper().dispatchEvent(new CustomEvent(PAD_STEP, { detail: 1 }))); // at the end
+    expect(stepper()).toHaveAttribute('aria-valuetext', 'Magic ×1');
+    fireEvent.click(within(stepper()).getByRole('button', { name: 'Previous' }));
+    expect(stepper()).toHaveAttribute('aria-valuetext', 'Uncommon ×5');
+    expect(onChange.mock.calls.map(([v]) => v)).toEqual(['uncommon', 'magic', 'uncommon']);
+  });
+
+  it('carries its guided-start target and says it is done from the state its owner gives', () => {
+    render(<Harness />);
+    expect(stepper()).toHaveAttribute('data-tutorial', 'forge.flux');
+    expect(stepper()).toHaveAttribute('data-tutorial-done', 'false');
+    fireEvent.keyDown(stepper(), { key: 'ArrowRight' });
+    expect(stepper()).toHaveAttribute('data-tutorial-done', 'true');
   });
 });

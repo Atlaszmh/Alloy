@@ -6,7 +6,7 @@ import { Tooltip, TooltipCard } from '../Tooltip';
 
 afterEach(() => {
   document.getElementById('delve-ui-layer')?.remove();
-  useUIStore.setState({ uiScale: 1, hudScale: 1 });
+  useUIStore.setState({ uiScale: 1, menuScale: 1, hudScale: 1 });
 });
 
 /** Puts the trigger at a known viewport box (jsdom lays nothing out). */
@@ -47,7 +47,7 @@ describe('the kit tooltip', () => {
   });
 
   it('places the card from the trigger box divided by the zoom it renders under', () => {
-    useUIStore.setState({ uiScale: 1.5, hudScale: 1 });
+    useUIStore.setState({ uiScale: 1.5, menuScale: 1.5, hudScale: 1 });
     const { rerender } = render(
       <Tooltip content={() => 'tip'}>
         <button type="button">Slot</button>
@@ -101,7 +101,7 @@ describe('the kit tooltip', () => {
   });
 
   it('renders inline under the HUD zoom with portal off, and stays open while asked', () => {
-    useUIStore.setState({ uiScale: 1, hudScale: 1.25 });
+    useUIStore.setState({ uiScale: 1, menuScale: 1, hudScale: 1.25 });
     const ref = createRef<HTMLButtonElement>();
     render(
       <div className="delve-hud-zoom">

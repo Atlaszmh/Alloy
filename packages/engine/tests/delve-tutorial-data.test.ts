@@ -292,8 +292,8 @@ describe('trails', () => {
       'l1-claim': claim,
       'l1-forge': [
         'forge.pattern:cuirass',
-        'forge.bar:rusty',
-        'forge.flux:uncommon',
+        'forge.bar',
+        'forge.flux',
         'forge.shard',
         'forge.go',
       ],

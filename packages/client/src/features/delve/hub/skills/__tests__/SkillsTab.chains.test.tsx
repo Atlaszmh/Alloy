@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, screen, fireEvent, within } from '@testing-library/react';
 import {
+  carriedByText,
   defaultMoveset,
   heroChains,
   pouchCount,
@@ -15,7 +16,7 @@ import {
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
-import { renderSkills } from './harness';
+import { edit, pickForm, renderSkills, stepTo, valuesOf } from './harness';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -27,7 +28,20 @@ const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 /** The hero's chains, as its equipped weapon carries them. */
 const chains = () => heroChains(registry, store().profile.equipped, store().profile.pair) as Chains;
-const apply = () => fireEvent.click(screen.getByTestId('chain-apply'));
+/** The footer's Apply opens the Apply sheet, whose Apply applies the draft (when it can). */
+const apply = () => {
+  fireEvent.click(screen.getByTestId('chain-apply'));
+  const confirm = screen.queryByTestId('apply-sheet-confirm');
+  if (confirm) fireEvent.click(confirm);
+};
+/** The Apply sheet, opened by the footer's Apply. */
+const openSheet = () => {
+  fireEvent.click(screen.getByTestId('chain-apply'));
+  return screen.getByTestId('apply-sheet');
+};
+/** Back out of the Apply sheet, the draft as it was. */
+const closeSheet = () =>
+  fireEvent.click(within(screen.getByTestId('apply-sheet')).getByRole('button', { name: /Back/ }));
 /** The Apply bar's line: "No changes", or "n unapplied changes · price". */
 const priceLine = () => screen.getByTestId('chain-price');
 
@@ -81,7 +95,8 @@ describe('SkillsTab', () => {
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
       'light Fire blow · light Fire blow · heavy Fire blow',
     );
-    expect(screen.queryByTestId('form-bolt')).toBeNull(); // a blow has no form
+    edit(0);
+    expect(screen.queryByTestId('move-form')).toBeNull(); // a blow has no form
     expect(screen.queryByText('Quick and cheap.')).toBeNull(); // nor a cost
   });
 
@@ -95,7 +110,8 @@ describe('SkillsTab', () => {
       ['defensive', 'Carried by rare weapons and better'],
       ['ultimate', 'Carried by epic weapons and better, or an awakened rare'],
     ]) {
-      expect(screen.getByTestId(`chain-skill-${skill}`)).toHaveTextContent('Locked');
+      // The tab's own line says what carries it.
+      expect(screen.getByTestId(`chain-skill-${skill}`)).toHaveTextContent(text);
       fireEvent.click(screen.getByTestId(`chain-skill-${skill}`));
       expect(screen.getByTestId('abilities-summary')).toHaveTextContent(text);
       expect(screen.queryByTestId('move-0')).toBeNull();
@@ -108,22 +124,23 @@ describe('SkillsTab', () => {
     store().unequip('weapon');
     renderSkills();
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
-    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('Locked');
-    expect(screen.getByTestId('chain-skill-defensive')).toHaveTextContent('Locked');
+    for (const s of ['primary', 'defensive'] as const)
+      expect(screen.getByTestId(`chain-skill-${s}`)).toHaveTextContent(carriedByText(registry, s));
   });
 
   it('edits a draft: Apply commits it, free before the first dive, and Revert drops it', () => {
     roomy();
     renderSkills();
     expect(priceLine()).toHaveTextContent('No changes');
-    fireEvent.click(screen.getByTestId('form-lance'));
+    edit(0);
+    pickForm('lance');
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
     expect(chains().primary.moves[0].form).toBe('bolt'); // not yet
     expect(priceLine()).toHaveTextContent('free until your first dive');
     fireEvent.click(screen.getByTestId('chain-revert'));
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Bolt');
     expect(priceLine()).toHaveTextContent('No changes');
-    fireEvent.click(screen.getByTestId('form-lance'));
+    pickForm('lance');
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply'); // free: no price
     apply();
     expect(chains().primary.moves[0].form).toBe('lance');
@@ -134,7 +151,8 @@ describe('SkillsTab', () => {
   it('keeps the draft when the tab closes; a dive starts only once it is discarded', () => {
     roomy();
     const { unmount } = renderSkills();
-    fireEvent.click(screen.getByTestId('form-lance'));
+    edit(0);
+    pickForm('lance');
     unmount();
     renderSkills();
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
@@ -155,11 +173,15 @@ describe('SkillsTab', () => {
     // A storm move the pair (Fire alone) doesn't hold: the engine refuses it.
     const storm: Move = { kind: 'medium', form: 'bolt', elements: ['storm'] };
     act(() => store().editDraft('primary', { moves: [storm], payment: 'mana' }));
-    const button = screen.getByTestId('chain-apply');
-    expect(button).toBeDisabled();
+    // The footer says why for the mouse; its Apply opens the sheet, whose Apply is off.
     expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Pick from your two elements');
-    expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('chain-apply-why').id);
-    apply();
+    openSheet();
+    const button = screen.getByTestId('apply-sheet-confirm');
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId('apply-sheet-why')).toHaveTextContent('Pick from your two elements');
+    expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('apply-sheet-why').id);
+    fireEvent.click(button);
+    closeSheet();
     expect(priceLine()).toHaveTextContent('1 unapplied change');
     // Back in the pair, it goes through.
     act(() =>
@@ -173,12 +195,13 @@ describe('SkillsTab', () => {
   it('Add slot waits while its chain has a change pending; an edit undone by hand leaves none', () => {
     store().setProfile({ ...store().profile, links: 1, scrap: 25 });
     renderSkills();
-    fireEvent.click(screen.getByTestId('form-lance'));
+    edit(0);
+    pickForm('lance');
     expect(screen.getByTestId('add-slot')).toBeDisabled();
     expect(screen.getByTestId('add-slot-why')).toHaveTextContent(
       'Apply or revert this chain first',
     );
-    fireEvent.click(screen.getByTestId('form-bolt')); // back as it was
+    pickForm('bolt'); // back as it was
     expect(priceLine()).toHaveTextContent('No changes');
     expect(store().chainDraft?.chains.primary).toBeUndefined();
     fireEvent.click(screen.getByTestId('add-slot'));
@@ -203,7 +226,8 @@ describe('SkillsTab', () => {
     const sword = p.equipped.weapon!;
     store().setProfile({ ...p, bag: [{ ...sword, uid: 'spare' }] });
     renderSkills();
-    fireEvent.click(screen.getByTestId('form-lance'));
+    edit(0);
+    pickForm('lance');
     act(() => store().equip('spare'));
     expect(priceLine()).toHaveTextContent('No changes');
     act(() => store().equip(sword.uid));
@@ -213,7 +237,8 @@ describe('SkillsTab', () => {
       store().bindSecondary('storm');
       store().setProfile({ ...store().profile, manaDust: 500, scrap: 500 });
     });
-    fireEvent.click(screen.getByTestId('form-lance'));
+    edit(0);
+    pickForm('lance');
     expect(priceLine()).toHaveTextContent('1 unapplied change');
     act(() => {
       expect(store().realign({ primary: 'frost' }).ok).toBe(true);
@@ -227,12 +252,16 @@ describe('SkillsTab', () => {
     const p = store().profile;
     store().setProfile({ ...p, stats: { ...p.stats, dives: 1 }, manaDust: 4 });
     renderSkills();
-    fireEvent.click(screen.getByTestId('form-lance')); // a changed form: editDust
+    edit(0);
+    pickForm('lance'); // a changed form: editDust
     expect(priceLine()).toHaveTextContent('1 unapplied change · 5 Mana Dust');
-    expect(screen.getByTestId('chain-apply')).toBeDisabled();
     expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Not enough Mana Dust');
+    openSheet();
+    expect(screen.getByTestId('apply-sheet-confirm')).toBeDisabled();
+    expect(screen.getByTestId('apply-sheet-why')).toHaveTextContent('Not enough Mana Dust');
+    closeSheet();
     act(() => store().setProfile({ ...store().profile, manaDust: 20 }));
-    fireEvent.click(screen.getByTestId('kind-heavy'));
+    stepTo('move-kind', 'Heavy');
     // Still one move changed: its kind and form together cost editDust once.
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply · 5 Mana Dust');
     apply();
@@ -244,9 +273,9 @@ describe('SkillsTab', () => {
     roomy();
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'nature' } });
     renderSkills();
-    fireEvent.click(screen.getByTestId('move-1'));
-    fireEvent.click(screen.getByTestId('form-burst'));
-    fireEvent.click(screen.getByTestId('infusion-nature'));
+    edit(1);
+    pickForm('burst');
+    stepTo('move-elements', 'Fire + Nature');
     apply();
     expect(chains().primary.moves[1]).toEqual({
       kind: 'medium',
@@ -258,10 +287,10 @@ describe('SkillsTab', () => {
       'light Fire Bolt · medium Wildfire Burst',
     );
     expect(screen.getByTestId('element-effect')).toHaveTextContent('Wildfire');
-    fireEvent.click(screen.getByTestId('swap-elements'));
+    stepTo('move-elements', 'Nature + Fire'); // the swap is a set of its own
     apply();
     expect(chains().primary.moves[1].elements).toEqual(['nature', 'fire']);
-    fireEvent.click(screen.getByTestId('element-nature'));
+    stepTo('move-elements', 'Nature');
     apply();
     expect(chains().primary.moves[1].elements).toEqual(['nature']);
   });
@@ -269,13 +298,14 @@ describe('SkillsTab', () => {
   it("sets a move's kind, and the chain's one payment with its wind-up", () => {
     roomy();
     renderSkills();
-    fireEvent.click(screen.getByTestId('kind-hold'));
+    edit(0);
+    stepTo('move-kind', 'Hold');
     expect(screen.getByTestId('num-full')).toHaveTextContent(/\d+ mana/);
-    fireEvent.click(screen.getByTestId('payment-charge'));
+    stepTo('chain-payment', 'Charge');
     expect(screen.getByTestId('num-full')).toHaveTextContent(/Charge \d+/);
-    fireEvent.click(screen.getByTestId('kind-heavy'));
-    for (const payment of ['cast', 'mana', 'charge'] as const) {
-      fireEvent.click(screen.getByTestId(`payment-${payment}`));
+    stepTo('move-kind', 'Heavy');
+    for (const payment of ['Cast', 'Mana', 'Charge']) {
+      stepTo('chain-payment', payment);
       expect(screen.getByTestId('num-windup')).toHaveTextContent(/^\d\.\d\ds$/);
     }
     apply();
@@ -289,7 +319,8 @@ describe('SkillsTab', () => {
     const { unmount } = renderSkills();
     // The Primary's first move, a light Bolt, on the starting sword (tempo 1).
     expect(num('beat')).toHaveTextContent(/^0\.25s$/);
-    fireEvent.click(screen.getByTestId('kind-hold'));
+    edit(0);
+    stepTo('move-kind', 'Hold');
     // A tap plays as a medium; a full charge as a hold.
     expect(num('beat')).toHaveTextContent(/^0\.4s$/);
     expect(num('full')).toHaveTextContent(/^1s: .+ mana, then a 0\.8s beat$/);
@@ -303,7 +334,8 @@ describe('SkillsTab', () => {
     });
     renderSkills();
     expect(num('beat')).toHaveTextContent(/^0\.33s$/);
-    fireEvent.click(screen.getByTestId('kind-hold'));
+    edit(0);
+    stepTo('move-kind', 'Hold');
     expect(num('beat')).toHaveTextContent(/^0\.52s$/);
     expect(num('full')).toHaveTextContent(/^1\.3s: .+ mana, then a 1\.04s beat$/);
   });
@@ -312,8 +344,10 @@ describe('SkillsTab', () => {
     const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
     roomy(5, { primary: { moves: [bolt], payment: 'mana' } });
     renderSkills();
-    expect(screen.getByTestId('move-remove-0')).toBeDisabled();
-    expect(screen.getByTestId('move-remove-0')).toHaveAccessibleName('Remove light Fire Bolt');
+    edit(0);
+    expect(screen.getByTestId('move-remove')).toBeDisabled();
+    expect(screen.getByTestId('move-remove')).toHaveAccessibleName('Remove light Fire Bolt');
+    fireEvent.click(screen.getByTestId('move-editor-back'));
     fireEvent.click(screen.getByTestId('move-add'));
     expect(document.activeElement).toBe(screen.getByTestId('move-1')); // the new card
     for (let i = 0; i < 3; i++) fireEvent.click(screen.getByTestId('move-add'));
@@ -321,51 +355,50 @@ describe('SkillsTab', () => {
     expect(screen.queryByTestId('move-add')).toBeNull(); // every slot used
     expect(document.activeElement).toBe(screen.getByTestId('move-4'));
     // The new move is picked: make it heavy, then bring it forward.
-    fireEvent.click(screen.getByTestId('kind-heavy'));
-    fireEvent.click(screen.getByTestId('move-left-4'));
+    edit(4);
+    stepTo('move-kind', 'Heavy');
+    stepTo('move-position', 'Position 4 of 5');
     expect(screen.getByTestId('move-3')).toHaveAttribute('aria-pressed', 'true'); // the heavy
-    fireEvent.click(screen.getByTestId('move-0'));
-    fireEvent.click(screen.getByTestId('move-remove-0'));
+    edit(0);
+    fireEvent.click(screen.getByTestId('move-remove'));
     expect(screen.getByTestId('move-add')).toBeInTheDocument();
     expect(document.activeElement).toBe(screen.getByTestId('move-0'));
     apply();
     expect(chains().primary.moves.map((m) => m.kind)).toEqual(['light', 'light', 'heavy', 'light']);
   });
 
-  it('▸ moves a card later and the selection follows it; the ends are off', () => {
+  it('Position moves a card; the selection follows it', () => {
     const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
     roomy(5, {
       primary: { moves: [bolt('light'), bolt('medium'), bolt('heavy')], payment: 'mana' },
     });
     renderSkills();
-    expect(screen.getByTestId('move-left-0')).toBeDisabled();
-    expect(screen.queryByTestId('move-right-2')).toBeNull(); // only the chosen card's toolbar
-    fireEvent.click(screen.getByTestId('move-2'));
-    expect(screen.getByTestId('move-right-2')).toBeDisabled();
-    fireEvent.click(screen.getByTestId('move-0'));
-    fireEvent.click(screen.getByTestId('move-right-0'));
+    edit(0);
+    // The ends: the first place and the last.
+    expect(screen.getByTestId('move-position')).toHaveAttribute('aria-valuemin', '0');
+    expect(screen.getByTestId('move-position')).toHaveAttribute('aria-valuemax', '2');
+    stepTo('move-position', 'Position 2 of 3');
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
       'medium Fire Bolt · light Fire Bolt · heavy Fire Bolt',
     );
     expect(screen.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('ability-readout')).toHaveTextContent('light Fire Bolt');
-    expect(document.activeElement).toBe(screen.getByTestId('move-right-1'));
   });
 
-  it('two ◂ presses move a card two places, the selection and the focus with it', () => {
+  it('two steps of Position move a card two places, the selection with it and the focus kept', () => {
     const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
     roomy(5, {
       primary: { moves: [bolt('light'), bolt('medium'), bolt('heavy')], payment: 'mana' },
     });
     renderSkills();
-    fireEvent.click(screen.getByTestId('move-2'));
-    fireEvent.click(screen.getByTestId('move-left-2'));
+    edit(2);
+    const position = screen.getByTestId('move-position');
+    position.focus();
+    fireEvent.keyDown(position, { key: 'ArrowLeft' });
     expect(screen.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
-    expect(document.activeElement).toBe(screen.getByTestId('move-left-1'));
-    fireEvent.click(document.activeElement!);
+    fireEvent.keyDown(position, { key: 'ArrowLeft' });
     expect(screen.getByTestId('move-0')).toHaveAttribute('aria-pressed', 'true');
-    // At the front its ◂ is off: the card itself keeps the focus.
-    expect(document.activeElement).toBe(screen.getByTestId('move-0'));
+    expect(document.activeElement).toBe(screen.getByTestId('move-position'));
     apply();
     expect(chains().primary.moves.map((m) => m.kind)).toEqual(['heavy', 'light', 'medium']);
   });
@@ -413,7 +446,8 @@ describe('SkillsTab', () => {
     vi.spyOn(store(), 'addSlot').mockReturnValueOnce(refuse('Not now'));
     fireEvent.click(screen.getByTestId('add-slot'));
     expect(screen.getByTestId('chain-message')).toHaveTextContent('Not now');
-    fireEvent.click(screen.getByTestId('form-lance'));
+    edit(0);
+    pickForm('lance');
     vi.spyOn(store(), 'applyDraft').mockReturnValueOnce(refuse('The forge is cold'));
     apply();
     expect(screen.getByTestId('chain-message')).toHaveTextContent('The forge is cold');
@@ -428,18 +462,21 @@ describe('SkillsTab', () => {
     renderSkills();
     expect(screen.getAllByTestId('card-off-pair')).toHaveLength(1);
     expect(screen.getByTestId('move-0')).toHaveAccessibleName('medium Storm Bolt, off-pair');
-    expect(screen.getByTestId('element-storm')).toHaveTextContent('Storm · off-pair');
-    expect(screen.getByTestId('element-storm')).toHaveAttribute('aria-checked', 'true');
-    // It keeps Storm, alone or infused, but takes no new off-pair set (Apply would refuse it).
-    expect(screen.getByTestId('element-storm')).toBeEnabled();
-    expect(screen.getByTestId('infusion-fire')).toBeDisabled();
-    expect(screen.getByTestId('element-fire')).toBeEnabled();
+    edit(0);
+    expect(screen.getByTestId('move-elements')).toHaveAttribute(
+      'aria-valuetext',
+      'Storm · off-pair',
+    );
+    // It keeps Storm, but takes no new off-pair set (Apply would refuse it): Fire, then Storm.
+    expect(screen.getByTestId('move-elements')).toHaveAttribute('aria-valuemax', '1');
+    fireEvent.keyDown(screen.getByTestId('move-elements'), { key: 'ArrowLeft' });
+    expect(screen.getByTestId('move-elements')).toHaveAttribute('aria-valuetext', 'Fire');
+    act(() => store().revertDraft());
     expect(screen.getByTestId('off-pair-note')).toHaveTextContent('Storm off-pair: no attunement');
-    fireEvent.click(screen.getByTestId('move-1'));
-    expect(screen.queryByTestId('element-storm')).toBeNull();
-    expect(screen.queryByTestId('infusion-storm')).toBeNull();
+    edit(1);
+    expect(valuesOf('move-elements').some((t) => t.includes('Storm'))).toBe(false);
     // A copy of the off-pair move takes the pair's element instead.
-    fireEvent.click(screen.getByTestId('move-0'));
+    edit(0);
     fireEvent.click(screen.getByTestId('move-add'));
     apply();
     expect(chains().primary.moves[2].elements).toEqual(['fire']);
@@ -450,18 +487,19 @@ describe('SkillsTab', () => {
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
     renderSkills();
     fireEvent.click(screen.getByTestId('chain-skill-defensive'));
+    edit(0);
+    fireEvent.click(screen.getByTestId('move-form'));
     expect(screen.getByTestId('form-ward')).toBeInTheDocument();
     expect(screen.queryByTestId('form-bolt')).toBeNull();
     fireEvent.click(screen.getByTestId('form-armor'));
     fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
+    edit(0);
+    fireEvent.click(screen.getByTestId('move-form'));
     expect(screen.getByTestId('form-maelstrom')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('chain-skill-basic'));
-    expect(screen.getAllByTestId(/^element-/).map((c) => c.getAttribute('data-testid'))).toEqual([
-      'element-fire',
-      'element-storm',
-    ]);
-    fireEvent.click(screen.getByTestId('move-2'));
-    fireEvent.click(screen.getByTestId('element-storm'));
+    edit(2);
+    expect(valuesOf('move-elements')).toEqual(['Fire', 'Storm']);
+    stepTo('move-elements', 'Storm');
     apply();
     expect(chains().defensive.moves[0].form).toBe('armor');
     expect(chains().basic[2]).toEqual({ kind: 'heavy', element: 'storm' });
@@ -471,8 +509,9 @@ describe('SkillsTab', () => {
     roomy();
     renderSkills();
     fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
-    fireEvent.click(screen.getByTestId('payment-mana'));
-    fireEvent.click(screen.getByTestId('kind-heavy'));
+    edit(0);
+    stepTo('chain-payment', 'Mana');
+    stepTo('move-kind', 'Heavy');
     expect(screen.getByTestId('cost-warning')).toHaveTextContent('your pool holds');
   });
 
@@ -480,8 +519,9 @@ describe('SkillsTab', () => {
     roomy();
     renderSkills();
     fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
-    fireEvent.click(screen.getByTestId('payment-mana'));
-    fireEvent.click(screen.getByTestId('kind-hold'));
+    edit(0);
+    stepTo('chain-payment', 'Mana');
+    stepTo('move-kind', 'Hold');
     expect(screen.getByTestId('cost-warning')).toHaveTextContent(
       /^A full charge needs \d+ mana; your pool holds \d+\.$/,
     );
@@ -492,9 +532,10 @@ describe('SkillsTab', () => {
     store().startDive(1);
     renderSkills();
     expect(screen.getByTestId('abilities-locked')).toBeInTheDocument();
-    expect(screen.getByTestId('form-lance')).toBeDisabled();
     expect(screen.getByTestId('move-add')).toBeDisabled();
-    fireEvent.click(screen.getByTestId('form-lance'));
+    // A card only selects: no editor opens on a read-only chain.
+    edit(0);
+    expect(screen.queryByTestId('move-editor')).toBeNull();
     expect(priceLine()).toHaveTextContent('No changes');
   });
 
@@ -506,8 +547,8 @@ describe('SkillsTab', () => {
     fireEvent.click(screen.getByTestId('move-2'));
     expect(screen.getByTestId('move-2')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('ability-readout')).toHaveTextContent('medium Fire Bolt');
-    for (const id of ['move-left-2', 'move-right-2', 'move-remove-2', 'move-add'])
-      expect(screen.getByTestId(id), id).toBeDisabled();
+    expect(screen.queryByTestId('move-editor')).toBeNull();
+    expect(screen.getByTestId('move-add')).toBeDisabled();
   });
 
   it('unarmed, it shows the default chains read-only', () => {
@@ -522,6 +563,8 @@ describe('SkillsTab', () => {
     );
     expect(screen.getByTestId('chain-slots')).toHaveTextContent('3 of 3 slots');
     expect(screen.queryByTestId('add-slot')).toBeNull();
+    edit(0);
+    expect(screen.queryByTestId('move-editor')).toBeNull();
   });
 });
 
@@ -568,11 +611,13 @@ describe('SkillsTab: sockets and runes', () => {
     store().setProfile({ ...store().profile, links: 1, scrap: 20 });
     renderSkills();
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets · 0 of 1');
+    edit(0);
     const open = screen.getByTestId('socket-open');
-    expect(within(screen.getByTestId('chain-cards')).getByTestId('socket-open')).toBe(open);
-    expect(open).toHaveTextContent('+ socket · 1 Link · 20 scrap');
+    expect(open).toHaveTextContent('Open a socket');
+    expect(open).toHaveTextContent('1 Link');
+    expect(open).toHaveTextContent('20 scrap');
     fireEvent.click(open);
-    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets · 1 of 1');
+    expect(screen.getAllByTestId(/^inspect-socket-/)).toHaveLength(1);
     expect(screen.queryByTestId('socket-open')).toBeNull(); // a common weapon's cap
     expect(priceLine()).toHaveTextContent('1 unapplied change · 1 Link · 20 scrap');
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply · 1 Link · 20 scrap');
@@ -591,14 +636,19 @@ describe('SkillsTab: sockets and runes', () => {
     expect(price).toHaveTextContent('Not enough runes in your pouch');
     expect(price).not.toHaveTextContent(/free/);
     expect(screen.getAllByText('Not enough runes in your pouch')).toHaveLength(1);
-    const button = screen.getByTestId('chain-apply');
+    expect(screen.getByTestId('chain-apply')).toHaveAttribute('aria-describedby', price.id);
+    // The sheet says it once too, beside its Apply, which is off.
+    const sheet = openSheet();
+    expect(within(sheet).getAllByText('Not enough runes in your pouch')).toHaveLength(1);
+    const button = screen.getByTestId('apply-sheet-confirm');
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('aria-describedby', price.id);
+    expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('apply-sheet-why').id);
   });
 
   it("+ socket is off without the Links, saying why in the engine's words", () => {
     store().setProfile({ ...store().profile, links: 0, scrap: 20 });
     renderSkills();
+    edit(0);
     const open = screen.getByTestId('socket-open');
     expect(open).toBeDisabled();
     const why = document.getElementById(open.getAttribute('aria-describedby')!);
@@ -657,7 +707,7 @@ describe('SkillsTab: sockets and runes', () => {
     expect(picker().getByTestId('rune-dormant')).toHaveTextContent('Works on heavy and hold blows');
     fireEvent.click(picker().getByRole('button', { name: 'Back' }));
     // A kind change keeps the rune, and a heavy blow wakes it.
-    fireEvent.click(screen.getByTestId('kind-heavy'));
+    stepTo('move-kind', 'Heavy');
     expect(
       within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: Linger I' }),
     ).toBeInTheDocument();
@@ -668,14 +718,15 @@ describe('SkillsTab: sockets and runes', () => {
   it("a form a socketed rune doesn't fit is off; the kind stays free", () => {
     socketed([split]);
     renderSkills();
+    edit(0);
+    fireEvent.click(screen.getByTestId('move-form'));
     expect(screen.getByTestId('form-volley')).toBeEnabled();
     for (const f of ['lance', 'burst', 'strike'])
       expect(screen.getByTestId(`form-${f}`), f).toBeDisabled();
-    expect(screen.getByTestId('form-burst')).toHaveAttribute('title', "Split doesn't fit a Burst");
-    expect(screen.getByTestId('form-rune-note')).toHaveTextContent(
-      "Split doesn't fit every form: pull it to pick another.",
-    );
-    fireEvent.click(screen.getByTestId('kind-heavy'));
+    // Each off form says why beside itself.
+    expect(screen.getByTestId('form-burst')).toHaveTextContent("Split doesn't fit a Burst");
+    fireEvent.click(screen.getByTestId('form-picker-back'));
+    stepTo('move-kind', 'Heavy');
     apply();
     expect(chains().primary.moves[0]).toMatchObject({ kind: 'heavy', runes: [split] });
   });
@@ -692,24 +743,26 @@ describe('SkillsTab: sockets and runes', () => {
       },
     });
     renderSkills();
-    fireEvent.click(screen.getByTestId('move-right-0'));
+    edit(0);
+    stepTo('move-position', 'Position 2 of 2');
     apply();
     expect(chains().primary.moves.map((m) => m.kind)).toEqual(['heavy', 'light']);
     expect(chains().primary.moves[1].runes).toEqual([split]);
     expect(socketsOf(chains().primary.moves[0])).toEqual([]);
   });
 
-  it("the inspector's socket rows open the rune picker in place of the numbers, as a scope", () => {
+  it("the editor's socket rows open the rune grid under the rows, as a scope", () => {
     socketed([null], { split: [1, 0, 0, 0, 0] });
     renderSkills();
     const readout = within(screen.getByTestId('ability-readout'));
     expect(readout.getByTestId('socket-count')).toHaveTextContent('Sockets · 1 of 1');
+    edit(0);
     fireEvent.click(readout.getByTestId('inspect-socket-0'));
     expect(readout.getByTestId('rune-picker')).toHaveAttribute('data-pad-scope');
-    expect(readout.queryByTestId('num-cost')).toBeNull();
+    expect(readout.getByTestId('rune-pick-split').parentElement!.className).toMatch(/grid-cols-2/);
     fireEvent.click(readout.getByTestId('rune-picker-close'));
     expect(readout.queryByTestId('rune-picker')).toBeNull();
-    expect(readout.getByTestId('num-cost')).toBeInTheDocument();
+    expect(readout.getByTestId('inspect-socket-0')).toBeInTheDocument();
   });
 
   it("the readout's beat counts a Quick rune", () => {

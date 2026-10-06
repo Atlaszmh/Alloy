@@ -325,6 +325,32 @@ describe('TutorialHighlight (the marker)', () => {
     expect(marker()!.style.display).toBe('none');
   });
 
+  it('under the pad a marked footer prompt leaves the focus where it is (it is no D-pad stop)', () => {
+    vi.mocked(registry.getTutorialData).mockReturnValue({
+      ...registry.getTutorialData(),
+      steps: [{ ...step('equip'), trail: ['loadout.bag:chest.uncommon', 'loadout.equip'] }],
+    });
+    render(
+      <div data-pad-scope>
+        <button id="tile" data-tutorial="loadout.bag:chest.uncommon" aria-pressed="true">
+          Cuirass
+        </button>
+        <footer>
+          <span className="k-prompt" data-tutorial="loadout.equip">
+            Equip
+          </span>
+        </footer>
+      </div>,
+    );
+    act(() => screen.getByText('Cuirass').focus());
+    pad();
+    render(<TutorialHighlight />);
+    at('equip');
+    nextFrame();
+    expect(marker()).toHaveAttribute('data-target', 'loadout.equip');
+    expect(screen.getByText('Cuirass')).toHaveFocus();
+  });
+
   it("never moves the pad's focus onto the HUD", () => {
     boxes['hud.potion'] = DOMRect.fromRect({ x: 10, y: 600, width: 56, height: 56 });
     render(

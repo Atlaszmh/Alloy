@@ -4,6 +4,7 @@ import type { PadButton } from '@/features/gamepad/gamepad';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { blurAfterMouse } from './controls';
 import { GLYPH_ART, pixelRuns } from './glyph-art';
+import { orderPrompts } from './prompts';
 import type { Binding, GlyphId, Prompt } from './types';
 
 type GlyphSize = 'sm' | 'md';
@@ -81,7 +82,7 @@ export function InputGlyph({
 }): ReactElement {
   const device = useInputDeviceStore((s) => s.device);
   if (device === 'gamepad' && binding.pad) {
-    return <PadGlyph button={binding.pad} hold={binding.padHold !== undefined} size={size} />;
+    return <PadGlyph button={binding.pad} size={size} />;
   }
   const key = Array.isArray(binding.key) ? binding.key[0] : binding.key;
   const caps = [
@@ -178,7 +179,7 @@ export function Price({
   );
 }
 
-/** Prompts in a row: a glyph and a label each. Draws only; the screen binds them with usePrompts. */
+/** Prompts in a row, in the grammar's order (`orderPrompts`): a glyph and a label each. Draws only; the screen binds them with usePrompts. */
 export function PromptBar({
   prompts,
   className = '',
@@ -188,7 +189,7 @@ export function PromptBar({
 }): ReactElement {
   return (
     <div className={`k-promptbar ${className}`}>
-      {prompts.map((p) =>
+      {orderPrompts(prompts).map((p) =>
         p.asButton ? (
           <button
             key={p.id}
@@ -198,6 +199,8 @@ export function PromptBar({
             tabIndex={-1}
             data-pad-skip
             data-pad-back={p.padBack ? '' : undefined}
+            data-tutorial={p.tutorial}
+            data-pulse={p.hint ? '' : undefined}
             disabled={p.disabled}
             onClick={p.onPress}
             onPointerUp={blurAfterMouse}
@@ -206,7 +209,13 @@ export function PromptBar({
             {p.label}
           </button>
         ) : (
-          <span key={p.id} className="k-prompt" aria-disabled={p.disabled || undefined}>
+          <span
+            key={p.id}
+            className="k-prompt"
+            aria-disabled={p.disabled || undefined}
+            data-tutorial={p.tutorial}
+            data-pulse={p.hint ? '' : undefined}
+          >
             <InputGlyph binding={p.binding} size="sm" />
             {p.label}
           </span>

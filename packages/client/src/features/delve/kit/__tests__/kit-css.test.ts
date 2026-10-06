@@ -54,9 +54,7 @@ describe('kit.css', () => {
       ['.delve-btn', 'repeating-linear-gradient(0deg, #733e39 0 10px, #6a3934 10px 12px)'],
       ['.delve-btn-gold', 'background: #feae34;'],
       ['.delve-panel', 'border: 6px solid #733e39;'],
-      ['.delve-tile', 'border: 3px solid;'],
       ['.delve-chip', 'background: #3a4466;'],
-      ['.delve-hpbar', 'background: #181425;'],
     ];
     for (const [selector, look] of looks) {
       const body = rule(legacy, selector);

@@ -6,7 +6,8 @@ import { DEFAULT_CONTROLS, type ControlsConfig } from '@/features/controls/contr
  * What the controller asks of the arena this frame, from the player's
  * bindings (`ControlsConfig.pad`; the default keeps both thumbs on the
  * sticks: RT Primary, B dodge, LB Defensive, LT Ultimate, RB manual attack,
- * D-pad down potion, A interact, L3 held every loot label, View the journal).
+ * D-pad down potion, A interact, L3 held every loot label, View the journal,
+ * D-pad up the peek).
  */
 export interface ArenaPadActions {
   /** Left stick, 0..1 per axis after the deadzone. */
@@ -34,6 +35,8 @@ export interface ArenaPadActions {
   labels: boolean;
   /** The journal button pressed this frame (View). */
   journal: boolean;
+  /** The peek button pressed this frame (D-pad up). */
+  peek: boolean;
 }
 
 const ABILITY_ACTIONS = ['primary', 'defensive', 'ultimate'] as const;
@@ -65,6 +68,7 @@ export function padToArena(
     menu: is(cfg.pad.menu, (b) => pressed.has(b)),
     labels: is(cfg.pad.labels, (b) => state.buttons[b]),
     journal: is(cfg.pad.journal, (b) => pressed.has(b)),
+    peek: is(cfg.pad.peek, (b) => pressed.has(b)),
   };
 }
 
@@ -73,7 +77,7 @@ export function padToArena(
  * move a press now would cast is a hold (during the slot's own wind-up, the
  * move after the winding one: `pressMove`).
  */
-function castsOnRelease(registry: DataRegistry, world: ArpgWorld, slot: number): boolean {
+export function castsOnRelease(registry: DataRegistry, world: ArpgWorld, slot: number): boolean {
   const h = world.hero;
   const window = registry.getDelveBalance().abilities.comboWindow;
   return h.hold?.slot === slot || pressMove(h, slot, world.t, window)?.kind === 'hold';
@@ -150,10 +154,68 @@ export interface PadMemory {
   attackHeld: boolean;
   /** When each held ability button went down (`world.t`); one held before the pad saw it, never. */
   downAt: Record<number, number>;
+  /**
+   * Press-to-toggle (`ControlsConfig.holdToggle`): the slot whose press started a hold move, held
+   * for it until its next press; `started` once the world's hold is that slot's.
+   */
+  latch: { slot: number; started: boolean } | null;
 }
 
 export function padMemory(): PadMemory {
-  return { holding: null, order: [], carried: [], sent: null, attackHeld: false, downAt: {} };
+  return {
+    holding: null,
+    order: [],
+    carried: [],
+    sent: null,
+    attackHeld: false,
+    downAt: {},
+    latch: null,
+  };
+}
+
+/**
+ * Press-to-toggle's pad (`ControlsConfig.holdToggle`): this frame's buttons with a latched hold
+ * held. A press whose next move is a hold (`castsOnRelease`) latches its slot, which then counts
+ * as held with its button up; that slot's next press releases it (taken out of the frame, so
+ * `padFrameCast` sees the button let go and casts the hold); another ability's press lets go of the
+ * latch (its chord casts the hold); and a hold that ends by itself (full charge, a dodge) lets go.
+ */
+export function latchHolds(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  acts: Pick<ArenaPadActions, 'cast' | 'held' | 'repeat'>,
+  mem: PadMemory,
+): Pick<ArenaPadActions, 'cast' | 'held' | 'repeat'> {
+  const hold = world.hero.hold?.slot ?? null;
+  const l = mem.latch;
+  if (l && hold === l.slot) l.started = true;
+  else if (l?.started) {
+    // Ended by itself: its button is up, and must not cast again as `padFrameCast` sees it let go.
+    mem.latch = null;
+    mem.sent = l.slot;
+  }
+  const latched = mem.latch?.slot ?? null;
+  if (latched !== null && acts.cast.length > 0) {
+    mem.latch = null;
+    if (acts.cast.includes(latched)) {
+      const off = (s: number) => s !== latched;
+      return {
+        cast: acts.cast.filter(off),
+        held: acts.held.filter(off),
+        repeat: acts.repeat.filter(off),
+      };
+    }
+    return acts;
+  }
+  if (latched !== null)
+    return acts.held.includes(latched)
+      ? acts
+      : { ...acts, held: [...acts.held, latched].sort((a, b) => a - b) };
+  // Only the latest press, the one `padFrameCast` makes `holding`: an earlier one taps.
+  const press = acts.cast.at(-1);
+  if (press !== undefined && castsOnRelease(registry, world, press))
+    mem.latch = { slot: press, started: false };
+  return acts;
 }
 
 /** The controller's part of a frame's input: its cast (`padCast`), and the slot it is holding. */

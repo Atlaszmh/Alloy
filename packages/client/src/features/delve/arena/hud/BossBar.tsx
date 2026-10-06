@@ -29,7 +29,7 @@ export function BossBar({ hud }: { hud: ArenaHud | null }) {
             background: BOSS_LIFE,
           }}
         />
-        <span className="k-bar-label k-disp text-[14px]">
+        <span className="k-bar-label k-disp text-[16px]">
           {formatNumber(Math.max(0, boss.hp))} / {formatNumber(boss.maxHp)}
         </span>
       </div>

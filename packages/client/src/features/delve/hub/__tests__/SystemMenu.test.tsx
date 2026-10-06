@@ -58,6 +58,14 @@ describe('SystemMenu', () => {
     expect(screen.getByTestId('menu-resume')).toHaveFocus();
   });
 
+  it('wraps for the pad: the dialog is a [data-pad-wrap] list, its Back included', () => {
+    renderMenu();
+    const list = screen.getByTestId('system-menu');
+    expect(list).toHaveAttribute('data-pad-wrap');
+    expect(list).toContainElement(screen.getByTestId('menu-main'));
+    expect(list.querySelector('[data-pad-back]')).not.toBeNull();
+  });
+
   it('opens Controls and Settings in its place, and their Close comes back to it', () => {
     renderMenu();
     fireEvent.click(screen.getByTestId('open-controls'));
@@ -68,6 +76,16 @@ describe('SystemMenu', () => {
     fireEvent.click(screen.getByTestId('open-settings'));
     expect(screen.getByTestId('settings-panel')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('settings-close'));
+    expect(screen.getByTestId('system-menu')).toBeInTheDocument();
+  });
+
+  it('Help opens How to delve in its place, and its Back comes back to the menu', () => {
+    renderMenu();
+    fireEvent.click(screen.getByTestId('open-help'));
+    expect(screen.getByTestId('help-dialog')).toBeInTheDocument();
+    expect(screen.queryByTestId('system-menu')).toBeNull();
+    fireEvent.click(within(screen.getByTestId('help-dialog')).getByRole('button', { name: /back/i }));
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
     expect(screen.getByTestId('system-menu')).toBeInTheDocument();
   });
 

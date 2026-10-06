@@ -66,6 +66,8 @@ export interface FloorFrame {
   cells?: number[];
   /** Each crumbling structure's wear (0–1), when it moved: `PixelWorld.setCracks`. */
   cracks?: number[];
+  /** Settings → Effects → Flashes, 0–1 (none: full): `PixelWorld.flashStrength`. */
+  flash?: number;
 }
 
 export interface FloorPicture {
@@ -236,6 +238,7 @@ export class FloorEngine {
   frame(f: FloorFrame, reuse?: Uint8ClampedArray): FloorPicture | null {
     if (f.cells) this.world.setCells(f.cells);
     if (f.cracks) this.world.setCracks(f.cracks);
+    this.world.flashStrength = f.flash ?? 1;
     this.world.seeThrough = this.inFoliage(f.hero)
       ? { ...this.cell(f.hero.x, f.hero.y), r: this.foliageSight * FLOOR_PPU }
       : null;

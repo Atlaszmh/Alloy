@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { useRef, useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Dialog, Footer, Header, Panel, Screen } from '../surfaces';
+import type { Prompt } from '../types';
 
 afterEach(() => document.getElementById('delve-ui-layer')?.remove());
 
@@ -189,5 +190,20 @@ describe('the kit surfaces', () => {
     expect(resume).toHaveFocus();
     back.focus();
     expect(fireEvent.keyDown(back, { key: 'Tab' })).toBe(true); // not at the end: the browser's own
+  });
+
+  it('a hinted prompt pulses, and its line sits over the footer; with none, nothing', () => {
+    const prompts: Prompt[] = [
+      { id: 'equip', label: 'Equip', binding: { pad: 'a' }, hint: 'Equip what is better.' },
+      { id: 'lock', label: 'Lock', binding: { pad: 'y' } },
+    ];
+    const { rerender } = render(<Footer prompts={prompts} />);
+    expect(screen.getByTestId('onboarding-hint')).toHaveTextContent('Equip what is better.');
+    const pulsing = document.querySelectorAll('.k-prompt[data-pulse]');
+    expect(pulsing).toHaveLength(1);
+    expect(pulsing[0]).toHaveTextContent('Equip');
+    rerender(<Footer prompts={prompts.map(({ hint: _, ...p }) => p)} />);
+    expect(screen.queryByTestId('onboarding-hint')).toBeNull();
+    expect(document.querySelector('[data-pulse]')).toBeNull();
   });
 });

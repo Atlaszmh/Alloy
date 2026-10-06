@@ -12,19 +12,13 @@ export interface Binding {
   /** A pointer gesture shown instead of (or beside) a key. */
   mouse?: 'click' | 'rmb' | 'lmb' | 'drag' | 'hover';
   pad?: PadButton;
-  /** Pad: this binding is a hold, firing `onHold(true)` after this many ms (default 600). */
-  padHold?: number;
   /** A key held down rather than pressed: Shift compare, Alt labels (onHold true on down, false on up/blur). */
   whileHeld?: boolean;
 }
 
 /**
- * One prompt. Press timing:
- * - A prompt with only `onPress` fires on press down.
- * - Two prompts may share a pad button in a scope only if exactly one of them has `padHold`
- *   (Skills: Y Remove and hold-Y Apply). Then the tap's `onPress` fires on release under 400 ms,
- *   the hold's `onHold(true)` fires at `padHold`, and a press released between them fires neither.
- * - `whileHeld` and LT-hold prompts get `onHold(true)` on down and `onHold(false)` on up.
+ * One prompt. Press timing: a prompt with only `onPress` fires on press down; a `whileHeld` one
+ * gets `onHold(true)` on down and `onHold(false)` on up.
  */
 export interface Prompt {
   id: string;
@@ -37,6 +31,10 @@ export interface Prompt {
   /** Drawn as a real (non-navigable, data-pad-skip) button that the mouse can click, e.g. the hub's "Menu" (data-pad-back). */
   asButton?: boolean;
   padBack?: boolean;
+  /** The guided-start target the prompt bar puts on this prompt's item (`data-tutorial`): under the pad, the button to press. */
+  tutorial?: string;
+  /** Onboarding: this screen's first-visit line (`useOnboarding`); the prompt pulses while it shows. */
+  hint?: string;
 }
 
 export type GlyphId =
@@ -84,6 +82,8 @@ export interface DialogProps {
   footer?: ReactNode;
   width?: number;
   initialFocus?: RefObject<HTMLElement | null>;
+  /** Up and down wrap at the dialog's ends, its Back included (a plain list: the system menu). */
+  wrap?: boolean;
   testId?: string;
 }
 
@@ -123,6 +123,21 @@ export interface SegmentedProps<T extends string> {
   onChange: (id: T) => void;
   columns?: number;
   'aria-label': string;
+}
+
+/** The kit `Stepper`: one value of several, stepped left and right. */
+export interface StepperProps<T extends string> {
+  label: string;
+  /** In order; `text` is what assistive tech reads (`aria-valuetext`). */
+  options: { id: T; label: ReactNode; text: string }[];
+  value: T;
+  onChange: (id: T) => void;
+  /** One line under it: what the save lacks and where it drops. */
+  note?: ReactNode;
+  /** Its guided-start target (`data-tutorial`), and whether its step is done (`data-tutorial-done`). */
+  tutorial?: string;
+  done?: boolean;
+  testId?: string;
 }
 
 export interface BarProps {

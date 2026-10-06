@@ -5,7 +5,7 @@ import { uiLayer } from '../layer';
 
 afterEach(() => {
   document.body.innerHTML = '';
-  useUIStore.setState({ uiScale: 1, hudScale: 1 });
+  useUIStore.setState({ uiScale: 1, menuScale: 1, hudScale: 1 });
 });
 
 function nest(...classes: string[]): HTMLElement {
@@ -37,7 +37,7 @@ describe('the kit zoom', () => {
   });
 
   it('reads the zoom an element sits under from its layer class', () => {
-    useUIStore.setState({ uiScale: 1.5, hudScale: 1.1 });
+    useUIStore.setState({ uiScale: 1.5, menuScale: 1.5, hudScale: 1.1 });
     expect(layerZoom(nest('a', 'b'))).toBe(1);
     expect(layerZoom(nest('delve-ui delve-zoom', 'x'))).toBe(1.5);
     expect(layerZoom(nest('delve-hud-zoom', 'x'))).toBe(1.75);

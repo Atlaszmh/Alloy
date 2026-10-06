@@ -2,11 +2,13 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { createRef, type RefObject } from 'react';
 import {
-  captureNav,
   hudScaleFor,
-  navCapture,
+  MENU_MIN,
+  menuScaleFor,
+  orderPrompts,
   padPrompts,
   scopedLast,
+  TEXT_SIZES,
   topScope,
   uiScaleFor,
   usePrompts,
@@ -264,46 +266,16 @@ describe('the Esc and Enter rules', () => {
   });
 });
 
-describe('padPrompts: the tap and the hold', () => {
+describe('padPrompts: presses and held prompts', () => {
   const remove = vi.fn();
-  const apply = vi.fn();
   const prompts: Prompt[] = [
     { id: 'remove', label: 'Remove', binding: { key: 'Delete', pad: 'y' }, onPress: remove },
-    {
-      id: 'apply',
-      label: 'Apply',
-      binding: { key: 'Enter', ctrl: true, pad: 'y', padHold: 600 },
-      onHold: apply,
-    },
   ];
   const none = new Set<PadButton>();
   const y = new Set<PadButton>(['y']);
 
   afterEach(() => {
     remove.mockReset();
-    apply.mockReset();
-  });
-
-  it('a tap fires on its release under 400 ms; a hold at 600 ms; a release between fires neither', () => {
-    renderHook(() => usePrompts(prompts));
-    expect(padPrompts(y, held('y'), 1000)).toEqual(y);
-    expect(remove).not.toHaveBeenCalled(); // not on the press: it might become a hold
-    padPrompts(none, held(), 1300);
-    expect(remove).toHaveBeenCalledTimes(1);
-
-    padPrompts(y, held('y'), 2000);
-    padPrompts(none, held('y'), 2599);
-    expect(apply).not.toHaveBeenCalled();
-    padPrompts(none, held('y'), 2600);
-    padPrompts(none, held('y'), 2700);
-    padPrompts(none, held(), 2800);
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(apply).toHaveBeenCalledWith(true);
-    expect(remove).toHaveBeenCalledTimes(1);
-
-    padPrompts(y, held('y'), 3000);
-    padPrompts(none, held(), 3500);
-    expect([remove.mock.calls.length, apply.mock.calls.length]).toEqual([1, 1]);
   });
 
   it('a tap alone fires on its press; a display-only prompt takes nothing', () => {
@@ -347,24 +319,10 @@ describe('padPrompts: the tap and the hold', () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it('a press whose screen went away fires nothing: no tap on the release, no hold', () => {
-    const first = renderHook(() => usePrompts(prompts));
-    padPrompts(y, held('y'), 0);
-    first.unmount();
-    padPrompts(none, held(), 100);
-    const second = renderHook(() => usePrompts(prompts));
-    padPrompts(y, held('y'), 1000);
-    second.unmount();
-    padPrompts(none, held('y'), 1700);
-    padPrompts(none, held(), 1800);
-    expect([remove.mock.calls.length, apply.mock.calls.length]).toEqual([0, 0]);
-  });
-
-  it('the arena going live lets go of every held prompt: held ones hear the release, taps never fire', () => {
+  it('the arena going live lets go of every held prompt: held ones hear the release', () => {
     const compare = vi.fn();
     renderHook(() =>
       usePrompts([
-        ...prompts,
         {
           id: 'compare',
           label: 'Full compare',
@@ -374,28 +332,13 @@ describe('padPrompts: the tap and the hold', () => {
       ]),
     );
     keydown('ShiftLeft', { shiftKey: true });
-    padPrompts(new Set<PadButton>(['y', 'lt']), held('y', 'lt'), 0);
+    padPrompts(new Set<PadButton>(['lt']), held('lt'), 0);
     setArenaLive(true);
     expect(compare.mock.calls).toEqual([[true], [true], [false], [false]]);
     setArenaLive(false);
     keyup('ShiftLeft');
     padPrompts(none, held(), 100);
     expect(compare).toHaveBeenCalledTimes(4);
-    expect(remove).not.toHaveBeenCalled();
-  });
-});
-
-describe('captureNav', () => {
-  it('holds the handler until released; an older release leaves a newer one', () => {
-    const first = vi.fn();
-    const second = vi.fn();
-    const releaseFirst = captureNav(first);
-    expect(navCapture()).toBe(first);
-    const releaseSecond = captureNav(second);
-    releaseFirst();
-    expect(navCapture()).toBe(second);
-    releaseSecond();
-    expect(navCapture()).toBeNull();
   });
 });
 
@@ -419,6 +362,38 @@ describe('the UI scale', () => {
     expect(hudScaleFor(2, 0.8)).toBe(1.5);
   });
 
+  it("menuScaleFor: Small is the UI scale's quarter step; Medium and Large multiply it, capped where the window holds less than MENU_MIN", () => {
+    const { small, medium, large } = TEXT_SIZES;
+    // Small: exactly today's --ui-scale, everywhere.
+    for (const [w, h] of [[1280, 720], [1280, 800], [1920, 1080], [2560, 1440], [3440, 1440], [3840, 2160]])
+      expect(menuScaleFor(w, h, small)).toBe(uiScaleFor(w, h));
+    // 1920×1080: 115% and 130% in full; Large leaves exactly MENU_MIN.
+    expect(menuScaleFor(1920, 1080, medium)).toBe(1.15);
+    expect(menuScaleFor(1920, 1080, large)).toBe(1.3);
+    expect(1920 / 1.3).toBeGreaterThanOrEqual(MENU_MIN.w);
+    expect(1080 / 1.3).toBeGreaterThanOrEqual(MENU_MIN.h);
+    // 1280×800 (UI scale 0.75): Medium in full (0.8625, floored); Large capped to the same.
+    expect(menuScaleFor(1280, 800, medium)).toBe(0.86);
+    expect(menuScaleFor(1280, 800, large)).toBe(0.86);
+    expect(menuScaleFor(1280, 720, large)).toBe(0.86);
+    // Between: 1600×900 (UI scale 0.75) has room for most of Large.
+    expect(menuScaleFor(1600, 900, large)).toBe(0.97);
+    // Larger windows: the quarter step times the size, under the cap.
+    expect(menuScaleFor(2560, 1440, medium)).toBe(1.43);
+    expect(menuScaleFor(2560, 1440, large)).toBe(1.62);
+    expect(menuScaleFor(3840, 2160, large)).toBe(2.6);
+    // Never under the UI scale, and every result leaves at least MENU_MIN (or is the UI scale).
+    for (const [w, h] of [[1024, 640], [1280, 720], [1366, 768], [1600, 900], [1920, 1200], [2560, 1080]])
+      for (const t of [medium, large]) {
+        const z = menuScaleFor(w, h, t);
+        expect(z).toBeGreaterThanOrEqual(uiScaleFor(w, h));
+        if (z > uiScaleFor(w, h)) {
+          expect(w / z).toBeGreaterThanOrEqual(MENU_MIN.w);
+          expect(h / z).toBeGreaterThanOrEqual(MENU_MIN.h);
+        }
+      }
+  });
+
   it('useUiScale reads the mirrored UI scale and the HUD setting', () => {
     const { result } = renderHook(() => useUiScale());
     act(() => {
@@ -431,5 +406,43 @@ describe('the UI scale', () => {
       useUIStore.getState().setHudScale(1);
     });
     localStorage.removeItem('alloy:delve:hudScale');
+  });
+});
+
+describe('orderPrompts', () => {
+  const p = (id: string, binding: Prompt['binding']): Prompt => ({ id, label: id, binding });
+
+  it('sorts by the pad button: A, X, Y, the bumpers, the triggers, the sticks, View, Menu, then B', () => {
+    const mixed = [
+      p('back', { pad: 'b' }),
+      p('menu', { key: 'Escape', pad: 'menu' }),
+      p('filter', { pad: 'rt' }),
+      p('lock', { key: 'KeyL', pad: 'y' }),
+      p('tabs', { pad: 'lb' }),
+      p('salvage', { key: 'Delete', pad: 'x' }),
+      p('depart', { pad: 'view' }),
+      p('scroll', { pad: 'rs' }),
+      p('equip', { pad: 'a' }),
+    ];
+    expect(orderPrompts(mixed).map((x) => x.id)).toEqual([
+      'equip', 'salvage', 'lock', 'tabs', 'filter', 'scroll', 'depart', 'menu', 'back',
+    ]);
+  });
+
+  it('keeps the given order among prompts of one button, and puts a prompt with no pad button before B', () => {
+    const list = [
+      p('back', { pad: 'b' }),
+      p('keys-only', { key: 'KeyT' }),
+      p('select', { mouse: 'click', pad: 'a' }),
+      p('equip', { mouse: 'rmb', pad: 'a' }),
+    ];
+    expect(orderPrompts(list).map((x) => x.id)).toEqual(['select', 'equip', 'keys-only', 'back']);
+  });
+
+  it('returns a new array and leaves its input alone', () => {
+    const list = [p('back', { pad: 'b' }), p('equip', { pad: 'a' })];
+    const out = orderPrompts(list);
+    expect(out).not.toBe(list);
+    expect(list.map((x) => x.id)).toEqual(['back', 'equip']);
   });
 });

@@ -4,6 +4,8 @@ import { rerollContract, startDive, type Contract, type ProfileActionResult } fr
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../../onboarding';
 import { QuestsTab } from '../QuestsTab';
 import { SAMPLE_QUESTS } from '../../../quests/__tests__/quest-fixture';
 import type { QuestView } from '../../../quests/types';
@@ -34,8 +36,8 @@ vi.mock('@alloy/engine', async (importOriginal) => ({
 
 const renderTab = (link?: HubLink, mode: HubMode = 'anvil') => {
   const props = { setPrompts: vi.fn(), setFooterAction: vi.fn(), go: vi.fn(), onDelve: vi.fn() };
-  render(<QuestsTab mode={mode} link={link} {...props} />);
-  return props;
+  const { unmount } = render(<QuestsTab mode={mode} link={link} {...props} />);
+  return { ...props, unmount };
 };
 /** The prompts the tab last handed the hub. */
 const lastPrompts = (setPrompts: ReturnType<typeof vi.fn>): Prompt[] =>
@@ -83,6 +85,36 @@ describe('QuestsTab', () => {
     fireEvent.click(screen.getByTestId('quest-rat-catcher'));
     expect(screen.getByTestId('quest-detail')).toHaveTextContent('Slay mine rats');
     expect(screen.getByTestId('quest-rewards')).toHaveTextContent('200 scrap');
+  });
+
+  it('opens on the first quest that waits to be claimed', () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }, DEEP_ROOTS];
+    renderTab();
+    expect(screen.getByTestId(`quest-${KINDLING.id}`)).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('opens on the first quest not yet claimed when none waits, else the first', () => {
+    shown.quests = [{ ...MAIN, status: 'claimed' }, KINDLING];
+    const { unmount } = renderTab();
+    expect(screen.getByTestId(`quest-${KINDLING.id}`)).toHaveAttribute('aria-current', 'true');
+    unmount();
+
+    shown.quests = [{ ...MAIN, status: 'claimed' }];
+    renderTab();
+    expect(screen.getByTestId('quest-detail')).toHaveTextContent(MAIN.name);
+  });
+
+  it('a link still opens its quest over the default', () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }];
+    renderTab({ tab: 'quests', questId: MAIN.id });
+    expect(screen.getByTestId(`quest-${MAIN.id}`)).toHaveAttribute('aria-current', 'true');
+  });
+
+  it("the open quest's row is the tab's data-pad-first, and only it", () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }, DEEP_ROOTS];
+    renderTab();
+    const first = [...document.querySelectorAll('[data-pad-first]')];
+    expect(first).toEqual([screen.getByTestId(`quest-${KINDLING.id}`)]);
   });
 
   it('tracks on the HUD from the button and from G / Y, three at most', () => {
@@ -154,7 +186,8 @@ describe('QuestsTab', () => {
       { ...KINDLING, status: 'complete' },
       { ...DEEP_ROOTS, status: 'complete' },
     ];
-    renderTab();
+    // Another quest opened by a link: the row that waits is not the open one yet.
+    renderTab({ tab: 'quests', questId: MAIN.id });
     const row = screen.getByTestId('quest-kindling');
     expect(row).toHaveAttribute('data-tutorial', 'quests.done');
     expect(row).toHaveAttribute('data-tutorial-done', 'false');
@@ -163,6 +196,13 @@ describe('QuestsTab', () => {
     expect(screen.getByTestId('quest-frozen-foreman')).not.toHaveAttribute('data-tutorial');
     fireEvent.click(row);
     expect(row).toHaveAttribute('data-tutorial-done', 'true');
+    expect(screen.getByTestId('quest-claim')).toHaveAttribute('data-tutorial', 'quests.claim');
+  });
+
+  it('with no link the row that waits is open, so the guided start goes straight to Claim', () => {
+    shown.quests = [MAIN, { ...KINDLING, status: 'complete' }];
+    renderTab();
+    expect(screen.getByTestId('quest-kindling')).toHaveAttribute('data-tutorial-done', 'true');
     expect(screen.getByTestId('quest-claim')).toHaveAttribute('data-tutorial', 'quests.claim');
   });
 
@@ -176,12 +216,16 @@ describe('QuestsTab', () => {
         ],
       }),
     );
+    useUIStore.setState({ seen: [] });
     const { setPrompts } = renderTab();
+    // A first visit: Claim carries the screen's line, until a claim.
+    expect(lastPrompts(setPrompts).find((p) => p.id === 'claim')!.hint).toBe(ONBOARDING.quests);
     const claim = screen.getByTestId('quest-claim');
     expect(claim).toHaveTextContent('Claim');
     expect(claim).toBeEnabled();
     fireEvent.click(claim);
     expect(useDelveStore.getState().claimQuest).toHaveBeenCalledWith('frozen-foreman');
+    expect(useUIStore.getState().seen).toContain('quests');
     expect(screen.getByTestId('quest-message')).toHaveTextContent(
       'Claimed The Frozen Foreman: 40 scrap, 1 × Uncommon flux',
     );
@@ -235,10 +279,142 @@ describe('QuestsTab', () => {
     try {
       shown.quests = [{ ...MAIN, status: 'complete' }];
       const { setPrompts } = renderTab();
-      expect(lastPrompts(setPrompts).map((p) => p.id)).toEqual(['select', 'track']);
+      expect(lastPrompts(setPrompts).map((p) => [p.id, p.label])).toEqual([
+        ['select', 'Claim'],
+        ['track', 'Untrack'],
+      ]);
     } finally {
       useInputDeviceStore.setState({ device: 'keyboard' });
     }
+  });
+
+  describe('claiming on the row, under the pad', () => {
+    beforeEach(() => useInputDeviceStore.setState({ device: 'gamepad' }));
+    afterEach(() => useInputDeviceStore.setState({ device: 'keyboard' }));
+
+    it('pressing the open, complete row claims it, and the prompt reads Claim', () => {
+      shown.quests = [{ ...MAIN, status: 'complete' }, DEEP_ROOTS];
+      const { setPrompts } = renderTab();
+      expect(lastPrompts(setPrompts).map((p) => [p.id, p.label])).toEqual([
+        ['select', 'Claim'],
+        ['track', 'Untrack'],
+      ]);
+      fireEvent.click(screen.getByTestId(`quest-${MAIN.id}`));
+      expect(useDelveStore.getState().claimQuest).toHaveBeenCalledWith(MAIN.id);
+      expect(screen.getByTestId('quest-message')).toHaveTextContent(`Claimed ${MAIN.name}`);
+    });
+
+    it('pressing another row opens it and claims nothing; a quest still under way reads Select', () => {
+      shown.quests = [{ ...MAIN, status: 'complete' }, DEEP_ROOTS];
+      const { setPrompts } = renderTab();
+      fireEvent.click(screen.getByTestId(`quest-${DEEP_ROOTS.id}`));
+      expect(useDelveStore.getState().claimQuest).not.toHaveBeenCalled();
+      expect(screen.getByTestId(`quest-${DEEP_ROOTS.id}`)).toHaveAttribute('aria-current', 'true');
+      expect(lastPrompts(setPrompts).find((p) => p.id === 'select')?.label).toBe('Select');
+    });
+
+    it('while a dive is open the row only opens, and the prompt reads Select', () => {
+      shown.quests = [{ ...MAIN, status: 'complete' }];
+      const { setPrompts } = renderTab(undefined, 'pause');
+      fireEvent.click(screen.getByTestId(`quest-${MAIN.id}`));
+      expect(useDelveStore.getState().claimQuest).not.toHaveBeenCalled();
+      expect(lastPrompts(setPrompts).find((p) => p.id === 'select')?.label).toBe('Select');
+    });
+
+    it('after a claim the next quest that waits opens and takes the focus', () => {
+      shown.quests = [
+        { ...MAIN, status: 'complete' },
+        DEEP_ROOTS,
+        { ...KINDLING, status: 'complete' },
+      ];
+      renderTab();
+      fireEvent.click(screen.getByTestId(`quest-${MAIN.id}`));
+      const next = screen.getByTestId(`quest-${KINDLING.id}`);
+      expect(next).toHaveAttribute('aria-current', 'true');
+      expect(document.activeElement).toBe(next);
+      // The line that says what was claimed stays over the next quest.
+      expect(screen.getByTestId('quest-message')).toHaveTextContent(`Claimed ${MAIN.name}`);
+    });
+
+    it('a refused claim opens nothing else', () => {
+      shown.quests = [{ ...MAIN, status: 'complete' }, { ...KINDLING, status: 'complete' }];
+      vi.mocked(useDelveStore.getState().claimQuest).mockReturnValue(
+        ok({ ok: false, reason: 'Finish or leave the dive first' }),
+      );
+      renderTab();
+      fireEvent.click(screen.getByTestId(`quest-${MAIN.id}`));
+      expect(screen.getByTestId(`quest-${MAIN.id}`)).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByTestId('quest-message')).toHaveTextContent('Finish or leave the dive first');
+    });
+  });
+
+  it('with the mouse, pressing the open, complete row claims nothing', () => {
+    shown.quests = [{ ...MAIN, status: 'complete' }];
+    renderTab();
+    fireEvent.click(screen.getByTestId(`quest-${MAIN.id}`));
+    expect(useDelveStore.getState().claimQuest).not.toHaveBeenCalled();
+  });
+
+  it('with the mouse, a claim from the button opens the next quest that waits and moves no focus', () => {
+    shown.quests = [{ ...MAIN, status: 'complete' }, { ...KINDLING, status: 'complete' }];
+    renderTab();
+    const claim = screen.getByTestId('quest-claim');
+    claim.focus();
+    fireEvent.click(claim);
+    expect(screen.getByTestId(`quest-${KINDLING.id}`)).toHaveAttribute('aria-current', 'true');
+    expect(document.activeElement).not.toBe(screen.getByTestId(`quest-${KINDLING.id}`));
+  });
+
+  describe('Claim all', () => {
+    const two = () => [
+      { ...MAIN, status: 'complete' as const },
+      DEEP_ROOTS,
+      { ...KINDLING, status: 'complete' as const },
+    ];
+
+    it("shows while two or more quests wait, as the tab's data-pad-first", () => {
+      shown.quests = [{ ...MAIN, status: 'complete' }, DEEP_ROOTS];
+      const { unmount } = renderTab();
+      expect(screen.queryByTestId('quest-claim-all')).toBeNull();
+      unmount();
+
+      shown.quests = two();
+      renderTab();
+      const all = screen.getByTestId('quest-claim-all');
+      expect(all).toHaveTextContent('Claim all 2');
+      expect([...document.querySelectorAll('[data-pad-first]')]).toEqual([all]);
+    });
+
+    it("claims each in the journal's order and says what it claimed", () => {
+      shown.quests = two();
+      renderTab();
+      fireEvent.click(screen.getByTestId('quest-claim-all'));
+      expect(vi.mocked(useDelveStore.getState().claimQuest).mock.calls.map(([id]) => id)).toEqual(
+        [MAIN.id, KINDLING.id],
+      );
+      expect(screen.getByTestId('quest-message')).toHaveTextContent(
+        `Claimed 2 quests: ${MAIN.name}, ${KINDLING.name}`,
+      );
+    });
+
+    it("stops at a refusal and shows the engine's reason", () => {
+      shown.quests = two();
+      vi.mocked(useDelveStore.getState().claimQuest)
+        .mockReturnValueOnce(ok())
+        .mockReturnValueOnce(ok({ ok: false, reason: 'The pouch is full' }));
+      renderTab();
+      fireEvent.click(screen.getByTestId('quest-claim-all'));
+      expect(useDelveStore.getState().claimQuest).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('quest-message')).toHaveTextContent(
+        `Claimed 1 quest: ${MAIN.name} · The pouch is full`,
+      );
+    });
+
+    it('is absent while a dive is open', () => {
+      shown.quests = two();
+      renderTab(undefined, 'pause');
+      expect(screen.queryByTestId('quest-claim-all')).toBeNull();
+    });
   });
 
   it('the Contract board: its slots in order, empty ones waiting for the next dive', () => {

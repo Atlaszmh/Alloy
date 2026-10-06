@@ -11,14 +11,14 @@ import {
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
-import { Button, Glyph, PixelSprite } from '../kit';
+import { Glyph, PixelSprite } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { formatNumber } from '../format';
 
 /*
  * Short screens: under 810 px tall the UI scale sits at its 0.75 floor, so the 1080-high design
  * has less than 1080 px. There the plates tighten and the doorways shrink to 64×72 (art at 3/4),
- * so three doors and Extract fit at 1280×720.
+ * so three doors, Extract and the potion fit across at 1280×720.
  */
 
 /** The 84×96 doorway each choice's art stands in (64×72 on short screens). */
@@ -42,23 +42,19 @@ function Doorway({ fill, children }: { fill: string; children: ReactNode }): Rea
 function DoorButton({
   art,
   title,
-  body,
-  aside,
+  lines,
   first,
   primary,
-  disabled,
   tutorial,
   onClick,
   testId,
 }: {
   art: ReactNode;
   title: ReactNode;
-  body: ReactNode;
-  aside?: ReactNode;
+  lines: ReactNode;
   first?: boolean;
   /** The first door: the responsive harness's reachability probe checks it. */
   primary?: boolean;
-  disabled?: boolean;
   tutorial?: TutorialTarget;
   onClick: () => void;
   testId: string;
@@ -66,9 +62,8 @@ function DoorButton({
   return (
     <button
       type="button"
-      className="k-plate flex flex-none items-center gap-4 p-5 text-left text-[var(--k-text)] [@media(max-height:809px)]:px-4 [@media(max-height:809px)]:py-2.5"
+      className="k-plate flex min-w-0 flex-1 basis-0 flex-col items-center gap-2 p-5 text-center text-[var(--k-text)] [@media(max-height:809px)]:p-3"
       onClick={onClick}
-      disabled={disabled}
       data-tutorial={tutorial}
       data-door
       data-pad-first={first || undefined}
@@ -76,18 +71,49 @@ function DoorButton({
       data-testid={testId}
     >
       {art}
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="k-disp text-[22px]">{title}</span>
-        <span className="text-[14px] text-[var(--k-text-3)]">{body}</span>
-      </span>
-      {aside}
+      <span className="k-disp text-[24px]">{title}</span>
+      {lines}
     </button>
   );
 }
 
-/** A door's loot multipliers as the data gives them: "Materials ×1.3", "Find +75%", "Tier up 35%". */
-export function doorLoot(mods: DoorMods): string[] {
-  const out: string[] = [];
+/** A door's terms in words, for its two lines: what it costs (red, "Cost: …") and what it gives (green, "Gain: …"). */
+export interface DoorTerms {
+  cost: string[];
+  gain: string[];
+}
+
+const pct = (v: number) => `${Math.round(Math.abs(v) * 100)}%`;
+
+/**
+ * A door's mods as words (the pad-first spec, 3: each door's cost and gain on separate lines,
+ * worded as well as coloured). A harder or longer road is a cost, a richer or kinder one a gain;
+ * a loot multiplier under 1 is a cost ("Materials ×0.5"). A door with neither (the Winding Path)
+ * shows its own text instead.
+ */
+export function doorTerms(mods: DoorMods): DoorTerms {
+  const cost: string[] = [];
+  const gain: string[] = [];
+  if (mods.skip) cost.push(`${mods.skip} depths deeper`);
+  if (mods.monsterHp)
+    (mods.monsterHp > 0 ? cost : gain).push(
+      `Foes ${mods.monsterHp > 0 ? '+' : '−'}${pct(mods.monsterHp)} life`,
+    );
+  if (mods.monsterDmg)
+    (mods.monsterDmg > 0 ? cost : gain).push(
+      `Foes hit ${pct(mods.monsterDmg)} ${mods.monsterDmg > 0 ? 'harder' : 'softer'}`,
+    );
+  if (mods.eliteChance)
+    cost.push(
+      mods.eliteChance >= 1 ? 'An elite leads every pack' : `Elite packs ${pct(mods.eliteChance)}`,
+    );
+  if (mods.packs && mods.packs !== 1)
+    (mods.packs > 1 ? cost : gain).push(
+      `${pct(mods.packs - 1)} ${mods.packs > 1 ? 'more' : 'fewer'} foes`,
+    );
+  if (mods.healFull) gain.push('Heal to full');
+  if (mods.potions) gain.push(`+${mods.potions} potion${mods.potions === 1 ? '' : 's'}`);
+  if (mods.bountyMult && mods.bountyMult !== 1) gain.push(`Bounty ×${mods.bountyMult}`);
   const times: [number | undefined, string][] = [
     [mods.materials, 'Materials'],
     [mods.runes, 'Runes'],
@@ -95,10 +121,11 @@ export function doorLoot(mods: DoorMods): string[] {
     [mods.flux, 'Flux'],
     [mods.essence, 'Essences'],
   ];
-  for (const [v, label] of times) if (v !== undefined && v !== 1) out.push(`${label} ×${v}`);
-  if (mods.find) out.push(`Find +${mods.find}%`);
-  if (mods.shardTier) out.push(`Tier up ${Math.round(mods.shardTier * 100)}%`);
-  return out;
+  for (const [v, label] of times)
+    if (v !== undefined && v !== 1) (v > 1 ? gain : cost).push(`${label} ×${v}`);
+  if (mods.find) gain.push(`Find +${mods.find}%`);
+  if (mods.shardTier) gain.push(`Tier up ${pct(mods.shardTier)}`);
+  return { cost, gain };
 }
 
 /**
@@ -113,25 +140,20 @@ function tutorialStop(state: TutorialState | null): TutorialStopDef | undefined 
 }
 
 /**
- * "Choose your path": each door as a plate with its art in a doorway (the next depth's first
- * monster, or the chest for a door that raises gear or essences), its depth, a boss mark and its
- * loot multipliers (`doorLoot`); Extract,
- * with the hero leaving; then the hero's life and potions, and a potion to drink. With
- * `padFirst`, the first door is the pad's first focus (not while a power-up is on offer).
- * With no doors, Extract stands alone (the first focus); a guided stop that doesn't extract
- * hides it; while `held` (a required power-up not yet taken) every road waits.
+ * Step 2's row (the pad-first spec, 3): each door as a plate with its art in a doorway (the next
+ * depth's first monster, or the chest for a door that raises gear or essences), its depth, a boss
+ * mark, and its cost and gain on their own lines (`doorTerms`), or its own text when it has
+ * neither; Extract, with the hero leaving; and, while life is below full and a potion is left, the
+ * potion. The first road is the pad's first focus (Extract, with no doors). A guided stop that
+ * doesn't extract hides Extract.
  */
 export function DoorPane({
   dive,
-  padFirst,
-  held = false,
   onChoose,
   onExtract,
   onPotion,
 }: {
   dive: DiveState;
-  padFirst: boolean;
-  held?: boolean;
   onChoose: (doorId: string) => void;
   onExtract: () => void;
   onPotion: () => void;
@@ -141,19 +163,11 @@ export function DoorPane({
   const tutorial = useDelveStore((s) => s.profile.tutorial);
   const extract = tutorialStop(tutorial)?.extract ?? true;
   const doors = dive.doorChoices.length > 0;
+  const thirsty = dive.potions > 0 && dive.heroHpFrac < 1;
   return (
-    <section
-      aria-label="Doors"
-      className="flex min-h-0 flex-col gap-4 [@media(max-height:809px)]:gap-3"
-    >
-      <h2 className="k-section m-0 text-[26px]">{doors ? 'Choose your path' : 'The way home'}</h2>
-      {held && (
-        <span className="text-[16px] text-[var(--k-hot)]" data-testid="roads-held">
-          Take the power-up to go on
-        </span>
-      )}
+    <div className="flex min-h-0 items-stretch gap-5 [@media(max-height:809px)]:gap-3">
       <div
-        className="k-scroll flex min-h-0 flex-col gap-4 [@media(max-height:809px)]:gap-3"
+        className="flex min-w-0 flex-[3] items-stretch gap-5 [@media(max-height:809px)]:gap-3"
         data-testid="door-list"
         data-tutorial="stop.doors"
       >
@@ -162,12 +176,12 @@ export function DoorPane({
           const next = dive.depth + 1 + (door.mods.skip ?? 0);
           const monster = registry.getBiomeForDepth(next).monsters[0];
           const treasure = (door.mods.gear ?? 1) > 1 || (door.mods.essence ?? 1) > 1;
+          const { cost, gain } = doorTerms(door.mods);
           return (
             <DoorButton
               key={id}
-              first={padFirst && i === 0}
+              first={i === 0}
               primary={i === 0}
-              disabled={held}
               testId={`door-${id}`}
               art={
                 <Doorway fill={treasure ? 'var(--k-wood-0)' : 'var(--k-mana-2)'}>
@@ -181,21 +195,35 @@ export function DoorPane({
                 </Doorway>
               }
               title={door.name}
-              body={door.text}
-              aside={
-                <span className="flex flex-none flex-col items-end gap-1 text-[14px]">
-                  <span className="k-disp text-[18px] text-[var(--k-text-2)]">Depth {next}</span>
-                  {isBossDepth(registry, next) && (
-                    <span className="flex items-center gap-1 text-[var(--k-bad-text)]">
-                      <Glyph id="skull" size={14} /> Boss
+              lines={
+                <>
+                  <span className="flex items-center gap-2 text-[18px] text-[var(--k-text-2)]">
+                    Depth {next}
+                    {isBossDepth(registry, next) && (
+                      <span className="flex items-center gap-1 text-[var(--k-bad-text)]">
+                        <Glyph id="skull" size={14} /> Boss
+                      </span>
+                    )}
+                  </span>
+                  {cost.length > 0 && (
+                    <span
+                      className="text-[18px] leading-tight text-[var(--k-bad-text)]"
+                      data-door-cost
+                    >
+                      Cost: {cost.join(' · ')}
                     </span>
                   )}
-                  {doorLoot(door.mods).map((text) => (
-                    <span key={text} className="leading-tight text-[var(--k-mana)]" data-door-loot>
-                      {text}
+                  {gain.length > 0 && (
+                    <span className="text-[18px] leading-tight text-[var(--k-ok)]" data-door-gain>
+                      Gain: {gain.join(' · ')}
                     </span>
-                  ))}
-                </span>
+                  )}
+                  {cost.length + gain.length === 0 && (
+                    <span className="text-[18px] leading-tight text-[var(--k-text-3)]">
+                      {door.text}
+                    </span>
+                  )}
+                </>
               }
               onClick={() => {
                 playSound('phaseTransition');
@@ -210,15 +238,18 @@ export function DoorPane({
         <DoorButton
           testId="extract-button"
           tutorial="stop.extract"
-          first={padFirst && !doors}
-          disabled={held}
+          first={!doors}
           art={
             <Doorway fill="var(--k-steel)">
               <PixelSprite id="hero" scale={4} context="ui" label="Your hero leaving" />
             </Doorway>
           }
           title="Extract"
-          body={`Leave with ${formatNumber(dive.bounty)} scrap and ${finds} finds.`}
+          lines={
+            <span className="text-[18px] leading-tight text-[var(--k-ok)]">
+              Leave with {formatNumber(dive.bounty)} scrap and {finds} finds.
+            </span>
+          }
           onClick={() => {
             playSound('victory');
             vibrate('success');
@@ -226,20 +257,21 @@ export function DoorPane({
           }}
         />
       )}
-      <div className="mt-auto flex items-center justify-between gap-3">
-        <span className="text-[16px] text-[var(--k-text-2)]">
-          Life {Math.round(dive.heroHpFrac * 100)}% · {dive.potions} potion
-          {dive.potions === 1 ? '' : 's'}
-        </span>
-        <Button
-          size="sm"
+      {thirsty && (
+        <button
+          type="button"
+          className="k-plate flex w-[220px] flex-none flex-col items-center justify-center gap-2 p-5 text-center text-[var(--k-text)] [@media(max-height:809px)]:p-3"
           onClick={onPotion}
-          disabled={dive.potions <= 0 || dive.heroHpFrac >= 1}
-          testId="door-potion"
+          data-testid="door-potion"
         >
-          <Glyph id="potion" size={18} /> Drink potion
-        </Button>
-      </div>
-    </section>
+          <Glyph id="potion" size={40} />
+          <span className="k-disp text-[22px]">Drink a potion</span>
+          <span className="text-[18px] text-[var(--k-text-2)]">
+            Life {Math.round(dive.heroHpFrac * 100)}% · {dive.potions} potion
+            {dive.potions === 1 ? '' : 's'}
+          </span>
+        </button>
+      )}
+    </div>
   );
 }

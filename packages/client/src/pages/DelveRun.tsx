@@ -22,6 +22,7 @@ import {
   type TutorialEvent,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { useUIStore } from '@/stores/uiStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -40,6 +41,9 @@ import { PurseBar } from '@/features/delve/arena/hud/PurseBar';
 import { SkillDock } from '@/features/delve/arena/hud/SkillDock';
 import { BossBar } from '@/features/delve/arena/hud/BossBar';
 import { FloorColumn } from '@/features/delve/arena/hud/FloorColumn';
+import { GainFeed } from '@/features/delve/arena/hud/GainFeed';
+import { LeanCorner } from '@/features/delve/arena/hud/LeanCorner';
+import { PeekOverlay } from '@/features/delve/arena/hud/PeekOverlay';
 import { useQuests } from '@/features/delve/quests/useQuests';
 import { StopScreen } from '@/features/delve/stop/StopScreen';
 import { TutorialPanel } from '@/features/delve/tutorial/TutorialPanel';
@@ -89,7 +93,7 @@ function Banner({ banner, onDone }: { banner: BannerState; onDone: () => void })
         {banner.title}
       </div>
       {banner.sub && (
-        <div className="delve-display mt-1 text-sm font-semibold text-stone-100 [text-shadow:2px_2px_0_#181425]">
+        <div className="delve-display mt-1 text-[16px] font-semibold text-stone-100 [text-shadow:2px_2px_0_#181425]">
           {banner.sub}
         </div>
       )}
@@ -116,6 +120,9 @@ export function DelveRun() {
   const [alcove, setAlcove] = useState<StopKind[] | null>(null);
   /** A fall while the guided start runs: the retry screen, in place of the summary. */
   const [fallen, setFallen] = useState(false);
+  /** The peek (D-pad up, M, the HUD's Map): the large map, the purse and the finds over the fight. */
+  const [peek, setPeek] = useState(false);
+  const togglePeek = useCallback(() => setPeek((p) => !p), []);
   /** Reads the floor's tutorial again at once, after the page sends it an event. */
   const [, bump] = useReducer((n: number) => n + 1, 0);
   const bannerId = useRef(0);
@@ -133,7 +140,7 @@ export function DelveRun() {
     (e: ArenaUiEvent) => {
       switch (e.kind) {
         case 'events':
-          playArenaEvents(e.events);
+          playArenaEvents(e.events, e.cues);
           break;
         case 'loot':
           if (e.bagFull) showToast('Bag full: extra loot was salvaged');
@@ -204,9 +211,15 @@ export function DelveRun() {
     setArenaLive(!paused);
     return () => setArenaLive(false);
   }, [paused]);
+  // Anything that stops the fight (the pause, the stop, a dialog, a beat) closes the peek.
+  useEffect(() => {
+    if (paused) setPeek(false);
+  }, [paused]);
   // Hesta's strip in the HUD: a floor's steps only (the stop shows its own), never under the retry screen.
   const guidedFloor = !fallen && !!stepIn(registry, tutorial, SHOWN_AT.floor);
   const manualAttack = useDelveStore((s) => s.manualAttack);
+  // Settings → HUD (the pad-first spec, 3): the lean HUD by default, today's full one by choice.
+  const lean = useUIStore((s) => s.hudMode) === 'lean';
   const arena = useArena(hostRef, { paused, insets, onUi, manualAttack });
   arenaRef.current = arena;
   const { quests } = useQuests();
@@ -353,20 +366,42 @@ export function DelveRun() {
       )}
 
       <HudGrid
+        testId="dive-hud"
         onInsets={setInsets}
+        insetRight={!lean}
         inert={!!pause || choosing || asking || fallen}
         hidden={choosing && !finished}
-        top={<PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />}
+        top={
+          lean ? (
+            // While the fight is live every toast is a line of the feed (`routeToasts`).
+            <GainFeed live={!paused} />
+          ) : (
+            <PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} onPeek={togglePeek} />
+          )
+        }
         right={
-          <FloorColumn
-            dive={dive}
-            biome={biome}
-            hud={arena.hud}
-            // One goal on screen: the tracked quests give way to a guided step.
-            quests={guidedFloor ? [] : quests}
-            onInspect={openItem}
-            onJournal={openJournal}
-          />
+          lean ? (
+            <LeanCorner
+              dive={dive}
+              biome={biome}
+              // One goal on screen: the tracked quests give way to a guided step.
+              quests={guidedFloor ? [] : quests}
+              map={arena.hud?.map ?? null}
+              onMenu={openMenu}
+              onJournal={openJournal}
+              onPeek={togglePeek}
+            />
+          ) : (
+            <FloorColumn
+              dive={dive}
+              biome={biome}
+              hud={arena.hud}
+              // One goal on screen: the tracked quests give way to a guided step.
+              quests={guidedFloor ? [] : quests}
+              onInspect={openItem}
+              onJournal={openJournal}
+            />
+          )
         }
         dock={
           !choosing &&
@@ -399,6 +434,8 @@ export function DelveRun() {
         }
       />
 
+      {peek && !paused && <PeekOverlay dive={dive} map={arena.hud?.map ?? null} lean={lean} />}
+
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
       {choosing && !finished && (
@@ -421,6 +458,8 @@ export function DelveRun() {
             dive={dive}
             biome={biome}
             foesLeft={arena.hud?.monstersLeft ?? 0}
+            roomsExplored={arena.hud?.map.floor?.explored}
+            roomsTotal={arena.hud?.map.floor?.total}
             link={pause.link}
             atStop={choosing}
             onResume={resume}

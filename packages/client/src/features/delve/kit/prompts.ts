@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import { hudZoom } from './zoom';
 import { isArenaLive } from '@/features/gamepad/gamepad-hub';
 import type { PadButton } from '@/features/gamepad/gamepad';
-import type { NavDir } from '@/features/gamepad/spatial-nav';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { Binding, Prompt } from './types';
@@ -17,11 +16,6 @@ import type { Binding, Prompt } from './types';
  * the menu key and the pad then. A handled key is `preventDefault`ed, and a
  * key already prevented is skipped, so no press acts twice.
  */
-
-/** A pad tap that shares its button with a hold fires on a release under this. */
-export const TAP_MAX_MS = 400;
-/** A pad hold's default length (`Binding.padHold`). */
-export const HOLD_MS = 600;
 
 function visible(el: Element): boolean {
   const r = el.getBoundingClientRect();
@@ -64,6 +58,28 @@ function activePrompts(): Prompt[] {
     .filter((e) => scopeOf(e) === top)
     .flatMap((e) => e.prompts)
     .filter((p) => !p.disabled && (p.onPress || p.onHold));
+}
+
+// ── Order ─────────────────────────────────────────────────────────────────
+
+/** The one order every footer draws its prompts in (the pad-first spec's grammar, rule 3). */
+const PAD_ORDER: readonly PadButton[] = [
+  'a', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'ls', 'rs', 'view', 'menu', 'b',
+];
+/** A prompt with no pad button, or one on the D-pad (keys or the mouse alone; a carry), sits after Menu and before B. */
+const NO_PAD_RANK = PAD_ORDER.indexOf('b') - 0.5;
+
+/**
+ * `prompts` in the grammar's order: by pad button (A, X, Y, LB/RB, LT/RT, the sticks, View,
+ * Menu, B), those of one button in the order given. The same order for every device, so the
+ * keys' prompts sit where the pad's do.
+ */
+export function orderPrompts(prompts: Prompt[]): Prompt[] {
+  const rank = (p: Prompt) => {
+    const i = p.binding.pad ? PAD_ORDER.indexOf(p.binding.pad) : -1;
+    return i < 0 ? NO_PAD_RANK : i;
+  };
+  return [...prompts].sort((a, b) => rank(a) - rank(b));
 }
 
 // ── Keys ──────────────────────────────────────────────────────────────────
@@ -184,12 +200,10 @@ export function usePrompts(prompts: Prompt[], scopeRef?: RefObject<HTMLElement |
 
 // ── The pad ───────────────────────────────────────────────────────────────
 
+/** A `whileHeld` prompt's button, held. */
 interface PadPress {
   at: number;
-  /** The tap that shares its button with `hold`: it fires on a release under TAP_MAX_MS. */
-  tap?: Prompt;
-  hold?: Prompt;
-  whileHeld?: Prompt;
+  whileHeld: Prompt;
   fired: boolean;
 }
 
@@ -199,10 +213,8 @@ const padHeld = new Map<PadButton, PadPress>();
  * The menu navigation's hand-off, once a frame (outside live combat): the
  * buttons pressed this frame (`pressed`), the buttons held (`held`) and the
  * time. Returns the presses a prompt took, which the navigation then leaves
- * alone. A tap alone fires on its press; a tap sharing its button with a hold
- * fires on a release under `TAP_MAX_MS`, the hold's `onHold(true)` at its
- * `padHold`, and a release between them fires neither; a `whileHeld` prompt
- * gets `onHold(true)` on the press and `onHold(false)` on the release.
+ * alone. A prompt fires on its press; a `whileHeld` one gets `onHold(true)` on
+ * the press and `onHold(false)` on the release. No menu prompt is a hold.
  */
 export function padPrompts(
   pressed: ReadonlySet<PadButton>,
@@ -210,17 +222,9 @@ export function padPrompts(
   now: number,
 ): Set<PadButton> {
   for (const [button, p] of padHeld) {
-    if (!held[button]) {
-      padHeld.delete(button);
-      if (p.whileHeld) p.whileHeld.onHold?.(false);
-      else if (!p.fired && now - p.at < TAP_MAX_MS) {
-        const tap = stillActive(p.tap);
-        if (tap) fire(tap);
-      }
-    } else if (p.hold && !p.fired && now - p.at >= (p.hold.binding.padHold || HOLD_MS)) {
-      p.fired = true;
-      stillActive(p.hold)?.onHold?.(true);
-    }
+    if (held[button]) continue;
+    padHeld.delete(button);
+    p.whileHeld.onHold?.(false);
   }
   const took = new Set<PadButton>();
   if (pressed.size === 0) return took;
@@ -230,13 +234,10 @@ export function padPrompts(
     if (mine.length === 0) continue;
     took.add(button);
     const whileHeld = mine.find((p) => p.binding.whileHeld);
-    const hold = mine.find((p) => p.binding.padHold !== undefined);
-    const tap = mine.find((p) => p !== whileHeld && p !== hold);
     if (whileHeld) {
       padHeld.set(button, { at: now, whileHeld, fired: true });
       whileHeld.onHold?.(true);
-    } else if (hold) padHeld.set(button, { at: now, hold, tap, fired: false });
-    else if (tap) fire(tap);
+    } else fire(mine[0]);
   }
   return took;
 }
@@ -246,15 +247,9 @@ function fire(p: Prompt): void {
   else p.onHold?.(true);
 }
 
-/** `p` as its screen has it now (by id), or undefined once its screen is gone or covered. */
-function stillActive(p: Prompt | undefined): Prompt | undefined {
-  return p && activePrompts().find((q) => q.id === p.id);
-}
-
 /**
  * Let go of every held key and pad button (a window blur, which never delivers
- * the keyup; the arena going live): a `whileHeld` prompt hears `onHold(false)`,
- * and a pending tap or hold never fires.
+ * the keyup; the arena going live): a `whileHeld` prompt hears `onHold(false)`.
  */
 export function releasePromptHolds(): void {
   const letGo = [...keysHeld.values()];
@@ -262,24 +257,6 @@ export function releasePromptHolds(): void {
   keysHeld.clear();
   padHeld.clear();
   for (const p of letGo) p.onHold?.(false);
-}
-
-/** What a carried card hears from the pad (Skills' reorder). */
-export type NavInput = NavDir | 'a' | 'b' | 'x';
-
-let carrying: ((input: NavInput) => void) | null = null;
-
-/** While carrying (Skills' pad reorder): the D-pad and A/B/X go to `handler` instead of the nav. Returns release. */
-export function captureNav(handler: (input: NavInput) => void): () => void {
-  carrying = handler;
-  return () => {
-    if (carrying === handler) carrying = null;
-  };
-}
-
-/** The handler `captureNav` set, if any (read by the menu navigation each frame). */
-export function navCapture(): ((input: NavInput) => void) | null {
-  return carrying;
 }
 
 // ── Scale ─────────────────────────────────────────────────────────────────
@@ -290,12 +267,35 @@ export function uiScaleFor(width: number, height: number): number {
   return Math.min(2, Math.max(0.75, fit));
 }
 
+/** Settings → Text size: the menus' zoom over the UI scale. */
+export type TextSize = 'small' | 'medium' | 'large';
+
+/** Each text size's multiplier on the UI scale. */
+export const TEXT_SIZES: Record<TextSize, number> = { small: 1, medium: 1.15, large: 1.3 };
+
+/** The least design box every menu screen holds (Large's at 1920×1080): the text size never zooms past it. */
+export const MENU_MIN = { w: 1476, h: 830 } as const;
+
+/**
+ * The menus' zoom (`--ui-scale`): the UI scale (`uiScaleFor`, quarter steps) at Small; else the UI
+ * scale × `text`, capped where the window would hold less than `MENU_MIN`, never under the UI
+ * scale, floored to a hundredth (no quarter step can hold 115%).
+ */
+export function menuScaleFor(width: number, height: number, text: number): number {
+  const ui = uiScaleFor(width, height);
+  if (text <= 1) return ui;
+  const fit = Math.min(width / MENU_MIN.w, height / MENU_MIN.h);
+  // The epsilon: 1.15 × 100 is 114.99999999999999 in floating point.
+  return Math.max(ui, Math.floor(Math.min(ui * text, fit) * 100 + 1e-9) / 100);
+}
+
 /** `--hud-scale`: the UI scale times Settings → HUD scale, to the nearest quarter, at least 0.75 (the kit's `hudZoom`). */
 export const hudScaleFor = hudZoom;
 
-/** The zooms `.delve-zoom` and `.delve-hud-zoom` apply (AppShell keeps `uiScale` current). */
+/** The zooms `.delve-zoom` and `.delve-hud-zoom` apply (AppShell keeps `uiScale` and `menuScale` current). */
 export function useUiScale(): { ui: number; hud: number } {
-  const ui = useUIStore((s) => s.uiScale);
+  const menu = useUIStore((s) => s.menuScale);
+  const base = useUIStore((s) => s.uiScale);
   const setting = useUIStore((s) => s.hudScale);
-  return { ui, hud: hudScaleFor(ui, setting) };
+  return { ui: menu, hud: hudScaleFor(base, setting) };
 }

@@ -19,6 +19,8 @@ export interface HudGridProps {
   inert?: boolean;
   /** Under the stop: not drawn, but still laid out, so its insets hold. */
   hidden?: boolean;
+  /** Whether the right column takes the camera's right inset (true; the lean HUD's corner: false, so the camera centres on the hero). */
+  insetRight?: boolean;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface HudGridProps {
  * the middle clear. Only its panels and slots take the pointer.
  * It reports the camera's insets (`onInsets`, stable; only when they change) on mount, on a
  * resize of any part or of the window, and on a HUD scale change: the top bar's bottom edge, the
- * window's width less the right column's left edge (0 while it is empty), and its height less the life bar's top edge
+ * window's width less the right column's left edge (0 while it is empty, or with `insetRight` off), and its height less the life bar's top edge
  * (the dock's while there is none).
  */
 export function HudGrid({
@@ -41,6 +43,7 @@ export function HudGrid({
   rightWidth = 340,
   inert,
   hidden,
+  insetRight = true,
 }: HudGridProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -56,7 +59,7 @@ export function HudGrid({
       const insets: Insets = {
         top: t.getBoundingClientRect().bottom,
         // An empty right column (Training's panel closed or a sheet) takes nothing from the view.
-        right: r.childElementCount ? window.innerWidth - r.getBoundingClientRect().left : 0,
+        right: insetRight && r.childElementCount ? window.innerWidth - r.getBoundingClientRect().left : 0,
         bottom: window.innerHeight - life.getBoundingClientRect().top,
         left: 0,
       };
@@ -76,7 +79,7 @@ export function HudGrid({
       mo.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [hud, onInsets]);
+  }, [hud, onInsets, insetRight]);
 
   return (
     <div

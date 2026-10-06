@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   MANA_TYPES,
+  chainCycle,
   manaPool,
   manaSupport,
   resolveChain,
@@ -149,11 +150,18 @@ export interface ChainEditorModel {
   /** The chosen move replaced, the chain's payment, and the cards' edits. */
   edit: (next: Move | Blow) => void;
   setPayment: (payment: AbilityPayment) => void;
-  /** Move `i` by `by` places (◂ ▸, a drag, the pad's carry); the selection and the focus follow it. */
-  shift: (i: number, by: number) => void;
+  /**
+   * Move `i` by `by` places (◂ ▸, a drag, the pad's carry); the selection and the focus follow it.
+   * `focus` false: the focus stays where it is (the editor's Position row).
+   */
+  shift: (i: number, by: number, focus?: boolean) => void;
   remove: (i: number) => void;
   add: () => void;
   openSocket: () => void;
+  /** The chosen ability chain's damage a second (`chainCycle`: a full cycle's damage over its seconds); null for the basic chain. */
+  dps: number | null;
+  /** `dps` with the chosen move replaced by `next` (what an option in the editor's grids would do); null for the basic chain. */
+  dpsWith: (next: Move) => number | null;
   /** The cards' container: after an add, a remove or a reorder the focus stays with the move. */
   cardsRef: RefObject<HTMLDivElement | null>;
 }
@@ -223,6 +231,12 @@ export function useChainEditor({
   const openWhy =
     runes && nextSocket !== undefined && !locked ? (runes.openWhy?.(skill, index) ?? null) : null;
   const current = socket === null ? null : (sockets[socket] ?? null);
+  /** A chain's damage a second, by the engine's cycle. */
+  const dpsOf = (c: Chain | null): number | null => {
+    if (!c || !slot) return null;
+    const cycle = chainCycle(registry, stats, resolveChain(registry, stats, slot, c));
+    return cycle.seconds > 0 ? cycle.damage / cycle.seconds : null;
+  };
   const setSockets = (next: (RuneRef | null)[]) =>
     commit(entries.map((e, j) => (j === index ? { ...e, runes: next } : e)));
 
@@ -303,12 +317,12 @@ export function useChainEditor({
     picker,
     edit: (next) => commit(entries.map((e, i) => (i === index ? next : e))),
     setPayment: (payment) => chain && commit(chain.moves, payment),
-    shift: (i, by) => {
+    shift: (i, by, focus = true) => {
       const to = i + by;
       if (locked || by === 0 || to < 0 || to >= entries.length) return;
       commit(moved(entries, i, to), undefined, moved(order, i, to));
       setPicked(to);
-      setFocusOn([`[data-${by < 0 ? 'earlier' : 'later'}="${to}"]`, cardAt(to)]);
+      if (focus) setFocusOn([`[data-${by < 0 ? 'earlier' : 'later'}="${to}"]`, cardAt(to)]);
     },
     remove: (i) => {
       if (locked || entries.length <= 1) return;
@@ -329,6 +343,9 @@ export function useChainEditor({
       setFocusOn([cardAt(entries.length)]);
     },
     openSocket: () => setSockets([...sockets, null]),
+    dps: dpsOf(chain),
+    dpsWith: (next) =>
+      dpsOf(chain && { ...chain, moves: chain.moves.map((m, j) => (j === index ? next : m)) }),
     cardsRef,
   };
 }

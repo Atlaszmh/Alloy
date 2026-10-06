@@ -4,10 +4,10 @@ import * as kit from '../index';
 /** Every component and hook of the spec's kit contract, as screens import them. */
 const CONTRACT = [
   'usePrompts',
-  'captureNav',
   'topScope',
   'scopedLast',
   'useUiScale',
+  'menuScaleFor',
   'Keycap',
   'PadGlyph',
   'InputGlyph',
@@ -26,6 +26,7 @@ const CONTRACT = [
   'Tabs',
   'Chip',
   'Segmented',
+  'Stepper',
   'Bar',
   'Tile',
   'Tooltip',
@@ -37,5 +38,10 @@ describe('the kit index', () => {
   it('exports every component and hook of the kit contract', () => {
     const missing = CONTRACT.filter((name) => typeof kit[name] !== 'function');
     expect(missing).toEqual([]);
+  });
+
+  it("exports Text size's table and the menus' least design box", () => {
+    expect(kit.TEXT_SIZES).toEqual({ small: 1, medium: 1.15, large: 1.3 });
+    expect(kit.MENU_MIN).toEqual({ w: 1476, h: 830 });
   });
 });

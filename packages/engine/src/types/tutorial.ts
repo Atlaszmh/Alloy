@@ -138,6 +138,7 @@ export const TUTORIAL_TARGETS = [
   'forge.go',
   'forge.bench',
   'forge.temper',
+  'forge.materials',
   'forge.refine',
   'temper.hone',
   'temper.line',

@@ -2,6 +2,7 @@ import type { DataRegistry } from '../data/registry.js';
 import {
   forgeInputs,
   forgeItem,
+  forgedMoveset,
   honeCost,
   honeLine,
   imprintCost,
@@ -9,19 +10,21 @@ import {
   imprintRefusal,
   previewForge,
 } from '../loot/forge.js';
-import { scrapLevelFactor } from '../loot/item-generator.js';
+import { implicitValue, scrapLevelFactor } from '../loot/item-generator.js';
 import { materialCount, refineCost, refinedRef, withMaterial } from '../loot/materials.js';
 import { baseSlots, defaultChain, movesetOf } from '../loot/moveset.js';
 import type { AwakenPrice, ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { GearItem, HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from './dive.js';
+import { compareItem } from './hero-stats.js';
 import { applyQuestEvents } from './quests.js';
 import { applyTutorialEvents } from './tutorial.js';
 import {
   findItem,
   forgeRng,
   recordFinds,
+  referenceDepth,
   replaceItem,
   type ProfileActionResult,
 } from './profile.js';
@@ -64,6 +67,67 @@ export function forge(
   const events = [{ type: 'forge', rarity: item.rarity, legendary: !!item.legendary }] as const;
   const next = applyTutorialEvents(registry, applyQuestEvents(registry, forged, events), events);
   return { ok: true, item, profile: next };
+}
+
+/** A forge's Power change against what is worn, at the bottom and the top of its bands (`forgePowerRange`). */
+export interface ForgePowerRange {
+  low: number;
+  high: number;
+  /** The random lines left out of both ends. */
+  random: number;
+}
+
+/**
+ * The Power a forge would change by against what is worn (the pad-first spec, 4): `low` the
+ * item with every chosen line, implicit and legendary power at the bottom of its band (the
+ * attunement floor applied), `high` at the top; a weapon valued as a home for your moveset
+ * (`compareItem`'s default), as the bag values a tile. Random lines are left out of both ends:
+ * `random` counts them. The purse and the materials don't matter (a refused request has a range).
+ * Pure: it draws nothing.
+ */
+export function forgePowerRange(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  req: ForgeRequest,
+): ForgePowerRange {
+  const p = previewForge(registry, profile, req);
+  const base = registry.getGearBase(p.baseId);
+  /** A band's roll at its bottom once the floor lifts it (0), or at its top (1). */
+  const rollAt = ([b0, b1]: readonly [number, number], end: 0 | 1) =>
+    end ? b1 : b0 + (b1 - b0) * p.floor;
+  const at = (end: 0 | 1): GearItem => ({
+    uid: 'forge-preview',
+    slot: p.slot,
+    baseId: p.baseId,
+    rarity: p.rarity,
+    mana: p.element,
+    ilvl: p.ilvl,
+    name: '',
+    implicits: base.implicits.map((t) => ({
+      stat: t.stat,
+      value: implicitValue(registry, t, p.ilvl, p.rarity, end),
+      roll: end,
+    })),
+    affixes: p.lines.flatMap((l) =>
+      l.shard && l.range
+        ? [{ stat: l.shard.stat, value: l.range[end], roll: rollAt(l.band, end), band: [l.band[0], l.band[1]] as [number, number] }]
+        : [],
+    ),
+    upgrade: 0,
+    reforges: 0,
+    hones: 0,
+    locked: false,
+    ...(p.legendary && {
+      legendary: { id: p.legendary.id, value: p.legendary.range[end], roll: rollAt(p.legendary.band, end) },
+    }),
+    ...(p.slot === 'weapon' && {
+      moveset: forgedMoveset(registry, { baseId: p.baseId, rarity: p.rarity, mana: p.element }),
+    }),
+  });
+  const depth = referenceDepth(profile);
+  const power = (item: GearItem) =>
+    compareItem(profile.equipped, item, registry, depth, profile.pair).powerPct;
+  return { low: power(at(0)), high: power(at(1)), random: p.lines.filter((l) => !l.shard).length };
 }
 
 /** Hone affix line `line` of item `uid`, for scrap. */

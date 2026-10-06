@@ -232,4 +232,23 @@ describe('RunePicker', () => {
     expect(screen.getByTestId('rune-pick-pierce')).not.toHaveTextContent('% cost');
     expect(screen.getByTestId('rune-pick-heavy')).toHaveTextContent('+55% cost');
   });
+
+  it('as a grid, lays the runes two to a row, each with what it does to the chain', () => {
+    render(
+      <RunePicker
+        candidates={[
+          { rune: { id: 'split', tier: 1 }, count: 2 },
+          { rune: quick3, count: 1 },
+        ]}
+        grid
+        damage={(r) => (r.id === 'quick' ? '+8% chain damage a second' : null)}
+        onPick={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const list = screen.getByTestId('rune-pick-quick').parentElement!;
+    expect(list.className).toMatch(/grid-cols-2/);
+    expect(screen.getByTestId('rune-damage-quick')).toHaveTextContent('+8% chain damage a second');
+    expect(screen.queryByTestId('rune-damage-split')).toBeNull();
+  });
 });

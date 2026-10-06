@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   awaken,
   awakenPrice,
@@ -12,16 +12,17 @@ import {
   type GearItem,
   type ManaType,
   type ShardRef,
+  type TutorialTarget,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
-import { Button, Chip, Glyph, Price } from '../../kit';
+import { Button, Panel, Price } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { ItemHeader } from '../../items/ItemHeader';
 import { ItemStatLines, AffixLine } from '../../items/ItemStatLines';
-import { manaStyle } from '../../format';
-import { ShardPicker } from './ShardPicker';
+import { manaStyle, SLOT_LABEL } from '../../format';
+import { heldShards, ShardPicker } from './ShardPicker';
 import { materialLabel, shardName } from './materials-text';
 
 const BACK = { key: 'Escape', pad: 'b' } as const;
@@ -34,13 +35,22 @@ const LINE_OP: Record<LineOp, { label: string; pick: string; done: string }> = {
   imprint: { label: 'Imprint', pick: 'Pick a line to imprint over', done: 'Imprinted!' },
 };
 
+/** One of Temper's operations: its label and price, and why it can't be done (null: it can). */
+interface Op {
+  id: string;
+  label: string;
+  price: ReactNode;
+  why: ReactNode | null;
+  run: () => void;
+  tutorial?: TutorialTarget;
+}
+
 /**
- * The Temper bench: the selected item's Upgrade +1, the line ops (Reforge a
- * line to a random affix, Hone its value within its band, Imprint a shard over
- * it) and Re-attune to the pair's other element, each at the engine's price
- * against the purse: one the purse can't pay is off, and says what it needs.
- * A rare weapon not yet awakened adds Awaken, once (it carries the Ultimate
- * too), enabled by the engine's dry run, which says why not.
+ * The Temper bench on the picked item: one list of its six operations (Upgrade +1, Reforge,
+ * Hone and Imprint a line, Re-attune to the pair's other element, Awaken a rare weapon once),
+ * each row with the engine's price and, when it can't be done, why on the same row; Reforge,
+ * Hone and Imprint open a line pick in its own pad scope. Beside it, the item's detail (no
+ * stops). Two panels, for the bench's second and third columns.
  */
 export function Temper({ item }: { item: GearItem }) {
   const registry = getDelveRegistry();
@@ -138,212 +148,247 @@ export function Temper({ item }: { item: GearItem }) {
     done(res.ok, 'Awakened!', res.reason, 'Cannot awaken');
   };
 
+  const shardFits = heldShards(registry, profile.materials.shards, item.slot, []).length > 0;
+  const lineWhy = (cost: number, more: string | null = null): ReactNode | null =>
+    affixes.length === 0 ? (
+      'No lines to work'
+    ) : more !== null ? (
+      more
+    ) : cost > scrap ? (
+      <>
+        Needs <Price scrap={cost} />
+      </>
+    ) : null;
+  const ops: Op[] = [
+    {
+      id: 'upgrade',
+      label: 'Upgrade +1',
+      price: upCost !== null && <Price scrap={upCost} />,
+      why:
+        upCost === null ? (
+          `At the top forge level, +${max}`
+        ) : upShort ? (
+          <>
+            Needs <Price scrap={upCost} />
+          </>
+        ) : null,
+      run: onUpgrade,
+    },
+    {
+      id: 'reforge',
+      label: 'Reforge a line',
+      price: <Price scrap={reforgeCost(registry, item)} />,
+      why: lineWhy(reforgeCost(registry, item)),
+      run: () => open('reforge'),
+    },
+    {
+      id: 'hone',
+      label: 'Hone a line',
+      price: <Price scrap={honeCost(registry, item)} />,
+      why: lineWhy(honeCost(registry, item)),
+      run: () => open('hone'),
+      tutorial: 'temper.hone',
+    },
+    {
+      id: 'imprint',
+      label: 'Imprint a shard',
+      price: <Price scrap={imprintCost(registry, item)} />,
+      why: lineWhy(
+        imprintCost(registry, item),
+        shardFits ? null : `No shard you hold fits a ${SLOT_LABEL[item.slot].toLowerCase()}`,
+      ),
+      run: () => open('imprint'),
+    },
+    ...(reattuneTo.length > 0
+      ? reattuneTo.map(
+          (m): Op => ({
+            id: reattuneTo.length > 1 ? `reattune-${m}` : 'reattune',
+            label: `Re-attune to ${manaStyle(registry, m).name}`,
+            price: <Price dust={raCost} />,
+            why:
+              raCost > dust ? (
+                <>
+                  Needs <Price dust={raCost} />
+                </>
+              ) : null,
+            run: () => onReattune(m),
+          }),
+        )
+      : [
+          {
+            id: 'reattune',
+            label: 'Re-attune',
+            price: null,
+            why: 'Bind a second element first',
+            run: () => {},
+          },
+        ]),
+    {
+      id: 'awaken',
+      label: 'Awaken',
+      price: awakenCost && (
+        <>
+          {awakenCost.epicFlux} {materialLabel(registry, { kind: 'flux', grade: 'epic' })} ·{' '}
+          <Price links={awakenCost.links} scrap={awakenCost.scrap} />
+        </>
+      ),
+      why: item.awakened
+        ? 'Awakened: it carries the Ultimate'
+        : !awakenable
+          ? 'Only a rare weapon awakens'
+          : awakenTry && !awakenTry.ok
+            ? (awakenTry.reason ?? 'Cannot awaken')
+            : null,
+      run: onAwaken,
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-4" data-testid="temper">
-      <ItemHeader item={item} size="lg" />
-      <div className="k-caption flex items-center gap-2" data-testid="forge-purse">
-        In hand: <Price scrap={scrap} dust={dust} />
-      </div>
-      {message && (
-        <p
-          role="status"
-          className="text-[16px]"
-          style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
-        >
-          {message.text}
-        </p>
-      )}
-      {op ? (
-        <div
-          ref={statsRef}
-          className="flex flex-col gap-3"
-          data-pad-scope
-          data-testid={`${op}-pick`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="k-label">{LINE_OP[op].pick}</span>
-            <Button
-              variant="quiet"
-              size="sm"
-              binding={BACK}
-              data-pad-back
-              onClick={() => open(null)}
-              testId={`${op}-back`}
-            >
-              Back
-            </Button>
+    <>
+      <Panel aria-label="Temper" testId="temper-bench">
+        <div className="flex flex-col gap-4" data-testid="temper">
+          <div className="k-caption flex items-center gap-2" data-testid="forge-purse">
+            In hand: <Price scrap={scrap} dust={dust} />
           </div>
-          {op === 'hone' && (
-            <p className="k-caption" data-testid="hone-count">
-              Honed {item.hones} {item.hones === 1 ? 'time' : 'times'}: each hone costs more.
+          {message && (
+            <p
+              role="status"
+              className="text-[18px]"
+              style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
+            >
+              {message.text}
             </p>
           )}
-          <div
-            className="flex flex-col gap-3"
-            data-tutorial={op === 'hone' ? 'temper.line' : undefined}
-            data-tutorial-done={line !== null}
-          >
-            {affixes.map((l, i) => (
-              <button
-                key={`${i}-${l.stat}`}
-                type="button"
-                className="k-well p-2 text-left"
-                style={{ borderColor: line === i ? 'var(--k-hot)' : undefined }}
-                aria-pressed={line === i}
-                data-pad-first={i === 0 ? '' : undefined}
-                onClick={() => {
-                  setLine(i);
-                  setShard(null); // a shard for one line may sit on another
-                }}
-                data-testid={`${op}-line-${i}`}
+          {op ? (
+            <div className="flex flex-col gap-3" data-pad-scope data-testid={`${op}-pick`}>
+              <div className="flex items-center justify-between">
+                <span className="k-label">{LINE_OP[op].pick}</span>
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  binding={BACK}
+                  data-pad-back
+                  onClick={() => open(null)}
+                  testId={`${op}-back`}
+                >
+                  Back
+                </Button>
+              </div>
+              <div
+                className="flex flex-col gap-3"
+                data-tutorial={op === 'hone' ? 'temper.line' : undefined}
+                data-tutorial-done={line !== null}
               >
-                <AffixLine line={l} />
-              </button>
-            ))}
-          </div>
-          {op === 'imprint' && line !== null && (
-            <>
-              <span className="k-label">Pick a shard</span>
-              <ShardPicker
-                slot={item.slot}
-                exclude={item.affixes.filter((_, j) => j !== line).map((a) => a.stat)}
-                selected={shard}
-                onPick={setShard}
-              />
-            </>
-          )}
-          <Button
-            variant="primary"
-            disabled={!ready || opShort}
-            onClick={onLineOp}
-            aria-describedby={opShort ? `${id}-op` : undefined}
-            data-tutorial={op === 'hone' ? 'temper.go' : undefined}
-            testId={`${op}-button`}
-          >
-            {line === null ? (
-              'Pick a line'
-            ) : !ready ? (
-              'Pick a shard'
-            ) : (
-              <>
-                {LINE_OP[op].label}
-                {shard && ` ${shardName(registry, shard)}`} · <Price scrap={opCost} />
-              </>
-            )}
-          </Button>
-          {opShort && (
-            <span id={`${id}-op`} className="k-caption">
-              Needs <Price scrap={opCost} />
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <div ref={statsRef}>
-            <ItemStatLines item={item} />
-          </div>
-          <p className="k-caption">
-            Each forge level adds +{Math.round(upgradeStep * 100)}% to every stat on the item.
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="primary"
-              disabled={upCost === null || upShort}
-              onClick={onUpgrade}
-              aria-describedby={upShort ? `${id}-up` : undefined}
-              testId="upgrade-button"
-            >
-              {upCost === null ? (
-                `Max +${max}`
-              ) : (
+                {affixes.map((l, i) => (
+                  <button
+                    key={`${i}-${l.stat}`}
+                    type="button"
+                    className="k-well p-2 text-left"
+                    style={{ borderColor: line === i ? 'var(--k-hot)' : undefined }}
+                    aria-pressed={line === i}
+                    data-pad-first={i === 0 ? '' : undefined}
+                    onClick={() => {
+                      setLine(i);
+                      setShard(null); // a shard for one line may sit on another
+                    }}
+                    data-testid={`${op}-line-${i}`}
+                  >
+                    <AffixLine line={l} />
+                  </button>
+                ))}
+              </div>
+              {op === 'imprint' && line !== null && (
                 <>
-                  Upgrade +1 · <Price scrap={upCost} />
+                  <span className="k-label">Pick a shard</span>
+                  <ShardPicker
+                    slot={item.slot}
+                    exclude={item.affixes.filter((_, j) => j !== line).map((a) => a.stat)}
+                    selected={shard}
+                    onPick={setShard}
+                  />
                 </>
               )}
-            </Button>
-            {affixes.length > 0 &&
-              (Object.keys(LINE_OP) as LineOp[]).map((o) => (
-                <Button
-                  key={o}
-                  onClick={() => open(o)}
-                  testId={`${o}-open`}
-                  data-tutorial={o === 'hone' ? 'temper.hone' : undefined}
-                >
-                  {LINE_OP[o].label}…
-                </Button>
-              ))}
-            {upShort && (
-              <span id={`${id}-up`} className="k-caption">
-                Needs <Price scrap={upCost} />
-              </span>
-            )}
-          </div>
-          {reattuneTo.length > 0 && (
-            <div className="flex flex-col gap-2" data-testid="reattune">
-              <p className="k-caption">
-                Re-attune to your other element: its {manaStyle(registry, item.mana).name} lines
-                follow.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {reattuneTo.map((m) => {
-                  const st = manaStyle(registry, m);
-                  return (
-                    <Chip
-                      key={m}
-                      disabled={raCost > dust}
-                      onClick={() => onReattune(m)}
-                      aria-describedby={raCost > dust ? `${id}-ra` : undefined}
-                      testId={`reattune-${m}`}
-                    >
-                      <Glyph id={m} size={16} color={st.color} /> {st.name} ·{' '}
-                      <Price dust={raCost} />
-                    </Chip>
-                  );
-                })}
-                {raCost > dust && (
-                  <span id={`${id}-ra`} className="k-caption self-center">
-                    Needs <Price dust={raCost} />
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-          {awakenCost && awakenTry && (
-            <div className="flex flex-col gap-2" data-testid="awaken">
-              <p className="k-caption">
-                Awaken this rare weapon, once: it carries the Ultimate too.
-              </p>
               <Button
                 variant="primary"
-                className="self-start"
-                disabled={!awakenTry.ok}
-                onClick={onAwaken}
-                aria-describedby={awakenTry.ok ? undefined : `${id}-aw`}
-                testId="awaken-button"
+                disabled={!ready || opShort}
+                onClick={onLineOp}
+                aria-describedby={opShort ? `${id}-op` : undefined}
+                data-tutorial={op === 'hone' ? 'temper.go' : undefined}
+                testId={`${op}-button`}
               >
-                Awaken · {awakenCost.epicFlux}{' '}
-                {materialLabel(registry, { kind: 'flux', grade: 'epic' })} ·{' '}
-                <Price links={awakenCost.links} scrap={awakenCost.scrap} />
+                {line === null ? (
+                  'Pick a line'
+                ) : !ready ? (
+                  'Pick a shard'
+                ) : (
+                  <>
+                    {LINE_OP[op].label}
+                    {shard && ` ${shardName(registry, shard)}`} · <Price scrap={opCost} />
+                  </>
+                )}
               </Button>
-              {!awakenTry.ok && (
-                <span
-                  id={`${id}-aw`}
-                  className="k-caption"
-                  style={{ color: 'var(--k-bad-text)' }}
-                  data-testid="awaken-refused"
-                >
-                  {awakenTry.reason}
+              {opShort && (
+                <span id={`${id}-op`} className="k-caption">
+                  Needs <Price scrap={opCost} />
                 </span>
               )}
             </div>
+          ) : (
+            <div className="flex flex-col gap-2" data-testid="temper-ops">
+              {ops.map((o) => (
+                <div
+                  key={o.id}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 [@media(max-height:809px)]:flex-col [@media(max-height:809px)]:items-stretch"
+                  data-temper-row
+                >
+                  <Button
+                    className="flex-1 justify-between"
+                    disabled={o.why !== null}
+                    aria-describedby={o.why !== null ? `${id}-${o.id}` : undefined}
+                    onClick={o.run}
+                    data-tutorial={o.tutorial}
+                    testId={`temper-op-${o.id}`}
+                  >
+                    <span>{o.label}</span>
+                    {o.price && <span>{o.price}</span>}
+                  </Button>
+                  {o.why !== null && (
+                    <span
+                      id={`${id}-${o.id}`}
+                      className="k-note w-[200px] flex-none [@media(max-height:809px)]:w-auto"
+                      style={{ color: 'var(--k-bad-text)' }}
+                    >
+                      {o.why}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Panel>
+      <Panel aria-label="Item" testId="temper-detail" scroll={false}>
+        {/* No stops: the header's tile is a picture here; the right stick scrolls it. */}
+        <div className="k-scroll flex min-h-0 flex-1 flex-col gap-3" data-pad-scroll data-pad-skip="">
+          <ItemHeader item={item} size="lg" />
+          <div ref={statsRef}>
+            <ItemStatLines item={item} />
+          </div>
+          <p className="k-note">
+            Each forge level adds +{Math.round(upgradeStep * 100)}% to every stat on the item.
+          </p>
+          {item.hones > 0 && (
+            <p className="k-note" data-testid="hone-count">
+              Honed {item.hones} {item.hones === 1 ? 'time' : 'times'}: each hone costs more.
+            </p>
           )}
           {item.awakened && (
-            <p className="k-caption" data-testid="awakened">
+            <p className="k-note" data-testid="awakened">
               Awakened: it carries the Ultimate.
             </p>
           )}
         </div>
-      )}
-    </div>
+      </Panel>
+    </>
   );
 }

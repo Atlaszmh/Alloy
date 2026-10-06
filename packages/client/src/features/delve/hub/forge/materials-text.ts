@@ -2,6 +2,17 @@ import type { DataRegistry, HeroStatKey, MaterialRef, RuneTier, ShardRef } from 
 import { RARITY_LABEL, formatStatValue } from '../../format';
 import { TIER_NUMERAL } from '../../runes/rune-style';
 
+/**
+ * Where each kind of material comes from: the one line a bench shows for what the save lacks.
+ * The essence line's depth is `delve.drops.essenceMinDepth` (a test holds them equal).
+ */
+export const DROPS_FROM = {
+  metal: 'Foes drop bars: deeper floors drop better metal',
+  flux: 'Elites and bosses drop flux: better grades deeper',
+  shard: 'Foes drop shards, and salvage gives them',
+  essence: 'Bosses drop essences from depth 20',
+} as const;
+
 /** 0.4 → "40%". */
 export const pct = (x: number): string => `${Math.round(x * 100)}%`;
 

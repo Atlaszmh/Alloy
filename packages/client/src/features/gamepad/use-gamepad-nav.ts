@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
-import { navCapture, padPrompts, scopedLast, topScope } from '@/features/delve/kit/prompts';
+import { padPrompts, scopedLast, topScope } from '@/features/delve/kit/prompts';
 import type { PadButton, PadState } from './gamepad';
 import { startGamepad } from './gamepad-hub';
 import { pickNext, type NavDir, type NavRect } from './spatial-nav';
@@ -11,20 +11,20 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * left-stick flick) moves focus to the control lying that way (`nextFocus`:
  * inside its `[data-pad-group]` pane while one does, else into the pane that
  * way, at the control it last held; never onto one scrolled out of its list;
- * left/right adjust a focused slider or list), A presses it. Every other
- * button goes to the screen's prompts first (`padPrompts`, which also times
- * the holds); one no prompt takes does its default: B presses the topmost
+ * left/right adjust a focused slider, list or stepper (`PAD_STEP`)), A presses it. At an edge, up
+ * and down wrap inside a `[data-pad-wrap]` list (`wrapFocus`). Every other
+ * button goes to the screen's prompts first (`padPrompts`); one no prompt takes does its default: B presses the topmost
  * scope's `[data-pad-back]`, Menu its `[data-pad-menu]` (else its back),
  * LB/RB step its top-level `[data-pad-tabs]` and LT/RT its
  * `[data-pad-tabs="sub"]`, past disabled tabs. A stepped tab takes the focus
- * only where tabs are D-pad stops (the skill list); a kit tab list puts it in
- * the content. The last visible
+ * only where tabs are D-pad stops; a kit tab list puts it in
+ * the content, on its `[data-pad-first]` control if it has one. The last visible
  * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it, and while the
  * pad has the input lock the focus never gets lost (`keepFocus`, which starts
  * a scope on its `[data-pad-first]`). `[data-pad-skip]` controls are never
- * D-pad targets. While a card is carried (`captureNav`) the D-pad and A/B/X go
- * to it. It also lets the keys, the mouse and touch claim the lock
- * (`claimDevices`).
+ * D-pad targets. The right stick scrolls the topmost scope's `[data-pad-scroll]` pane
+ * (`STICK_SCROLL_PX`); it never moves the focus. It also lets the keys, the
+ * mouse and touch claim the lock (`claimDevices`).
  */
 
 /** What the pad's focus can land on. */
@@ -38,6 +38,9 @@ function visible(el: HTMLElement): boolean {
   const r = el.getBoundingClientRect();
   return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 }
+
+/** How far the right stick scrolls a detail pane at full tilt (px a second, before the UI's zoom). */
+export const STICK_SCROLL_PX = 1400;
 
 /** How far (px) the mouse must travel to claim the input lock: a bump on the desk doesn't. */
 export const MOUSE_CLAIM_PX = 16;
@@ -179,10 +182,12 @@ function gapBetween(a: DOMRect, b: DOMRect): number {
 }
 
 /**
- * The control a press of `dir` on `el` would focus, or null at an edge. Inside `el`'s group
- * while one of its controls lies that way (`pickNext`); else in the group whose box lies that
- * way, at the control it last held, else at the pick among its controls, else at its nearest.
- * `memory: false` leaves the last-held control out: the picks alone (tests, the audit).
+ * The control a press of `dir` on `el` would focus, or null at an edge. Inside `el`'s scrolling
+ * list while one of its rows lies that way (a row scrolled out beats a nearer control beside the
+ * list); else inside `el`'s group while one of its controls does (`pickNext`); else in the group
+ * whose box lies that way, at the control it last held, else at the pick among its controls,
+ * else at its nearest. `memory: false` leaves the last-held control out: the picks alone (tests,
+ * the audit).
  */
 export function nextFocus(
   el: HTMLElement,
@@ -196,6 +201,9 @@ export function nextFocus(
     return next ? pool[Number(next.id)] : null;
   };
   const home = groupOf(el);
+  const list = scrollers(el)[0];
+  const row = list && pick(els.filter((c) => groupOf(c) === home && scrollers(c)[0] === list));
+  if (row) return row;
   const inside = pick(els.filter((c) => groupOf(c) === home));
   if (inside) return inside;
   const group = pick([...new Set(els.filter((c) => groupOf(c) !== home).map(groupOf))]);
@@ -234,6 +242,42 @@ function stepSelect(el: HTMLSelectElement, dir: NavDir): void {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+/**
+ * Where nothing lies that way, up and down go on round a `[data-pad-wrap]` list: to its next
+ * candidate that way by height (a control out of line, such as a dialog's Back off to the side
+ * of its column, still steps on), and at its end to its topmost candidate from the bottom, its
+ * lowest from the top. Null outside such a list, for a sideways press, or when `el` is the
+ * list's only candidate.
+ */
+function wrapFocus(el: HTMLElement, dir: NavDir, els: HTMLElement[]): HTMLElement | null {
+  if (dir !== 'up' && dir !== 'down') return null;
+  const list = el.closest('[data-pad-wrap]');
+  if (!list) return null;
+  const top = (c: HTMLElement) => c.getBoundingClientRect().top;
+  const sign = dir === 'down' ? 1 : -1;
+  const ahead = (c: HTMLElement) => sign * (top(c) - top(el));
+  const rest = els.filter((c) => c !== el && list.contains(c));
+  if (rest.length === 0) return null;
+  const on = rest.filter((c) => ahead(c) > 0);
+  // The nearest ahead, else (at the end) the furthest behind: round to the other end.
+  return (on.length ? on : rest).reduce((best, c) => (ahead(c) < ahead(best) ? c : best));
+}
+
+const OPPOSITE: Record<NavDir, NavDir> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+/** The last move, if it crossed panes: where it left, where it landed, which way. */
+let lastCross: { from: HTMLElement; to: HTMLElement; dir: NavDir } | null = null;
+
+/**
+ * The event a focused `[data-pad-step]` control hears for left/right (`detail`: -1 or 1), in
+ * place of a focus move: the kit's `Stepper`.
+ */
+export const PAD_STEP = 'padstep';
+
+/**
+ * A D-pad press: left/right adjust a focused slider, list or stepper (`PAD_STEP`); else the focus moves to
+ * `nextFocus`'s pick, straight back across the panes it just crossed (`lastCross`), or round a
+ * `[data-pad-wrap]` list at its edge.
+ */
 export function moveFocus(dir: NavDir): void {
   const active = document.activeElement;
   if (
@@ -246,13 +290,34 @@ export function moveFocus(dir: NavDir): void {
   if (active instanceof HTMLSelectElement && (dir === 'left' || dir === 'right')) {
     return stepSelect(active, dir);
   }
+  if (
+    active instanceof HTMLElement &&
+    active.matches('[data-pad-step]') &&
+    (dir === 'left' || dir === 'right')
+  ) {
+    active.dispatchEvent(new CustomEvent(PAD_STEP, { detail: dir === 'right' ? 1 : -1 }));
+    return;
+  }
   const els = candidates();
   if (els.length === 0) return;
   if (!(active instanceof HTMLElement) || !els.includes(active)) return focus(els[0]);
   // Its pane remembers it now: a focus given this frame (a click, code) hasn't met keepFocus yet.
   groupFocus.set(groupOf(active), active);
-  const next = nextFocus(active, dir);
-  if (next) focus(next);
+  const picked = nextFocus(active, dir);
+  // Straight back: the press that reverses the last crossing returns to the control it left
+  // (the bag's tile, from a footer button that sits under another pane), unless a control
+  // inside this pane lies that way.
+  const back =
+    lastCross?.to === active &&
+    dir === OPPOSITE[lastCross.dir] &&
+    els.includes(lastCross.from) &&
+    (!picked || groupOf(picked) !== groupOf(active))
+      ? lastCross.from
+      : null;
+  const next = back ?? picked ?? wrapFocus(active, dir, els);
+  if (!next) return;
+  lastCross = groupOf(next) !== groupOf(active) ? { from: active, to: next, dir } : null;
+  focus(next);
 }
 
 const TAB_LISTS = {
@@ -260,21 +325,24 @@ const TAB_LISTS = {
   sub: '[data-pad-tabs="sub"]',
 } as const;
 
-/** The first candidate after `mark` in document order, outside the screen's footer. */
+/**
+ * Where a stepped tab's focus lands: among the candidates after `mark` in document order,
+ * outside the screen's footer, the first that says so (`[data-pad-first]`: a tab's selected row),
+ * else the first.
+ */
 function firstAfter(mark: Element): HTMLElement | null {
-  return (
-    candidates(null).find(
-      (el) =>
-        mark.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING &&
-        !el.closest('[data-screen-section="screen-foot"]'),
-    ) ?? null
+  const after = candidates(null).filter(
+    (el) =>
+      mark.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING &&
+      !el.closest('[data-screen-section="screen-foot"]'),
   );
+  return after.find((el) => el.hasAttribute('data-pad-first')) ?? after[0] ?? null;
 }
 
 /**
  * Step the topmost scope's tab list (LB/RB its top level, LT/RT its sub list), past disabled
  * tabs. The focus never rests on a tab the D-pad can't reach: it stays where it survived, else
- * goes to the new tab's first control.
+ * goes to the new tab's `[data-pad-first]` control, else its first (`firstAfter`).
  */
 function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
   const list = scopedLast(TAB_LISTS[level]);
@@ -288,7 +356,7 @@ function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
   const before = document.activeElement;
   // Rendered now (React would in a microtask): the old tab's controls must be gone before the focus is placed.
   flushSync(() => tabs[i].click());
-  // A list that is also a pane's content (the Skills tab's skill list): its row takes the focus.
+  // A tab list whose tabs are D-pad stops: its tab takes the focus.
   if (isCandidate(tabs[i])) return focus(tabs[i]);
   // A kit tab list is off the D-pad. A focused control that survived the switch keeps the focus;
   // else the new tab's first control takes it.
@@ -315,14 +383,12 @@ export function useGamepadNav(): void {
     let heldDir: NavDir | null = null;
     let repeatAt = 0;
     let stickArmed = true;
+    let last = 0;
     const stop = startGamepad((state, pressed, now) => {
-      // A carried card (Skills' reorder) hears the D-pad and A/B/X instead of the focus.
-      const carry = navCapture();
-      const move = (dir: NavDir) => (carry ? carry(dir) : moveFocus(dir));
       // A stick flick moves once; it re-arms when the stick comes back near the centre.
       const flick = stickDir(state);
       if (flick && stickArmed) {
-        move(flick);
+        moveFocus(flick);
         stickArmed = false;
       }
       if (Math.hypot(state.left.x, state.left.y) < 0.3) stickArmed = true;
@@ -331,22 +397,18 @@ export function useGamepadNav(): void {
       if (dir && dir !== heldDir) {
         heldDir = dir;
         repeatAt = now + REPEAT_DELAY_MS;
-        move(dir);
+        moveFocus(dir);
       } else if (dir && now >= repeatAt) {
         repeatAt = now + REPEAT_EVERY_MS;
-        move(dir);
+        moveFocus(dir);
       } else if (!dir) heldDir = null;
 
-      const carried = carry ? (['a', 'b', 'x'] as const).filter((b) => pressed.has(b)) : [];
-      for (const b of carried) carry?.(b);
       // The D-pad moves and A presses the focused control: never a prompt's.
-      const offered = [...pressed].filter(
-        (b) => !DPAD.has(b) && b !== 'a' && !(carried as readonly PadButton[]).includes(b),
-      );
+      const offered = [...pressed].filter((b) => !DPAD.has(b) && b !== 'a');
       const took = padPrompts(new Set(offered), state.buttons, now);
       const left = (b: PadButton) => offered.includes(b) && !took.has(b);
 
-      if (!carry && pressed.has('a')) {
+      if (pressed.has('a')) {
         const el = document.activeElement as HTMLElement | null;
         if (el && candidates().includes(el)) el.click();
         else moveFocus('down');
@@ -357,6 +419,11 @@ export function useGamepadNav(): void {
       if (left('lt')) stepTabs('sub', -1);
       if (left('rt')) stepTabs('sub', 1);
       if (left('menu')) (scopedLast('[data-pad-menu]') ?? scopedLast('[data-pad-back]'))?.click();
+      // The right stick scrolls the topmost scope's detail pane (the grammar: never the focus).
+      const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
+      last = now;
+      if (state.right.y !== 0 && dt > 0)
+        scopedLast('[data-pad-scroll]')?.scrollBy?.({ top: state.right.y * STICK_SCROLL_PX * dt });
       keepFocus();
     });
     return () => {

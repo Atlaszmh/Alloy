@@ -34,6 +34,7 @@ import { Box } from '../../quests/QuestTracker';
 import { rewardView } from '../../quests/quest-view';
 import { QUEST_KIND, objectiveCount, type QuestView } from '../../quests/types';
 import type { HubTabProps } from '../types';
+import { useOnboarding } from '../../onboarding';
 
 const COLUMNS = '400px minmax(0,1fr) 440px';
 export const TRACK_BINDING: Binding = { key: 'KeyG', pad: 'y' };
@@ -56,6 +57,9 @@ const GIVER_NUDGE: Record<string, number> = { hesta: 3 };
  * The Quests tab: the journal (Main, Side, the Contract board, and the claimed ones under a
  * collapsed Done), the open quest (Hesta, her line, the objectives) and its rewards with Claim,
  * Track and a contract's Reroll. Opening a quest marks it seen; the engine prices and refuses.
+ * It opens on the first quest that waits to be claimed, and the pad lands on its row: A on it
+ * claims (never while a dive is open), and the next quest that waits opens and takes the focus;
+ * while two or more wait, Claim all in the journal's head takes them all, in order.
  */
 export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
@@ -64,10 +68,20 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
   const markQuestSeen = useDelveStore((s) => s.markQuestSeen);
   // A claim waits for the dive to end: in the pause, and at the Anvil mid-dive (a floor restart).
   const diving = mode === 'pause' || isDiveActive(profile);
+  // A first visit's line rides Claim (else Select), until a claim.
+  const { hint, done } = useOnboarding('quests', mode === 'anvil' && !diving);
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const [openId, setOpenId] = useState(link?.tab === 'quests' ? link.questId : undefined);
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
-  const quest = quests.find((q) => q.id === openId) ?? quests[0];
+  const root = useRef<HTMLDivElement>(null);
+  /** The open quest's row takes the focus once it is open (under the pad, after a claim). */
+  const [refocus, setRefocus] = useState(false);
+  // With nothing chosen: the first quest waiting to be claimed, else the first still to do.
+  const quest =
+    quests.find((q) => q.id === openId) ??
+    quests.find((q) => q.status === 'complete') ??
+    quests.find((q) => q.status !== 'claimed') ??
+    quests[0];
   const { maxTracked, contracts } = registry.getDelveBalance().quests;
   const trackedCount = quests.filter((q) => q.tracked).length;
   const canTrack = !!quest && (quest.tracked || trackedCount < maxTracked);
@@ -78,6 +92,9 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
     () => (slot >= 0 ? rerollContract(registry, profile, slot) : null),
     [registry, profile, slot],
   );
+
+  // Under the pad, A on the open quest's row claims it (never while a dive is open).
+  const rowClaims = pad && !diving && quest?.status === 'complete';
 
   const open = (id: string) => {
     setOpenId(id);
@@ -93,6 +110,42 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
       res.ok
         ? { good: true, text: `Claimed ${quest.name}: ${got.join(', ')}` }
         : { good: false, text: res.reason ?? '' },
+    );
+    if (!res.ok) return;
+    done();
+    // The next quest that waits opens (and, under the pad, takes the focus): A, A, A. With none
+    // left the claimed one stays open while it is in the journal.
+    const next = quests.find((q) => q.status === 'complete' && q.id !== quest.id);
+    setOpenId(next?.id ?? quest.id);
+    if (pad && next) setRefocus(true);
+  };
+  /** A press of a row: under the pad the open, complete one claims; any other opens. */
+  const onRow = (id: string) => (rowClaims && id === quest?.id ? onClaim() : open(id));
+  /** The quests waiting to be claimed, in the journal's order. */
+  const waiting = quests.filter((q) => q.status === 'complete');
+  const claimAll = !diving && waiting.length >= 2;
+  /** Claim every waiting quest in order; a refusal stops it and is shown after what went. */
+  const onClaimAll = () => {
+    const names: string[] = [];
+    let refusal: string | null = null;
+    for (const q of waiting) {
+      const res = useDelveStore.getState().claimQuest(q.id);
+      if (!res.ok) {
+        refusal = res.reason ?? '';
+        break;
+      }
+      names.push(q.name);
+    }
+    playSound(names.length > 0 ? 'upgradeTier' : 'combineFail');
+    if (names.length > 0) {
+      vibrate('success');
+      done();
+    }
+    const claimed = `Claimed ${names.length} quest${names.length === 1 ? '' : 's'}: ${names.join(', ')}`;
+    setMessage(
+      names.length === 0
+        ? { good: false, text: refusal ?? '' }
+        : { good: true, text: refusal ? `${claimed} · ${refusal}` : claimed },
     );
   };
   const onReroll = () => {
@@ -112,6 +165,12 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
     if (link?.tab === 'quests' && link.questId) setOpenId(link.questId);
   }, [link]);
 
+  useEffect(() => {
+    if (!refocus) return;
+    root.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+    setRefocus(false);
+  }, [refocus]);
+
   // Opening a quest marks it seen: NEW no more.
   useEffect(() => {
     if (quest?.isNew) markQuestSeen(quest.id);
@@ -124,15 +183,23 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
       setPrompts([]);
       return;
     }
-    const prompts: Prompt[] = [SELECT_PROMPT];
-    // On the pad, A presses the focused Claim button.
-    if (quest.status === 'complete' && !pad)
+    const claim = quest.status === 'complete' && !pad;
+    const prompts: Prompt[] = [
+      {
+        ...SELECT_PROMPT,
+        label: rowClaims ? 'Claim' : SELECT_PROMPT.label,
+        hint: claim ? undefined : hint,
+      },
+    ];
+    // On the pad, A presses the focused Claim button, or the open quest's row.
+    if (claim)
       prompts.push({
         id: 'claim',
         label: 'Claim',
         binding: { key: ['Enter', 'NumpadEnter'] },
         onPress: () => act.current.onClaim(),
         disabled: diving,
+        hint,
       });
     if (quest.status !== 'claimed')
       prompts.push({
@@ -151,11 +218,12 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
         disabled: !rerollOk,
       });
     setPrompts(prompts);
-  }, [setPrompts, setTracked, quest, canTrack, pad, diving, hasReroll, rerollOk]);
+  }, [setPrompts, setTracked, quest, canTrack, pad, diving, rowClaims, hasReroll, rerollOk, hint]);
   useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (
     <div
+      ref={root}
       className="box-border grid h-full gap-6 px-8 py-6"
       style={{ gridTemplateColumns: COLUMNS }}
     >
@@ -165,7 +233,9 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
             quests={quests}
             board={board}
             open={quest.id}
-            onOpen={open}
+            onOpen={onRow}
+            onClaimAll={claimAll ? onClaimAll : undefined}
+            waitingCount={waiting.length}
             tracked={trackedCount}
             maxTracked={maxTracked}
           />
@@ -193,6 +263,8 @@ function Journal({
   board,
   open,
   onOpen,
+  onClaimAll,
+  waitingCount,
   tracked,
   maxTracked,
 }: {
@@ -200,6 +272,9 @@ function Journal({
   board: (Contract | null)[];
   open: string;
   onOpen: (id: string) => void;
+  /** Claim all, in the head, while two or more quests wait and no dive is open. */
+  onClaimAll?: () => void;
+  waitingCount: number;
   tracked: number;
   maxTracked: number;
 }) {
@@ -210,15 +285,35 @@ function Journal({
   // The guided start's `quests.done`: the first row that waits to be claimed, in the journal's order.
   const waiting = quests.find((q) => q.status === 'complete')?.id;
   const row = (q: QuestView) => (
-    <QuestRow key={q.id} quest={q} on={q.id === open} waiting={q.id === waiting} onOpen={onOpen} />
+    <QuestRow
+      key={q.id}
+      quest={q}
+      on={q.id === open}
+      first={!onClaimAll && q.id === open}
+      waiting={q.id === waiting}
+      onOpen={onOpen}
+    />
   );
   return (
     <Panel
       title="Journal"
       testId="quest-journal"
       aside={
-        <span className="k-caption" data-testid="quests-tracked">
-          {tracked} tracked of {maxTracked}
+        <span className="flex items-center gap-3">
+          {onClaimAll && (
+            <Button
+              variant="go"
+              size="sm"
+              onClick={onClaimAll}
+              data-pad-first=""
+              testId="quest-claim-all"
+            >
+              Claim all {waitingCount}
+            </Button>
+          )}
+          <span className="k-caption" data-testid="quests-tracked">
+            {tracked} tracked of {maxTracked}
+          </span>
         </span>
       }
     >
@@ -247,7 +342,7 @@ function Journal({
             ) : (
               <p
                 key={`empty-${i}`}
-                className="k-caption m-0 px-[14px] py-3"
+                className="k-note m-0 px-[14px] py-3"
                 style={DASHED}
                 data-testid={`contract-slot-${i}`}
               >
@@ -300,11 +395,14 @@ function Group({
 function QuestRow({
   quest: q,
   on,
+  first,
   waiting,
   onOpen,
 }: {
   quest: QuestView;
   on: boolean;
+  /** The tab's first focus for the pad: the open quest's row, unless Claim all shows. */
+  first: boolean;
   /** The journal's first quest that waits to be claimed: the guided start's `quests.done`. */
   waiting: boolean;
   onOpen: (id: string) => void;
@@ -315,6 +413,7 @@ function QuestRow({
       onClick={() => onOpen(q.id)}
       aria-current={on}
       data-testid={`quest-${q.id}`}
+      data-pad-first={first ? '' : undefined}
       data-tutorial={waiting ? 'quests.done' : undefined}
       data-tutorial-done={waiting ? on : undefined}
       className="flex items-center gap-3 px-[14px] py-3 text-left"
@@ -348,7 +447,7 @@ function QuestRow({
             DONE
           </span>
         )}
-        {q.tracked && <span className="text-[14px] text-[var(--k-ok)]">tracked</span>}
+        {q.tracked && <span className="text-[16px] text-[var(--k-ok)]">tracked</span>}
       </span>
     </button>
   );
@@ -377,7 +476,7 @@ function Detail({ quest }: { quest: QuestView }) {
           </span>
           <h2 className="k-disp m-0 text-[44px] text-[var(--k-hot-hi)]">{quest.name}</h2>
           {quest.story && (
-            <p className="m-0 max-w-[640px] text-[16px] leading-[1.55] text-[var(--k-text-2)]">
+            <p className="m-0 max-w-[640px] text-[18px] leading-[1.55] text-[var(--k-text-2)]">
               {quest.story}
             </p>
           )}
@@ -393,10 +492,10 @@ function Detail({ quest }: { quest: QuestView }) {
           >
             <Box done={o.done} size={14} />
             <span className="flex flex-col gap-[2px]">
-              <span className={`text-[17px] ${o.done ? 'text-[var(--k-text-3)]' : ''}`}>
+              <span className={`text-[18px] ${o.done ? 'text-[var(--k-text-3)]' : ''}`}>
                 {o.text}
               </span>
-              {o.hint && <span className="k-caption">{o.hint}</span>}
+              {o.hint && <span className="k-note">{o.hint}</span>}
             </span>
             <span className="flex flex-col items-end gap-1">
               <b
@@ -478,7 +577,7 @@ function Rewards({
         {message && (
           <p
             role="status"
-            className="m-0 text-[16px]"
+            className="m-0 text-[18px]"
             style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
             data-testid="quest-message"
           >
@@ -499,7 +598,7 @@ function Rewards({
             >
               {quest.tracked ? 'Tracked on the HUD' : 'Track on the HUD'}
             </Button>
-            <span className="k-caption text-center">
+            <span className="k-note text-center">
               Up to {maxTracked} quests show under the minimap during a dive.
             </span>
           </>
@@ -515,7 +614,7 @@ function Rewards({
               Reroll · <Price scrap={rerollScrap} />
             </Button>
             {!reroll.ok && (
-              <span className="k-caption text-center" data-testid="quest-reroll-why">
+              <span className="k-note text-center" data-testid="quest-reroll-why">
                 {reroll.reason}
               </span>
             )}

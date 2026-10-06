@@ -121,7 +121,7 @@ export function SkillDock({
                   ))}
                 </span>
                 <span
-                  className="text-[14px]"
+                  className="text-[16px]"
                   data-testid={`ability-cost-${slot}`}
                   style={{
                     color: !ab.affordable

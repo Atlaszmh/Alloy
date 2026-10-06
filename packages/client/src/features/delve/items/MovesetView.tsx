@@ -30,7 +30,7 @@ export function MovesetView({ item }: { item: GearItem }): ReactElement {
   const carried = carriedSkills(registry, item);
   return (
     <div
-      className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-[14px]"
+      className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-[16px]"
       data-testid="item-moveset"
     >
       <div className="k-label">Moveset</div>

@@ -9,10 +9,10 @@ export function hudZoom(ui: number, hudSetting: number): number {
   return Math.max(0.75, Math.round(ui * hudSetting * 4) / 4);
 }
 
-/** The zoom a context sits under now, from the ui store (AppShell mirrors `--ui-scale` into it). */
+/** The zoom a context sits under now, from the ui store (AppShell mirrors the UI scale and `--ui-scale` into it). */
 export function contextZoom(context: ScaleContext): number {
-  const { uiScale, hudScale } = useUIStore.getState();
-  return context === 'hud' ? hudZoom(uiScale, hudScale) : uiScale;
+  const { uiScale, menuScale, hudScale } = useUIStore.getState();
+  return context === 'hud' ? hudZoom(uiScale, hudScale) : menuScale;
 }
 
 /**

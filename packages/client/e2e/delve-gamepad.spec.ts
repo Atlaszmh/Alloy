@@ -8,6 +8,7 @@ import {
   type GearItem,
   type Moveset,
 } from '@alloy/engine';
+import { startDive } from './fixtures/delve';
 
 /**
  * Controller support with a fake standard-mapping pad: Playwright has no real
@@ -21,10 +22,13 @@ const ARENA_READY = 30_000;
 const BUTTON = {
   a: 0,
   b: 1,
+  x: 2,
+  y: 3,
   lb: 4,
   rb: 5,
   lt: 6,
   rt: 7,
+  view: 8,
   menu: 9,
   up: 12,
   down: 13,
@@ -81,6 +85,7 @@ async function setup(
       navigator.getGamepads = () => [w.__pad as Gamepad];
       if (sessionStorage.getItem('pad-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem('alloy:delve:v2', value);
       if (bot) localStorage.setItem('alloy:delve:autopilot', '1');
       localStorage.setItem('alloy:muted', 'true');
@@ -185,41 +190,56 @@ async function padWalk(page: Page, id: string): Promise<void> {
 }
 
 test.describe('Delve with a controller', () => {
-  test('G01: Menu opens the pause with Resume focused; RB steps its tabs, skipping Forge; B resumes; Menu opens it again, and A on Resume resumes', async ({
+  test('G01: Menu opens the pause list on Resume; A on Build and quests opens the hub, where RB steps the tabs past the Forge and B goes back; B and Menu resume; View opens the hub on Quests', async ({
     page,
   }) => {
     await setup(page, true);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
 
     await tap(page, BUTTON.menu);
     const pause = page.getByTestId('pause-screen');
     const resume = pause.getByTestId('pause-resume');
     await expect(pause).toBeVisible();
-    // The pad has the input lock: the focus goes straight to Resume, on the Loadout tab.
+    // The pad has the input lock: the focus goes straight to Resume.
     await expect(resume).toBeFocused();
-    await expect(pause.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.down);
+    await expect(pause.getByTestId('pause-build')).toBeFocused();
+    await tap(page, BUTTON.a);
+    const hub = page.getByTestId('pause-hub');
+    await expect(hub.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
-    await expect(pause.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
+    await expect(hub.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
     // The Forge is locked mid-dive: RB steps over it.
     await tap(page, BUTTON.rb);
-    await expect(pause.getByTestId('tab-codex')).toHaveAttribute('aria-selected', 'true');
-    await expect(pause.getByTestId('tab-forge')).toHaveAttribute('aria-selected', 'false');
+    await expect(hub.getByTestId('tab-codex')).toHaveAttribute('aria-selected', 'true');
+    await expect(hub.getByTestId('tab-forge')).toHaveAttribute('aria-selected', 'false');
+    // B: back to the list, on the row that opened the hub; B again resumes.
+    await tap(page, BUTTON.b);
+    await expect(pause.getByTestId('pause-build')).toBeFocused();
     await tap(page, BUTTON.b);
     await expect(pause).toBeHidden();
-
+    // Menu opens it on Resume again; Menu resumes; and so does A on Resume.
     await tap(page, BUTTON.menu);
-    await expect(pause).toBeVisible();
+    await expect(resume).toBeFocused();
+    await tap(page, BUTTON.menu);
+    await expect(pause).toBeHidden();
+    await tap(page, BUTTON.menu);
     await expect(resume).toBeFocused();
     await tap(page, BUTTON.a);
     await expect(pause).toBeHidden();
+    // View, the journal, opens the hub on Quests directly; Menu there resumes.
+    await tap(page, BUTTON.view);
+    await expect(hub.getByTestId('tab-quests')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.menu);
+    await expect(hub).toBeHidden();
   });
 
   test('G02: B dodges, and the hints switch to the controller', async ({ page }) => {
     await setup(page, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const dodge = page.getByTestId('dodge-button');
     await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
     expect(await tapAndReadCharges(page, BUTTON.b)).toBe('1');
@@ -233,7 +253,7 @@ test.describe('Delve with a controller', () => {
   }) => {
     await setup(page, false, 2); // a light Bolt, then a medium one
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const bar = page.getByTestId('mana-bar');
     await expect(bar).toBeVisible({ timeout: ARENA_READY });
     const mana = async () =>
@@ -273,7 +293,7 @@ test.describe('Delve with a controller', () => {
   }) => {
     await setup(page, false);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await startDive(page);
     const dodge = page.getByTestId('dodge-button');
     await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
 
@@ -300,23 +320,20 @@ test.describe('Delve with a controller', () => {
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
     const focused = () =>
       page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
-    // The skill list steps with LT / RT; the Primary is the one first chosen.
+    // RB lands on the Primary's chosen card; LT / RT step the strip, and the card keeps the focus.
     await expect(page.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('move-0')).toBeFocused();
     await tap(page, BUTTON.lt);
     const basic = page.getByTestId('chain-skill-basic');
     await expect(basic).toHaveAttribute('aria-selected', 'true');
-    await expect(basic).toBeFocused();
+    await expect(page.getByTestId('move-0')).toBeFocused();
     await tap(page, BUTTON.rt);
     await expect(page.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.lt);
     await expect(basic).toHaveAttribute('aria-selected', 'true');
-    // From the row, the chain's cards lie to the right.
-    await tap(page, BUTTON.right);
-    await expect(page.getByTestId('move-0')).toBeFocused();
+    // Along the chain's cards.
     await tap(page, BUTTON.right);
     await expect(page.getByTestId('move-1')).toBeFocused();
-    await tap(page, BUTTON.a);
-    await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
     // The weapon carries the chains.
     const blow = () =>
       page.evaluate(
@@ -325,15 +342,28 @@ test.describe('Delve with a controller', () => {
             .basic[1],
       );
     expect((await blow()).kind).toBe('light');
-    // On to the inspector's kind radios, and along them past the light one.
-    await padWalk(page, 'kind-medium');
+    // A opens the move's editor; its first row, Kind, takes the focus.
     await tap(page, BUTTON.a);
-    await expect(page.getByTestId('kind-medium')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
+    const kind = page.getByTestId('move-kind');
+    await expect(kind).toBeFocused();
+    await expect(kind).toHaveAttribute('aria-valuetext', 'Light');
+    await tap(page, BUTTON.right);
+    await expect(kind).toHaveAttribute('aria-valuetext', 'Medium');
+    expect(await focused()).toBe('move-kind');
     // A draft until Apply.
     await expect(page.getByTestId('chain-apply')).toBeEnabled();
     expect((await blow()).kind).toBe('light');
-    expect(await focused()).toBe('kind-medium');
-    await page.getByTestId('chain-apply').click();
+    // B closes the editor onto its card.
+    await tap(page, BUTTON.b);
+    await expect(page.getByTestId('move-editor')).toHaveCount(0);
+    await expect(page.getByTestId('move-1')).toBeFocused();
+    // Y opens the Apply sheet on its Apply; A applies.
+    await tap(page, BUTTON.y);
+    await expect(page.getByTestId('apply-sheet-confirm')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('apply-sheet')).toHaveCount(0);
     await expect.poll(async () => (await blow()).kind).toBe('medium');
   });
 
@@ -345,36 +375,38 @@ test.describe('Delve with a controller', () => {
     await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
-    // LT / RT step the skill list (the Primary is the one first chosen), focusing its row.
-    await tap(page, BUTTON.lt);
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
+    // RB lands on the Primary's chosen card.
+    await expect(page.getByTestId('move-0')).toBeFocused();
     const focused = () =>
       page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
-    /** Press down, then up, until `id` has the focus (on a phone the tab bar sits in between). */
+    /** Walk the D-pad (a grid now: each direction in turn) until `id` has the focus. */
     const padTo = async (id: string) => {
-      for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.down);
-      for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.up);
+      for (const b of [BUTTON.down, BUTTON.right, BUTTON.up, BUTTON.left, BUTTON.down])
+        for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, b);
       expect(await focused()).toBe(id);
     };
-    // From the row, right to the Primary's card's one open socket.
-    await tap(page, BUTTON.right);
-    await expect(page.getByTestId('socket-0')).toBeFocused();
+    // A opens the card's editor; down to its one open socket's row.
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('move-editor')).toBeVisible();
+    await padTo('inspect-socket-0');
     const picker = page.getByTestId('rune-picker');
-    // A opens the picker, which takes the focus; B backs out, the focus back on the socket.
+    // A opens the rune grid, which takes the focus; B backs out, the focus back on the row.
     await tap(page, BUTTON.a);
     await expect(picker).toBeVisible();
     await expect.poll(focused).toMatch(/^rune-/);
     await tap(page, BUTTON.b);
     await expect(picker).toBeHidden();
-    await expect(page.getByTestId('socket-0')).toBeFocused();
+    await expect(page.getByTestId('inspect-socket-0')).toBeFocused();
     // Again, and A on Quick sockets it: a draft until Apply.
     await tap(page, BUTTON.a);
     await expect(picker).toBeVisible();
     await padTo('rune-pick-quick');
     await tap(page, BUTTON.a);
     await expect(picker).toBeHidden();
-    await expect(page.getByTestId('socket-0')).toHaveAttribute('data-rune', 'quick:3');
+    await expect(page.getByTestId('chain-cards').getByTestId('socket-0')).toHaveAttribute(
+      'data-rune',
+      'quick:3',
+    );
     const sockets = () =>
       page.evaluate(
         () =>
@@ -382,11 +414,15 @@ test.describe('Delve with a controller', () => {
             .moves[0].runes,
       );
     expect(await sockets()).toEqual([null]);
-    await page.getByTestId('chain-apply').click();
+    // Y in the editor opens the Apply sheet on its Apply; A applies.
+    await tap(page, BUTTON.y);
+    await expect(page.getByTestId('apply-sheet-confirm')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('apply-sheet')).toHaveCount(0);
     await expect.poll(sockets).toEqual([{ id: 'quick', tier: 3 }]);
   });
 
-  test("G08: a bag weapon picked on the pad; RT reaches the compare pane's actions, A transfers and unequips, B goes back", async ({
+  test('G08: a bag weapon by the pad: A opens the take sheet, Transfer wears it with your moveset; X on the worn weapon unequips', async ({
     page,
   }) => {
     await setup(page, false, 1, false, (registry) => {
@@ -405,26 +441,65 @@ test.describe('Delve with a controller', () => {
     await tap(page, BUTTON.down);
     await padWalk(page, 'bag-item');
     await expect(sheet).toContainText('Selected · compared with your weapon');
-    // RT jumps to the pane's first action, the footer says B goes back.
-    await expect(page.locator('.k-prompt', { hasText: 'Actions' })).toBeVisible();
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('transfer-button')).toBeFocused();
-    await expect(page.locator('.k-prompt', { hasText: 'Back to bag' })).toBeVisible();
-    await tap(page, BUTTON.b);
-    await expect(page.getByTestId('bag-item')).toBeFocused();
-    await expect(page.getByTestId('system-menu')).toBeHidden();
-    // Again, and A moves the moveset onto the axe, which is worn now.
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('transfer-button')).toBeFocused();
+    // The verdict leads the pane, and the footer's A says what it does on this weapon.
+    await expect(page.getByTestId('item-verdict')).toBeVisible();
+    await expect(page.locator('.k-prompt', { hasText: 'Equip or transfer' })).toBeVisible();
+    await expect(page.locator('.k-prompt', { hasText: 'Actions' })).toHaveCount(0);
+    // The pane's buttons are the mouse's: right from the bag never lands on them.
+    await tap(page, BUTTON.right);
+    expect(
+      await page.evaluate(
+        () => !!document.activeElement?.closest('[data-testid="compare-actions"]'),
+      ),
+    ).toBe(false);
+    await padWalk(page, 'bag-item');
+    // A opens the take sheet; A on Transfer moves the moveset onto the axe, which is worn now.
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('take-sheet')).toBeVisible();
+    await page.getByTestId('take-transfer').focus();
     await tap(page, BUTTON.a);
     await expect.poll(async () => (await save()).equipped.weapon?.uid).toBe('bag-axe');
+    await expect(page.getByTestId('take-sheet')).toHaveCount(0);
+    // X on the worn weapon unequips it.
+    await page.getByTestId('slot-weapon').focus();
     await expect(sheet).toContainText('Equipped · your weapon');
-    // RT and A unequip it.
-    await tap(page, BUTTON.rt);
-    await expect(page.getByTestId('unequip-button')).toBeFocused();
-    await tap(page, BUTTON.a);
+    await tap(page, BUTTON.x);
     await expect.poll(async () => (await save()).equipped.weapon?.uid).toBeUndefined();
     expect((await save()).bag.map((i: GearItem) => i.uid)).toContain('bag-axe');
+  });
+
+  test('G09: X salvages the focused tile at once, B takes it back, and the offer ends after 5 s', async ({
+    page,
+  }) => {
+    await setup(page, false, 1, false, (registry) => [
+      generateItem(
+        registry,
+        { uid: 'bag-helm', ilvl: 3, rarity: 'rare', slot: 'helm', mana: 'fire' },
+        new SeededRNG(7),
+      ),
+    ]);
+    await page.goto('/delve');
+    await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    const save = () => page.evaluate(() => JSON.parse(localStorage.getItem('alloy:delve:v2')!));
+    const undo = page.locator('.k-prompt', { hasText: 'Undo salvage' });
+    await tap(page, BUTTON.down); // the pad takes the input lock
+    await padWalk(page, 'bag-item');
+    // A rare helm is precious: it melts at once all the same.
+    await tap(page, BUTTON.x);
+    await expect.poll(async () => (await save()).bag.length).toBe(0);
+    await expect(undo).toBeVisible();
+    await tap(page, BUTTON.b);
+    await expect
+      .poll(async () => (await save()).bag.map((i: GearItem) => i.uid))
+      .toEqual(['bag-helm']);
+    await expect(undo).toHaveCount(0);
+    // Again; the offer is gone after 5 s.
+    await padWalk(page, 'bag-item');
+    await tap(page, BUTTON.x);
+    await expect.poll(async () => (await save()).bag.length).toBe(0);
+    await expect(undo).toBeVisible();
+    await expect(undo).toHaveCount(0, { timeout: 7_000 });
+    expect((await save()).bag).toHaveLength(0);
   });
 
   test('G03: RB and LB step through the five Anvil tabs, wrapping round', async ({ page }) => {

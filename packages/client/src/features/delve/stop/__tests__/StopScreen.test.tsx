@@ -11,11 +11,13 @@ import {
   type StopKind,
 } from '@alloy/engine';
 import { ARM_MS, StopScreen } from '../StopScreen';
-import { doorLoot } from '../DoorPane';
-import { padPrompts } from '../../kit/prompts';
+import { doorTerms } from '../DoorPane';
+import { padPrompts, scopedLast } from '../../kit/prompts';
 import type { PadButton } from '@/features/gamepad/gamepad';
 import { getDelveRegistry } from '../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { useUIStore } from '@/stores/uiStore';
+import { ONBOARDING } from '../../onboarding';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -33,6 +35,29 @@ const press = (code: string) => {
     box.mockRestore();
   }
 };
+
+/**
+ * A pad button as the nav hears it (use-gamepad-nav.ts): the topmost scope's prompts first, else
+ * its default (B presses the scope's [data-pad-back], Menu its [data-pad-menu] or its back).
+ */
+const padPress = (button: PadButton) => {
+  const box = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
+  try {
+    act(() => {
+      const took = padPrompts(new Set([button]), {} as Record<PadButton, boolean>, 0);
+      if (took.has(button)) return;
+      if (button === 'b') scopedLast('[data-pad-back]')?.click();
+      if (button === 'menu')
+        (scopedLast('[data-pad-menu]') ?? scopedLast('[data-pad-back]'))?.click();
+    });
+  } finally {
+    box.mockRestore();
+  }
+};
+/** The first door of the stop's dive. */
+const firstDoor = () => screen.getByTestId(`door-${store().profile.dive!.doorChoices[0]}`);
 
 /** The stop's prompts and buttons wake ARM_MS after it mounts: a press carried from the fight does nothing. */
 const arm = () => act(() => vi.advanceTimersByTime(ARM_MS));
@@ -105,9 +130,14 @@ describe('StopScreen (between depths)', () => {
     expect(root).toHaveAttribute('data-pad-scope');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Depth 1 cleared');
     expect(root).toHaveTextContent(registry.getBiomeForDepth(1).name);
-    expect(screen.getByTestId('floor-counts')).toHaveTextContent(
-      '26 scrap bounty0 materials2 items3 runes',
+    // Both finds are upgrades: the helm's slot is empty, and the axe beats the starting sword.
+    expect(screen.getByTestId('stop-finds')).toHaveTextContent(
+      '26 scrap bounty · 2 items · 3 runes · ▲ 2 upgrades waiting',
     );
+    const loss = Math.round(registry.getDelveBalance().crafting.deathLoss * 100);
+    const risk = screen.getByTestId('risk-line');
+    expect(risk).toHaveTextContent(`Banked this dive · dying loses ${loss}% of it`);
+    expect(risk).toHaveAttribute('data-tutorial', 'stop.risk');
     expect(screen.queryByTestId('boss-slain')).toBeNull();
   });
 
@@ -120,9 +150,12 @@ describe('StopScreen (between depths)', () => {
     );
   });
 
-  it("lists this floor's items with their marks and its runes grouped, over the risk line", () => {
+  it('A on the finds line opens the sheet: the items with their marks, the runes grouped; an item closes it and opens the pause on it', () => {
     const { onInspect } = atStop(['equip']);
+    arm();
+    fireEvent.click(screen.getByTestId('stop-finds'));
     const found = screen.getByTestId('floor-finds');
+    expect(found).toHaveAttribute('role', 'dialog');
     const items = within(found).getAllByTestId('loot-item');
     // Newest first; the ring was an earlier floor's.
     expect(items.map((b) => b.dataset.uid)).toEqual(['w1', 'h1']);
@@ -133,11 +166,8 @@ describe('StopScreen (between depths)', () => {
       'Quick IRune, to your pouch',
       'Split III ×2Rune, to your pouch',
     ]);
-    const loss = Math.round(registry.getDelveBalance().crafting.deathLoss * 100);
-    expect(within(found).getByTestId('risk-line')).toHaveTextContent(
-      `Banked this dive · dying loses ${loss}% of it`,
-    );
     fireEvent.click(items[1]);
+    expect(screen.queryByTestId('floor-finds')).toBeNull();
     expect(onInspect).toHaveBeenCalledWith('h1');
   });
 
@@ -147,6 +177,7 @@ describe('StopScreen (between depths)', () => {
     haul = addMaterial(haul, { kind: 'essence', essence: 'twin_fang' });
     haul = addMaterial(haul, { kind: 'links' }, 2);
     atStop(['equip'], {}, haul);
+    fireEvent.click(screen.getByTestId('stop-finds'));
     const found = screen.getByTestId('floor-finds');
     const rows = [
       ...found.querySelectorAll(
@@ -170,24 +201,84 @@ describe('StopScreen (between depths)', () => {
       'Twin Fang essenceForges a legendary',
     ]);
     // Bars, flux, shards and essences count as materials.
-    expect(screen.getByTestId('floor-counts')).toHaveTextContent('5 materials');
+    expect(screen.getByTestId('stop-finds')).toHaveTextContent('5 materials');
   });
 
-  it('shows the doors with their art and depth, Extract with the hero, and the potion', () => {
+  it('opens on step 1 while a power-up is offered: the cards (the first the first focus), the finds line and the risk line, no roads', () => {
+    atStop(['equip', 'upgrade']);
+    const step = screen.getByTestId('stop-powerup');
+    expect(step).toHaveAttribute('data-tutorial', 'stop.powerup');
+    expect(step).toContainElement(screen.getByTestId('stop-equip'));
+    expect(screen.getByTestId('stop-equip')).toHaveAttribute('data-pad-first');
+    expect(screen.getByTestId('stop-equip')).toHaveAttribute('data-primary-action', 'powerup');
+    expect(screen.queryByTestId('stop-road')).toBeNull();
+    expect(screen.queryByTestId('door-list')).toBeNull();
+    expect(screen.queryByTestId('extract-button')).toBeNull();
+    expect(screen.getByTestId('door-choice').querySelectorAll('[data-pad-first]')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Skip power-up' })).toBeInTheDocument();
+  });
+
+  it('X (or S) skips to step 2, the first road focused; B (or its button) goes back while nothing was taken', () => {
+    atStop(['equip', 'upgrade']);
+    arm();
+    padPress('x');
+    const road = screen.getByTestId('stop-road');
+    expect(road).toHaveTextContent('Choose your road');
+    expect(screen.getByTestId('stop-skipped')).toHaveTextContent('Power-up skipped.');
+    expect(screen.queryByTestId('stop')).toBeNull();
+    expect(firstDoor()).toHaveFocus();
+    padPress('b');
+    expect(screen.queryByTestId('stop-road')).toBeNull();
+    expect(screen.getByTestId('stop-equip')).toHaveFocus();
+    press('KeyS');
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Power-ups' }));
+    expect(screen.getByTestId('stop')).toBeInTheDocument();
+  });
+
+  it('a take moves to step 2 for good: the first road focused, and no way back', () => {
+    useUIStore.setState({ seen: [] });
+    atStop(['equip', 'upgrade']);
+    arm();
+    // A first stop: Take pulses with the screen's line, until a power-up is taken.
+    expect(screen.getByTestId('onboarding-hint')).toHaveTextContent(ONBOARDING.stop);
+    expect(document.querySelector('.k-prompt[data-pulse]')).toHaveTextContent('Take');
+    fireEvent.click(screen.getByTestId('stop-equip'));
+    fireEvent.click(screen.getAllByTestId('stop-equip-item')[0]);
+    expect(store().profile.dive!.stop!.taken).toBe(true);
+    expect(useUIStore.getState().seen).toContain('stop');
+    expect(screen.queryByTestId('onboarding-hint')).toBeNull();
+    expect(screen.getByTestId('stop-taken')).toHaveTextContent('Power-up taken.');
+    expect(firstDoor()).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Power-ups' })).toBeNull();
+    padPress('b');
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
+  });
+
+  it("opens on step 2 when the stop offers nothing, or what it offered is taken (a reload's)", () => {
+    atStop(['equip'], { stop: { offers: ['equip'], taken: true } });
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
+    expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Skip power-up' })).toBeNull();
+    expect(screen.getByTestId('stop-finds')).toBeInTheDocument();
+    expect(screen.getByTestId('risk-line')).toBeInTheDocument();
+  });
+
+  it('shows the doors with their art, depth, cost and gain, Extract with the hero, and the potion', () => {
     const { onChoose, onExtract, onPotion } = atStop(['equip'], { heroHpFrac: 0.5, potions: 2 });
-    const dive = store().profile.dive!;
-    const first = dive.doorChoices[0];
-    const door = screen.getByTestId(`door-${first}`);
+    arm();
+    press('KeyS');
+    const door = firstDoor();
+    const first = store().profile.dive!.doorChoices[0];
     expect(door).toHaveTextContent(registry.getDoor(first).name);
     expect(door.querySelector('[data-sprite], [data-glyph="chest"]')).not.toBeNull();
-    // Each door shows its loot multipliers; the plain one has none.
-    const loot = (id: string) =>
-      [...screen.getByTestId(`door-${id}`).querySelectorAll('[data-door-loot]')].map(
-        (el) => el.textContent,
-      );
-    expect(loot('gilded')).toEqual(doorLoot(registry.getDoor('gilded').mods));
-    expect(loot('gilded').length).toBeGreaterThan(0);
-    expect(loot('winding')).toEqual([]);
+    const line = (id: string, kind: 'cost' | 'gain') =>
+      screen.getByTestId(`door-${id}`).querySelector(`[data-door-${kind}]`)?.textContent ?? null;
+    const gilded = doorTerms(registry.getDoor('gilded').mods);
+    expect(line('gilded', 'cost')).toBe(`Cost: ${gilded.cost.join(' · ')}`);
+    expect(line('gilded', 'gain')).toBe(`Gain: ${gilded.gain.join(' · ')}`);
+    expect(line('winding', 'cost')).toBeNull();
+    expect(screen.getByTestId('door-winding')).toHaveTextContent(registry.getDoor('winding').text);
     fireEvent.click(door);
     expect(onChoose).toHaveBeenCalledWith(first);
     const extract = screen.getByTestId('extract-button');
@@ -195,9 +286,23 @@ describe('StopScreen (between depths)', () => {
     expect(extract.querySelector('[data-sprite="hero"]')).not.toBeNull();
     fireEvent.click(extract);
     expect(onExtract).toHaveBeenCalledOnce();
-    expect(screen.getByTestId('door-choice')).toHaveTextContent('Life 50% · 2 potions');
-    fireEvent.click(screen.getByTestId('door-potion'));
+    const potion = screen.getByTestId('door-potion');
+    expect(potion).toHaveTextContent('Life 50% · 2 potions');
+    fireEvent.click(potion);
     expect(onPotion).toHaveBeenCalledOnce();
+  });
+
+  it('the potion is offered only while life is below full and a potion is left', () => {
+    atStop(null, { heroHpFrac: 1, potions: 2 });
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
+    expect(screen.queryByTestId('door-potion')).toBeNull();
+    act(() =>
+      store().setProfile({
+        ...store().profile,
+        dive: { ...store().profile.dive!, heroHpFrac: 0.4, potions: 0 },
+      }),
+    );
+    expect(screen.queryByTestId('door-potion')).toBeNull();
   });
 
   it("has no back at its top level: Esc and the pad's Menu open the pause; Enter with nothing focused doesn't", () => {
@@ -231,30 +336,13 @@ describe('StopScreen (between depths)', () => {
     expect(onMenu).not.toHaveBeenCalled();
   });
 
-  it('S skips the power-up: the cards go and the focus moves to the first door', () => {
-    atStop(['equip', 'upgrade']);
-    expect(screen.getByTestId('door-choice')).toHaveTextContent('Skip power-up');
-    arm();
-    press('KeyS');
-    expect(screen.queryByTestId('stop')).toBeNull();
-    expect(screen.getByTestId('stop-skipped')).toHaveTextContent('Power-up skipped');
-    const first = store().profile.dive!.doorChoices[0];
-    expect(screen.getByTestId(`door-${first}`)).toHaveFocus();
-  });
-
   it('for ARM_MS after it mounts, its prompts and buttons are inert: a press carried from the fight skips nothing', () => {
-    const { onInspect } = atStop(['equip', 'upgrade']);
+    atStop(['equip', 'upgrade']);
     const main = screen.getByTestId('door-choice').querySelector('main > div')!;
     expect(main).toHaveAttribute('inert');
     press('KeyS');
-    within(screen.getByTestId('floor-finds')).getAllByTestId('loot-item')[0].focus();
-    const box = vi
-      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-      .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
-    padPrompts(new Set<PadButton>(['y']), {} as Record<PadButton, boolean>, 0);
-    box.mockRestore();
+    padPress('x');
     expect(screen.getByTestId('stop')).toBeInTheDocument();
-    expect(onInspect).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(ARM_MS - 1));
     press('KeyS');
     expect(screen.getByTestId('stop')).toBeInTheDocument();
@@ -266,13 +354,11 @@ describe('StopScreen (between depths)', () => {
 
   it("the pad's first focus is the first power-up card while one is on offer, the first door once it is skipped", () => {
     atStop(['equip', 'upgrade']);
-    const first = store().profile.dive!.doorChoices[0];
-    const door = screen.getByTestId(`door-${first}`);
     expect(screen.getByTestId('stop-equip')).toHaveAttribute('data-pad-first');
     expect(screen.getByTestId('door-choice').querySelectorAll('[data-pad-first]')).toHaveLength(1);
     arm();
     press('KeyS');
-    expect(door).toHaveAttribute('data-pad-first');
+    expect(firstDoor()).toHaveAttribute('data-pad-first');
     expect(screen.getByTestId('door-choice').querySelectorAll('[data-pad-first]')).toHaveLength(1);
   });
 
@@ -282,48 +368,42 @@ describe('StopScreen (between depths)', () => {
     expect(screen.getByTestId(`door-${first}`)).toHaveAttribute('data-pad-first');
   });
 
-  it("words a door's loot multipliers from its mods, leaving out what it doesn't change", () => {
-    expect(doorLoot({})).toEqual([]);
-    expect(
-      doorLoot({
-        materials: 1.3,
-        runes: 0.5,
-        gear: 1,
-        flux: 1.5,
-        essence: 2,
-        find: 75,
-        shardTier: 0.35,
-      }),
-    ).toEqual([
-      'Materials ×1.3',
-      'Runes ×0.5',
-      'Flux ×1.5',
-      'Essences ×2',
-      'Find +75%',
-      'Tier up 35%',
-    ]);
+  it("words a door's cost and its gain from its mods, each a list for its own line", () => {
+    const terms = (id: string) => doorTerms(registry.getDoor(id).mods);
+    expect(doorTerms({})).toEqual({ cost: [], gain: [] });
+    expect(terms('winding')).toEqual({ cost: [], gain: [] });
+    expect(terms('gilded')).toEqual({
+      cost: ['Foes +25% life'],
+      gain: ['Flux ×1.5', 'Essences ×1.5', 'Find +75%'],
+    });
+    expect(terms('champions')).toEqual({ cost: ['An elite leads every pack'], gain: ['Bounty ×1.5'] });
+    expect(terms('shrine')).toEqual({
+      cost: ['Materials ×0.5', 'Runes ×0.5'],
+      gain: ['Heal to full', '+1 potion'],
+    });
+    expect(terms('plunge')).toEqual({ cost: ['2 depths deeper'], gain: ['Bounty ×2'] });
+    // A minus sign, not a hyphen.
+    expect(terms('swarm')).toEqual({ cost: ['50% more foes'], gain: ['Foes −30% life', 'Materials ×1.3'] });
+    expect(terms('cursed')).toEqual({ cost: ['Foes hit 40% harder'], gain: ['Tier up 35%'] });
   });
 
   it('with no power-up to offer, says so', () => {
     atStop(null);
     expect(screen.queryByTestId('stop')).toBeNull();
-    expect(screen.getByTestId('door-choice')).toHaveTextContent('No power-up at this stop.');
+    expect(screen.getByTestId('stop-none')).toHaveTextContent('No power-up at this stop.');
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
   });
 
-  it('Y (Inspect item) opens the focused find', () => {
-    const { onInspect } = atStop(['equip']);
+  it('Y does nothing at the stop, and no prompt names it', () => {
+    const { onInspect, onChoose } = atStop(['equip']);
     arm();
-    expect(screen.getByTestId('door-choice')).toHaveTextContent('Inspect item');
-    within(screen.getByTestId('floor-finds')).getAllByTestId('loot-item')[1].focus();
-    const box = vi
-      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-      .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
-    try {
-      padPrompts(new Set<PadButton>(['y']), {} as Record<PadButton, boolean>, 0);
-    } finally {
-      box.mockRestore();
-    }
-    expect(onInspect).toHaveBeenCalledWith('h1');
+    const root = screen.getByTestId('door-choice');
+    expect(root).not.toHaveTextContent('Inspect');
+    screen.getByTestId('stop-finds').focus();
+    padPress('y');
+    expect(onInspect).not.toHaveBeenCalled();
+    expect(onChoose).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('floor-finds')).toBeNull();
   });
 });
 
@@ -338,17 +418,16 @@ describe("StopScreen (a guided start's stops)", () => {
     vi.restoreAllMocks();
   });
 
-  it('a required power-up holds every road, and Skip with them, until it is taken', () => {
+  it('a required power-up holds step 1: Skip is off and says why, and the roads come once it is taken', () => {
     atStop(['equip'], { stop: { offers: ['equip'], taken: false, required: true } });
     arm();
-    const roads = () => [
-      ...store().profile.dive!.doorChoices.map((id) => screen.getByTestId(`door-${id}`)),
-      screen.getByTestId('extract-button'),
-    ];
-    for (const road of roads()) expect(road).toBeDisabled();
+    const skip = screen.getByRole('button', { name: 'Skip power-up' });
+    expect(skip).toBeDisabled();
     expect(screen.getByTestId('roads-held')).toHaveTextContent('Take the power-up to go on');
     press('KeyS');
-    expect(screen.getByTestId('stop')).toBeInTheDocument();
+    padPress('x');
+    expect(screen.getByTestId('stop-powerup')).toBeInTheDocument();
+    expect(screen.queryByTestId('door-list')).toBeNull();
     const dive = store().profile.dive!;
     act(() =>
       store().setProfile({
@@ -356,13 +435,16 @@ describe("StopScreen (a guided start's stops)", () => {
         dive: { ...dive, stop: { ...dive.stop!, taken: true } },
       }),
     );
-    for (const road of roads()) expect(road).toBeEnabled();
     expect(screen.queryByTestId('roads-held')).toBeNull();
+    expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
+    for (const id of store().profile.dive!.doorChoices)
+      expect(screen.getByTestId(`door-${id}`)).toBeEnabled();
+    expect(screen.getByTestId('extract-button')).toBeEnabled();
   });
 
   it('with no doors, Extract stands alone, the first focus', () => {
     atStop(null, { doorChoices: [] });
-    expect(screen.getByTestId('door-choice')).not.toHaveTextContent('Choose your path');
+    expect(screen.getByTestId('door-choice')).not.toHaveTextContent('Choose your road');
     expect(screen.getByTestId('door-list')).toBeEmptyDOMElement();
     expect(screen.getByTestId('extract-button')).toHaveAttribute('data-pad-first');
   });
@@ -393,7 +475,7 @@ describe("StopScreen (a guided start's stops)", () => {
     expect(screen.getByTestId('extract-button')).toBeInTheDocument();
   });
 
-  it("a guided stop shows Hesta's strip in the header row, between the title and the counts", () => {
+  it("a guided stop shows Hesta's strip in the header row, between the title and the finds line", () => {
     vi.spyOn(registry, 'getTutorialData').mockReturnValue({
       ...registry.getTutorialData(),
       steps: [
@@ -428,7 +510,7 @@ describe("StopScreen (a guided start's stops)", () => {
     expect(screen.getByTestId('tutorial-objective')).toHaveTextContent('Take Equip');
     expect(screen.getByTestId('tutorial-line')).toHaveTextContent('Hesta speaks.');
     const title = screen.getByRole('heading', { level: 1 });
-    const counts = screen.getByTestId('floor-counts');
+    const counts = screen.getByTestId('stop-finds');
     expect(strip.parentElement).toBe(counts.parentElement);
     expect(title.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(strip.compareDocumentPosition(counts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

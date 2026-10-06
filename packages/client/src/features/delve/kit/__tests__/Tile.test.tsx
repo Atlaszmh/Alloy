@@ -53,6 +53,13 @@ describe('the kit tile', () => {
     expect(tile.querySelector('[data-glyph="potential"]')).not.toBeNull();
   });
 
+  it('says its mark in data-delta for tests and audits', () => {
+    const { rerender } = render(<Tile rarity="rare" delta="potential" label="x" />);
+    expect(screen.getByRole('button')).toHaveAttribute('data-delta', 'potential');
+    rerender(<Tile rarity="rare" delta={null} label="x" />);
+    expect(screen.getByRole('button')).not.toHaveAttribute('data-delta');
+  });
+
   it('draws an empty slot with no rarity', () => {
     render(<Tile rarity={null} label="Empty helm slot" />);
     const tile = screen.getByRole('button', { name: 'Empty helm slot' });

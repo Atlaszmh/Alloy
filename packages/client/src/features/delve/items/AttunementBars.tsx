@@ -28,7 +28,7 @@ export function AttunementBars({
   return (
     <span className="flex flex-col gap-2">
       {!compact && (
-        <span className="k-caption" data-testid="mana-pool">
+        <span className="k-note" data-testid="mana-pool">
           Mana pool <b className="text-[var(--k-mana)]">{Math.round(pool.max)}</b> · +
           {pool.regen.toFixed(1)}/s · every point of attunement adds {bal.poolPerAttune}
         </span>

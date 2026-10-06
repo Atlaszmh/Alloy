@@ -1,4 +1,14 @@
+import { afterEach } from 'vitest';
 import '@testing-library/jest-dom';
+
+// Every onboarding hint seen (features/delve/onboarding.ts): a test that wants one clears `seen`,
+// and the next test starts with them all seen again.
+const SEEN = ['loadout', 'skills', 'forge', 'quests', 'stop'];
+localStorage.setItem('alloy:delve:seen', JSON.stringify(SEEN));
+afterEach(async () => {
+  const { useUIStore } = await import('@/stores/uiStore');
+  useUIStore.setState({ seen: [...SEEN] });
+});
 
 // Mock AudioContext for jsdom test environment
 class MockAudioContext {

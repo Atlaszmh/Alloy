@@ -1,149 +1,45 @@
-import { useId, type ReactNode } from 'react';
-import { isDiveActive, startDepthOptions, tutorialBlocksDive } from '@alloy/engine';
-import { applyLabel, selectDraftApply, useDelveStore } from '@/stores/delveStore';
-import { playSound } from '@/shared/utils/sound-manager';
-import { Button, Chip, Footer, Glyph, type Binding, type Prompt } from '@/features/delve/kit';
-import { getDelveRegistry } from '../registry';
+import type { ReactNode } from 'react';
+import { isDiveActive } from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
+import { Button, Footer, type Binding, type Prompt } from '@/features/delve/kit';
 
-/** Training's inputs: T, or View on the pad. The hub binds it through usePrompts; the button draws it. */
-export const TRAINING_BINDING: Binding = { key: 'KeyT', pad: 'view' };
+/** Delve's inputs at the Anvil: Enter with nothing focused, or View on the pad. Both open the Depart sheet. */
+export const DEPART_BINDING: Binding = { key: 'Enter', pad: 'view' };
 
 /**
- * The hub's planks: the prompts, then Training, the start depths and the hot
- * metal Delve button (Enter with nothing focused, or Start). An unapplied chain
- * draft blocks the dive, and its block (apply, or discard and delve) sits
- * before the button; so does a guided start's Anvil lesson, its reason
- * (`tutorialBlocksDive`) beside it. While a tab sets `action` (Skills: its Apply bar, with a
- * compact Delve), that node replaces the whole right-hand group. Between dives, the
- * quests waiting to be claimed sit beside Delve ("2 to claim"), opening Quests.
+ * The hub's planks: the prompts, then one hot metal button, Delve, which opens the Depart sheet
+ * (the pad-first spec, 2.2: the start depths, Training, the claim count and whatever holds a
+ * dive live there). It is never disabled. While a tab sets `action` (Skills: its Apply bar, with
+ * a compact Delve), that node replaces it.
  */
 export function HubFooter({
   prompts,
-  onTraining,
   start,
-  onStart,
-  onDelve,
+  onDepart,
   action,
-  toClaim = 0,
-  onToClaim,
 }: {
   prompts: Prompt[];
-  onTraining: () => void;
-  /** The chosen start depth (the hub keeps it, for the Skills tab's Delve too). */
+  /** The chosen start depth (the hub keeps it; the sheet picks it). */
   start: number;
-  onStart: (depth: number) => void;
-  onDelve: () => void;
+  /** Opens the Depart sheet. */
+  onDepart: () => void;
   action?: ReactNode;
-  /** Completed quests and contracts waiting to be claimed. */
-  toClaim?: number;
-  /** Opens the Quests tab. */
-  onToClaim?: () => void;
 }) {
-  const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const id = useId();
-  const starts = startDepthOptions(registry, profile);
   const active = isDiveActive(profile);
-  // The chain builder's unapplied changes: a new dive waits until they're applied or discarded.
-  // The builder's Apply, here too: its total, and the engine's op as a dry run (why it can't go).
-  const view = useDelveStore(selectDraftApply);
-  const blocked = Object.keys(view.changes).length > 0 && !active;
-  const applying = blocked ? view.dry : null;
-  const applyWhy = applying && !applying.ok ? applying.reason : null;
-  // A guided start's Anvil lesson holds a new dive until it ends or is skipped (never a Resume).
-  const lesson = active ? null : tutorialBlocksDive(registry, profile);
-
-  const onApply = () => {
-    const res = useDelveStore.getState().applyDraft();
-    playSound(res.ok ? 'upgradeTier' : 'combineFail');
-  };
-  const onDiscardAndDelve = () => {
-    useDelveStore.getState().revertDraft();
-    onDelve();
-  };
-
   if (action) return <Footer prompts={prompts}>{action}</Footer>;
-
   return (
     <Footer prompts={prompts}>
-      {blocked && (
-        <div className="flex items-center gap-3" data-testid="draft-block">
-          <div className="flex max-w-[280px] flex-col text-[14px] leading-tight">
-            <span id={`${id}-draft`} className="text-[var(--k-hot)]" data-testid="draft-warning">
-              Unapplied changes: apply or discard them to delve
-            </span>
-            {applyWhy && (
-              <span
-                id={`${id}-apply`}
-                className="text-[var(--k-bad-text)]"
-                data-testid="draft-apply-why"
-              >
-                {applyWhy}
-              </span>
-            )}
-          </div>
-          <Button
-            variant="go"
-            size="sm"
-            disabled={!applying?.ok}
-            onClick={onApply}
-            aria-describedby={applyWhy ? `${id}-apply` : undefined}
-            testId="draft-apply"
-          >
-            {applyLabel(registry, view.price)}
-          </Button>
-          {/* A lesson holds the dive: discarding would only drop the lesson's draft. */}
-          {!lesson && (
-            <Button size="sm" onClick={onDiscardAndDelve} testId="draft-discard-delve">
-              Discard changes &amp; delve
-            </Button>
-          )}
-        </div>
-      )}
-      {lesson && (
-        <span
-          id={`${id}-lesson`}
-          className="max-w-[280px] text-[14px] leading-tight text-[var(--k-hot)]"
-          data-testid="lesson-block"
-        >
-          {lesson}
-        </span>
-      )}
-      <Button
-        onClick={onTraining}
-        binding={TRAINING_BINDING}
-        data-tutorial="hub.training"
-        testId="training-button"
-      >
-        <Glyph id="training" size={20} /> Training
-      </Button>
-      {!active && starts.length > 1 && (
-        <div className="flex items-center gap-2" data-testid="start-depths">
-          <span className="text-[14px] text-[var(--k-wood-text)]">Start at</span>
-          {starts.map((d) => (
-            <Chip key={d} pressed={start === d} onClick={() => onStart(d)}>
-              {d}
-            </Chip>
-          ))}
-        </div>
-      )}
-      {toClaim > 0 && !active && (
-        <Button size="sm" onClick={onToClaim} testId="claim-count">
-          {toClaim} to claim
-        </Button>
-      )}
       <Button
         variant="primary"
         size="lg"
-        onClick={onDelve}
-        disabled={blocked || !!lesson}
-        aria-describedby={blocked ? `${id}-draft` : lesson ? `${id}-lesson` : undefined}
-        binding={{ key: 'Enter', pad: 'menu' }}
+        onClick={onDepart}
+        binding={DEPART_BINDING}
         data-pad-menu
         data-pad-first
         data-primary-action="delve"
         data-tutorial="hub.delve"
-        testId="delve-button"
+        testId="depart-button"
       >
         {active ? `Resume dive · depth ${profile.dive!.depth}` : `Delve ▸ depth ${start}`}
       </Button>

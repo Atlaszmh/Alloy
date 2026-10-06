@@ -69,20 +69,34 @@ describe('ChainLane', () => {
     expect(screen.queryByTestId('rhythm-strip')).toBeNull();
   });
 
-  it('the chosen card alone carries the ◂ ▸ × toolbar', () => {
-    panes();
-    expect(screen.getByTestId('move-right-0')).toBeEnabled();
-    expect(screen.queryByTestId('move-right-1')).toBeNull();
-    fireEvent.click(screen.getByTestId('move-1'));
-    expect(screen.queryByTestId('move-right-0')).toBeNull();
-    expect(screen.getByTestId('move-left-1')).toBeEnabled();
-  });
-
-  it("the toolbar is the mouse's: the pad skips it (X carries, Y removes)", () => {
-    panes();
-    for (const id of ['move-left-0', 'move-right-0', 'move-remove-0'])
-      expect(screen.getByTestId(id).closest('[data-pad-skip]')).not.toBeNull();
-    expect(screen.getByTestId('move-0').closest('[data-pad-skip]')).toBeNull();
+  it("a card's pips are off the D-pad and a pip's click opens its editor at that socket", () => {
+    const socketed: Chains = {
+      ...chains,
+      primary: { moves: [bolt({ kind: 'light', runes: [null] }), bolt()], payment: 'mana' },
+    };
+    render(
+      <Panes
+        chains={socketed}
+        caps={caps}
+        stats={stats}
+        locked={false}
+        onChange={vi.fn()}
+        runes={{
+          pouch: 'any',
+          socketCap: 3,
+          socketPrice: () => null,
+          weaponBaseId: null,
+          pullText: () => 'Pull',
+        }}
+      />,
+    );
+    expect(screen.getByTestId('sockets-0')).toHaveAttribute('data-pad-skip');
+    expect(screen.queryByTestId('move-editor')).toBeNull();
+    fireEvent.click(
+      within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: empty' }),
+    );
+    expect(screen.getByTestId('move-editor')).toBeInTheDocument();
+    expect(screen.getByTestId('rune-picker')).toBeInTheDocument();
   });
 
   it('a mouse drag moves a card by its travel over the spacing of the cards', () => {

@@ -2,12 +2,14 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { createElement } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import {
+  abilityReady,
   beginFloor,
   chainMove,
   computeHeroStats,
   createDelveProfile,
   createSandboxWorld,
   defaultChains,
+  makeCtx,
   moveNumbers,
   spawnDummies,
   startDive,
@@ -23,6 +25,7 @@ import {
   holdingSlot,
   labelsHeld,
   pressJournal,
+  pressPeek,
   pressMenu,
 } from '../arena/input';
 import { TAP_MS } from '../arena/aim';
@@ -261,6 +264,24 @@ describe('loot labels and the journal', () => {
     expect(opened).toBe(2);
   });
 
+  it("M and the pad's D-pad up press the topmost scope's Map (the peek), only while the fight is live", () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const map = document.body.appendChild(document.createElement('button'));
+    map.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 });
+    map.setAttribute('data-pad-peek', '');
+    let peeks = 0;
+    map.addEventListener('click', () => peeks++);
+    key('keydown', 'KeyM');
+    expect(peeks).toBe(1);
+    pressPeek(); // useArenaCore's padFrame, on the pad's D-pad up
+    expect(peeks).toBe(2);
+    detach();
+    detach = attachKeyboard(createArenaInput(), () => false); // paused
+    key('keydown', 'KeyM');
+    expect(peeks).toBe(2);
+  });
+
   it("the labels follow the input lock: the keys' Alt under the keys, the pad's L3 under the pad", () => {
     const input = createArenaInput();
     const l3 = { labels: true } as ArenaPadActions;
@@ -271,7 +292,7 @@ describe('loot labels and the journal', () => {
     expect(labelsHeld('gamepad', input, l3)).toBe(true);
   });
 
-  it('the pad reports L3 held as labels and a View press as the journal', () => {
+  it('the pad reports L3 held as labels, a View press as the journal and D-pad up as the peek', () => {
     const state = (...held: PadButton[]) => ({
       left: { x: 0, y: 0 },
       right: { x: 0, y: 0 },
@@ -285,6 +306,8 @@ describe('loot labels and the journal', () => {
       labels: false,
       journal: true,
     });
+    expect(padToArena(state('up'), new Set(['up']))).toMatchObject({ peek: true, potion: false });
+    expect(padToArena(state('down'), new Set(['down']))).toMatchObject({ peek: false, potion: true });
   });
 });
 
@@ -397,6 +420,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     menu: false,
     labels: false,
     journal: false,
+    peek: false,
     ...over,
   });
   /** Screen px to world units: a tenth. */
@@ -645,6 +669,160 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(next.out.attackAim).toEqual(along);
     expect(next.events.find((e) => e.kind === 'basic')).toMatchObject({
       dir: { x: expect.closeTo(-1), y: expect.closeTo(0) },
+    });
+  });
+
+  describe('press-to-toggle hold moves on the pad', () => {
+    const toggle = { ...opts, holdToggle: true };
+    const holdBolt = {
+      moves: [{ kind: 'hold', form: 'bolt', elements: ['fire'] }],
+      payment: 'mana',
+    } as Chain;
+    /** One frame of the pad under the toggle, stepped: its input, and the casts it made. */
+    const run = (w: ReturnType<typeof world>, mem = padMemory()) => {
+      const input = createArenaInput();
+      const STEP = registry.getDelveBalance().arena.step;
+      return (acts: Partial<ArenaPadActions>) => {
+        const out = frameInput(registry, w, input, pad(acts), mem, toggle);
+        return { out, casts: stepWorld(registry, w, out, STEP).filter((e) => e.kind === 'cast') };
+      };
+    };
+
+    it('a press starts a hold charging, the button let go keeps it, and the next press releases it', () => {
+      const w = world(holdBolt);
+      const frame = run(w);
+      expect(frame({ cast: [0], held: [0] }).casts).toEqual([]);
+      for (let i = 0; i < 5; i++) expect(frame({}).out.holding).toBe(0); // RT up: still charging
+      expect(w.hero.hold?.slot).toBe(0);
+      const fired = frame({ cast: [0], held: [0] });
+      expect(fired.out).toMatchObject({ cast: { slot: 0, aim: null }, holding: null });
+      // RT still down after the second press, then let go: nothing more charges or casts.
+      expect(frame({ held: [0] }).out).toMatchObject({ cast: null, holding: null });
+      expect(frame({}).out).toMatchObject({ cast: null, holding: null });
+      expect(w.hero.hold).toBeNull();
+    });
+
+    it('any other move casts on the press, as without the toggle', () => {
+      const w = world(); // the default Primary: no hold
+      const mem = padMemory();
+      expect(run(w, mem)({ cast: [0], held: [0] }).out.cast).toEqual({ slot: 0, aim: null });
+      expect(mem.latch).toBeNull();
+    });
+
+    it("another ability's press releases the charging one first, as a chord does", () => {
+      const w = world(holdBolt);
+      const mem = padMemory();
+      const frame = run(w, mem);
+      frame({ cast: [0], held: [0] });
+      for (let i = 0; i < 5; i++) frame({});
+      expect(frame({ cast: [1], held: [1] }).out.cast).toEqual({ slot: 0, aim: null });
+      expect(mem.latch).toBeNull();
+    });
+
+    it('a hold that fires by itself at full charge lets go: the next press starts a new one', () => {
+      const w = world(holdBolt);
+      // Something to aim at: with nothing, a full charge ends unpaid and casts nothing.
+      spawnDummies(registry, w, { layout: 'single', element: null });
+      const mem = padMemory();
+      const frame = run(w, mem);
+      frame({ cast: [0], held: [0] });
+      let fired = false;
+      for (let i = 0; i < 600 && !fired; i++) fired = frame({}).casts.length > 0;
+      expect(fired).toBe(true); // auto-fire at holdMax × the tempo
+      // The latch lets go quietly: no second cast as the slot stops being held.
+      const after = frame({});
+      expect(after.out).toMatchObject({ cast: null, holding: null });
+      expect(after.casts).toEqual([]);
+      expect(mem.latch).toBeNull();
+      // Wait out the move's cooldown and beat, then a press charges anew rather than releasing.
+      for (let i = 0; i < 300 && !abilityReady(makeCtx(registry, w, []), 0); i++) frame({});
+      const again = frame({ cast: [0], held: [0] });
+      expect(again.out).toMatchObject({ cast: null, holding: 0 });
+    });
+
+    it('two pressed in one frame latch only the latest, the one that holds: a lower hold taps', () => {
+      const w = world(holdBolt); // the Primary a hold, the Defensive not
+      const mem = padMemory();
+      const frame = run(w, mem);
+      expect(frame({ cast: [0, 1], held: [0, 1] }).out.cast).toEqual({ slot: 0, aim: null });
+      expect(mem.latch).toBeNull();
+    });
+
+    it('off by default: the button let go releases the hold, as ever', () => {
+      const w = world(holdBolt);
+      const input = createArenaInput();
+      const mem = padMemory();
+      frameInput(registry, w, input, pad({ cast: [0], held: [0] }), mem, opts);
+      expect(frameInput(registry, w, input, pad(), mem, opts).cast).toEqual({ slot: 0, aim: null });
+    });
+  });
+
+  describe('press-to-toggle hold moves on the keys', () => {
+    let detach = () => {};
+    beforeEach(() => useControlsStore.getState().setHoldToggle(true));
+    afterEach(() => {
+      detach();
+      useControlsStore.getState().reset();
+    });
+    const holdBolt = {
+      moves: [{ kind: 'hold', form: 'bolt', elements: ['fire'] }],
+      payment: 'mana',
+    } as Chain;
+
+    it('Q tapped starts the hold and its key let go keeps it; Q again releases it', () => {
+      const w = world(holdBolt);
+      const input = createArenaInput();
+      detach = attachKeyboard(input, () => true);
+      const STEP = registry.getDelveBalance().arena.step;
+      const mem = padMemory();
+      const frame = () => {
+        const out = frameInput(registry, w, input, null, mem, keys);
+        stepWorld(registry, w, out, STEP);
+        return out;
+      };
+      key('keydown', 'KeyQ');
+      key('keyup', 'KeyQ');
+      for (let i = 0; i < 5; i++) expect(frame()).toMatchObject({ cast: null, holding: 0 });
+      expect(w.hero.hold?.slot).toBe(0);
+      key('keydown', 'KeyQ');
+      expect(frame()).toMatchObject({ cast: { slot: 0 }, holding: null });
+      key('keyup', 'KeyQ');
+      expect(frame()).toMatchObject({ cast: null, holding: null });
+      expect(w.hero.hold).toBeNull();
+    });
+
+    it('a move that is not a hold casts as its key goes up, as without the toggle', () => {
+      const w = world();
+      const input = createArenaInput();
+      detach = attachKeyboard(input, () => true);
+      key('keydown', 'KeyQ');
+      key('keyup', 'KeyQ');
+      expect(frameInput(registry, w, input, null, padMemory(), keys)).toMatchObject({
+        cast: { slot: 0, aim: null },
+        holding: null,
+      });
+    });
+
+    it('a hold that fires by itself lets go of the key without a cast', () => {
+      const w = world(holdBolt);
+      spawnDummies(registry, w, { layout: 'single', element: null });
+      const input = createArenaInput();
+      detach = attachKeyboard(input, () => true);
+      const STEP = registry.getDelveBalance().arena.step;
+      const mem = padMemory();
+      key('keydown', 'KeyQ');
+      key('keyup', 'KeyQ');
+      let fired = false;
+      for (let i = 0; i < 600 && !fired; i++) {
+        const out = frameInput(registry, w, input, null, mem, keys);
+        fired = stepWorld(registry, w, out, STEP).some((e) => e.kind === 'cast');
+      }
+      expect(fired).toBe(true);
+      expect(frameInput(registry, w, input, null, mem, keys)).toMatchObject({
+        cast: null,
+        holding: null,
+      });
+      expect(input.aiming).toBeNull();
     });
   });
 });

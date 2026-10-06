@@ -36,6 +36,8 @@ export type SoundName =
   | 'lootDrop'
   | 'lootRare'
   | 'lootLegendary'
+  | 'lootUpgrade'
+  | 'lootEssence'
   | 'potion'
   | 'heroHurt';
 
@@ -87,6 +89,8 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   lootDrop:        { sprite: 'loot-drop',         volume: 0.45, category: 'sfx', varyPitch: true, cooldownMs: 60 },
   lootRare:        { sprite: 'loot-rare',         volume: 0.6, category: 'sfx', cooldownMs: 120 },
   lootLegendary:   { sprite: 'loot-legendary',    volume: 0.85, category: 'sfx' },
+  lootUpgrade:     { sprite: 'loot-upgrade',      volume: 0.6, category: 'sfx', cooldownMs: 150 },
+  lootEssence:     { sprite: 'loot-essence',      volume: 0.75, category: 'sfx' },
   potion:          { sprite: 'potion',            volume: 0.6, category: 'sfx' },
   heroHurt:        { sprite: 'hero-hurt',         volume: 0.5, category: 'sfx', varyPitch: true, cooldownMs: 90 },
 };
@@ -170,6 +174,37 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
       g.gain.setValueAtTime(0.001, t); g.gain.setValueAtTime(vol * 0.4, s0);
       g.gain.exponentialRampToValueAtTime(0.001, s0 + 0.7);
       osc.connect(g).connect(ctx.destination); osc.start(s0); osc.stop(s0 + 0.7);
+    });
+  },
+  lootUpgrade(vol) {
+    // Two bright notes rising a fourth, square: "better", unlike the rare's soft three-note sine.
+    const ctx = getAudioContext(); if (!ctx) return;
+    const t = ctx.currentTime;
+    [783.99, 1046.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.type = 'square'; osc.frequency.value = freq;
+      const s0 = t + i * 0.09;
+      g.gain.setValueAtTime(0.001, t); g.gain.setValueAtTime(vol * 0.22, s0);
+      g.gain.exponentialRampToValueAtTime(0.001, s0 + 0.24);
+      osc.connect(g).connect(ctx.destination); osc.start(s0); osc.stop(s0 + 0.24);
+    });
+  },
+  lootEssence(vol) {
+    // A low hum swelling under a slow shimmer: rarer than a rare, short of the legendary's boom.
+    const ctx = getAudioContext(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const hum = ctx.createOscillator(); const hg = ctx.createGain();
+    hum.type = 'sine'; hum.frequency.value = 196;
+    hg.gain.setValueAtTime(0.001, t); hg.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.15);
+    hg.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+    hum.connect(hg).connect(ctx.destination); hum.start(t); hum.stop(t + 1.1);
+    [987.77, 1174.66, 1479.98].forEach((freq, i) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      const s0 = t + 0.1 + i * 0.12;
+      g.gain.setValueAtTime(0.001, t); g.gain.setValueAtTime(vol * 0.3, s0);
+      g.gain.exponentialRampToValueAtTime(0.001, s0 + 0.6);
+      osc.connect(g).connect(ctx.destination); osc.start(s0); osc.stop(s0 + 0.6);
     });
   },
   potion(vol) {

@@ -156,4 +156,23 @@ describe('CodexTab', () => {
     rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'patterns' } })} />);
     expect(screen.getAllByTestId('pattern-unknown')).toHaveLength(10);
   });
+
+  it("Help: one card a topic, the focused one's page in the detail; a link opens it", () => {
+    render(<CodexTab {...props({ link: { tab: 'codex', section: 'help' } })} />);
+    expect(screen.getByTestId('codex-section-help')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByTestId(/^help-card-/).map((c) => c.dataset.testid)).toEqual([
+      'help-card-controls', 'help-card-weapons', 'help-card-skills',
+      'help-card-forge', 'help-card-floor', 'help-card-banking',
+    ]);
+    // The first topic until one is focused or hovered.
+    expect(within(screen.getByTestId('codex-detail')).getByTestId('delve-howto')).toHaveAttribute(
+      'data-topic',
+      'controls',
+    );
+    fireEvent.focus(screen.getByTestId('help-card-floor'));
+    expect(screen.getByTestId('delve-howto')).toHaveAttribute('data-topic', 'floor');
+    expect(screen.getByTestId('delve-howto').closest('[data-pad-scroll]')).not.toBeNull();
+    // No progress bar: Help is not a collection.
+    expect(within(screen.getByTestId('codex-sections')).queryByRole('progressbar')).toBeNull();
+  });
 });

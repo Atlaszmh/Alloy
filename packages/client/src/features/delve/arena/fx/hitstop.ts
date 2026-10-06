@@ -33,11 +33,14 @@ export class HitStop {
     return now < this.until;
   }
 
-  /** An elite or boss kill always freezes; anything else waits out the gap after the last freeze. */
-  onEvents(events: readonly ArpgEvent[], now: number): void {
+  /**
+   * An elite or boss kill always freezes; anything else waits out the gap after the last freeze.
+   * The freeze lasts `hitstopMs` × `strength` (Settings → Effects → Hit-stop: 0 never freezes).
+   */
+  onEvents(events: readonly ArpgEvent[], now: number, strength = 1): void {
     const bigKill = events.some((e) => e.kind === 'death' && e.monsterKind !== 'normal');
     if (!bigKill && now < this.until + HITSTOP.gapMs) return;
-    const ms = hitstopMs(events);
+    const ms = Math.round(hitstopMs(events) * strength);
     if (ms > 0) this.until = Math.max(this.until, now + ms);
   }
 

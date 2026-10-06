@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { armed } from './fixtures/delve';
+import { applyDraft, armed, startDive as departAndDelve } from './fixtures/delve';
 import {
   baseCost,
   beginFloor,
@@ -66,6 +66,7 @@ async function seed(page: Page, profile: DelveProfile, autopilot = false): Promi
     ([key, value, bot]) => {
       if (sessionStorage.getItem('runes-e2e')) return;
       localStorage.clear();
+      localStorage.setItem('alloy:delve:seen', '["loadout","skills","forge","quests","stop"]'); // every onboarding hint seen
       localStorage.setItem(key, value);
       if (bot) localStorage.setItem('alloy:delve:autopilot', '1');
       localStorage.setItem('alloy:delve:timescale', '2');
@@ -101,8 +102,10 @@ test.describe('Delve runes', () => {
     await page.getByTestId('tab-skills').click();
     const cards = page.getByTestId('chain-cards');
     await expect(cards.getByTestId('socket-0')).toHaveCount(0);
-    await cards.getByTestId('socket-open').click();
-    await cards.getByTestId('socket-0').click();
+    // The move's editor: Open a socket, then its socket's row opens the rune grid.
+    await page.getByTestId('move-0').click();
+    await page.getByTestId('socket-open').click();
+    await page.getByTestId('inspect-socket-0').click();
     const picker = page.getByTestId('rune-picker');
     await expect(picker).toBeVisible();
     // The picker names the rune at its tier with its effect, as the engine's runeText fills it.
@@ -118,7 +121,7 @@ test.describe('Delve runes', () => {
     const apply = page.getByTestId('chain-apply');
     await expect(apply).toContainText('1 Link');
     await expect(apply).toContainText('20 scrap');
-    await apply.click();
+    await applyDraft(page);
     await expect(page.getByTestId('chain-price')).toHaveText('No changes');
     await expect.poll(() => primarySockets(page)).toEqual([QUICK_III]);
     const after = await saved(page);
@@ -136,7 +139,7 @@ test.describe('Delve runes', () => {
     const registry = createDefaultRegistry();
     await seed(page, heroWith(registry, [QUICK_III]), true);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await departAndDelve(page);
     const primary = page.getByTestId('ability-0');
     await expect(primary).toBeVisible({ timeout: ARENA_READY });
     // One dot for Quick (the HUD's pips carry their rune's id as `data-rune`).
@@ -162,7 +165,7 @@ test.describe('Delve runes', () => {
     expect(profile.dive!.stop!.offers).toEqual(['rune']);
     await seed(page, profile);
     await page.goto('/delve');
-    await page.getByTestId('delve-button').click();
+    await departAndDelve(page);
 
     await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: ARENA_READY });
     await page.getByTestId('stop-rune').click();
@@ -182,6 +185,7 @@ test.describe('Delve runes', () => {
     await seed(page, heroWith(registry, [], { scrap: 20, runes: { split: [3, 0, 0, 0, 0] } }));
     await page.goto('/delve');
     await page.getByTestId('tab-forge').click();
+    await page.getByTestId('bench-materials').click();
     const pouch = page.getByTestId('rune-pouch');
     await expect(pouch).toBeVisible();
     await pouch.getByTestId('rune-fuse-split-1').click();
@@ -237,6 +241,7 @@ test.describe('Delve runes', () => {
 
     // The pouch: a rune's raw price, with no move to ease it.
     await page.getByTestId('tab-forge').click();
+    await page.getByTestId('bench-materials').click();
     await expect(page.getByTestId('pouch-quick-3')).toContainText(
       runeText(registry, QUICK_III).cost!,
     );

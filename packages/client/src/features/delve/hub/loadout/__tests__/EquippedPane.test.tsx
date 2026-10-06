@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { profileStats, strikeInterval, type Blow } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { armed } from '../../../__tests__/armed';
 import { getDelveRegistry } from '../../../registry';
 import { EquippedPane } from '../EquippedPane';
@@ -18,6 +19,7 @@ describe('the equipped pane', () => {
     localStorage.clear();
     store().resetProfile(1234, 'frost');
     store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
+    useInputDeviceStore.setState({ device: 'keyboard' });
   });
 
   it('draws the paper doll round the hero on the anvil, each slot labelled', () => {
@@ -115,5 +117,23 @@ describe('the equipped pane', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
     fireEvent.click(tile);
     expect(props.onSelect).toHaveBeenCalledWith(weapon.uid);
+  });
+
+  it('under the pad focus on a worn tile selects it, and no card shows', () => {
+    useInputDeviceStore.setState({ device: 'gamepad' });
+    const props = open();
+    const weapon = store().profile.equipped.weapon!;
+    const tile = screen.getByTestId('slot-weapon');
+    fireEvent.focus(tile);
+    expect(props.onSelect).toHaveBeenCalledWith(weapon.uid);
+    fireEvent.mouseEnter(tile);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it("the attunement strip and the moveset's Skills › are off the D-pad: LB/RB reach Skills", () => {
+    open();
+    expect(screen.getByTestId('mana-strip').closest('[data-pad-skip]')).not.toBeNull();
+    const box = screen.getByTestId('loadout-moveset');
+    expect(within(box).getByRole('button', { name: 'Skills ›' })).toHaveAttribute('data-pad-skip');
   });
 });

@@ -39,7 +39,7 @@ export function SkillTooltip({
       >
         {rows.length > 0 && <NumberTable rows={rows} />}
         {ab.runes.length > 0 && (
-          <div className="text-[14px] text-[var(--k-mana)]">
+          <div className="text-[16px] text-[var(--k-mana)]">
             {ab.runes.map((r) => runeName(registry, r)).join(' · ')}
           </div>
         )}

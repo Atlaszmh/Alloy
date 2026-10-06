@@ -35,6 +35,7 @@ export function PixelSprite({
 }: PixelSpriteProps): ReactElement {
   const [data, setData] = useState<Atlas | null>(null);
   const ui = useUIStore((s) => s.uiScale);
+  const menu = useUIStore((s) => s.menuScale);
   const hud = useUIStore((s) => s.hudScale);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export function PixelSprite({
 
   const frames = data?.animations[id];
   const rect = frames?.length ? data?.frames[frames[frame % frames.length]]?.frame : undefined;
-  const z = context === 'hud' ? hudZoom(ui, hud) : ui;
+  const z = context === 'hud' ? hudZoom(ui, hud) : menu;
   const s = snapScale(scale, z, window.devicePixelRatio || 1);
 
   return (

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { computeHeroStats, defaultChains, type Chains, type Move } from '@alloy/engine';
+import {
+  chainCycle,
+  computeHeroStats,
+  defaultChains,
+  resolveChain,
+  type Chains,
+  type Move,
+} from '@alloy/engine';
 import { getDelveRegistry } from '../../registry';
 import { useChainEditor, type ChainEditorProps } from '../useChainEditor';
 
@@ -93,5 +100,33 @@ describe('useChainEditor', () => {
     expect(result.current.picker).toMatchObject({ tierChoice: true, current: null });
     act(() => result.current.select(1));
     expect(result.current.picker).toBeNull();
+  });
+  it("dps is the chain's damage over its cycle's seconds, and dpsWith the same with the chosen move replaced", () => {
+    const { result } = setup();
+    const m = result.current;
+    const cycle = chainCycle(
+      registry,
+      stats,
+      resolveChain(registry, stats, 'primary', chains.primary),
+    );
+    expect(m.dps).toBeCloseTo(cycle.damage / cycle.seconds);
+    const heavy = { ...(m.move as Move), kind: 'heavy' as const };
+    const next = chainCycle(
+      registry,
+      stats,
+      resolveChain(registry, stats, 'primary', {
+        ...chains.primary,
+        moves: chains.primary.moves.map((x, j) => (j === m.index ? heavy : x)),
+      }),
+    );
+    expect(m.dpsWith(heavy)).toBeCloseTo(next.damage / next.seconds);
+    expect(m.dpsWith(heavy)).not.toBeCloseTo(m.dps!);
+  });
+
+  it('the basic chain has no dps (its blows are no cycle)', () => {
+    const { result } = setup();
+    act(() => result.current.pick('basic'));
+    expect(result.current.dps).toBeNull();
+    expect(result.current.dpsWith(result.current.move as Move)).toBeNull();
   });
 });

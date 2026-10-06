@@ -5,6 +5,8 @@ import {
   profileStats,
   salvageYield,
   unsocketMode,
+  type GearItem,
+  type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
 import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
@@ -20,6 +22,7 @@ import { CompareTable } from '../../items/CompareTable';
 import { ItemStatLines } from '../../items/ItemStatLines';
 import { LegendaryBox } from '../../items/LegendaryBox';
 import { MovesetView } from '../../items/MovesetView';
+import { deltaMark } from '../../ItemTile';
 import { SKILL_NAME } from '../../chains/chain-text';
 import { SLOT_LABEL, UPGRADE_EPSILON, formatDelta, manaStyle } from '../../format';
 import type { HubLink } from '../types';
@@ -33,21 +36,97 @@ export interface LoadoutActions {
   lock: (uid: string) => void;
 }
 
+/** The compare pane's one-line verdict (the pad-first spec, 4), from the engine's comparison. */
+export type Verdict = 'up' | 'home' | 'worse' | 'same';
+
+/** What each verdict says. */
+export const VERDICT_TEXT: Record<Verdict, string> = {
+  up: 'An upgrade as it comes',
+  home: 'Better only as a home for your moveset',
+  worse: 'Worse than what you wear',
+  same: 'About the same as what you wear',
+};
+
+/**
+ * A bag item's verdict, read as its tile's mark is (`deltaMark`): `cmp` its Power change (a
+ * weapon's as a home for your moveset), `asIs` a weapon's as it comes. Null without a comparison
+ * (a worn item).
+ */
+export function verdictOf(
+  cmp: Pick<ItemComparison, 'powerPct'> | null,
+  asIs: Pick<ItemComparison, 'powerPct'> | null,
+): Verdict | null {
+  if (!cmp) return null;
+  const mark = deltaMark(cmp.powerPct, asIs?.powerPct);
+  return mark === 'up' ? 'up' : mark === 'potential' ? 'home' : mark === 'down' ? 'worse' : 'same';
+}
+
+/**
+ * Move your moveset onto the bag weapon `item` (the store's `transfer`), with its sound and its
+ * toast, or say why not. True when it moved.
+ */
+export function transferOnto(item: GearItem): boolean {
+  const res = useDelveStore.getState().transfer(item.uid);
+  if (!res.ok) {
+    playSound('combineFail');
+    showToast(res.reason ?? 'Cannot transfer');
+    return false;
+  }
+  playSound('combineMerge');
+  vibrate('success');
+  const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
+  const moved = partsText(getDelveRegistry(), res.runes, res.destroyed);
+  showToast(`Your moveset moved onto ${item.name}${links}${moved ? ` · ${moved}` : ''}`);
+  return true;
+}
+
+/**
+ * What a transfer of your moveset onto `item` leaves: the chains it can't carry (their extra
+ * slots come back as Links) and the runes with no socket there, by the pull rule. The compare
+ * pane's Transfer and the pad's take sheet both show it.
+ */
+export function TransferNotes({ worn, item }: { worn: GearItem; item: GearItem }): ReactElement {
+  const registry = getDelveRegistry();
+  const unsocket = useDelveStore((s) => s.unsocket);
+  const pull = unsocketMode(registry, unsocket);
+  const transfer = movesetTransfer(registry, worn, item);
+  const leaves = carriedSkills(registry, worn).filter(
+    (s) => !carriedSkills(registry, item).includes(s),
+  );
+  return (
+    <>
+      {leaves.length > 0 && (
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-leaves">
+          Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
+        </span>
+      )}
+      {transfer.runes.length > 0 && (
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-runes">
+          {pull === 'destroy'
+            ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
+            : `${runeNames(registry, transfer.runes)} back to your pouch`}
+        </span>
+      )}
+    </>
+  );
+}
+
 /**
  * The Loadout's right pane: the hovered (else selected, else worn) item against what's worn in
  * its slot: its Power change (a bag weapon's as it is and as a home for your moveset), the stat
  * table, the attunement it moves, the bind choice for gear outside the pair, a weapon's moveset
  * Transfer, and Equip, Salvage (what the engine's `salvageYield` says it gives: currency, a
  * shard, its pattern, its essence) and Lock with their gains; "Forge it ›" opens the Forge with it.
- * `full` (Shift or LT held) adds its stat lines and a weapon's moveset. Mid-dive or paused, the
- * actions give way to a note.
+ * `full` (Full compare, R3 or Shift) adds its stat lines and a weapon's moveset. Mid-dive or
+ * paused, the actions give way to a note. It leads with the verdict (`verdictOf`); its actions are
+ * the mouse's (`data-pad-skip`: the footer's A / X / Y act on the focused tile under the pad); its
+ * body scrolls on the right stick (`data-pad-scroll`).
  */
 export function ComparePane({
   uid,
   source,
   full,
   locked,
-  armed,
   asked,
   actions,
   go,
@@ -56,8 +135,6 @@ export function ComparePane({
   source: 'hovered' | 'selected' | 'worn';
   full: boolean;
   locked: boolean;
-  /** The precious item a first Salvage press armed. */
-  armed: string | null;
   /** The item whose Equip asked to bind first. */
   asked: string | null;
   actions: LoadoutActions;
@@ -83,22 +160,18 @@ export function ComparePane({
 
   const inBag = where === 'bag';
   const transfer = worn && asIs ? movesetTransfer(registry, worn, item) : null;
-  // Your chains the target can't carry stay behind (their extra slots come back as Links).
-  const leaves =
-    worn && transfer
-      ? carriedSkills(registry, worn).filter((s) => !carriedSkills(registry, item).includes(s))
-      : [];
   // Equip takes a weapon as it is; Transfer is marked by its value as a home.
   const equipCmp = asIs ?? cmp;
   const isUpgrade = !!equipCmp && equipCmp.powerPct > UPGRADE_EPSILON;
   const homeUpgrade = !!transfer && !!cmp && cmp.powerPct > UPGRADE_EPSILON;
-  const pull = unsocketMode(registry, unsocket);
   // What salvage gives, as the engine reckons it: only a bag item salvages, and only between dives.
   const yields = inBag && !locked ? salvageYield(registry, profile, item) : null;
-  const melts = yields ? pullText(registry, yields.runes, pull) : '';
+  // What becomes of a weapon's runes, by the pull rule: Salvage's label says it before the press.
+  const melts = yields ? pullText(registry, yields.runes, unsocketMode(registry, unsocket)) : null;
   const binding = inBag && !locked && needsBind(profile, declined, item);
   const attune = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
   const slot = SLOT_LABEL[item.slot].toLowerCase();
+  const verdict = inBag ? verdictOf(cmp, asIs) : null;
   const heading =
     source === 'worn'
       ? `Your ${slot}`
@@ -106,19 +179,7 @@ export function ComparePane({
         ? `${source === 'hovered' ? 'Hovered' : 'Selected'} · compared with your ${slot}`
         : `Equipped · your ${slot}`;
 
-  const onTransfer = () => {
-    const res = useDelveStore.getState().transfer(item.uid);
-    if (!res.ok) {
-      playSound('combineFail');
-      showToast(res.reason ?? 'Cannot transfer');
-      return;
-    }
-    playSound('combineMerge');
-    vibrate('success');
-    const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
-    const moved = partsText(registry, res.runes, res.destroyed);
-    showToast(`Your moveset moved onto ${item.name}${links}${moved ? ` · ${moved}` : ''}`);
-  };
+  const onTransfer = () => transferOnto(item);
 
   const onUnequip = () => {
     try {
@@ -132,9 +193,27 @@ export function ComparePane({
   return (
     <Panel testId="item-sheet" aria-label="Compare" scroll={false}>
       {/* The details scroll; the actions below them stay in view. */}
-      <div className="k-scroll flex min-h-0 flex-1 flex-col gap-4">
+      <div className="k-scroll flex min-h-0 flex-1 flex-col gap-4" data-pad-scroll>
+        {verdict && (
+          <p
+            className="k-disp text-[24px]"
+            style={{
+              color:
+                verdict === 'up'
+                  ? 'var(--k-ok)'
+                  : verdict === 'home'
+                    ? 'var(--k-mana)'
+                    : 'var(--k-text-2)',
+            }}
+            data-testid="item-verdict"
+            data-verdict={verdict}
+          >
+            {VERDICT_TEXT[verdict]}
+          </p>
+        )}
         <span className="k-label">{heading}</span>
-        <div className="flex">
+        {/* The header's tile is a picture here, never a D-pad stop. */}
+        <div className="flex" data-pad-skip="">
           <ItemHeader item={item} size="lg" />
         </div>
 
@@ -189,7 +268,7 @@ export function ComparePane({
         {binding && <BindChoice item={item} ask={asked === item.uid} />}
       </div>
 
-      <div className="flex flex-none flex-col gap-2.5" data-testid="compare-actions">
+      <div className="flex flex-none flex-col gap-2.5" data-testid="compare-actions" data-pad-skip>
         {transfer && !locked && (
           <div className="flex flex-col gap-1.5">
             <Button
@@ -207,18 +286,7 @@ export function ComparePane({
                 </>
               )}
             </Button>
-            {leaves.length > 0 && (
-              <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-leaves">
-                Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
-              </span>
-            )}
-            {transfer.runes.length > 0 && (
-              <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-runes">
-                {pull === 'destroy'
-                  ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
-                  : `${runeNames(registry, transfer.runes)} back to your pouch`}
-              </span>
-            )}
+            {worn && <TransferNotes worn={worn} item={item} />}
           </div>
         )}
 
@@ -230,7 +298,7 @@ export function ComparePane({
                 Locked during the dive
               </span>
             </span>
-            <span className="text-[16px] text-[var(--k-wood-text)]">
+            <span className="text-[18px] text-[var(--k-wood-text)]">
               Equip it at the Anvil between dives, or take Equip as is at the next stop.
             </span>
           </div>
@@ -262,24 +330,19 @@ export function ComparePane({
                 data-tutorial="loadout.salvage"
                 testId="salvage-button"
               >
-                {armed === item.uid ? (
-                  `Press again to melt${melts ? ` · ${melts}` : ''}`
-                ) : (
-                  <>
-                    Salvage ·{' '}
-                    <Price
-                      scrap={yields.scrap}
-                      links={yields.links > 0 ? yields.links : undefined}
-                      dust={yields.dust > 0 ? yields.dust : undefined}
-                      signed
-                    />
-                  </>
-                )}
+                Salvage ·{' '}
+                <Price
+                  scrap={yields.scrap}
+                  links={yields.links > 0 ? yields.links : undefined}
+                  dust={yields.dust > 0 ? yields.dust : undefined}
+                  signed
+                />
+                {melts && ` · ${melts}`}
               </Button>
             )}
             {yields && (yields.shards.length > 0 || yields.pattern || yields.essence) && (
               <span
-                className="flex flex-col text-[14px] text-[var(--k-text-2)]"
+                className="flex flex-col text-[18px] text-[var(--k-text-2)]"
                 data-testid="salvage-yield"
               >
                 {yields.shards.length > 0 && (

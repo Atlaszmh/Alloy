@@ -54,4 +54,17 @@ describe('hit-stop', () => {
     s.onEvents([hit(1)], 1020);
     expect(s.frozen(1030)).toBe(true);
   });
+
+  it('scales by Settings → Effects → Hit-stop, and never freezes at 0', () => {
+    const half = new HitStop();
+    half.onEvents([hit(1)], 1000, 0.5);
+    expect(half.frozen(1040)).toBe(true); // 90 ms × 0.5 = 45
+    expect(half.frozen(1046)).toBe(false);
+    const off = new HitStop();
+    off.onEvents([hit(1, true), death('boss')], 1000, 0);
+    expect(off.frozen(1000)).toBe(false);
+    const full = new HitStop();
+    full.onEvents([hit(1)], 1000); // the default: full
+    expect(full.frozen(1089)).toBe(true);
+  });
 });

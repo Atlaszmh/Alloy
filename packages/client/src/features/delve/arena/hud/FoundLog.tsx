@@ -15,7 +15,7 @@ import { noFocus } from './SkillSlot';
 const ROW = 32;
 const GAP = 6;
 const ROW_CLASS =
-  'flex h-8 w-full flex-none items-center gap-[10px] bg-[var(--k-well)] px-2 text-left text-[14px]';
+  'flex h-8 w-full flex-none items-center gap-[10px] bg-[var(--k-well)] px-2 text-left text-[16px]';
 
 /** A find's mark against what you wear (`deltaMark`), here and on the stop's found panel. */
 export const MARK = {
@@ -92,6 +92,11 @@ function HaulFeedRow({ row, testId, color }: { row: HaulRow; testId: string; col
   );
 }
 
+/** How many of `items` are upgrades as they come (▲): what waits to be equipped at the Anvil. */
+export function countUpgrades(items: readonly { asIs: number | null }[]): number {
+  return items.filter((r) => r.asIs !== null && r.asIs > UPGRADE_EPSILON).length;
+}
+
 /**
  * "Found this floor": each pickup since the floor began, as many as fit, then "+n more": the
  * materials in the floor's haul grouped ("Iron bar ×3"), the items newest first, the essences in
@@ -129,7 +134,7 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
   }, []);
 
   const up = (d: number | null) => d !== null && d > UPGRADE_EPSILON;
-  const upgrades = items.filter((r) => up(r.asIs)).length;
+  const upgrades = countUpgrades(items);
   const potential = items.filter((r) => up(r.delta) && !up(r.asIs)).length;
 
   const rows = [
@@ -196,12 +201,12 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
       testId="pickup-feed"
     >
       {upgrades > 0 && (
-        <span className="text-[14px] text-[var(--k-ok)]" data-testid="upgrades-locked">
+        <span className="text-[16px] text-[var(--k-ok)]" data-testid="upgrades-locked">
           ▲ {upgrades} to equip at the Anvil
         </span>
       )}
       {potential > 0 && (
-        <span className="text-[14px] text-[var(--k-mana)]" data-testid="upgrades-potential">
+        <span className="text-[16px] text-[var(--k-mana)]" data-testid="upgrades-potential">
           ◇ {potential} potential: Transfer at the Anvil
         </span>
       )}

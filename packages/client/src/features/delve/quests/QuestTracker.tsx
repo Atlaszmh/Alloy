@@ -8,18 +8,36 @@ import { QUEST_KIND, objectiveCount, type QuestView } from './types';
 /**
  * The HUD's quest tracker (Phase 3's right column): up to `delve.quests.maxTracked` tracked quests;
  * nothing while none is. With `onJournal`, its Journal hint is a button that opens the journal.
+ * With `compact` (the lean HUD's corner), one line: the first tracked quest and its next objective.
  */
 export function QuestTracker({
   quests,
   onJournal,
+  compact,
 }: {
   quests: QuestView[];
   onJournal?: () => void;
+  compact?: boolean;
 }): ReactElement | null {
   const config = useControlsStore((s) => s.config);
   const { maxTracked } = getDelveRegistry().getDelveBalance().quests;
   const shown = quests.filter((q) => q.tracked).slice(0, maxTracked);
   if (shown.length === 0) return null;
+  if (compact) {
+    const q = shown[0];
+    const o = q.objectives.find((x) => !x.done);
+    return (
+      <div className="flex min-w-0 text-[16px]" data-testid="quest-tracker">
+        <div className="flex min-w-0 items-baseline gap-2" data-testid={`tracked-${q.id}`}>
+          <span className="k-disp truncate text-[18px]" style={{ color: QUEST_KIND[q.kind].text }}>
+            {q.name}
+          </span>
+          <span className="truncate">{o ? o.text : 'Ready to claim'}</span>
+          {o && <b className="k-disp flex-none text-[16px] text-[var(--k-hot-hi)]">{objectiveCount(o)}</b>}
+        </div>
+      </div>
+    );
+  }
   const hint = (
     <>
       <InputGlyph
@@ -29,7 +47,7 @@ export function QuestTracker({
       Journal
     </>
   );
-  const hintClass = 'flex items-center gap-2 text-[14px] text-[var(--k-text-3)]';
+  const hintClass = 'flex items-center gap-2 text-[16px] text-[var(--k-text-3)]';
   return (
     <Panel
       as="div"
@@ -63,7 +81,7 @@ export function QuestTracker({
           </div>
           {q.objectives.map((o) => (
             <div key={o.id} className="flex flex-col gap-1">
-              <div className="grid grid-cols-[12px_1fr_auto] items-center gap-2 text-[14px]">
+              <div className="grid grid-cols-[12px_1fr_auto] items-center gap-2 text-[16px]">
                 <Box done={o.done} size={10} />
                 <span className={o.done ? 'text-[var(--k-text-3)]' : ''}>{o.text}</span>
                 {o.done ? (

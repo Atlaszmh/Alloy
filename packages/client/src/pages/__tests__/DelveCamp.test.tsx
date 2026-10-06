@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { heroChains, settleDive } from '@alloy/engine';
 import { DelveCamp } from '../DelveCamp';
@@ -32,6 +32,8 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
+    // Training lives in the Depart sheet, which the footer's Delve opens.
+    fireEvent.click(screen.getByTestId('depart-button'));
     const button = screen.getByTestId('training-button');
     expect(button).toBeEnabled();
     fireEvent.click(button);
@@ -66,13 +68,19 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
+  /** The footer's Delve, pressed: the Depart sheet, which holds what blocks a dive. */
+  const openSheet = () => fireEvent.click(screen.getByTestId('depart-button'));
 
-  it('a pending chain draft blocks the Delve button, saying why; Apply sets it and opens the way', () => {
+  it("a pending chain draft blocks the sheet's Delve, saying why; Apply sets it and opens the way", () => {
     draftLance();
     renderCamp();
     const count = screen.getByTestId('draft-count');
     expect(count).toHaveTextContent(/^1$/);
     expect(count).toHaveAttribute('aria-label', '1 unapplied change');
+    // The footer's Delve never waits: it opens the sheet, which says what holds the dive.
+    expect(screen.getByTestId('depart-button')).toBeEnabled();
+    expect(screen.queryByTestId('draft-warning')).toBeNull();
+    openSheet();
     const warning = screen.getByTestId('draft-warning');
     expect(warning).toHaveTextContent('Unapplied changes: apply or discard them to delve');
     const delve = screen.getByTestId('delve-button');
@@ -94,6 +102,7 @@ describe('DelveCamp', () => {
     useDelveStore.getState().setProfile({ ...p, stats: { ...p.stats, dives: 1 }, manaDust: 0 });
     draftLance();
     renderCamp();
+    openSheet();
     const apply = screen.getByTestId('draft-apply');
     expect(apply).toHaveTextContent(/Apply · \d+ Mana Dust/);
     expect(apply).toBeDisabled();
@@ -112,6 +121,7 @@ describe('DelveCamp', () => {
       s.editDraft('primary', { ...primary, moves: [{ ...primary.moves[0], runes: [null] }] });
     });
     renderCamp();
+    openSheet();
     const apply = screen.getByTestId('draft-apply');
     expect(apply).toHaveTextContent('Apply · 1 Link · 20 scrap');
     expect(apply).toBeDisabled(); // the scrap is there, but a new hero has no Links
@@ -121,6 +131,7 @@ describe('DelveCamp', () => {
   it('Discard changes & delve reverts the draft and starts the dive in one press', () => {
     draftLance();
     renderCamp();
+    openSheet();
     fireEvent.click(screen.getByTestId('draft-discard-delve'));
     expect(useDelveStore.getState().chainDraft).toBeNull();
     expect(useDelveStore.getState().profile.dive).not.toBeNull();
@@ -135,6 +146,7 @@ describe('DelveCamp', () => {
     expect(useDelveStore.getState().startDive(1)).toBe(true);
     draftLance();
     renderCamp();
+    openSheet();
     expect(screen.queryByTestId('draft-warning')).toBeNull();
     fireEvent.click(screen.getByTestId('delve-button'));
     expect(mockNavigate).toHaveBeenCalledWith('/delve/run');
@@ -181,6 +193,20 @@ describe('DelveCamp', () => {
     const chains = p.equipped.weapon!.moveset!.chains;
     expect(chains.basic!.map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
     expect(Object.keys(chains)).toEqual(['basic']);
+    // Jump in promised How to delve: Help opens once; closed, the hub is the player's.
+    fireEvent.click(within(screen.getByTestId('help-dialog')).getByRole('button', { name: /back/i }));
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
+    expect(screen.getByTestId('depart-button').closest('[inert]')).toBeNull();
+  });
+
+  it('a save with its mana already chosen never meets Help on its own', () => {
+    useDelveStore.getState().resetProfile(99, 'fire');
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('help-dialog')).toBeNull();
   });
 
   it('shows the Links beside the scrap', () => {
@@ -208,8 +234,8 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
-    // The footer's Menu (Esc / B) opens the system menu.
-    fireEvent.click(document.querySelector<HTMLElement>('[data-pad-back]')!);
+    // The footer's Menu (Esc / Menu) opens the system menu.
+    fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
     fireEvent.click(screen.getByTestId('restart-delve'));
     // The first press only asks.
     expect(useDelveStore.getState().profile.scrap).toBe(500);
@@ -229,7 +255,7 @@ describe('DelveCamp', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByTestId('mana-choice')).toBeNull();
-    expect(screen.getByTestId('delve-button').closest('[inert]')).toBeNull();
+    expect(screen.getByTestId('depart-button').closest('[inert]')).toBeNull();
   });
 
   it('the choice holds the keyboard and the pad: the Anvil behind it is inert', () => {
@@ -244,8 +270,7 @@ describe('DelveCamp', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     // A kit dialog: in the zoomed UI layer, over the hub.
     expect(dialog.closest('#delve-ui-layer')).not.toBeNull();
-    expect(screen.getByTestId('delve-button').closest('[inert]')).not.toBeNull();
-    expect(screen.getByTestId('training-button').closest('[inert]')).not.toBeNull();
+    expect(screen.getByTestId('depart-button').closest('[inert]')).not.toBeNull();
     // In the app the UI layer follows the page; here an earlier test's layer may precede it.
     document.body.append(uiLayer());
     // jsdom lays nothing out: give every element a box so the pad sees them.

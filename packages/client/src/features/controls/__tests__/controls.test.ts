@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ACTION_LABELS,
   DEFAULT_CONTROLS,
+  SENSITIVITY_LIMITS,
   bindKey,
   bindPad,
   exportControls,
@@ -63,6 +65,34 @@ describe('controls config', () => {
     expect(parseControls(JSON.parse(exportControls(c)))).toEqual(c);
   });
 
+  it('reads holdToggle: false by default, a saved boolean kept, anything else the default', () => {
+    expect(DEFAULT_CONTROLS.holdToggle).toBe(false);
+    expect(parseControls({}).holdToggle).toBe(false);
+    expect(parseControls({ holdToggle: true }).holdToggle).toBe(true);
+    expect(parseControls({ holdToggle: 'yes' }).holdToggle).toBe(false);
+    // An older setup, saved before the field, keeps its bindings and gets the default.
+    const old = JSON.parse(exportControls(DEFAULT_CONTROLS));
+    delete old.holdToggle;
+    expect(parseControls(old)).toEqual(DEFAULT_CONTROLS);
+  });
+
+  it("reads swapSticks and each stick's sensitivity: defaults, kept values, and out-of-range ones refused", () => {
+    expect(DEFAULT_CONTROLS).toMatchObject({ swapSticks: false, sensitivity: { left: 1, right: 1 } });
+    expect(SENSITIVITY_LIMITS).toEqual([0.5, 1.5]);
+    const cfg = parseControls({ swapSticks: true, sensitivity: { left: 0.5, right: 1.5 } });
+    expect(cfg).toMatchObject({ swapSticks: true, sensitivity: { left: 0.5, right: 1.5 } });
+    expect(
+      parseControls({ swapSticks: 1, sensitivity: { left: 0.2, right: 'fast' } }),
+    ).toMatchObject({
+      swapSticks: false,
+      sensitivity: { left: 1, right: 1 },
+    });
+    const old = JSON.parse(exportControls(DEFAULT_CONTROLS));
+    delete old.swapSticks;
+    delete old.sensitivity;
+    expect(parseControls(old)).toEqual(DEFAULT_CONTROLS);
+  });
+
   it('names buttons and keys for people', () => {
     expect(padLabel('rs')).toBe('R3');
     expect(padLabel('down')).toBe('D-pad ▼');
@@ -87,5 +117,24 @@ describe('interact', () => {
       keys: { ...keys, potion: 'KeyC' },
     });
     expect([taken.pad.interact, taken.keys.interact]).toEqual([null, null]);
+  });
+});
+
+describe('peek', () => {
+  it('is D-pad up and M, labelled for the editor', () => {
+    expect([DEFAULT_CONTROLS.pad.peek, DEFAULT_CONTROLS.keys.peek]).toEqual(['up', 'KeyM']);
+    expect(ACTION_LABELS.peek).toBe('Peek: map, purse and finds');
+  });
+
+  it('a setup saved before it gains it, unless that setup already uses D-pad up or M: then unbound', () => {
+    const { peek: _p, ...pad } = DEFAULT_CONTROLS.pad;
+    const { peek: _k, ...keys } = DEFAULT_CONTROLS.keys;
+    expect(parseControls({ ...DEFAULT_CONTROLS, pad, keys })).toEqual(DEFAULT_CONTROLS);
+    const taken = parseControls({
+      ...DEFAULT_CONTROLS,
+      pad: { ...pad, potion: 'up' },
+      keys: { ...keys, interact: 'KeyM' },
+    });
+    expect([taken.pad.peek, taken.keys.peek]).toEqual([null, null]);
   });
 });

@@ -10,6 +10,7 @@ import {
 } from './floor-engine';
 import type { FloorRequest, FloorResponse } from './floor-worker';
 import { getDelveRegistry } from '../../registry';
+import { useUIStore } from '@/stores/uiStore';
 
 /** A structure's wear goes in steps of this fraction, so a scratch sends nothing. */
 const CRACK_STEPS = 8;
@@ -103,7 +104,11 @@ export class PixelFloor {
     if (this.inFlight) return;
     const changes = this.changes(w.map);
     if (this.shown && this.pendingDt === 0 && this.pendingEvents.length === 0 && !changes) return;
-    const frame = { ...snapshotArena(w, this.pendingDt, this.pendingEvents, view), ...changes };
+    const frame = {
+      ...snapshotArena(w, this.pendingDt, this.pendingEvents, view),
+      ...changes,
+      flash: useUIStore.getState().flash,
+    };
     this.pendingDt = 0;
     this.pendingEvents = [];
     if (this.worker) {

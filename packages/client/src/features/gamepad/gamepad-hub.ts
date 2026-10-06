@@ -76,7 +76,7 @@ function frame(now: number): void {
     rest = { left: CENTRE, right: CENTRE };
     return;
   }
-  current = readPad(pad, useControlsStore.getState().config.deadzone);
+  current = readPad(pad, useControlsStore.getState().config);
   const pressed = edges(prev, current);
   prev = current;
   const lock = useInputDeviceStore.getState();

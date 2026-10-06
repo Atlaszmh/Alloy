@@ -17,6 +17,7 @@ export const CONTROL_ACTIONS = [
   'menu',
   'labels',
   'journal',
+  'peek',
 ] as const;
 export type ControlAction = (typeof CONTROL_ACTIONS)[number];
 
@@ -35,12 +36,23 @@ export interface ControlsConfig {
   /** Controller only: holding the ability's button keeps casting it whenever it's ready. */
   repeat: Record<RepeatAction, boolean>;
   deadzone: { left: number; right: number };
+  /** Controller only: each stick's response past its deadzone, 0.5 to 1.5 (1: linear; see `radialDeadzone`). */
+  sensitivity: { left: number; right: number };
+  /** Controller only: move on the right stick and aim on the left (their clicks swap too). */
+  swapSticks: boolean;
   /** How far placed abilities land at full right-stick tilt, as a fraction of their range. */
   aimReach: number;
+  /**
+   * Hold moves by press-to-toggle: a press starts a hold move charging and the next press of its
+   * button or key releases it (the pad and the keys; the HUD's slots and the attack keep holding).
+   */
+  holdToggle: boolean;
 }
 
 export const DEADZONE_LIMITS = { left: [0.05, 0.5], right: [0.1, 0.6] } as const;
 export const AIM_REACH_LIMITS = [0.3, 1] as const;
+/** Each stick's sensitivity, 50% to 150% (`radialDeadzone`'s curve). */
+export const SENSITIVITY_LIMITS = [0.5, 1.5] as const;
 
 export const DEFAULT_CONTROLS: ControlsConfig = {
   version: 1,
@@ -56,6 +68,8 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
     menu: 'menu',
     labels: 'ls',
     journal: 'view',
+    // The fight's map, purse and finds (the pad-first spec, 3): the D-pad is free in the fight but for the potion.
+    peek: 'up',
   },
   keys: {
     primary: 'KeyQ',
@@ -68,6 +82,7 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
     menu: 'Escape',
     labels: 'AltLeft',
     journal: 'KeyJ',
+    peek: 'KeyM',
     up: 'KeyW',
     down: 'KeyS',
     left: 'KeyA',
@@ -75,7 +90,10 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
   },
   repeat: { primary: true, defensive: false, ultimate: false },
   deadzone: { left: 0.2, right: 0.35 },
+  sensitivity: { left: 1, right: 1 },
+  swapSticks: false,
   aimReach: 1,
+  holdToggle: false,
 };
 
 export const ACTION_LABELS: Record<KeyAction, string> = {
@@ -89,6 +107,7 @@ export const ACTION_LABELS: Record<KeyAction, string> = {
   menu: 'Menu',
   labels: 'Show all loot labels (hold)',
   journal: 'Journal',
+  peek: 'Peek: map, purse and finds',
   up: 'Move up',
   down: 'Move down',
   left: 'Move left',
@@ -147,6 +166,7 @@ export function parseControls(raw: unknown): ControlsConfig {
   const keys = isObject(r.keys) ? r.keys : {};
   const repeat = isObject(r.repeat) ? r.repeat : {};
   const dz = isObject(r.deadzone) ? r.deadzone : {};
+  const sens = isObject(r.sensitivity) ? r.sensitivity : {};
   const padButton = (v: unknown) =>
     v === null || (typeof v === 'string' && (PAD_BUTTONS as readonly string[]).includes(v))
       ? (v as PadButton | null)
@@ -166,7 +186,13 @@ export function parseControls(raw: unknown): ControlsConfig {
       left: inRange(dz.left, DEADZONE_LIMITS.left) ? dz.left : d.deadzone.left,
       right: inRange(dz.right, DEADZONE_LIMITS.right) ? dz.right : d.deadzone.right,
     },
+    sensitivity: {
+      left: inRange(sens.left, SENSITIVITY_LIMITS) ? sens.left : d.sensitivity.left,
+      right: inRange(sens.right, SENSITIVITY_LIMITS) ? sens.right : d.sensitivity.right,
+    },
+    swapSticks: typeof r.swapSticks === 'boolean' ? r.swapSticks : d.swapSticks,
     aimReach: inRange(r.aimReach, AIM_REACH_LIMITS) ? r.aimReach : d.aimReach,
+    holdToggle: typeof r.holdToggle === 'boolean' ? r.holdToggle : d.holdToggle,
   };
 }
 

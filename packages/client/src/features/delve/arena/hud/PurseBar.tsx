@@ -14,7 +14,8 @@ const n = (x: number) => x.toLocaleString('en-US');
  * The dive's top bar (glass): "Purse", then scrap, Links, Mana Dust, materials, runes and the
  * bag, each its glyph (named for screen readers), the amount held at the Anvil and this dive's
  * gain (the floor's haul and what the dive has banked; the bag's, the items found); hovering the
- * materials lists them; "+N banks on extract" (`bounty`); and at the right end the Labels hint,
+ * materials lists them; "+N banks on extract" (`bounty`); and at the right end (unless `controls`
+ * is off: the peek's copy) the Map (`data-pad-peek`, the peek; with `onPeek`), the Labels hint,
  * Journal (`data-pad-journal`; disabled until there is `onJournal`) and Menu ("Dive menu",
  * `data-pad-menu`), which opens the menu.
  */
@@ -22,10 +23,14 @@ export function PurseBar({
   dive,
   onMenu,
   onJournal,
+  onPeek,
+  controls = true,
 }: {
   dive: DiveState;
-  onMenu: () => void;
+  onMenu?: () => void;
   onJournal?: () => void;
+  onPeek?: () => void;
+  controls?: boolean;
 }) {
   const profile = useDelveStore((s) => s.profile);
   const drops = useDelveStore((s) => s.diveDrops.length);
@@ -69,7 +74,7 @@ export function PurseBar({
         const entry = (
           <span
             key={r.id}
-            className="flex items-center gap-2 whitespace-nowrap text-[15px]"
+            className="flex items-center gap-2 whitespace-nowrap text-[16px]"
             data-testid={`purse-${r.id}`}
           >
             <Glyph id={r.glyph} size={18} title={r.name} />
@@ -89,56 +94,74 @@ export function PurseBar({
           </Tooltip>
         );
       })}
-      <span className="whitespace-nowrap text-[14px] text-[var(--k-text-3)]">
+      <span className="whitespace-nowrap text-[16px] text-[var(--k-text-3)]">
         <b className="text-[var(--k-hot)]" data-testid="bounty">
           +{n(dive.bounty)}
         </b>{' '}
         banks on extract
       </span>
-      <span className="ml-auto flex items-center gap-4 whitespace-nowrap text-[14px] text-[var(--k-text-2)]">
-        <span className="flex items-center gap-[6px]">
-          <InputGlyph
-            binding={{
-              key: config.keys.labels ?? undefined,
-              pad: config.pad.labels ?? undefined,
-              whileHeld: true,
-            }}
-            size="sm"
-          />
-          Labels
+      {controls && (
+        <span className="ml-auto flex items-center gap-4 whitespace-nowrap text-[16px] text-[var(--k-text-2)]">
+          {onPeek && (
+            <button
+              type="button"
+              className="flex min-h-8 items-center gap-[6px]"
+              data-pad-peek
+              onMouseDown={noFocus}
+              onClick={onPeek}
+              data-testid="peek-button"
+            >
+              <InputGlyph
+                binding={{ key: config.keys.peek ?? undefined, pad: config.pad.peek ?? undefined }}
+                size="sm"
+              />
+              Map
+            </button>
+          )}
+          <span className="flex items-center gap-[6px]">
+            <InputGlyph
+              binding={{
+                key: config.keys.labels ?? undefined,
+                pad: config.pad.labels ?? undefined,
+                whileHeld: true,
+              }}
+              size="sm"
+            />
+            Labels
+          </span>
+          <button
+            type="button"
+            className="flex min-h-8 items-center gap-[6px] disabled:opacity-60"
+            data-pad-journal
+            disabled={!onJournal}
+            onMouseDown={noFocus}
+            onClick={onJournal}
+          >
+            <InputGlyph
+              binding={{
+                key: config.keys.journal ?? undefined,
+                pad: config.pad.journal ?? undefined,
+              }}
+              size="sm"
+            />
+            Journal
+          </button>
+          <button
+            type="button"
+            className="flex min-h-8 items-center gap-[6px]"
+            aria-label="Dive menu"
+            data-pad-menu
+            onMouseDown={noFocus}
+            onClick={onMenu}
+          >
+            <InputGlyph
+              binding={{ key: config.keys.menu ?? undefined, pad: config.pad.menu ?? undefined }}
+              size="sm"
+            />
+            Menu
+          </button>
         </span>
-        <button
-          type="button"
-          className="flex min-h-8 items-center gap-[6px] disabled:opacity-60"
-          data-pad-journal
-          disabled={!onJournal}
-          onMouseDown={noFocus}
-          onClick={onJournal}
-        >
-          <InputGlyph
-            binding={{
-              key: config.keys.journal ?? undefined,
-              pad: config.pad.journal ?? undefined,
-            }}
-            size="sm"
-          />
-          Journal
-        </button>
-        <button
-          type="button"
-          className="flex min-h-8 items-center gap-[6px]"
-          aria-label="Dive menu"
-          data-pad-menu
-          onMouseDown={noFocus}
-          onClick={onMenu}
-        >
-          <InputGlyph
-            binding={{ key: config.keys.menu ?? undefined, pad: config.pad.menu ?? undefined }}
-            size="sm"
-          />
-          Menu
-        </button>
-      </span>
+      )}
     </div>
   );
 }

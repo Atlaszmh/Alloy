@@ -113,7 +113,7 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
       <AttunementBars stats={stats} elements={secondary ? [primary, secondary] : [primary]} />
       {secondary && (
         <div
-          className="flex flex-col gap-1 text-[14px] text-[var(--k-text-3)]"
+          className="flex flex-col gap-1 text-[18px] text-[var(--k-text-3)]"
           data-testid="overtake"
         >
           <span>
@@ -132,12 +132,12 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
           </div>
         </div>
       )}
-      <div className="text-[14px] text-[var(--k-text-2)]" data-testid="mana-dust">
+      <div className="text-[18px] text-[var(--k-text-2)]" data-testid="mana-dust">
         <Price dust={profile.manaDust} /> · from salvaging gear outside your pair
       </div>
       {locked && (
         <div
-          className="k-well p-2 text-center text-[14px] text-[var(--k-hot)]"
+          className="k-well p-2 text-center text-[18px] text-[var(--k-hot)]"
           data-testid="pair-locked"
         >
           A dive is under way: bind and realign between dives.
@@ -150,13 +150,13 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
           data-tutorial="mana.bind"
           data-tutorial-done={binding !== null}
         >
-          <div className="text-[14px] text-[var(--k-text-3)]">
+          <div className="text-[18px] text-[var(--k-text-3)]">
             Bind a second element: your moves and blows can use it, and your chains keep the ones
             they have (add the element in the chain builder). Power now{' '}
             {formatNumber(profilePower(registry, profile))}.
           </div>
           {candidates.length === 0 ? (
-            <div className="text-[14px] text-[var(--k-text-3)]">
+            <div className="text-[18px] text-[var(--k-text-3)]">
               Find gear of another element to bind it.
             </div>
           ) : (
@@ -176,7 +176,7 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
           )}
           {binding && !locked && (
             <div
-              className="flex flex-wrap items-center gap-2 text-[14px]"
+              className="flex flex-wrap items-center gap-2 text-[18px]"
               data-testid="mana-bind-ask"
             >
               <span>Bind {style(binding).name}? After that, only a Realign changes it.</span>
@@ -198,14 +198,14 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
       )}
       {next && (
         <div className="flex flex-col gap-2" data-testid="realign-section">
-          <div className="text-[14px] text-[var(--k-text-3)]">
+          <div className="text-[18px] text-[var(--k-text-3)]">
             Realign: change your pair for{' '}
             <Price dust={cost.realignDust} scrap={cost.realignScrap} />. Gear stays as it is; your
             equipped weapon's moves and blows follow the new pair.
           </div>
           {(['primary', 'secondary'] as const).map((role) => (
             <div key={role} className="flex flex-wrap items-center gap-1.5">
-              <span className="w-24 text-[14px] text-[var(--k-text-3)]">
+              <span className="w-24 text-[16px] text-[var(--k-text-3)]">
                 {role === 'primary' ? 'Primary' : 'Secondary'}
               </span>
               {MANA_TYPES.map((m) => (
@@ -238,7 +238,7 @@ export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => v
         </div>
       )}
       {message && (
-        <div className="text-[14px] font-semibold text-[var(--k-bad-text)]" role="status">
+        <div className="text-[18px] font-semibold text-[var(--k-bad-text)]" role="status">
           {message}
         </div>
       )}

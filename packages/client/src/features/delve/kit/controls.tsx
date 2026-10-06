@@ -1,6 +1,15 @@
-import type { PointerEvent, ReactElement } from 'react';
+import { useEffect, useRef, type PointerEvent, type ReactElement } from 'react';
+import { PAD_STEP } from '@/features/gamepad/use-gamepad-nav';
 import { InputGlyph } from './glyphs';
-import type { BarProps, Binding, ButtonProps, ChipProps, SegmentedProps, TabsProps } from './types';
+import type {
+  BarProps,
+  Binding,
+  ButtonProps,
+  ChipProps,
+  SegmentedProps,
+  StepperProps,
+  TabsProps,
+} from './types';
 
 /** Kit controls let go of focus after a mouse click (so Enter and Esc reach the screen), never after a key or pad press. */
 export function blurAfterMouse(e: PointerEvent<HTMLElement>): void {
@@ -209,6 +218,91 @@ export function Segmented<T extends string>({
   );
 }
 
+/**
+ * One value of several, stepped left and right (the pad-first spec, 4: the Forge's rows): one
+ * focusable control (`role="spinbutton"`, `[data-pad-step]`), so the D-pad's left/right step it
+ * (`PAD_STEP`) and up/down move on; the arrow keys step it while focused; ◂ ▸ are the mouse's.
+ * Clamped at its ends. A guided-start target says it is done by `done`, its owner's state.
+ */
+export function Stepper<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  note,
+  tutorial,
+  done,
+  testId,
+}: StepperProps<T>): ReactElement {
+  const ref = useRef<HTMLDivElement>(null);
+  const i = Math.max(0, options.findIndex((o) => o.id === value));
+  const step = (d: number) => {
+    const next = options[i + d];
+    if (next) onChange(next.id);
+  };
+  const latest = useRef(step);
+  latest.current = step;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const on = (e: Event) => latest.current((e as CustomEvent<number>).detail);
+    el.addEventListener(PAD_STEP, on);
+    return () => el.removeEventListener(PAD_STEP, on);
+  }, []);
+  return (
+    <div className="k-stepper-row">
+      <span className="k-label" aria-hidden>
+        {label}
+      </span>
+      <div
+        ref={ref}
+        role="spinbutton"
+        tabIndex={0}
+        aria-label={label}
+        aria-valuetext={options[i]?.text}
+        aria-valuenow={i}
+        aria-valuemin={0}
+        aria-valuemax={options.length - 1}
+        className="k-stepper"
+        data-pad-step=""
+        data-tutorial={tutorial}
+        data-tutorial-done={done === undefined ? undefined : String(done)}
+        data-testid={testId}
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          step(e.key === 'ArrowRight' ? 1 : -1);
+        }}
+      >
+        <button
+          type="button"
+          tabIndex={-1}
+          data-pad-skip=""
+          aria-label="Previous"
+          disabled={i === 0}
+          onClick={() => step(-1)}
+          onPointerUp={blurAfterMouse}
+        >
+          ◂
+        </button>
+        <span className="k-stepper-value">{options[i]?.label}</span>
+        <button
+          type="button"
+          tabIndex={-1}
+          data-pad-skip=""
+          aria-label="Next"
+          disabled={i === options.length - 1}
+          onClick={() => step(1)}
+          onPointerUp={blurAfterMouse}
+        >
+          ▸
+        </button>
+      </div>
+      {note && <span className="k-caption">{note}</span>}
+    </div>
+  );
+}
+
 const BAR_FILL: Record<BarProps['kind'], string> = {
   life: 'repeating-linear-gradient(90deg, #63c74d 0 12px, #3e8948 12px 14px)',
   mana: 'repeating-linear-gradient(90deg, #2ce8f5 0 2px, #0099db 2px 12px, #124e89 12px 14px)',
@@ -285,7 +379,7 @@ export function Bar({
       {label !== undefined && (
         <span
           className="k-bar-label k-disp"
-          style={{ fontSize: Math.max(14, Math.round(height * 0.7)) }}
+          style={{ fontSize: Math.max(16, Math.round(height * 0.7)) }}
         >
           {label}
         </span>

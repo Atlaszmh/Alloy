@@ -10,17 +10,18 @@ import {
   type GearSlot,
   type Rarity,
 } from '@alloy/engine';
-import { partsText, useDelveStore } from '@/stores/delveStore';
+import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
-import { Button, Chip, Glyph, Panel, Segmented } from '../../kit';
+import { Button, Chip, Glyph, Panel, Segmented, Tabs } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { ItemTile, deltaMark } from '../../ItemTile';
-import { RARITY_COLOR, RARITY_LABEL, UPGRADE_EPSILON, formatNumber } from '../../format';
+import { RARITY_COLOR, RARITY_LABEL, UPGRADE_EPSILON } from '../../format';
+import { JunkSheet } from './JunkSheet';
+import type { BagFilter } from '../types';
 
-type Filter = 'all' | 'weapons' | 'armor' | 'jewelry' | 'upgrades';
 type Sort = 'power' | 'rarity' | 'slot' | 'newest';
 type AutoSalvage = Rarity | 'off';
 
@@ -34,7 +35,7 @@ interface Row {
   asIs: number;
 }
 
-const KIND: Record<Exclude<Filter, 'all' | 'upgrades'>, readonly GearSlot[]> = {
+const KIND: Record<Exclude<BagFilter, 'all' | 'upgrades'>, readonly GearSlot[]> = {
   weapons: ['weapon'],
   armor: ['helm', 'chest', 'gloves', 'boots'],
   jewelry: ['amulet', 'ring'],
@@ -62,31 +63,42 @@ const SORTS: { id: Sort; label: string; by: (a: Row, b: Row) => number }[] = [
 const AUTO_RARITIES: Rarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic'];
 
 /**
- * The Loadout's bag: its count, filter and sort chips, eight columns of tiles (▲ better as it
+ * The Loadout's bag: its count, the filter tabs (LT/RT, `filter` is the Loadout's, so the hub
+ * remembers it) and the sort chip, eight columns of tiles (▲ better as it
  * is, ◇ better only with your moveset moved onto it, ▼ worse, NEW, the lock), and the footer:
- * Equip best, Salvage junk and auto-salvage. A click selects a tile for the compare pane and a
- * right-click equips it; under the pad, focus selects and A equips (spec, decided item 36).
+ * Equip best, Salvage junk (it opens the review sheet, `JunkSheet`) and auto-salvage. A click selects a tile for the compare pane and a
+ * right-click equips it; under the pad, focus selects and A takes it (`onTake`: equips, or asks how
+ * to take a weapon that can take your moveset). The selected tile, else the first, is the pad's
+ * first focus (`data-pad-first`).
  */
 export function BagPane({
   locked,
   selected,
+  filter,
+  onFilter,
   onSelect,
   onHover,
   onEquip,
+  onTake,
 }: {
   /** Mid-dive or paused: Equip best, Salvage junk and auto-salvage wait for the Anvil. */
   locked: boolean;
   selected: string | null;
+  filter: BagFilter;
+  onFilter: (f: BagFilter) => void;
   onSelect: (uid: string) => void;
   onHover: (uid: string | null) => void;
   onEquip: (uid: string) => void;
+  /** A under the pad: equip, or the take sheet for a weapon. */
+  onTake: (uid: string) => void;
 }): ReactElement {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const newUids = useDelveStore((s) => s.newUids);
-  const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState(0);
   const [choosing, setChoosing] = useState(false);
+  // Salvage junk's review sheet, on the candidates as they were when it opened.
+  const [reviewing, setReviewing] = useState<string[] | null>(null);
   const bagSize = registry.getDelveBalance().loot.bagSize;
   const { bag, equipped, pair, autoSalvage } = profile;
   const depth = referenceDepth(profile);
@@ -130,20 +142,6 @@ export function BagPane({
     }
   };
 
-  const onSalvageJunk = () => {
-    const { scrap, dust, links, runes, destroyed } = useDelveStore.getState().salvage(junk);
-    if (scrap > 0) {
-      playSound('gemScatter');
-      vibrate('medium');
-      const dustText = dust > 0 ? ` · +${formatNumber(dust)} Mana Dust` : '';
-      const linkText = links > 0 ? ` · +${links} Link${links > 1 ? 's' : ''}` : '';
-      const parts = partsText(registry, runes, destroyed);
-      showToast(
-        `Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap${dustText}${linkText}${parts ? ` · ${parts}` : ''}`,
-      );
-    }
-  };
-
   const onAutoSalvage = (to: AutoSalvage) => {
     const top = to === 'off' ? -1 : AUTO_RARITIES.indexOf(to);
     AUTO_RARITIES.forEach((r, i) => {
@@ -151,12 +149,6 @@ export function BagPane({
     });
     setChoosing(false);
   };
-
-  const chip = (id: Filter, label: ReactElement | string) => (
-    <Chip pressed={filter === id} onClick={() => setFilter(id)} testId={`bag-filter-${id}`}>
-      {label}
-    </Chip>
-  );
 
   return (
     <Panel
@@ -176,20 +168,33 @@ export function BagPane({
       }
       aside={
         <div className="flex flex-wrap items-center gap-2.5">
-          {chip('all', 'All')}
-          {chip('weapons', 'Weapons')}
-          {chip('armor', 'Armor')}
-          {chip('jewelry', 'Jewelry')}
-          {chip(
-            'upgrades',
-            <span className="flex items-center gap-1.5">
-              <span className="k-well inline-flex px-1 py-0.5">
-                <Glyph id="up" size={14} />
-              </span>
-              Upgrades {upgrades}
-            </span>,
-          )}
-          <span className="k-caption ml-2">Sort</span>
+          <Tabs
+            aria-label="Bag filter"
+            level="sub"
+            size="md"
+            glyphs
+            value={filter}
+            onChange={(f) => {
+              playSound('buttonClick');
+              onFilter(f);
+            }}
+            tabs={[
+              { id: 'all', label: 'All', testId: 'bag-filter-all' },
+              { id: 'weapons', label: 'Weapons', testId: 'bag-filter-weapons' },
+              { id: 'armor', label: 'Armor', testId: 'bag-filter-armor' },
+              { id: 'jewelry', label: 'Jewelry', testId: 'bag-filter-jewelry' },
+              {
+                id: 'upgrades',
+                label: (
+                  <span className="flex items-center gap-1.5">
+                    <Glyph id="up" size={14} /> Upgrades {upgrades}
+                  </span>
+                ),
+                testId: 'bag-filter-upgrades',
+              },
+            ]}
+          />
+          <span className="k-caption">Sort</span>
           <Chip
             onClick={() => setSort((sort + 1) % SORTS.length)}
             aria-label={`Sorted by ${SORTS[sort].label}: next sort`}
@@ -213,7 +218,7 @@ export function BagPane({
             className="grid content-start gap-[14px]"
             style={{ gridTemplateColumns: 'repeat(8, minmax(56px, 84px))' }}
           >
-            {shown.map(({ item, delta, asIs }) => (
+            {shown.map(({ item, delta, asIs }, i) => (
               <ItemTile
                 key={item.uid}
                 item={item}
@@ -224,9 +229,11 @@ export function BagPane({
                 isNew={newUids[item.uid]}
                 selected={selected === item.uid}
                 testId="bag-item"
+                data-uid={item.uid}
+                data-pad-first={(selected ? item.uid === selected : i === 0) || undefined}
                 data-tutorial={`loadout.bag:${item.slot}.${item.rarity}`}
                 onClick={() => {
-                  if (useInputDeviceStore.getState().device === 'gamepad') onEquip(item.uid);
+                  if (useInputDeviceStore.getState().device === 'gamepad') onTake(item.uid);
                   else {
                     playSound('orbSelect');
                     onSelect(item.uid);
@@ -258,7 +265,7 @@ export function BagPane({
         </Button>
         <Button
           disabled={junk.length === 0 || locked}
-          onClick={onSalvageJunk}
+          onClick={() => setReviewing(junk)}
           testId="salvage-junk"
         >
           {locked
@@ -291,6 +298,7 @@ export function BagPane({
           ]}
         />
       )}
+      {reviewing && <JunkSheet uids={reviewing} onClose={() => setReviewing(null)} />}
     </Panel>
   );
 }

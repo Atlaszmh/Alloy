@@ -8,11 +8,13 @@ import {
   keepFocus,
   moveFocus,
   nextFocus,
+  PAD_STEP,
+  STICK_SCROLL_PX,
   useGamepadNav,
 } from '../use-gamepad-nav';
 import type { GamepadLike } from '../gamepad';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
-import { captureNav, usePrompts } from '@/features/delve/kit/prompts';
+import { usePrompts } from '@/features/delve/kit/prompts';
 
 describe('moveFocus on a list', () => {
   afterEach(() => document.body.replaceChildren());
@@ -110,6 +112,87 @@ describe('moveFocus between buttons', () => {
   });
 });
 
+describe('moveFocus in a wrapping list', () => {
+  afterEach(() => document.body.replaceChildren());
+
+  /** A column of buttons 40 px tall, 10 px apart, inside `parent`. */
+  const column = (parent: HTMLElement, n: number, left = 0): HTMLButtonElement[] =>
+    Array.from({ length: n }, (_, i) => {
+      const b = parent.appendChild(document.createElement('button'));
+      b.textContent = `row ${i}`;
+      b.getBoundingClientRect = () =>
+        DOMRect.fromRect({ x: left, y: i * 50, width: 200, height: 40 });
+      return b;
+    });
+  const boxed = (el: HTMLElement) => {
+    el.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 400, height: 400 });
+    return el;
+  };
+
+  it('down from the last row goes to the first, and up from the first to the last', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 4);
+    rows[3].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(rows[0]);
+    moveFocus('up');
+    expect(document.activeElement).toBe(rows[3]);
+  });
+
+  it('does not wrap without the attribute', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    const rows = column(list, 3);
+    rows[2].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(rows[2]);
+  });
+
+  it('never wraps sideways', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 3);
+    rows[1].focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(rows[1]);
+  });
+
+  it('prefers a real neighbour: a control below the list, outside it, takes the press', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 2);
+    const below = document.body.appendChild(document.createElement('button'));
+    below.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 300, width: 200, height: 40 });
+    rows[1].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(below);
+  });
+
+  it('steps on round a control out of line (a dialog header Back above the column, off to the side)', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const back = list.appendChild(document.createElement('button'));
+    back.getBoundingClientRect = () => DOMRect.fromRect({ x: 900, y: -60, width: 60, height: 30 });
+    const rows = column(list, 3);
+    rows[2].focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(back);
+    moveFocus('down');
+    expect(document.activeElement).toBe(rows[0]);
+    moveFocus('up');
+    expect(document.activeElement).toBe(back);
+    moveFocus('up');
+    expect(document.activeElement).toBe(rows[2]);
+  });
+
+  it('leaves nextFocus alone: the audit sees an edge', () => {
+    const list = boxed(document.body.appendChild(document.createElement('div')));
+    list.setAttribute('data-pad-wrap', '');
+    const rows = column(list, 2);
+    expect(nextFocus(rows[1], 'down', { memory: false })).toBeNull();
+  });
+});
+
 describe('candidates: a control scrolled out of its list', () => {
   afterEach(() => document.body.replaceChildren());
   /** `el` with a box `w` × `h` at `left`, `top`. */
@@ -138,7 +221,7 @@ describe('candidates: a control scrolled out of its list', () => {
     expect(candidates(null)).toEqual([shown, outside]);
   });
 
-  it('is never the D-pad\'s pick from outside, and is the next row from inside', () => {
+  it("is never the D-pad's pick from outside, and is the next row from inside", () => {
     const { shown, hidden, outside } = scene();
     outside.focus();
     expect(isCandidate(hidden)).toBe(false);
@@ -148,6 +231,20 @@ describe('candidates: a control scrolled out of its list', () => {
     shown.focus();
     moveFocus('down');
     expect(document.activeElement).toBe(hidden);
+  });
+
+  it('walks its own list first: the row scrolled out above wins over a nearer control above the list, in the same pane', () => {
+    // A pane holding a header button just above a list, whose previous row is scrolled out above it.
+    const pane = document.body.appendChild(document.createElement('div'));
+    pane.setAttribute('data-pad-group', '');
+    const header = at(pane.appendChild(document.createElement('button')), 0, 30, 40, 15);
+    const list = at(pane.appendChild(document.createElement('div')), 0, 50, 100, 100);
+    list.style.overflowY = 'auto';
+    const above = at(list.appendChild(document.createElement('button')), 0, -30, 100, 40);
+    const first = at(list.appendChild(document.createElement('button')), 0, 50, 100, 40);
+    expect(nextFocus(first, 'up', { memory: false })).toBe(above);
+    // Down from the header enters the list at its row in view.
+    expect(nextFocus(header, 'down', { memory: false })).toBe(first);
   });
 });
 
@@ -223,6 +320,42 @@ describe('groups: the focus stays in a pane while it can, and comes back to wher
     expect(document.activeElement).toBe(b1);
     moveFocus('left');
     expect(document.activeElement).toBe(a1);
+  });
+
+  it('straight back across panes returns to the control left, whatever pane lies over the one entered', () => {
+    // A bag (left) and a sheet (right) over a footer whose only button sits under the sheet.
+    const [bag, sheet] = [pane(0), pane(200)];
+    const [tile, equip] = [button(bag, 0, 0), button(sheet, 200, 0)];
+    const foot = at(document.body.appendChild(document.createElement('div')), 0, 300, 300, 40);
+    foot.setAttribute('data-pad-group', '');
+    const delve = at(foot.appendChild(document.createElement('button')), 250, 300, 50, 40);
+    tile.focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(delve);
+    // By the picks alone, up from Delve is the sheet over it.
+    expect(nextFocus(delve, 'up', { memory: false })).toBe(equip);
+    moveFocus('up');
+    expect(document.activeElement).toBe(tile);
+    // It is the crossing that is remembered, not the bag: from the sheet, the way back is the sheet.
+    equip.focus();
+    moveFocus('down');
+    expect(document.activeElement).toBe(delve);
+    moveFocus('up');
+    expect(document.activeElement).toBe(equip);
+  });
+
+  it('a neighbour inside the pane entered still takes the opposite press', () => {
+    const [a, b] = [pane(0), pane(200)];
+    const a1 = button(a, 80, 0);
+    const [c, d] = [button(b, 200, 0), button(b, 260, 0)];
+    // The right pane last held d, so a1's press enters it there, with c between.
+    d.focus();
+    keepFocus();
+    a1.focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(d);
+    moveFocus('left');
+    expect(document.activeElement).toBe(c);
   });
 
   it('a control in no group is a group of one', () => {
@@ -373,19 +506,34 @@ describe('keepFocus: the pad never loses the focus', () => {
 });
 
 /** The standard mapping's button indices. */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, menu: 9, up: 12, right: 15 } as const;
+const PAD = {
+  a: 0,
+  b: 1,
+  x: 2,
+  y: 3,
+  lb: 4,
+  rb: 5,
+  lt: 6,
+  rt: 7,
+  menu: 9,
+  up: 12,
+  down: 13,
+  left: 14,
+  right: 15,
+} as const;
 
 describe('the pad outside combat: scopes, tab lists and prompts', () => {
   const frames = new Map<number, FrameRequestCallback>();
   let lastFrame = 0;
   const realGetGamepads = Object.getOwnPropertyDescriptor(navigator, 'getGamepads');
   let down: number[] = [];
+  let axes = [0, 0, 0, 0];
   let now = 0;
   let stop = () => {};
   const pad = (): GamepadLike => ({
     connected: true,
     mapping: 'standard',
-    axes: [0, 0, 0, 0],
+    axes: [...axes],
     buttons: Array.from({ length: 17 }, (_, i) => ({
       pressed: down.includes(i),
       value: down.includes(i) ? 1 : 0,
@@ -428,6 +576,7 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
   beforeEach(() => {
     clicks.length = 0;
     down = [];
+    axes = [0, 0, 0, 0];
     frames.clear();
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       frames.set(++lastFrame, cb);
@@ -446,6 +595,45 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     vi.unstubAllGlobals();
     document.body.replaceChildren();
     setDevice('keyboard');
+  });
+
+  it("the right stick scrolls the topmost scope's [data-pad-scroll] pane, by its tilt and the time, never the focus", () => {
+    const button = el('button');
+    button.focus();
+    const page = el('div', { 'data-pad-scroll': '' });
+    const sheet = el('div', { 'data-pad-scope': '' });
+    const pane = el('div', { 'data-pad-scroll': '' }, sheet);
+    const by: number[] = [];
+    pane.scrollBy = ((o: ScrollToOptions) => by.push(o.top ?? 0)) as typeof pane.scrollBy;
+    page.scrollBy = (() => by.push(NaN)) as typeof page.scrollBy;
+    axes = [0, 0, 0, 1]; // full tilt down
+    tick();
+    tick();
+    axes = [0, 0, 0, -1];
+    tick();
+    axes = [0, 0, 0, 0];
+    tick();
+    // 16 ms a frame at STICK_SCROLL_PX a second, down twice then up once; only the sheet's pane.
+    const step = (STICK_SCROLL_PX * 16) / 1000;
+    expect(by.map((v) => Math.round(v))).toEqual([step, step, -step].map(Math.round));
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('left/right on a focused [data-pad-step] control step it (PAD_STEP), never moving the focus; up and down move on', () => {
+    // A button either side of the stepper, which a plain left/right would move to, and one below.
+    el('button', {}, document.body, 0, 0);
+    const stepper = el('div', { 'data-pad-step': '', tabindex: '0' }, document.body, 20, 0);
+    el('button', {}, document.body, 40, 0);
+    const below = el('button', {}, document.body, 20, 20);
+    const heard: number[] = [];
+    stepper.addEventListener(PAD_STEP, (e) => heard.push((e as CustomEvent<number>).detail));
+    stepper.focus();
+    tap(PAD.right);
+    tap(PAD.left);
+    expect(heard).toEqual([1, -1]);
+    expect(document.activeElement).toBe(stepper);
+    tap(PAD.down);
+    expect(document.activeElement).toBe(below);
   });
 
   it("B presses the topmost scope's back, never the page's; Menu its menu, else its back", () => {
@@ -499,7 +687,7 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     expect(top()).toBe('forge');
   });
 
-  it('a skipped tab list (the kit\'s) puts the focus in the content, or leaves it where it survived', () => {
+  it("a skipped tab list (the kit's) puts the focus in the content, or leaves it where it survived", () => {
     const list = el('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' });
     const main = el('div');
     const foot = el('div', { 'data-screen-section': 'screen-foot' });
@@ -508,7 +696,8 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     const tab = (name: string, selected: boolean) => {
       const t = el('button', { role: 'tab', 'aria-selected': String(selected) }, list);
       t.addEventListener('click', () => {
-        for (const o of list.querySelectorAll('[role="tab"]')) o.setAttribute('aria-selected', 'false');
+        for (const o of list.querySelectorAll('[role="tab"]'))
+          o.setAttribute('aria-selected', 'false');
         t.setAttribute('aria-selected', 'true');
         main.replaceChildren();
         el('button', { 'data-name': `${name}-first` }, main, 0, 20);
@@ -535,6 +724,43 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
     expect((document.activeElement as HTMLElement).getAttribute('role')).not.toBe('tab');
   });
 
+  it("a stepped tab's focus goes to its [data-pad-first] control when it has one, else its first", () => {
+    const list = el('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' });
+    const main = el('div');
+    /** Whether tab B's second control says the focus lands on it. */
+    let marked = true;
+    /** Each tab swaps the main's content for its own controls. */
+    const tab = (selected: boolean, fill: () => void) => {
+      const t = el('button', { role: 'tab', 'aria-selected': String(selected) }, list);
+      t.addEventListener('click', () => {
+        for (const o of list.querySelectorAll('[role="tab"]'))
+          o.setAttribute('aria-selected', 'false');
+        t.setAttribute('aria-selected', 'true');
+        main.replaceChildren();
+        fill();
+      });
+      return t;
+    };
+    const content = (text: string, top: number, attrs: Record<string, string> = {}) => {
+      el('button', attrs, main, 0, top).textContent = text;
+    };
+    tab(true, () => content('only', 20));
+    tab(false, () => {
+      content('one', 20);
+      content('two', 40, marked ? { 'data-pad-first': '' } : {});
+      content('three', 60);
+    });
+    el('button', {}, main, 0, 20).focus();
+    tap(PAD.rb);
+    expect(document.activeElement?.textContent).toBe('two');
+    // And with no [data-pad-first] in the content (step away and back): its first control.
+    marked = false;
+    tap(PAD.rb);
+    expect(document.activeElement?.textContent).toBe('only');
+    tap(PAD.rb);
+    expect(document.activeElement?.textContent).toBe('one');
+  });
+
   it("a React tab list's switch is rendered before the focus is placed: the new tab's first control", async () => {
     // Boxes by `data-top`: b-second lies where a-only was, so a focus left to fall goes there.
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
@@ -550,7 +776,12 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
       return h(
         Fragment,
         null,
-        h('div', { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' }, tabFor('a'), tabFor('b')),
+        h(
+          'div',
+          { role: 'tablist', 'data-pad-tabs': '', 'data-pad-skip': '' },
+          tabFor('a'),
+          tabFor('b'),
+        ),
         ...(tab === 'a'
           ? [h('button', { key: 'a', 'data-name': 'a-only', 'data-top': '40' })]
           : [
@@ -588,43 +819,5 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
       1, 1, 0,
     ]);
     expect(clicks).toEqual(['focused']);
-  });
-
-  it('holding Y past its hold fires the hold prompt, and never the tap', () => {
-    const remove = vi.fn();
-    const apply = vi.fn();
-    renderHook(() =>
-      usePrompts([
-        { id: 'remove', label: 'Remove', binding: { pad: 'y' }, onPress: remove },
-        { id: 'apply', label: 'Apply', binding: { pad: 'y', padHold: 600 }, onHold: apply },
-      ]),
-    );
-    down = [PAD.y];
-    for (let i = 0; i < 40; i++) tick(); // 640 ms
-    down = [];
-    tick();
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(remove).not.toHaveBeenCalled();
-    tap(PAD.y);
-    expect(remove).toHaveBeenCalledTimes(1);
-  });
-
-  it('while a card is carried, the D-pad and A, B and X go to it, not the focus or the back', () => {
-    named(el('button', { 'data-pad-back': '' }), 'page-back');
-    const first = el('button', {}, document.body, 0, 0);
-    el('button', {}, document.body, 40, 0);
-    first.focus();
-    const heard: string[] = [];
-    const release = captureNav((input) => heard.push(input));
-    tap(PAD.right);
-    tap(PAD.x);
-    tap(PAD.a);
-    tap(PAD.b);
-    expect(heard).toEqual(['right', 'x', 'a', 'b']);
-    expect(clicks).toEqual([]);
-    expect(document.activeElement).toBe(first);
-    release();
-    tap(PAD.right);
-    expect(document.activeElement).not.toBe(first);
   });
 });

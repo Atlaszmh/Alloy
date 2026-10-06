@@ -318,6 +318,8 @@ export class PixelWorld {
   weather: boolean;
   /** Lightning flash (0–1). */
   flash = 0;
+  /** Settings → Effects → Flashes (0–1): how much of the lightning and the blasts' flashes lights the floor. */
+  flashStrength = 1;
 
   private readonly dw: Float32Array;
   private readonly rand: () => number;
