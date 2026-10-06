@@ -77,10 +77,12 @@ export function ForgeTab({ mode, setPrompts, link, memory }: HubTabProps) {
           },
         ]}
       />
+      {/* The side panes give way (to 80%) before the bench in the middle does: Large text leaves
+          a 1477 design px wide screen. */}
       <div
         className="grid min-h-0 flex-1 gap-6"
         style={{
-          gridTemplateColumns: '430px minmax(0, 1fr) 470px',
+          gridTemplateColumns: 'minmax(344px, 430px) minmax(480px, 1fr) minmax(376px, 470px)',
           gridTemplateRows: 'minmax(0, 1fr)',
         }}
       >

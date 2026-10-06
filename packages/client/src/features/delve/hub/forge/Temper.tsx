@@ -338,7 +338,7 @@ export function Temper({ item }: { item: GearItem }) {
               {ops.map((o) => (
                 <div
                   key={o.id}
-                  className="flex items-center gap-3 [@media(max-height:809px)]:flex-col [@media(max-height:809px)]:items-stretch"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 [@media(max-height:809px)]:flex-col [@media(max-height:809px)]:items-stretch"
                   data-temper-row
                 >
                   <Button
