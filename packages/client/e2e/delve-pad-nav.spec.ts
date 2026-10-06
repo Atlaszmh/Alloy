@@ -77,9 +77,10 @@ const CEILING: Record<string, number> = {
   'skills-forms': 5,
   // The Apply sheet: its Back, Apply, Try in Training and Discard changes.
   'apply-sheet': 4,
-  // The 9 learned patterns and Delve; with a pattern open, its Flux, Metal and Element rows and Forge.
+  // The 9 learned patterns and Delve; with a pattern open, its Metal and Element rows (a save with
+  // no flux sees one line for it, and none of its lines is a stop without a shard) and Forge.
   forge: 10,
-  'forge-pattern': 14,
+  'forge-pattern': 13,
   // The 19 gear rows, the one operation the worn weapon can take, and Delve (one stop a gear row).
   temper: 21,
   // The audit's save: the shard bench's stepper and Buy, its Refines, and Delve.
