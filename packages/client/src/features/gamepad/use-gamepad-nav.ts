@@ -182,10 +182,12 @@ function gapBetween(a: DOMRect, b: DOMRect): number {
 }
 
 /**
- * The control a press of `dir` on `el` would focus, or null at an edge. Inside `el`'s group
- * while one of its controls lies that way (`pickNext`); else in the group whose box lies that
- * way, at the control it last held, else at the pick among its controls, else at its nearest.
- * `memory: false` leaves the last-held control out: the picks alone (tests, the audit).
+ * The control a press of `dir` on `el` would focus, or null at an edge. Inside `el`'s scrolling
+ * list while one of its rows lies that way (a row scrolled out beats a nearer control beside the
+ * list); else inside `el`'s group while one of its controls does (`pickNext`); else in the group
+ * whose box lies that way, at the control it last held, else at the pick among its controls,
+ * else at its nearest. `memory: false` leaves the last-held control out: the picks alone (tests,
+ * the audit).
  */
 export function nextFocus(
   el: HTMLElement,
@@ -199,6 +201,9 @@ export function nextFocus(
     return next ? pool[Number(next.id)] : null;
   };
   const home = groupOf(el);
+  const list = scrollers(el)[0];
+  const row = list && pick(els.filter((c) => groupOf(c) === home && scrollers(c)[0] === list));
+  if (row) return row;
   const inside = pick(els.filter((c) => groupOf(c) === home));
   if (inside) return inside;
   const group = pick([...new Set(els.filter((c) => groupOf(c) !== home).map(groupOf))]);

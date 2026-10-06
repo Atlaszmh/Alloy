@@ -232,6 +232,20 @@ describe('candidates: a control scrolled out of its list', () => {
     moveFocus('down');
     expect(document.activeElement).toBe(hidden);
   });
+
+  it('walks its own list first: the row scrolled out above wins over a nearer control above the list, in the same pane', () => {
+    // A pane holding a header button just above a list, whose previous row is scrolled out above it.
+    const pane = document.body.appendChild(document.createElement('div'));
+    pane.setAttribute('data-pad-group', '');
+    const header = at(pane.appendChild(document.createElement('button')), 0, 30, 40, 15);
+    const list = at(pane.appendChild(document.createElement('div')), 0, 50, 100, 100);
+    list.style.overflowY = 'auto';
+    const above = at(list.appendChild(document.createElement('button')), 0, -30, 100, 40);
+    const first = at(list.appendChild(document.createElement('button')), 0, 50, 100, 40);
+    expect(nextFocus(first, 'up', { memory: false })).toBe(above);
+    // Down from the header enters the list at its row in view.
+    expect(nextFocus(header, 'down', { memory: false })).toBe(first);
+  });
 });
 
 const device = () => useInputDeviceStore.getState().device;
