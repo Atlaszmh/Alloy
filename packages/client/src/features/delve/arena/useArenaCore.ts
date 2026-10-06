@@ -614,7 +614,11 @@ export function useArenaCore(
             if (events.length > 0) {
               renderer.handleEvents(events);
               // The bot-driven E2E runs would otherwise spend a large share of wall time frozen.
-              if (!flags.autopilot) hitstopRef.current.onEvents(events, performance.now());
+              if (!flags.autopilot) hitstopRef.current.onEvents(
+                  events,
+                  performance.now(),
+                  useUIStore.getState().hitstop,
+                );
               handleEvents(world, events);
             }
             if (!wasDead && world.heroDead) mode.onHeroDead(world);
