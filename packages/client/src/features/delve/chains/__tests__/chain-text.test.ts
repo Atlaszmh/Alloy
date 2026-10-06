@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { damageShift } from '../chain-text';
+import { KIND_HINT, kindHint } from '../MoveEditor';
+
+describe('kindHint', () => {
+  it("a hold's line follows the toggle", () => {
+    expect(kindHint('hold', false)).toBe(KIND_HINT.hold);
+    expect(kindHint('hold', true)).toBe(
+      'Press the button to charge it, press it again to let go: a quick pair is a medium hit, a full charge beyond heavy.',
+    );
+    expect(kindHint('heavy', true)).toBe(KIND_HINT.heavy);
+  });
+});
 
 describe('damageShift', () => {
   it("says what an option does to the chain's damage a second, rounded to a percent", () => {

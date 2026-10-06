@@ -15,7 +15,7 @@ vi.mock('@/features/gamepad/gamepad-hub', () => ({
 
 import { ControlsPanel } from '../ControlsPanel';
 import { DEFAULT_CONTROLS, exportControls } from '../controls';
-import { useControlsStore } from '@/stores/controlsStore';
+import { CONTROLS_KEY, useControlsStore } from '@/stores/controlsStore';
 import { MANUAL_ATTACK_KEY, useDelveStore } from '@/stores/delveStore';
 import { attachPromptKeys } from '@/features/delve/kit/prompts';
 
@@ -89,6 +89,17 @@ describe('ControlsPanel', () => {
     expect(toggle).toHaveTextContent('Basic attack: Manual');
     fireEvent.click(toggle);
     expect(useDelveStore.getState().manualAttack).toBe(false);
+  });
+
+  it('Hold moves sits beside Basic attack: Hold by default, Press to toggle once clicked, saved for this device', () => {
+    render(<ControlsPanel onClose={() => {}} />);
+    const button = screen.getByTestId('hold-mode-toggle');
+    expect(button).toHaveTextContent('Hold moves: Hold');
+    expect(button.parentElement).toBe(screen.getByTestId('attack-mode-toggle').parentElement);
+    fireEvent.click(button);
+    expect(button).toHaveTextContent('Hold moves: Press to toggle');
+    expect(config().holdToggle).toBe(true);
+    expect(JSON.parse(localStorage.getItem(CONTROLS_KEY)!).holdToggle).toBe(true);
   });
 
   it('resets to the default, and copies the setup to send over', async () => {

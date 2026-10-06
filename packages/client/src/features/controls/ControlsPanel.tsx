@@ -101,13 +101,20 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           </p>
         )}
 
-        <Button
-          className="self-start"
-          onClick={() => useDelveStore.getState().setManualAttack(!manual)}
-          testId="attack-mode-toggle"
-        >
-          Basic attack: {manual ? 'Manual' : 'Auto'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => useDelveStore.getState().setManualAttack(!manual)}
+            testId="attack-mode-toggle"
+          >
+            Basic attack: {manual ? 'Manual' : 'Auto'}
+          </Button>
+          <Button
+            onClick={() => store().setHoldToggle(!cfg.holdToggle)}
+            testId="hold-mode-toggle"
+          >
+            Hold moves: {cfg.holdToggle ? 'Press to toggle' : 'Hold'}
+          </Button>
+        </div>
 
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-2">
           <span className={caption}>Action</span>

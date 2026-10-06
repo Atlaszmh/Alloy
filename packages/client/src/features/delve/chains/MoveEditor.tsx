@@ -19,6 +19,7 @@ import {
   type FormId,
 } from '@alloy/engine';
 import { Chip, Glyph } from '@/features/delve/kit';
+import { useControlsStore } from '@/stores/controlsStore';
 import { formatNumber, manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 import { KIND_ICON, KIND_LABEL, listed } from './chain-text';
@@ -30,6 +31,13 @@ export const KIND_HINT: Record<MoveKind, string> = {
   heavy: 'Harder and bigger, but dearer and slower.',
   hold: 'Hold the button to charge it, then let go: a tap is a medium hit, a full charge beyond heavy.',
 };
+
+/** A kind's line under its choice: a hold's says how it charges under press-to-toggle (`ControlsConfig.holdToggle`). */
+export function kindHint(kind: MoveKind, toggle: boolean): string {
+  return kind === 'hold' && toggle
+    ? 'Press the button to charge it, press it again to let go: a quick pair is a medium hit, a full charge beyond heavy.'
+    : KIND_HINT[kind];
+}
 
 function Heading({ children }: { children: string }) {
   return <h3 className="k-label m-0">{children}</h3>;
@@ -308,6 +316,7 @@ export function MoveEditor({
 }: MoveEditorProps) {
   const registry = getDelveRegistry();
   const data = registry.getArpgData();
+  const toggle = useControlsStore((s) => s.config.holdToggle);
   const set = (next: Partial<Move>) => onChange({ ...move, ...next } as Move | Blow);
   const trait = (m: ManaType) => data.elementTraits[m];
   const { off, shown, takes, misfits, blocking } = moveChoices(move, slot, elements);
@@ -330,7 +339,7 @@ export function MoveEditor({
         </div>
         <div className="k-note">
           {'form' in move
-            ? KIND_HINT[move.kind]
+            ? kindHint(move.kind, toggle)
             : move.kind === 'hold' &&
               'Hold the attack to charge it; automatic attacks swing it slow and hard.'}
         </div>

@@ -1,11 +1,12 @@
 import { runeTargetOf, runeText, type ManaType } from '@alloy/engine';
 import { Panel } from '@/features/delve/kit';
+import { useControlsStore } from '@/stores/controlsStore';
 import { manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import { RuneGlyph } from '../../runes/RuneGlyph';
 import { dormantText, runeName } from '../../runes/rune-style';
 import {
-  KIND_HINT,
+  kindHint,
   MoveNumbers,
   NumberTable,
   blowRows,
@@ -38,6 +39,7 @@ export function MoveInspector({
 }) {
   const registry = getDelveRegistry();
   const data = registry.getArpgData();
+  const toggle = useControlsStore((s) => s.config.holdToggle);
   const { move, slot, index, resolved } = ed;
   const { stats, runes } = anvil.editor;
   if (ed.absent || !move)
@@ -86,7 +88,7 @@ export function MoveInspector({
           <div className="flex min-w-0 flex-col gap-2 text-[16px] text-[var(--k-text-3)]">
             <span data-testid="detail-kind">
               {'form' in move
-                ? KIND_HINT[move.kind]
+                ? kindHint(move.kind, toggle)
                 : move.kind === 'hold' &&
                   'Hold the attack to charge it; automatic attacks swing it slow and hard.'}
             </span>

@@ -9,6 +9,7 @@ import {
   type MoveKind,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { useControlsStore } from '@/stores/controlsStore';
 import { Button, Price, Stepper, usePrompts } from '@/features/delve/kit';
 import { manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
@@ -16,7 +17,7 @@ import { RuneGlyph } from '../../runes/RuneGlyph';
 import { RunePicker } from '../../runes/RunePicker';
 import { dormantText, runeName } from '../../runes/rune-style';
 import { KIND_NAME, damageShift } from '../../chains/chain-text';
-import { KIND_HINT, moveChoices } from '../../chains/MoveEditor';
+import { kindHint, moveChoices } from '../../chains/MoveEditor';
 import { PAYMENTS, cardAt, type ChainEditorModel } from '../../chains/useChainEditor';
 import { APPLY_BINDING } from './ApplyBar';
 import { FormPicker } from './FormPicker';
@@ -61,6 +62,7 @@ export function MoveRows({
 }) {
   const registry = getDelveRegistry();
   const secondary = useDelveStore((s) => s.profile.pair.secondary);
+  const toggle = useControlsStore((s) => s.config.holdToggle);
   const [forms, setForms] = useState(false);
   const { move, index, entries, chain, slot } = ed;
   const runes = anvil.editor.runes;
@@ -141,7 +143,7 @@ export function MoveRows({
         options={MOVE_KINDS.map((k) => ({ id: k, label: KIND_NAME[k], text: KIND_NAME[k] }))}
         note={
           'form' in move
-            ? KIND_HINT[move.kind]
+            ? kindHint(move.kind, toggle)
             : move.kind === 'hold'
               ? 'Hold the attack to charge it; automatic attacks swing it slow and hard.'
               : undefined
