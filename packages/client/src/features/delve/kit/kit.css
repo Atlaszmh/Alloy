@@ -135,18 +135,24 @@
 }
 
 .k-body-2 {
-  font-size: 16px;
+  font-size: 18px;
   color: var(--k-text-2);
 }
 
 .k-caption {
-  font-size: 14px;
+  font-size: 16px;
+  color: var(--k-text-3);
+}
+
+/* A caption that is a sentence: read, so 18, in the caption's colour (the pad-first spec, 6). */
+.k-note {
+  font-size: 18px;
   color: var(--k-text-3);
 }
 
 .k-label {
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--k-text-3);
@@ -346,7 +352,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   min-width: 28px;
   height: 28px;
   padding: 0 7px;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .k-glyph-md {
@@ -358,7 +364,7 @@ html[data-input='gamepad'] .delve-ui :focus {
 
 .k-hold {
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--k-text-2);
   text-transform: uppercase;
 }
@@ -496,7 +502,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 6px 12px;
   font-family: var(--k-font-body);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   color: #ffffff;
   background: #3a4466;
   border: 2px solid #5a6988;
@@ -578,7 +584,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 1px 4px;
   vertical-align: 3px;
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   font-size-adjust: none;
   line-height: 1.2;
   text-transform: none;
@@ -602,7 +608,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 6px 10px;
   min-height: 36px;
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   color: #ffffff;
   background: #3a4466;
   border: 2px solid #5a6988;
@@ -623,7 +629,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   min-height: 36px;
   padding: 2px;
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   color: #ffffff;
   background: #3a4466;
   border: 2px solid #5a6988;
@@ -872,7 +878,7 @@ html[data-input='gamepad'] .delve-ui :focus {
 .k-tile-delta {
   right: 6px;
   bottom: 5px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -881,7 +887,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   top: 6px;
   padding: 1px 3px;
   font-family: var(--k-font-label);
-  font-size: 14px;
+  font-size: 16px;
   color: #3e2731;
   background: #fee761;
 }
