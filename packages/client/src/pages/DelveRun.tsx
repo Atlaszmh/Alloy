@@ -140,7 +140,7 @@ export function DelveRun() {
     (e: ArenaUiEvent) => {
       switch (e.kind) {
         case 'events':
-          playArenaEvents(e.events);
+          playArenaEvents(e.events, e.cues);
           break;
         case 'loot':
           if (e.bagFull) showToast('Bag full: extra loot was salvaged');

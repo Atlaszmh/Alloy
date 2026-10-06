@@ -1,10 +1,39 @@
-import type { ArpgEvent } from '@alloy/engine';
+import type { ArpgEvent, ArpgWorld, GearItem } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
 
-/** Sounds and haptics for a frame's arena events: the dive and the Training Grounds share them. */
-export function playArenaEvents(events: readonly ArpgEvent[]): void {
+/** A drop with a sound of its own: gear that is an upgrade as it comes (▲), or an essence. */
+export type LootCue = 'upgrade' | 'essence';
+
+/**
+ * This frame's drops that sound like themselves, by drop id: an essence (its material), or gear
+ * `isUpgrade` calls an upgrade as it comes (the loot plaque's own test: ▲). The `drop` event
+ * carries neither; the world's drops do, under the event's id, the frame it falls.
+ */
+export function lootCues(
+  world: ArpgWorld,
+  events: readonly ArpgEvent[],
+  isUpgrade?: (item: GearItem) => boolean,
+): Record<number, LootCue> {
+  const cues: Record<number, LootCue> = {};
+  for (const e of events) {
+    if (e.kind !== 'drop') continue;
+    const d = world.drops.find((x) => x.id === e.dropId);
+    if (d?.material?.kind === 'essence') cues[e.dropId] = 'essence';
+    else if (d?.item && isUpgrade?.(d.item)) cues[e.dropId] = 'upgrade';
+  }
+  return cues;
+}
+
+/**
+ * Sounds and haptics for a frame's arena events: the dive and the Training Grounds share them.
+ * `cues` (`lootCues`) gives an upgrade or an essence drop its own sound.
+ */
+export function playArenaEvents(
+  events: readonly ArpgEvent[],
+  cues: Record<number, LootCue> = {},
+): void {
   for (const ev of events) {
     switch (ev.kind) {
       case 'hit':
@@ -28,10 +57,14 @@ export function playArenaEvents(events: readonly ArpgEvent[]): void {
       case 'death':
         if (ev.monsterKind !== 'normal') playSound('death');
         break;
-      case 'drop':
-        if (ev.rarity === 'rare' || ev.rarity === 'epic') playSound('lootRare');
+      case 'drop': {
+        const cue = cues[ev.dropId];
+        if (cue === 'essence') playSound('lootEssence');
+        else if (cue === 'upgrade') playSound('lootUpgrade');
+        else if (ev.rarity === 'rare' || ev.rarity === 'epic') playSound('lootRare');
         else if (ev.dropKind === 'item' || ev.dropKind === 'rune') playSound('lootDrop');
         break;
+      }
       case 'pickup':
         if (ev.dropKind === 'item') playSound('dropSuccess');
         else if (ev.dropKind === 'rune') playSound('upgradeTier');
