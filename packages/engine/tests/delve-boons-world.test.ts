@@ -247,3 +247,39 @@ describe('drops (material-drops.ts, rune-drops.ts)', () => {
     }
   });
 });
+
+describe('dive.ts', () => {
+  const diving = (buffs: Buff[]): DelveProfile => {
+    const p = startDive(registry, createDelveProfile(registry, 5), 1);
+    return { ...p, dive: { ...p.dive!, diveBuffs: buffs } };
+  };
+
+  it("Insurance: a death loses deathLoss less Σ the boons' points (at least 0); the boons stay on the settled dive", () => {
+    const banked = { ...emptyHaul(), scrap: 1000 };
+    const settle = (buffs: Buff[]) => {
+      const p = diving(buffs);
+      return settleDive(registry, { ...p, dive: { ...p.dive!, banked } }, 'death').dive!;
+    };
+    const loss = bal.crafting.deathLoss;
+    expect(Math.abs(settle([]).banked.scrap - 1000 * (1 - loss))).toBeLessThanOrEqual(1);
+    const some = settle([buff({ deathLoss: 0.1 })]);
+    expect(Math.abs(some.banked.scrap - 1000 * (1 - (loss - 0.1)))).toBeLessThanOrEqual(1);
+    const none = settle([buff({ deathLoss: 0.25 }), buff({ deathLoss: 0.25 })]);
+    expect([none.banked.scrap, none.lost!.scrap, none.diveBuffs.length]).toEqual([1000, 0, 2]);
+  });
+
+  it('Deeper Still: the next door goes Σ skip further; the skip is spent, the entry stays', () => {
+    const choosing = (p: DelveProfile, door: string): DelveProfile => ({
+      ...p,
+      dive: { ...p.dive!, phase: 'choosing', doorChoices: [door] },
+    });
+    const deeper = buff({ skip: 1, find: 20 }, 'deeper-still');
+    const p = chooseDoor(registry, choosing(diving([deeper]), 'winding'), 'winding');
+    expect(p.dive!.depth).toBe(3);
+    expect(p.dive!.diveBuffs).toEqual([{ ...deeper, effect: { skip: 0, find: 20 } }]);
+    expect(chooseDoor(registry, choosing(p, 'winding'), 'winding').dive!.depth).toBe(4);
+    // Added to the door's own skip (the Plunge's 2).
+    expect(chooseDoor(registry, choosing(diving([deeper]), 'plunge'), 'plunge').dive!.depth).toBe(5);
+    expect(chooseDoor(registry, choosing(diving([]), 'winding'), 'winding').dive!.depth).toBe(2);
+  });
+});

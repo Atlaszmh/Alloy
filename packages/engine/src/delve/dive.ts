@@ -11,6 +11,7 @@ import { createFloorWorld, emptyPending, isBossFloor } from '../arpg/world.js';
 import { diveStats, profileStats } from './pair.js';
 import { heroChains } from '../loot/moveset.js';
 import { rollStop } from './stops.js';
+import { buffSum } from './boons.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 import { addToPouch } from '../loot/runes.js';
@@ -379,7 +380,10 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
   if (dive.stop?.kind === 'powerups' && dive.stop.required && !dive.stop.taken) throw new Error('Take the power-up first');
   if (!dive.doorChoices.includes(doorId)) throw new Error(`Door not offered: ${doorId}`);
   const door = registry.getDoor(doorId);
-  const depth = dive.depth + 1 + (door.mods.skip ?? 0);
+  // Deeper Still (the boons spec's `skip`): the dive's boons add to the door's skip and are spent (each entry stays).
+  const skip = buffSum(dive.diveBuffs).skip ?? 0;
+  const depth = dive.depth + 1 + (door.mods.skip ?? 0) + skip;
+  const diveBuffs = skip ? dive.diveBuffs.map((b) => (b.effect.skip ? { ...b, effect: { ...b.effect, skip: 0 } } : b)) : dive.diveBuffs;
   const entered: DelveProfile = {
     ...profile,
     bestDepth: Math.max(profile.bestDepth, depth),
@@ -392,6 +396,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
       doorChoices: [],
       stop: null,
       dropsGiven: [],
+      diveBuffs,
       phase: 'fighting',
     },
   };
@@ -454,7 +459,8 @@ export function settleDive(registry: DataRegistry, profile: DelveProfile, outcom
   let kept = dive.banked;
   let lost: Haul | null = null;
   if (outcome !== 'extract') {
-    const loss = registry.getDelveBalance().crafting.deathLoss;
+    // Insurance (the boons spec's `deathLoss`): the dive's boons take points off the share, never below 0; they stay on the dive.
+    const loss = Math.max(0, registry.getDelveBalance().crafting.deathLoss - (buffSum(dive.diveBuffs).deathLoss ?? 0));
     const rng = new SeededRNG(profile.seed).fork(`death:${dive.seed}`);
     const share = mapCounts(dive.banked, (n) => stochasticRound(n * loss, rng));
     kept = addHaul(dive.banked, mapCounts(share, (n) => -n));
