@@ -167,7 +167,11 @@ function applyStacks(
   const active = s.stacks[element] > 0;
   if (!active && n <= 0) return;
   s.stacks[element] = Math.min(stackCap(ctx, element), s.stacks[element] + Math.max(0, n));
-  s.stackUntil[element] = t + ctx.bal.stacks.duration[element] * (1 + time);
+  // Never shorter: a plain hit leaves a longer (stackTime) timer as it is.
+  s.stackUntil[element] = Math.max(
+    s.stackUntil[element] ?? 0,
+    t + ctx.bal.stacks.duration[element] * (1 + time),
+  );
   if (element === 'fire') {
     if (!active) s.burnTickAt = t + 0.5;
     if (!active || ref >= s.burnRef) {
@@ -542,16 +546,22 @@ function givenAway(ctx: SimCtx, m: MonsterEntity): void {
  * `lowLife` on a foe under its threshold, `nearFoes` per awake foe within its
  * radius of the hero, to its cap. 1 with neither.
  */
+/** Hit sources that aren't the hero's own hit (a status tick, a reaction, thorns, a hazard). */
+const NOT_HERO: ReadonlySet<HitSource> = new Set(['dot', 'reaction', 'thorns', 'hazard']);
+
 function boonFoeMult(ctx: SimCtx, m: MonsterEntity): number {
   const h = ctx.world.hero;
   const { lowLife, nearFoes } = h.boon;
   let mult = 1;
   if (lowLife && m.hp < lowLife.below * m.maxHp) mult *= 1 + lowLife.mult;
   if (nearFoes) {
-    const n = ctx.world.monsters.filter(
-      (f) => !f.dead && f.aggro && dist(h.x, h.y, f.x, f.y) <= nearFoes.radius,
-    ).length;
-    mult *= 1 + nearFoes.per * Math.min(n, nearFoes.cap);
+    const r2 = nearFoes.radius * nearFoes.radius;
+    let n = 0;
+    for (const f of ctx.world.monsters) {
+      if (n >= nearFoes.cap) break;
+      if (!f.dead && f.aggro && (f.x - h.x) ** 2 + (f.y - h.y) ** 2 <= r2) n++;
+    }
+    mult *= 1 + nearFoes.per * n;
   }
   return mult;
 }
@@ -581,7 +591,7 @@ export function hitMonster(
     h.riposteUntil = 0;
   }
   if (crit) amount *= stats.critMultiplier;
-  if (opts.source === 'basic' || opts.source === 'skill') amount *= boonFoeMult(ctx, m);
+  if (!NOT_HERO.has(opts.source)) amount *= boonFoeMult(ctx, m);
 
   // A dummy resists as its own setting says (Neutral: nothing); its `element` is only its look.
   const resists = m.dummy ? m.dummy.element : m.element;

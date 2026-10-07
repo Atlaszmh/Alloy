@@ -409,3 +409,35 @@ describe('a floor-long barrier (Stone Skin)', () => {
     expect(w.hero.barrier!.until).toBeCloseTo(w.t + bal.runes.guardSeconds, 9);
   });
 });
+
+describe('review fixes', () => {
+  it("lowLife reaches a thrown Burst's hit", () => {
+    const burst = (boon: boolean) => {
+      const w = noCrit(
+        arena([dummy(13, 30)], {
+          noBasic: true,
+          primary: { moves: [{ kind: 'medium', form: 'burst', elements: ['fire'] }] },
+        }),
+      );
+      if (boon) wear(w, { lowLife: { below: 0.25, mult: 0.4 } });
+      w.monsters[0].hp = w.monsters[0].maxHp * 0.1;
+      return firstHit([...press(w, 0), ...run(w, 2)], 'skill');
+    };
+    expect(burst(true)).toBeCloseTo(burst(false) * 1.4, 6);
+  });
+
+  it('lifeCost is 0 with no mana pool', () => {
+    const w = wear(arena([], { noBasic: true }), { bloodPrice: 0.5 });
+    w.hero.manaMax = 0;
+    expect(lifeCost(w.hero, 10)).toBe(0);
+  });
+
+  it('a hit without stackTime never shortens a longer stack timer', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    const ctx = ctxOf(w);
+    const [m] = w.monsters;
+    hitMonster(ctx, m, 10, 'fire', { source: 'skill', applies: ['burn'], stacks: 1, stackTime: 1 });
+    hitMonster(ctx, m, 10, 'fire', { source: 'skill', applies: ['burn'], stacks: 1 });
+    expect(m.status.stackUntil.fire).toBeCloseTo(w.t + bal.stacks.duration.fire * 2, 9);
+  });
+});

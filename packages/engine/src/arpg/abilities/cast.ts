@@ -29,7 +29,7 @@ export function canAfford(world: ArpgWorld, ab: ResolvedAbility): boolean {
  */
 export function lifeCost(h: HeroEntity, cost: number): number {
   const p = h.boon.bloodPrice ?? 0;
-  return p > 0 ? (cost / h.manaMax) * p * h.stats.maxHp : 0;
+  return p > 0 && h.manaMax > 0 ? (cost / h.manaMax) * p * h.stats.maxHp : 0;
 }
 
 /** Whether the slot's beat still runs at `t` (its next move waits for its end). */
