@@ -26,7 +26,7 @@ const blessed = (p: DelveProfile): DelveProfile => ({
 describe('save v10', () => {
   it('a dive starts with nothing used and no blessings; a world has nothing pending', () => {
     const p = diving();
-    expect(p.version).toBe(12);
+    expect(p.version).toBe(13);
     expect(p.dive).toMatchObject({ used: [], diveBuffs: [] });
     expect(emptyPending()).toMatchObject({ used: [], diveBuffs: [] });
   });
