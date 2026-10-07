@@ -4,8 +4,8 @@ import { buffSum } from '../src/delve/boons.js';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { BoonEffect, Buff } from '../src/types/boon.js';
-import { abilityHit } from '../src/arpg/abilities/impact.js';
-import { stepBonus } from '../src/arpg/abilities/resolve.js';
+import { abilityHit, knobHitOpts } from '../src/arpg/abilities/impact.js';
+import { NEUTRAL, stepBonus } from '../src/arpg/abilities/resolve.js';
 import {
   arena,
   bal,
@@ -154,5 +154,19 @@ describe('the damage path: per foe (combat.ts)', () => {
     expect(
       hitMonster(ctxOf(asleep), asleep.monsters[0], 100, null, { source: 'skill' }),
     ).toBeCloseTo(100, 9);
+  });
+});
+
+describe('stackTime (combat.ts applyStacks)', () => {
+  it('lengthens the stacks a hit applies; a hit carries the knob through knobHitOpts', () => {
+    expect(knobHitOpts({ ...NEUTRAL, stackTime: 0.3 }).stackTime).toBe(0.3);
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    const ctx = ctxOf(w);
+    const [m] = w.monsters;
+    const fire = { source: 'skill', applies: ['burn'], stacks: 1 } as const;
+    hitMonster(ctx, m, 10, 'fire', { ...fire, applies: [...fire.applies] });
+    expect(m.status.stackUntil.fire).toBeCloseTo(w.t + bal.stacks.duration.fire, 9);
+    hitMonster(ctx, m, 10, 'fire', { ...fire, applies: [...fire.applies], stackTime: 0.5 });
+    expect(m.status.stackUntil.fire).toBeCloseTo(w.t + bal.stacks.duration.fire * 1.5, 9);
   });
 });

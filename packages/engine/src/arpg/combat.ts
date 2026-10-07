@@ -76,6 +76,8 @@ export interface HitOpts {
   stacks?: number;
   /** An echo's hit: its `hit` event says so (see the boons spec's 8). */
   echo?: true;
+  /** The stacks it applies last × (1 + this) (the `stackTime` knob; see the boons spec §3). */
+  stackTime?: number;
 }
 
 /** The status each element's hits apply: its stacks (Earth's `stagger` only from an Earth source). */
@@ -158,13 +160,14 @@ function applyStacks(
   n: number,
   ref: number,
   slot: number | undefined,
+  time = 0,
 ): void {
   const s = m.status;
   const t = ctx.world.t;
   const active = s.stacks[element] > 0;
   if (!active && n <= 0) return;
   s.stacks[element] = Math.min(stackCap(ctx, element), s.stacks[element] + Math.max(0, n));
-  s.stackUntil[element] = t + ctx.bal.stacks.duration[element];
+  s.stackUntil[element] = t + ctx.bal.stacks.duration[element] * (1 + time);
   if (element === 'fire') {
     if (!active) s.burnTickAt = t + 0.5;
     if (!active || ref >= s.burnRef) {
@@ -263,6 +266,7 @@ function addStatus(
   rattles: boolean | undefined,
   slot: number | undefined,
   n: number,
+  time = 0,
 ): void {
   const st = ctx.bal.status;
   const t = ctx.world.t;
@@ -273,12 +277,12 @@ function addStatus(
   // The element's stacks; a stagger's Earth stacks only from an Earth source (immunity doesn't refuse them).
   if (element && (status !== 'stagger' || rattles)) {
     const perStack = element === 'fire' ? st.burnDps : element === 'nature' ? st.poisonDps : 0;
-    applyStacks(ctx, m, element, n, hitAmount * perStack, slot);
+    applyStacks(ctx, m, element, n, hitAmount * perStack, slot, time);
   }
   switch (status) {
     case 'freeze':
       // Glacier: frost up to the threshold, so the hit crosses it.
-      applyStacks(ctx, m, 'frost', ctx.bal.stacks.freezeAt - s.stacks.frost, 0, slot);
+      applyStacks(ctx, m, 'frost', ctx.bal.stacks.freezeAt - s.stacks.frost, 0, slot, time);
       break;
     case 'stagger':
       if (t < s.staggerImmuneUntil) break;
@@ -694,7 +698,8 @@ export function hitMonster(
   // hit saw (on entry, or right after the pairs came off: 3 → 0 → 3 crosses, 2 → 0 → 2 doesn't).
   const applies = opts.applies ?? [];
   const own = element ? BASIC_STATUS[element] : null;
-  const add = (s: StatusId) => addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k);
+  const add = (s: StatusId) =>
+    addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k, opts.stackTime);
   if (own && applies.includes(own)) add(own);
   if (element && pair) consumePairs(m, element, pair.partner, pair.n, pair.def.id);
   const frostLow = Math.min(frostBefore, stacks.frost);

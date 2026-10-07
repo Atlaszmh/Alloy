@@ -221,9 +221,19 @@ export interface ImpactOpts {
   through?: boolean;
 }
 
-/** The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes spec). */
-export function knobHitOpts(k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit'> {
-  return { leech: k.lifesteal, catalyst: k.catalyst, manaOnHit: k.manaOnHit };
+/**
+ * The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes
+ * spec), and the boons' stack time.
+ */
+export function knobHitOpts(
+  k: Knobs,
+): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit' | 'stackTime'> {
+  return {
+    leech: k.lifesteal,
+    catalyst: k.catalyst,
+    manaOnHit: k.manaOnHit,
+    stackTime: k.stackTime,
+  };
 }
 
 /**
