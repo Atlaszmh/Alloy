@@ -722,7 +722,7 @@ const CountPowerSchema = z
   .strict();
 
 /** Partial ability knobs (`KnobsData`); `.strict()` rejects misspelled knob names. */
-const KnobsSchema = z
+export const KnobsSchema = z
   .object({
     power: z.number().positive(),
     area: z.number().positive(),
@@ -1486,6 +1486,7 @@ const DelveBalanceSchema = z.object({
   layout: LayoutBalanceSchema,
   ai: AiBalanceSchema,
   terrain: TerrainBalanceSchema,
+  boons: BoonsBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
     // The open room's grid: whole cells.

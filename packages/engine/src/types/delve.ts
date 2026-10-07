@@ -6,7 +6,7 @@ import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
 import type { AiBalance, LayoutBalance, LayoutsData, TerrainBalance } from './floor-map.js';
-import type { BoonOffer, Buff } from './boon.js';
+import type { BoonOffer, BoonsBalance, Buff } from './boon.js';
 import type { TutorialState } from './tutorial.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
@@ -662,6 +662,8 @@ export interface DelveBalance {
   ai: AiBalance;
   /** Cover, foliage, slow ground, crumbling structures, props and hazards (see the room objects spec). */
   terrain: TerrainBalance;
+  /** A stop's boons: its cards and their tier odds by depth (see the boons spec). */
+  boons: BoonsBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;
