@@ -278,9 +278,16 @@ export function baseCost(ab: ResolvedAbility): number {
   return ab.cost / (1 + ab.load);
 }
 
-/** The step bonus of the move at `index`: its power and size factors. */
-export function stepBonus(bal: DelveBalance, index: number): { power: number; size: number } {
-  const b = bal.chains.stepBonus * index;
+/**
+ * The step bonus of the move at `index`: its power and size factors. `extra`
+ * adds to `chains.stepBonus` (a boon's, Closer: the boons spec §2).
+ */
+export function stepBonus(
+  bal: DelveBalance,
+  index: number,
+  extra = 0,
+): { power: number; size: number } {
+  const b = (bal.chains.stepBonus + extra) * index;
   return { power: 1 + b, size: 1 + b / 2 };
 }
 

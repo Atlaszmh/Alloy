@@ -30,7 +30,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
   const t = world.t;
   const p = aimPoint(ctx, ab, aim);
   if (!p) return { ok: false, tx: h.x, ty: h.y };
-  const { power, size } = stepBonus(ctx.bal, ab.index);
+  const { power, size } = stepBonus(ctx.bal, ab.index, h.boon.stepBonus);
   const hit = abilityHit(ctx, ab) * power;
   const heft = stepHeft(ab);
   let dir = dirTo(h.x, h.y, p.x, p.y);

@@ -149,7 +149,7 @@ function fire(
   });
   if (ab.motion < 0) {
     const d = dirTo(h.x, h.y, res.tx, res.ty);
-    const size = stepBonus(bal, ab.index).size;
+    const size = stepBonus(bal, ab.index, h.boon.stepBonus).size;
     if (d.x !== 0 || d.y !== 0)
       startPush(ctx, 'step', { x: -d.x, y: -d.y }, -ab.motion * size, bal.feel.recoilSeconds);
   }
@@ -238,7 +238,10 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   if (ab.motion > 0 && (dir.x !== 0 || dir.y !== 0)) {
     const stop = nearestMonster(ctx, at.x, at.y, 1.5);
     // Never past the aim point, where the form would re-aim from and turn round.
-    const reach = Math.min(ab.motion * stepBonus(bal, ab.index).size, dist(h.x, h.y, at.x, at.y));
+    const reach = Math.min(
+      ab.motion * stepBonus(bal, ab.index, h.boon.stepBonus).size,
+      dist(h.x, h.y, at.x, at.y),
+    );
     startPush(ctx, 'stepIn', dir, reach, ab.conjure, stop?.id ?? null);
   }
   ctx.events.push({ kind: 'windup', slot, until: h.windup.until, heft: stepHeft(ab) });
