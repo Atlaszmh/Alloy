@@ -64,7 +64,7 @@ interface Buff { boon: BoonId; tier: 1 | 2 | 3; effect: BoonEffect }
 | `tempo` | tempo × (1 − x) per entry, the product floored at 0.5 (shorter beats, faster holds) | `applyBuffs` (`HeroStats.tempo`) |
 | `lifesteal` | added to `HeroStats.lifesteal` | `applyBuffs` |
 | `attune` | `{ role: 'primary' \| 'secondary', points }`, added to that element of the pair | `profileStats` (section 2a), never `applyBuffs` |
-| `knobs` | a `KnobsData` partial, ability moves only | `resolveAbility` (section 2a) |
+| `knobs` | a `KnobsData` partial, on ability moves and basic blows | `computeHeroStats` for the blows, `resolveAbility` for the moves (section 2a) |
 | `byKind` | `{ light?, medium?, heavy?, hold? }`, extra damage by the blow's or move's kind | `impact.ts` |
 | `firstMove` | extra damage on a chain's first move | `impact.ts` |
 | `stepBonus` | added to `delve.chains.stepBonus` | `resolve.ts` (`ResolvedChain.stepBonus`) |
@@ -101,7 +101,11 @@ interface Buff { boon: BoonId; tier: 1 | 2 | 3; effect: BoonEffect }
 
 ### 2a. Knobs and attunement
 
-**Knobs reach ability moves only.** `applyBuffs` copies each entry's `knobs` onto `HeroStats.boonKnobs: KnobsData[]`, which `computeHeroStats` sets to `[]`, so the sandbox and the DPS Lab need no change. `resolveAll` in `world.ts` already runs on the buffed stats (after `applyBuffs`, at floor start and in `refreshWorldHero`), and `resolveAbility` appends `stats.boonKnobs` to the partials it hands `mergeKnobs`, beside the legendaries'. So each entry merges by `mergeKnobs`'s own rule: `lifesteal`, `stacksBonus`, `catalyst` and `stackTime` add, `quick.*` multiply, `echo` takes the largest of the move's runes and every boon entry. Basic blows never take boon knobs: an Echo on every blow would change the attack's feel and cost.
+**Knobs reach ability moves and basic blows.** Boons with knobs are dive boons only (no shrine carries one), so they go in where the stats are built. `diveStats` passes the dive entries' knob partials as `HeroStatsExtra.boonKnobs: KnobsData[]` (default `[]`, so the sandbox, the DPS Lab, Power and `profileStats` see none). `computeHeroStats` does two things with them:
+- It merges them into each basic blow's knobs beside the blow's socketed runes (hero-stats.ts, where a blow's `knobs` is `mergeKnobs(...socketed.knobs)`).
+- It keeps them on `HeroStats.boonKnobs` for the moves. `resolveAll` in `world.ts` resolves on those stats, and `resolveAbility` appends `stats.boonKnobs` to the partials it hands `mergeKnobs`, beside the legendaries'.
+
+`applyBuffs` passes `boonKnobs` through untouched. Each entry merges by `mergeKnobs`'s own rule: `lifesteal`, `stacksBonus`, `catalyst` and `stackTime` add; `quick.*` multiply; `echo` takes the largest of the runes' and every boon entry's. A knob a blow has no use for does nothing there: `quick.cooldown` on a blow, which has no cooldown, so Swift Hands is the abilities' alone. A blow's boon knobs are not runes: they put nothing in `HeroBlow.runes`, so the HUD's rune dots and the builder's dormant marks are unchanged.
 
 **Attunement** goes in before stats exist, and only in the fight. A new `diveStats(registry, profile)` (`delve/pair.ts`) is `profileStats` plus the summed `attune` points of `profile.dive?.diveBuffs`, passed as `HeroStatsExtra.attunement` (each role resolved against `profile.pair`; a secondary while unbound goes to the primary; `pairExtra` gains an optional attunement argument). That is the path the Training Grounds' extra attunement takes, so blows' `attunePower`, masteries, the pool and the rune ease all see it. Only `beginFloor` and `refreshWorldHero`'s callers (`takeAlcove`, the store's refresh) switch to `diveStats`. `profileStats` is unchanged, so the forge's roll floor, `overtakeProgress`, Power and `compareItem` never see a boon. `applyBuffs` ignores `attune`.
 
@@ -134,7 +138,7 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Quickstep | tempo | 2 | beats and holds 8% faster | 12% | 18% | `tempo` | |
 | Swift Hands | tempo | 2 | ability cooldowns −8% | −12% | −18% | `knobs.quick.cooldown` 0.92 / 0.88 / 0.82 (no power cut, unlike the Quick rune) | |
 | Free Cast | tempo | 1 | an ability within 1.5 s of a dodge is free | same, +10% damage | same, +25% damage | `freeCast` { 1.5, 0 / 0.1 / 0.25 } | 3 |
-| Echo | tempo | 1 | abilities echo at 15% at least | 25% | 40% | `knobs.echo` (the largest of it and the move's runes) | 5 |
+| Echo | tempo | 1 | attacks and abilities echo at 15% at least | 25% | 40% | `knobs.echo` (the largest of it and the move's or blow's runes) | 5 |
 | Overflow | tempo | 2 | +20% mana regen | +35% | +50% | `manaRegen` | |
 | Magpie | fortune | 2 | +25 Find | +40 | +60 | `find` | |
 | Wide Net | fortune | 1 | magnet +40% | +70% | +100% | `magnet` | |
@@ -229,9 +233,11 @@ Family colours (ENDESGA 32, in `stop/boon-style.ts`): offense red, element viole
 - `delve-boons-data.test.ts`: `boonsProblems` is empty on the shipped data and catches a bad knob key, a bad element role, a cap of 4, a family with no stop row, and a stop row whose three tiers are identical.
 - `delve-boons.test.ts`: `rollBoons` offers 3 distinct families, is deterministic per seed, never offers a capped boon, honours `minDepth`, falls back a tier when a tier is empty, bumps a tier under a door's `boons`; `buffSum` adds across entries and tiers.
 - `delve-stops.test.ts` (extend): `takeStop` with `boon` pushes the entry, spends nothing, marks taken, refuses a second take and a power-up action; a guided stop still offers power-ups and takes them; `alcoveOffers` and `takeAlcove` unchanged.
-- One short test per field at its site, in the file that owns the site's tests: `applyBuffs` (damage per entry, maxLife floor, tempo floor, lifesteal, bloodPrice's regen, `boonKnobs`), `profileStats` (attune by role reaches a blow's `attunePower`), resolve (two Swift Hands entries multiply; Echo takes the larger of a rune and a boon; blows carry no boon knob), dodge (charges, window, perfectAlways), impact (byKind, firstMove, lowLife, nearFoes), cast (free cast and its damage, the life cost and its refusal), defend (duration), combat (last stand once a floor), interact (heal on clear, `shrinesLastDive`), drops (metalUp, flux, runes, scrap, gear), spawn (eliteChance), `settleDive` (deathLoss; buffs left on the settled dive), `chooseDoor` (skip consumed), fog (exitRevealed), terrain (noSlow), objects (hazardsFriendly), stacks (`stackTime`).
+- One short test per field at its site, in the file that owns the site's tests: `applyBuffs` (damage per entry, maxLife floor, tempo floor, lifesteal, bloodPrice's regen, `boonKnobs`), `profileStats` (attune by role reaches a blow's `attunePower`), resolve (two Swift Hands entries multiply; Echo takes the larger of a rune and a boon; a blow merges its runes' and the boons' knobs; a blow's `runes` list stays its sockets'; `profileStats` and the sandbox carry no boon knob), dodge (charges, window, perfectAlways), impact (byKind, firstMove, lowLife, nearFoes), cast (free cast and its damage, the life cost and its refusal), defend (duration), combat (last stand once a floor), interact (heal on clear, `shrinesLastDive`), drops (metalUp, flux, runes, scrap, gear), spawn (eliteChance), `settleDive` (deathLoss; buffs left on the settled dive), `chooseDoor` (skip consumed), fog (exitRevealed), terrain (noSlow), objects (hazardsFriendly), stacks (`stackTime`).
 - Shrines: over 20 seeds and six depths, every generated floor's sanctum holds the same shrine id as before the change (pinned from the current code), and the tutorial floor's shrine is still Vigor.
 - Profile schema: a v12 save resets; v13 round-trips a dive with boons and a `boons` stop.
+
+**Performance:** see section 8.
 
 **Engine, pacing** (at the close, over 16 seeds, read before tuning): `delve-pacing.test.ts`, `delve-pacing-robust.test.ts`, `delve-pacing-pairs.test.ts`, `delve-tutorial-bot.test.ts`, `delve-maps-sweep.test.ts`. If a rail moves, tune the boon tiers' numbers first, then `tierWeights`, then the alcoves' `kindWeights`. Never the rails. Record the measured numbers in CLAUDE.md as the other systems do.
 
@@ -246,6 +252,34 @@ Family colours (ENDESGA 32, in `stop/boon-style.ts`): offense red, element viole
 - `e2e/fixtures/delve.ts`'s `toRoad` skips either kind of step.
 - `delve-type.spec.ts` TY02: the tile's count at the floor.
 - `delve-tutorial.spec.ts` unchanged: the guided stops keep their cards.
+
+## 8. Performance
+
+Boons add hits: Echo doubles the blows and moves it rides, Pack Breaker and Hunted bring bigger fights, and a boon's knobs stack on a build's runes (Echo with Split and Multi-shot on a Volley). This section measures where that costs and fixes what the measurement shows.
+
+**Measured** (2026-10-07, a throwaway harness: the bot on generated floors at depths 8 and 20, 6 seeds each, 90 s a floor, an unkillable starter hero, Echo 0.4 forced on every blow and move against none):
+
+| Depth | Echo | Sim µs a step | Worst step | Hits | Events |
+|---|---|---|---|---|---|
+| 8 | none | 93.7 | 2.0 ms | 2368 | 4510 |
+| 8 | 0.4 | 93.5 | 2.0 ms | 2767 | 5294 |
+| 20 | none | 96.0 | 3.9 ms | 2953 | 4393 |
+| 20 | 0.4 | 92.4 | 3.8 ms | 4137 | 6203 |
+
+The sim isn't the cost: a step is under 0.1 ms of its 33 ms tick, with or without Echo. What grows is the events, by up to 41%, and every event lands on the client. The client already caps most of what an event makes: mana particles (500), the pixel floor's particles (7000) and stamps (8), floating numbers (45, pooled), infusion draws (600 a frame), and each sound's own throttle. Two things are uncapped and fire per hit:
+
+1. **Hit-stop and camera kick.** `hitstopMs` freezes the display on every heavy hit, and an echo of a heavy blow freezes it again 0.4 s later. That stutters as well as costs: a heavy echo reads as a second, weaker hit, not a second impact.
+2. **The hit's pixel-floor and mana-fx moments.** These are capped in total but not per frame, so a burst of echoes can spend the whole budget in one frame and starve the next real hit's effect.
+
+**The changes:**
+- The engine's `hit` event gains `echo?: true`, set where a hit comes from an echo (`landBlow`'s `echo` option, an ability's `replay`). Its numbers and its gameplay don't change.
+- On the client, an echo hit never starts hit-stop or a camera kick (`fx/hitstop.ts`, the shake), and plays its hit sound at half volume through the same throttle.
+- The mana-fx and pixel-floor hit moments take a per-frame budget, `HIT_FX_BUDGET` (`fx/mana-fx.ts`, alongside `INFUSION_BUDGET`). Real hits draw first and echo hits only from what is left; a hit over the budget draws its floating number and nothing else. The starting number is 24 hit moments a frame, tuned by the check below.
+
+**The check:**
+- **Engine:** `tests/delve-sim-perf.test.ts`, skipped unless `SIM_PERF` is set, as the two-build gate is. It runs the harness above on the worst case boons make: a build with Echo III, Split III and Multi-shot III on its Primary and blows, against a Hunted floor at depth 20. It prints µs a step and events a second. It asserts only that the worst step stays under 8 ms (a quarter of a tick); wall-clock means aren't asserted.
+- **Client:** a dev-only frame readout in the Training Grounds bar (`FrameChip`, dev builds only, beside the DPS Lab button): the 95th-percentile frame time over the last 5 s. The Training Grounds can stand the worst case today, with any rune at any tier and a pack of foes.
+- **The plan's last task is a manual check:** that build against 12 foes at 1920×1080, Effects at 100%, with and without the budget. The numbers go into this section and into CLAUDE.md. The target is a 95th-percentile frame at or under 16.7 ms on the dev machine. If it misses, profile before tuning: lower `HIT_FX_BUDGET` first, then the per-sound throttles. Never cut gameplay hits.
 
 ## Out of scope
 
