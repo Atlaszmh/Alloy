@@ -13,6 +13,10 @@ export const ONBOARDING = {
   stop: 'Take one power-up, then choose your road: deeper, or home with the haul.',
 } as const;
 
+/** The stop's line on a boons stop (the boons spec, 6); its seen key stays `stop`. */
+export const BOON_HINT =
+  'Take a boon: it lasts the dive. Then choose your road: deeper, or home with the haul.';
+
 /** A screen with a first-visit hint. */
 export type OnboardingId = keyof typeof ONBOARDING;
 
