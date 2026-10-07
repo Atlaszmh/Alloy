@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { DataRegistry } from '../src/data/registry.js';
 import { rollBoons } from '../src/delve/boons.js';
+import { economySim } from '../src/delve/economy.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import type { BoonDef, BoonOffer, Buff } from '../src/types/boon.js';
+import { BOON_FAMILIES, type BoonDef, type BoonOffer, type Buff } from '../src/types/boon.js';
 import type { DiveState } from '../src/types/delve.js';
 import { bal, registry } from './fixtures/arena.js';
 
@@ -115,4 +116,19 @@ describe('rollBoons', () => {
     ).toEqual(['keen-edge', 'magpie']);
     expect(roll(at(8), 1, tuned([80, 18, 2], registry.getBoons().slice(0, 6)))).toEqual([]);
   });
+});
+
+describe("economySim's boons", () => {
+  it('counts the boons each dive took by family, every family, never a pact', () => {
+    const report = economySim(registry, 1, 2);
+    let total = 0;
+    for (const d of report.dives) {
+      expect(Object.keys(d.boons)).toEqual([...BOON_FAMILIES]);
+      expect(d.boons.pact).toBe(0);
+      for (const n of Object.values(d.boons)) expect(Number.isInteger(n) && n >= 0).toBe(true);
+      total += Object.values(d.boons).reduce((a, b) => a + b, 0);
+    }
+    expect(total).toBeGreaterThan(0); // seed 1 clears depths in its first dives
+    expect(structuredClone(report.dives)).toEqual(report.dives);
+  }, 30000);
 });

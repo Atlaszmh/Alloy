@@ -1,5 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { BoonFamily } from '../types/boon.js';
+import { BOON_FAMILIES, type BoonFamily } from '../types/boon.js';
 import type { DelveProfile, StopKind } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS, RARITY_ORDER, rarityIndex } from '../types/gear.js';
@@ -1144,6 +1144,7 @@ export function runAutopilot(
     let timedOut = 0;
     let result: AutopilotDiveReport['result'] = 'dead';
     let stops = emptyHaul();
+    const boons = Object.fromEntries(BOON_FAMILIES.map((f) => [f, 0])) as Record<BoonFamily, number>;
 
     while (p.dive && (p.dive.phase === 'fighting' || p.dive.phase === 'choosing')) {
       if (p.dive.phase === 'fighting') {
@@ -1160,6 +1161,8 @@ export function runAutopilot(
       if (guided) run?.stops.push(stop?.kind === 'powerups' ? stop.offers : []);
       p = guided ? takeGuidedStop(registry, p) : takeBestStop(registry, p);
       stops = addHaul(stops, outflow(before, p));
+      for (const b of p.dive!.diveBuffs.slice(before.dive!.diveBuffs.length))
+        boons[registry.getBoon(b.boon)!.family]++;
       if (guided?.extract) {
         p = extractDive(registry, p);
         result = 'extracted';
@@ -1211,6 +1214,7 @@ export function runAutopilot(
       quests: visit.quests,
       spent: visit.spent,
       stops,
+      boons,
       lost: dive.lost,
       forged,
       depth: dive.depth,
