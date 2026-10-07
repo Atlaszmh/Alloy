@@ -3,6 +3,9 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
 
+/** An echo's hit plays its sound at this share of the volume, through the sound's own throttle. */
+export const ECHO_GAIN = 0.5;
+
 /** A drop with a sound of its own: gear that is an upgrade as it comes (▲), or an essence. */
 export type LootCue = 'upgrade' | 'essence';
 
@@ -34,12 +37,19 @@ export function playArenaEvents(
   events: readonly ArpgEvent[],
   cues: Record<number, LootCue> = {},
 ): void {
-  for (const ev of events) {
-    switch (ev.kind) {
-      case 'hit':
+  // The frame's real hits first, then its echoes, so an echo never takes a real hit's cooldown.
+  for (const echo of [false, true])
+    for (const ev of events) {
+      if (ev.kind !== 'hit' || !!ev.echo !== echo) continue;
+      // An echo's hit: quieter, and no buzz (spec §8).
+      if (echo) playSound(ev.crit ? 'crit' : 'attack', ECHO_GAIN);
+      else {
         playSound(ev.crit ? 'crit' : 'attack');
         if (ev.crit) vibrate('light');
-        break;
+      }
+    }
+  for (const ev of events) {
+    switch (ev.kind) {
       case 'heroHit':
         if (ev.blocked) break; // Invulnerable: shown in grey, silent
         playSound(ev.dodged ? 'dodge' : 'heroHurt');
