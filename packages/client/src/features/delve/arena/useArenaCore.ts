@@ -8,6 +8,8 @@ import {
   basicStep,
   canAfford,
   chainMove,
+  dodgeMax,
+  dodgeRecharge,
   holdCharge,
   holdFull,
   hudMapOf,
@@ -341,7 +343,6 @@ export function snapshot(
   const t = world.t;
   const bal = getDelveRegistry().getDelveBalance();
   const comboWindow = bal.abilities.comboWindow;
-  const dodgeBal = bal.dodge;
   const boss =
     world.bossId !== null ? world.monsters.find((m) => m.id === world.bossId) : undefined;
   // Only a channel or a hold dims the buttons: a conjure is anticipation in the arena, like any other.
@@ -404,9 +405,9 @@ export function snapshot(
     }),
     busy,
     dodgeCharges: h.dodgeCharges,
-    dodgeMax: dodgeBal.charges,
+    dodgeMax: dodgeMax(bal, h.boon),
     dodgeRefill:
-      h.dodgeRechargeAt > 0 ? Math.max(0, 1 - (h.dodgeRechargeAt - t) / dodgeBal.recharge) : 1,
+      h.dodgeRechargeAt > 0 ? Math.max(0, 1 - (h.dodgeRechargeAt - t) / dodgeRecharge(bal, h.boon)) : 1,
     riposte: t < h.riposteUntil,
     basicChainStep: blow,
     basicChainLength: h.stats.weapon.blows.length,
