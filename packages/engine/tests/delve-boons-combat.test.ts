@@ -6,6 +6,7 @@ import { dodgeMax, dodgeRecharge, perfectOrigin, refundDodgeCharge } from '../sr
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { BoonEffect, Buff } from '../src/types/boon.js';
 import { canAfford, lifeCost } from '../src/arpg/abilities/cast.js';
+import { guardLand } from '../src/arpg/abilities/defend.js';
 import { abilityHit, knobHitOpts } from '../src/arpg/abilities/impact.js';
 import { NEUTRAL, stepBonus } from '../src/arpg/abilities/resolve.js';
 import {
@@ -358,5 +359,53 @@ describe('Last Stand (combat.ts hurtHero)', () => {
     h.hp = 0.5 * max;
     hurt(0.4); // crosses again: once a floor
     expect(hurt(0.02)).toBeCloseTo(0.02, 9);
+  });
+});
+
+describe("Hunted's gear chance (combat.ts dropLoot)", () => {
+  it("gear multiplies an elite's gear chance", () => {
+    const items = (gear: number) => {
+      const w = wear(arena([{ ...dummy(13, 30), kind: 'elite', hp: 1 }], { noBasic: true }), {
+        gear,
+      });
+      hitMonster(ctxOf(w), w.monsters[0], 100, null, { source: 'skill' });
+      return w.drops.filter((d) => d.kind === 'item').length;
+    };
+    // `drops.elite.gearChance` is 0.5: × 2 always, × 0 never.
+    expect([items(2), items(0)]).toEqual([1, 0]);
+  });
+});
+
+describe('a floor-long barrier (Stone Skin)', () => {
+  const floorBarrier = () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    w.hero.barrier = { hp: 1000, max: 1000, until: Infinity };
+    return w;
+  };
+
+  /** Set off Obsidian (fire onto earth) under a barrier of `hp`; its `until` after. */
+  const obsidian = (hp: number) => {
+    const w = floorBarrier();
+    w.hero.barrier!.hp = hp;
+    const [m] = w.monsters;
+    m.status.stacks.earth = 1;
+    m.status.stackUntil.earth = 1e9;
+    hitMonster(ctxOf(w), m, 10, 'fire', { source: 'skill', stacks: 1 });
+    return w.hero.barrier!.until;
+  };
+
+  it('Obsidian, smaller or larger, keeps it floor-long', () => {
+    expect(obsidian(1000)).toBe(Infinity); // smaller: extends
+    expect(obsidian(1e-6)).toBe(Infinity); // larger: replaces
+  });
+
+  it('Guard, larger, takes it over and keeps it floor-long; on a timed barrier it times as before', () => {
+    const w = floorBarrier();
+    w.hero.barrier!.hp = 1;
+    guardLand(ctxOf(w), { ...NEUTRAL, guardOnLand: 0.5 });
+    expect(w.hero.barrier).toMatchObject({ hp: w.hero.stats.maxHp * 0.5, until: Infinity });
+    w.hero.barrier = { hp: 1, max: 1, until: w.t + 1 };
+    guardLand(ctxOf(w), { ...NEUTRAL, guardOnLand: 0.5 });
+    expect(w.hero.barrier!.until).toBeCloseTo(w.t + bal.runes.guardSeconds, 9);
   });
 });

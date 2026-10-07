@@ -458,9 +458,11 @@ function react(
     case 'obsidian': {
       // The larger barrier wins; a smaller one only extends it.
       const hp = Math.min(amount * r.obsidianSoak, h.stats.maxHp * r.obsidianCap);
-      if (!h.barrier || hp > h.barrier.hp)
-        h.barrier = { hp, max: hp, until: t + r.obsidianDuration };
-      else h.barrier.until = t + r.obsidianDuration;
+      // Never shorter: a floor-long barrier (Stone Skin) stays so, replaced or extended.
+      if (!h.barrier || hp > h.barrier.hp) {
+        const until = h.barrier?.until === Infinity ? Infinity : t + r.obsidianDuration;
+        h.barrier = { hp, max: hp, until };
+      } else h.barrier.until = Math.max(h.barrier.until, t + r.obsidianDuration);
       return amount;
     }
     case 'lightning_rod':
@@ -884,7 +886,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
         {
           depth: world.depth,
           kind: m.kind,
-          gear: world.door?.mods.gear ?? 1,
+          // Hunted (a boon) multiplies it too.
+          gear: (world.door?.mods.gear ?? 1) * (world.hero.boon.gear ?? 1),
           ...(den && { gearBonus: bal.drops.den.gearBonus }),
           nextUid: loot.nextUid,
           biomeMana: world.element,
