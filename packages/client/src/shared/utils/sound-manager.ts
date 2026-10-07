@@ -435,7 +435,7 @@ export class SoundManager {
   }
 
   /** Load individual audio files for all registry entries that have `files`. */
-  loadFiles(basePath = '/assets/audio/sfx/'): void {
+  loadFiles(basePath = `${import.meta.env.BASE_URL}assets/audio/sfx/`): void {
     if (this.howls.size > 0) return; // Already loaded
     // Pre-compute total to avoid race between onload callbacks and loop
     let pending = 0;

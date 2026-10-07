@@ -1,18 +1,18 @@
 RewriteEngine On
-RewriteBase /
+RewriteBase /alloy/
 RewriteRule ^index\.html$ - [L]
 
 # SPA fallback: every route serves index.html
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule . /index.html [L]
+RewriteRule . /alloy/index.html [L]
 
 <IfModule mod_headers.c>
   # HTML and unhashed files (sprite atlas, public/) revalidate; Vite's hashed assets cache for a year
   <FilesMatch "\.(html|json|png)$">
     Header set Cache-Control "public, max-age=300"
   </FilesMatch>
-  <If "%{REQUEST_URI} =~ m#^/assets/#">
+  <If "%{REQUEST_URI} =~ m#^/alloy/assets/#">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </If>
 </IfModule>
