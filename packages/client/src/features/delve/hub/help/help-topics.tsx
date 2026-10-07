@@ -68,8 +68,9 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
           )}
           <p>
             Your hero attacks whatever is in reach and builds mana (or attack by hand: switch it in
-            Controls). {g('dodge')} dodges: dodge through a blow just as it lands for a{' '}
-            <b className="text-[var(--k-hot-hi)]">PERFECT</b>, and your next hit crits and staggers.
+            Controls). {g('dodge')} dodges: keep steering as you dash to curve it, and dodge through
+            a blow just as it lands for a <b className="text-[var(--k-hot-hi)]">PERFECT</b>, and
+            your next hit crits and staggers.
           </p>
         </>
       )}
@@ -122,8 +123,8 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
         <p>
           Between depths, push deeper or <b className="text-[var(--k-hot)]">extract</b> to bring the
           dive home: each depth you clear banks its haul. Die and you lose the floor's haul and{' '}
-          {loss} of what the dive banked; the gear and patterns you pick up are always yours.
-          Each stop offers three boons. Take one: it lasts the dive, and some stack.
+          {loss} of what the dive banked; the gear and patterns you pick up are always yours. Each
+          stop offers three boons. Take one: it lasts the dive, and some stack.
         </p>
       )}
     </div>

@@ -236,6 +236,8 @@ export class ArenaRenderer {
   private dying: Dying[] = [];
   private heroFlashUntil = 0;
   private heroPerfectUntil = 0;
+  /** Where the dodge's streak was last drawn to, while one runs. */
+  private dashTrail: Vec | null = null;
   private aim: AimView | null = null;
   /** Alt or L3 held: every drop's loot label shows. */
   private labelsHeld = false;
@@ -668,19 +670,19 @@ export class ArenaRenderer {
               progress: 0,
             });
           break;
-        case 'dodge': {
-          const reach = getDelveRegistry().getDelveBalance().dodge.distance;
+        case 'dodge':
+          // The kick-off; the steered path draws itself as it goes (`syncHero`'s trail).
           this.fx.bolt(
             [
+              { x: e.fromX - e.dirX * 0.4, y: e.fromY - e.dirY * 0.4 },
               { x: e.fromX, y: e.fromY },
-              { x: e.fromX + e.dirX * reach, y: e.fromY + e.dirY * reach },
             ],
             0xe7e5e4,
             0.18,
           );
           this.fx.burst(e.fromX, e.fromY + 0.3, 0xd6d3d1, 6, 2.5);
+          this.dashTrail = { x: e.fromX, y: e.fromY };
           break;
-        }
         case 'perfectDodge':
           this.heroPerfectUntil = this.time + 0.3;
           this.floatText(e.x, e.y - 1.6, 'PERFECT', 0xfde047, 28, {
@@ -873,8 +875,14 @@ export class ArenaRenderer {
   private syncHero(w: ArpgWorld): void {
     const h = w.hero;
     const aura = MANA_HEX[h.stats.weapon.blows[0].element];
-    // Dust kicked up along a dodge.
-    if (h.dodge && w.t < h.dodge.until) this.fx.burst(h.x, h.y + 0.35, 0xd6d3d1, 1, 1.2);
+    // Dust kicked up along a dodge, and a streak behind it that follows its arc.
+    if (h.dodge && w.t < h.dodge.until) {
+      this.fx.burst(h.x, h.y + 0.35, 0xd6d3d1, 1, 1.2);
+      const from = this.dashTrail;
+      if (from && (from.x !== h.x || from.y !== h.y))
+        this.fx.bolt([{ ...from }, { x: h.x, y: h.y }], 0xe7e5e4, 0.22);
+      this.dashTrail = { x: h.x, y: h.y };
+    } else this.dashTrail = null;
     this.hero.position.set(h.x, h.y);
     this.hero.zIndex = h.y;
     this.hero.alpha = w.t < h.invulnUntil ? 0.55 : 1;

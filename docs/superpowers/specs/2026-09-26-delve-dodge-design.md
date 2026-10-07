@@ -114,3 +114,14 @@ A quick, tactical dodge with a few charges that refill over time. Short i-frames
 - the HUD shows the dodge button with its pips.
 
 **E2E:** `dodge-button` is visible in the arena on every device.
+
+## Addendum (v0.71.0): the steered dodge
+
+The dodge is longer and the player steers it, so it reads as a dash that skates on into a glide the player guides through the fight.
+
+- **Longer:** `dodge.distance` 3 → 4.5 units, `duration` 0.2 → 0.32 s. The i-frames (0.25 s) and the perfect window (0.15 s) are unchanged, so the glide's tail is open to hits.
+- **Eased:** the dash bursts out and slows into its end: progress `u + ease × u × (1 − u)` over the duration (`dashProgress`; `dodge.ease` 0.6, so it starts at 1.6× its mean speed and ends at 0.4×, about a walk's pace).
+- **Steered:** each tick the dash's heading (`HeroEntity.dodge.dir`) turns toward the steering by at most `dodge.steer` (9 rad/s) × the stick's tilt × dt (`steerToward`; exactly opposite turns left), and the hero faces it. The slice of each tick goes along that heading through `moveCircle`, so a wall takes the part against it and the dash slides along it. With no steering the dash runs straight, as before; it starts where it always did (the move, else away from the nearest foe, else the facing).
+- **Cancellable glide:** a press waits through the dash's commit, `dodge.cancelAfter` (0.25 s, the i-frames' end); past it, a waiting ability press whose slot is ready, or a waiting dodge with a charge, cuts the glide short (`cutGlide` in `heroTick`: `dodge.until` set to now) and fires that tick, so a dodge chains into a cast or a second dodge without waiting out the glide.
+- **Client:** the dodge event draws a short kick-off streak, and the renderer draws the streak along the hero's actual path while it dashes (`dashTrail` in `ArenaRenderer.syncHero`), so a curved dodge leaves a curved trail.
+- **Tests** (`tests/delve-dodge.test.ts`, "steering the dodge"): the first half of the time covers more than 60% of the distance; steering bends the dash into an arc of its full length; the turn is capped at `steer` and scaled by the tilt; a cast and a second dodge each cut the glide only after the commit.

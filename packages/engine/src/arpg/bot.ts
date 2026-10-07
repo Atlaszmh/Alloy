@@ -54,7 +54,12 @@ export function botInput(
   if (!world.map.open) bindTerrain(world.map, registry.getDelveBalance().terrain);
   const input = plainInput(registry, world, policy);
   if (!world.map.open) breakInWay(world, input);
-  return world.tutorial ? guided(registry, world, input) : input;
+  const out = world.tutorial ? guided(registry, world, input) : input;
+  // Mid-dash it holds its line (the steering would curve a dodge): one taken to escape a blow
+  // never bends back into it.
+  const d = world.hero.dodge;
+  if (d && world.t < d.until) out.move = { ...d.dir };
+  return out;
 }
 
 /**

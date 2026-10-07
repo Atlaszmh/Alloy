@@ -1442,11 +1442,18 @@ const DelveBalanceSchema = z.object({
       recharge: z.number().positive(),
       distance: z.number().positive(),
       duration: z.number().positive(),
+      // The glide's ease-out: 0 a steady dash; under 1, so it never stops before its end.
+      ease: z.number().min(0).lt(1),
+      // Radians a second the steering turns the dash.
+      steer: z.number().min(0),
+      // Seconds into the dash before a ready press cuts its glide short.
+      cancelAfter: z.number().min(0),
       iframes: z.number().positive(),
       perfectWindow: z.number().positive(),
       riposteWindow: z.number().positive(),
     })
-    .refine((d) => d.perfectWindow <= d.iframes, 'perfectWindow must fit inside iframes'),
+    .refine((d) => d.perfectWindow <= d.iframes, 'perfectWindow must fit inside iframes')
+    .refine((d) => d.cancelAfter <= d.duration, 'cancelAfter must fit inside duration'),
   feel: z.object({
     conjure: z.array(z.number().min(0)).length(5),
     conjureSlot: z.object({

@@ -642,6 +642,12 @@ export interface DelveBalance {
     recharge: number;
     distance: number;
     duration: number;
+    /** The glide's ease-out (0 a steady dash): it bursts out and slows into its end. */
+    ease: number;
+    /** Radians a second the steering turns the dash, so a dodge can be an arc. */
+    steer: number;
+    /** Seconds into the dash before a ready press (an ability, a dodge) cuts its glide short. */
+    cancelAfter: number;
     iframes: number;
     /** A hit this soon after the dodge starts is a perfect dodge. */
     perfectWindow: number;

@@ -15,7 +15,7 @@ function ctxOf(w: ArpgWorld) {
 }
 
 describe('the dodge', () => {
-  it('spends a charge and dashes about 3 units along the move direction', () => {
+  it('spends a charge and dashes its distance along the move direction', () => {
     const w = arena([], { noBasic: true });
     const events = dodge(w, { x: 1, y: 0 });
     expect(kinds(events)).toContain('dodge');
@@ -81,20 +81,83 @@ describe('the dodge', () => {
     expect(w.hero.mana).toBeLessThan(mana - 1);
   });
 
-  it('holds a cast pressed mid-dash until the dash ends', () => {
+  it('holds a cast pressed mid-dash through its commit, then the cast cuts the glide short', () => {
     const w = arena([dummy(13, 28)], { noBasic: true });
     dodge(w, { x: 1, y: 0 });
     expect(kinds(pressOnly(w, 0))).not.toContain('windup');
-    const end = w.hero.dodge!.until;
+    const { start, until } = w.hero.dodge!;
     for (let i = 0; i < 60 && !w.hero.windup; i++)
       stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
-    expect(w.hero.windup!.start).toBeGreaterThanOrEqual(end - 1e-9);
+    expect(w.hero.windup!.start).toBeGreaterThanOrEqual(start + D.cancelAfter - 1e-9);
+    expect(w.hero.windup!.start).toBeLessThan(until);
+    expect(w.hero.dodge!.until).toBe(w.hero.windup!.start);
+    const x = w.hero.x;
+    run(w, 0.1);
+    expect(w.hero.x).toBeCloseTo(x, 5);
   });
 
+  it('a second dodge pressed mid-dash chains once the commit passes', () => {
+    const w = arena([], { noBasic: true });
+    dodge(w, { x: 1, y: 0 });
+    const first = w.hero.dodge!;
+    const events = [...dodge(w, { x: 1, y: 0 })];
+    for (let i = 0; i < 30 && w.hero.dodge === first; i++)
+      events.push(...run(w, STEP, { x: 1, y: 0 }));
+    expect(kinds(events)).toContain('dodge');
+    expect(w.hero.dodge!.start).toBeLessThan(first.start + D.duration);
+    expect(w.hero.dodge!.start).toBeGreaterThanOrEqual(first.start + D.cancelAfter - 1e-9);
+  });
   it('a dodge tap between frames is not lost', () => {
     const w = arena([], { noBasic: true });
     stepWorld(registry, w, { move: { x: 0, y: 0 }, dodge: true }, STEP / 4);
     expect(kinds(stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP))).toContain('dodge');
+  });
+});
+
+describe('steering the dodge', () => {
+  it('bursts out and glides: the first half of the time covers most of the distance', () => {
+    const w = arena([], { noBasic: true });
+    dodge(w, { x: 1, y: 0 });
+    run(w, D.duration / 2, { x: 1, y: 0 });
+    expect(w.hero.x - 13).toBeGreaterThan(D.distance * 0.6);
+    run(w, D.duration);
+    expect(w.hero.x).toBeCloseTo(13 + D.distance, 1);
+  });
+
+  it('the steering bends the dash into an arc, its length kept', () => {
+    const w = arena([], { noBasic: true });
+    dodge(w, { x: 1, y: 0 });
+    const path: { x: number; y: number }[] = [{ x: w.hero.x, y: w.hero.y }];
+    while (w.t < w.hero.dodge!.until) {
+      run(w, STEP, { x: 0, y: -1 });
+      path.push({ x: w.hero.x, y: w.hero.y });
+    }
+    // It went right, then curved up: an arc, not a straight line or a snap.
+    expect(w.hero.x).toBeGreaterThan(13 + 1);
+    expect(w.hero.y).toBeLessThan(36 - 1);
+    let walked = 0;
+    for (let i = 1; i < path.length; i++)
+      walked += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+    // Its last tick hands off to the walk, which adds that tick's step.
+    expect(walked).toBeGreaterThan(D.distance - 0.05);
+    expect(walked).toBeLessThan(D.distance + 0.2);
+    expect(w.hero.facing.y).toBeLessThan(-0.9);
+  });
+
+  it('turns at most `steer` radians a second', () => {
+    const w = arena([], { noBasic: true });
+    dodge(w, { x: 1, y: 0 });
+    run(w, STEP, { x: -1, y: 0 });
+    const d = w.hero.dodge!.dir;
+    expect(Math.abs(Math.atan2(d.y, d.x))).toBeCloseTo(D.steer * STEP, 5);
+  });
+
+  it('a half-tilted stick turns it half as fast', () => {
+    const w = arena([], { noBasic: true });
+    dodge(w, { x: 1, y: 0 });
+    run(w, STEP, { x: 0, y: -0.5 });
+    const d = w.hero.dodge!.dir;
+    expect(Math.abs(Math.atan2(d.y, d.x))).toBeCloseTo(D.steer * STEP * 0.5, 5);
   });
 });
 

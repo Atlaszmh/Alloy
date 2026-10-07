@@ -123,8 +123,8 @@
       }
     },
     "dodge": {
-      "charges": 2, "recharge": 2.5, "distance": 3, "duration": 0.2, "iframes": 0.25,
-      "perfectWindow": 0.15, "riposteWindow": 1.5
+      "charges": 2, "recharge": 2.5, "distance": 4.5, "duration": 0.32, "ease": 0.6,
+      "steer": 9, "cancelAfter": 0.25, "iframes": 0.25, "perfectWindow": 0.15, "riposteWindow": 1.5
     },
     "feel": {
       "conjure": [0.04, 0.08, 0.14, 0.24, 0.38],

@@ -8,9 +8,13 @@ import { nearestMonster } from './abilities/targeting.js';
 import { cancelSwing, cancelWindup, dropHold } from './action.js';
 
 /**
- * The dodge: a short dash with i-frames, paid with charges that refill one at
- * a time. A monster attack that would have hit the hero early in the dodge is
- * a perfect dodge: the charge comes back and the next real hit is a riposte.
+ * The dodge: a dash with i-frames, paid with charges that refill one at a
+ * time. It bursts out fast and eases into a glide (`dodge.ease`), and the
+ * steering turns it as it goes, at most `dodge.steer` radians a second, so a
+ * dodge is an arc the player skates through the fight. A monster attack that
+ * would have hit the hero early in the dodge is a perfect dodge: the charge
+ * comes back and the next real hit is a riposte. Past `dodge.cancelAfter` a
+ * ready press (an ability or another dodge) cuts the glide short.
  */
 
 /** The hero's dodge charges: `dodge.charges` plus the boons' (the boons spec §2), at least 1. */
@@ -81,12 +85,32 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
 }
 
 /**
- * Refill charges and carry the dash: each tick on toward where its progress puts
- * it (so it always covers the full distance), swept from where the hero stands
- * (see the floor maps spec). Once a wall has held it back, each tick moves only
- * its own slice, so it never lurches on past a corner.
+ * How far along its distance a dodge is at `u`, its share of the duration:
+ * eased out (`ease` 0 is a steady dash), so it bursts out and glides to a stop.
  */
-export function dodgeTick(ctx: SimCtx, dt: number): void {
+export function dashProgress(ease: number, u: number): number {
+  const v = Math.min(1, Math.max(0, u));
+  return v + ease * v * (1 - v);
+}
+
+/** `dir` turned toward `want` by at most `max` radians (exactly opposite: turning left). */
+function steerToward(dir: Vec, want: Vec, max: number): Vec {
+  const cross = dir.x * want.y - dir.y * want.x;
+  const dot = dir.x * want.x + dir.y * want.y;
+  const a = Math.max(-max, Math.min(max, Math.atan2(cross, dot)));
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { x: dir.x * c - dir.y * s, y: dir.x * s + dir.y * c };
+}
+
+/**
+ * Refill charges and carry the dash: each tick its slice of the distance
+ * (eased, see `dashProgress`) along its heading, which the steering turns by
+ * up to `steer` radians a second (scaled by the stick's tilt), so the dash
+ * curves. Swept from where the hero stands (see the floor maps spec): a wall
+ * takes the part of a slice against it, and the dash slides along it.
+ */
+export function dodgeTick(ctx: SimCtx, dt: number, move: Vec = { x: 0, y: 0 }): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const t = world.t;
@@ -97,16 +121,29 @@ export function dodgeTick(ctx: SimCtx, dt: number): void {
   }
   const d = h.dodge;
   if (!d || t - dt >= d.until) return;
-  const at = (s: number) =>
-    Math.min(1, Math.max(0, (s - d.start) / bal.dodge.duration)) * bal.dodge.distance;
-  const k = at(t);
-  const slice = k - at(t - dt);
-  const tx = d.fromX + d.dir.x * k;
-  const ty = d.fromY + d.dir.y * k;
-  const late = Math.hypot(tx - h.x, ty - h.y) > slice + 1e-9;
-  const dx = late ? d.dir.x * slice : tx - h.x;
-  const dy = late ? d.dir.y * slice : ty - h.y;
-  Object.assign(h, moveCircle(world.map, h, h.radius, dx, dy));
+  const { distance, duration, ease, steer } = bal.dodge;
+  const at = (s: number) => dashProgress(ease, (s - d.start) / duration) * distance;
+  const v = clampLen(move);
+  const tilt = Math.hypot(v.x, v.y);
+  if (tilt > 0.05) {
+    d.dir = steerToward(d.dir, { x: v.x / tilt, y: v.y / tilt }, steer * tilt * dt);
+    h.facing = d.dir;
+  }
+  // A cut-short glide stops at its cut.
+  const slice = at(Math.min(t, d.until)) - at(t - dt);
+  Object.assign(h, moveCircle(world.map, h, h.radius, d.dir.x * slice, d.dir.y * slice));
+}
+
+/**
+ * A ready press waits past the dodge's commit (`dodge.cancelAfter`): the
+ * glide ends now, so the press fires this tick. True when it cut.
+ */
+export function cutGlide(ctx: SimCtx): boolean {
+  const { world, bal } = ctx;
+  const d = world.hero.dodge;
+  if (!d || !isDashing(ctx) || world.t < d.start + bal.dodge.cancelAfter) return false;
+  d.until = world.t;
+  return true;
 }
 
 /** Where the dodge began, while its perfect window is open and unused; else null. */

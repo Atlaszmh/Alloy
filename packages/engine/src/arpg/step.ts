@@ -49,7 +49,7 @@ import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic.js';
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
-import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
+import { cutGlide, dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 import { addMaterial } from '../loot/materials.js';
 import { clearanceOf, downhill, flowTick, homeWay, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
@@ -189,14 +189,26 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
       healHero(ctx, h.stats.maxHp * bal.dive.potionHeal, 'potion');
     }
   }
-  // The dash moves first; presses made during it wait for it to end.
-  dodgeTick(ctx, dt);
+  const t = world.t;
+  const window = bal.abilities.comboWindow;
+  const ready = (slot: number) =>
+    !!h.chains[slot] &&
+    !inBeat(h, slot, t) &&
+    t >= h.cooldowns[slot][pressStep(h, slot, t, window)];
+  // The dash moves first, steered; presses made during it wait for it to end, but past its
+  // commit a ready one (another dodge, or an ability whose slot is ready) cuts the glide short.
+  dodgeTick(ctx, dt, move);
+  if (
+    isDashing(ctx) &&
+    ((world.queuedDodge && h.dodgeCharges >= 1) ||
+      world.queuedCasts.some((q) => ready(q.cast.slot)))
+  )
+    cutGlide(ctx);
   if (world.queuedDodge && !isDashing(ctx)) {
     world.queuedDodge = false;
     tryDodge(ctx, move);
   }
   const dashing = isDashing(ctx);
-  const t = world.t;
   const busy = dashing || !!h.windup || !!h.hold;
   // The waiting presses (one per slot) wait out a wind-up, a hold, a dash, their slot's beat and
   // the tick a swing strikes without ageing: each gets `buffer` from then.
@@ -208,11 +220,6 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // Of those whose slot is ready (its beat over, its move off cooldown), the one pressed first
   // fires. One on cooldown stays (ageing) and fires if the cooldown ends in time. A swing
   // striking this tick lands first: the press waits a tick.
-  const window = bal.abilities.comboWindow;
-  const ready = (slot: number) =>
-    !!h.chains[slot] &&
-    !inBeat(h, slot, t) &&
-    t >= h.cooldowns[slot][pressStep(h, slot, t, window)];
   if (!busy && !striking) {
     // A repeat press never fires a hold move: once ready it's dropped (the held button charges
     // it), leaving the tick's one press to the next ready one.

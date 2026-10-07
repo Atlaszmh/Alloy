@@ -15,10 +15,12 @@ describe('the dodge', () => {
     w.hero.x = 10.5;
     dodge(w, { x: -1, y: -1 });
     run(w, 0.5);
-    // Up and to the left: held at the pillar until its rows are past, then one slice left.
-    expect(w.hero.x).toBeLessThan(10.4);
-    expect(w.hero.x).toBeGreaterThan(9.9);
-    expect(w.hero.y).toBeCloseTo(36 - 3 / Math.SQRT2, 9);
+    // Up and to the left: held at the pillar until its rows are past (the hero's bottom edge
+    // clears row 35 at y 34.5), then left only as far as it goes up from there: no catch-up.
+    const y = 36 - registry.getDelveBalance().dodge.distance / Math.SQRT2;
+    expect(w.hero.y).toBeCloseTo(y, 9);
+    expect(w.hero.x).toBeCloseTo(10.5 - (34.5 - y), 0);
+    expect(w.hero.x).toBeGreaterThan(10.5 - (34.5 - y) - 0.05);
   });
 });
 
