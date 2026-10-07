@@ -16,5 +16,7 @@ describe('the kit gallery (dev)', () => {
     expect(
       screen.getByRole('button', { name: 'Ember Fang, downgrade, locked, equipped' }),
     ).toBeInTheDocument();
+    // A boon card at each tier.
+    expect(screen.getAllByTestId('boon-card').map((c) => c.dataset.tier)).toEqual(['1', '2', '3']);
   });
 });

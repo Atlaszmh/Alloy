@@ -208,6 +208,23 @@ describe('delveStore', () => {
     expect(s().takeStop({ kind: 'equip', uid: 'x4' }).ok).toBe(false);
   });
 
+  // Phase D: remove the .skip once B1 has merged (Phase A's engine refuses every boon take).
+  it.skip("takes the stop's boon: free, worn on the dive, once", () => {
+    const s = () => useDelveStore.getState();
+    s().startDive(1);
+    const dive = { ...s().profile.dive!, phase: 'choosing' as const };
+    const before = { ...s().profile };
+    s().setProfile({
+      ...s().profile,
+      dive: { ...dive, stop: { kind: 'boons', offers: [{ id: 'keen-edge', tier: 2 }], taken: false } },
+    });
+    expect(s().takeStop({ kind: 'boon', index: 0 }).ok).toBe(true);
+    expect(s().profile.dive!.diveBuffs.at(-1)).toMatchObject({ boon: 'keen-edge', tier: 2 });
+    expect(s().profile.dive!.stop!.taken).toBe(true);
+    expect(s().profile.scrap).toBe(before.scrap);
+    expect(s().takeStop({ kind: 'boon', index: 0 }).ok).toBe(false);
+  });
+
   it('a reset takes a primary; without one the choice is still to make', () => {
     expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'fire', secondary: null });
     useDelveStore.getState().resetProfile(99);

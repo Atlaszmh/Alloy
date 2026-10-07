@@ -22,7 +22,8 @@ import { StopPanel } from '../StopPanel';
 import { TutorialPanel } from '../tutorial/TutorialPanel';
 import { SHOWN_AT } from '../tutorial/tutorial-view';
 import { DoorPane } from './DoorPane';
-import { useOnboarding } from '../onboarding';
+import { BoonCards } from './BoonCards';
+import { BOON_HINT, useOnboarding } from '../onboarding';
 
 /** A stop step's "Skip this step" (a stop has no beats): to the save. */
 const sendTutorial = (event: TutorialEvent): void =>
@@ -200,8 +201,9 @@ export interface StopScreenProps {
  * The stop between depths, over the dimmed arena, in two steps (the pad-first spec, 3). The
  * header, on both: "Depth N cleared", the risk line (the dive's banked haul and the share a death
  * loses), Hesta's strip on a guided stop, and the finds line, which A or a click opens as a sheet
- * of this floor's finds (an item in it opens the pause on that item). Step 1, while a power-up is
- * on offer: the cards (`StopPanel`, each expanding in place to its picker); A takes, X (or S)
+ * of this floor's finds (an item in it opens the pause on that item). Step 1, while the stop is
+ * untaken: a boons stop's three boons (`BoonCards`, the boons spec, 6), or a guided stop's
+ * power-ups (`StopPanel`, each expanding in place to its picker); A takes, X (or S)
  * skips, but not a guided stop's required one, which holds the step. Step 2: the roads
  * (`DoorPane`); B (or Backspace) goes back to the cards while nothing was taken. Each move between
  * the steps puts the focus on the new step's first control. There is no back at the top level:
@@ -230,11 +232,14 @@ export const StopScreen = memo(function StopScreen({
     return () => clearTimeout(t);
   }, []);
   const mainRef = useRef<HTMLDivElement>(null);
-  // The power-up cards (a boons stop's cards are the boons spec's C1; until then it goes to the road).
-  const stop = dive.stop?.kind === 'powerups' ? dive.stop : null;
+  // Step 1's cards: a boons stop's boons, or a guided stop's power-ups.
+  const stop = dive.stop;
   const offering = !!stop && !stop.taken;
+  const boons = stop?.kind === 'boons';
+  /** What step 1 offers, in the prompts and notes: "Boon" or "Power-up". */
+  const what = boons ? 'Boon' : 'Power-up';
   // A guided stop's required power-up holds step 1 (the engine refuses a door until it's taken).
-  const required = !!stop?.required && !stop.taken;
+  const required = stop?.kind === 'powerups' && !!stop.required && !stop.taken;
   /** X's move to the road; B undoes it while nothing was taken. */
   const [skipped, setSkipped] = useState(false);
   const step: 'powerup' | 'road' = offering && !skipped ? 'powerup' : 'road';
@@ -242,8 +247,9 @@ export const StopScreen = memo(function StopScreen({
   const runeCount = runes.reduce((n, r) => n + r.count, 0);
   const menuKey = useControlsStore((s) => s.config.keys.menu);
   const tutorial = useDelveStore((s) => s.profile.tutorial);
-  // A first stop's line rides Take; the picker marks it done (StopPanel's StopPicker).
-  const { hint } = useOnboarding('stop');
+  // A first stop's line rides Take; a take marks it done (StopPanel's StopPicker, BoonCards).
+  const { hint: stopHint } = useOnboarding('stop');
+  const hint = stopHint && (boons ? BOON_HINT : stopHint);
 
   // A move between the steps (a skip, a take, a back) puts the focus on the new step's first
   // control: the first card, or the first road. The first step's own first focus is the screen's.
@@ -260,7 +266,7 @@ export const StopScreen = memo(function StopScreen({
           { id: 'take', label: 'Take', binding: { mouse: 'click', pad: 'a' }, hint },
           {
             id: 'skip',
-            label: 'Skip power-up',
+            label: `Skip ${what.toLowerCase()}`,
             binding: { key: 'KeyS', pad: 'x' },
             onPress: () => setSkipped(true),
             disabled: !armed || required,
@@ -273,7 +279,7 @@ export const StopScreen = memo(function StopScreen({
             ? [
                 {
                   id: 'back',
-                  label: 'Power-ups',
+                  label: boons ? 'Boons' : 'Power-ups',
                   binding: { key: 'Backspace', pad: 'b' },
                   onPress: () => setSkipped(false),
                   disabled: !armed,
@@ -293,11 +299,11 @@ export const StopScreen = memo(function StopScreen({
   usePrompts([...prompts, menu], mainRef);
 
   const note = stop?.taken ? (
-    <span data-testid="stop-taken">Power-up taken.</span>
+    <span data-testid="stop-taken">{what} taken.</span>
   ) : skipped ? (
-    <span data-testid="stop-skipped">Power-up skipped.</span>
+    <span data-testid="stop-skipped">{what} skipped.</span>
   ) : !stop ? (
-    <span data-testid="stop-none">No power-up at this stop.</span>
+    <span data-testid="stop-none">Nothing on offer at this stop.</span>
   ) : null;
 
   return (
@@ -367,18 +373,22 @@ export const StopScreen = memo(function StopScreen({
           </button>
         </div>
         {step === 'powerup' ? (
-          <div
-            className="flex min-h-0 flex-1 flex-col gap-4"
-            data-tutorial="stop.powerup"
-            data-testid="stop-powerup"
-          >
-            {required && (
-              <span className="text-[18px] text-[var(--k-hot)]" data-testid="roads-held">
-                Take the power-up to go on
-              </span>
-            )}
-            <StopPanel stop={stop!} />
-          </div>
+          stop?.kind === 'boons' ? (
+            <BoonCards stop={stop} worn={dive.diveBuffs} />
+          ) : (
+            <div
+              className="flex min-h-0 flex-1 flex-col gap-4"
+              data-tutorial="stop.powerup"
+              data-testid="stop-powerup"
+            >
+              {required && (
+                <span className="text-[18px] text-[var(--k-hot)]" data-testid="roads-held">
+                  Take the power-up to go on
+                </span>
+              )}
+              {stop?.kind === 'powerups' && <StopPanel stop={stop} />}
+            </div>
+          )
         ) : (
           <section
             aria-label="Choose your road"

@@ -96,11 +96,12 @@ export async function startDive(page: Page): Promise<void> {
   await page.getByTestId('delve-button').click();
 }
 
-/** At a stop: past the power-up (Skip) to the road. Nothing to do when the stop opened there. */
+/** At a stop: skips the stop's step 1 (its boons or power-ups) to its road. Nothing to do when the stop opened there. */
 export async function toRoad(page: Page): Promise<void> {
   const stop = page.getByTestId('door-choice');
-  if (await stop.getByTestId('stop-powerup').isVisible())
-    await stop.getByRole('button', { name: 'Skip power-up' }).click();
+  // Step 1 is a boons stop's cards, or a guided stop's power-ups.
+  if (await stop.getByTestId('stop-powerup').or(stop.getByTestId('stop-boon')).isVisible())
+    await stop.getByRole('button', { name: /^Skip (power-up|boon)$/ }).click();
   await expect(stop.getByTestId('stop-road')).toBeVisible();
 }
 
