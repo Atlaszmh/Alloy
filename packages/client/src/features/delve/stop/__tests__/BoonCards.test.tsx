@@ -73,6 +73,11 @@ describe('a boon card', () => {
     expect(card).toHaveTextContent('Glass Cannon');
     expect(card).toHaveTextContent('+45% damage, −20% max life');
     expect(screen.queryByTestId('boon-taken')).toBeNull();
+    expect(
+      screen.getByRole('button', {
+        name: 'Glass Cannon, Pact, tier 3: +45% damage, −20% max life',
+      }),
+    ).toBe(card);
     fireEvent.click(card);
     expect(onTake).toHaveBeenCalledOnce();
   });
@@ -91,6 +96,9 @@ describe('a boon card', () => {
       />,
     );
     expect(screen.getByTestId('boon-taken')).toHaveTextContent('Taken 2 of 3');
+    expect(screen.getByTestId('boon-card')).toHaveAccessibleName(
+      'Keen Edge, Offense, tier 1: +10% damage. Taken 2 of 3',
+    );
     expect(screen.getByTestId('boon-card')).not.toHaveAttribute('data-pad-first');
     expect(screen.getByTestId('boon-card').querySelector('[data-boon-tier]')).toHaveTextContent(
       'I',
@@ -146,5 +154,15 @@ describe("a stop's boon cards", () => {
     fireEvent.click(screen.getAllByTestId('boon-card')[0]);
     expect(screen.getByTestId('boon-refused')).toHaveTextContent('Not offered at this stop');
     expect(useUIStore.getState().seen).not.toContain('stop');
+  });
+
+  it('a take that succeeds after a refusal clears its reason', () => {
+    stubTake({ ok: false, reason: 'Not offered at this stop' });
+    render(<BoonCards stop={STOP} worn={[]} />);
+    fireEvent.click(screen.getAllByTestId('boon-card')[0]);
+    expect(screen.getByTestId('boon-refused')).toBeInTheDocument();
+    stubTake({});
+    fireEvent.click(screen.getAllByTestId('boon-card')[1]);
+    expect(screen.queryByTestId('boon-refused')).toBeNull();
   });
 });

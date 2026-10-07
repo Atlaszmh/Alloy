@@ -55,6 +55,7 @@ export function BoonCard({
       type="button"
       className="k-plate relative flex flex-col gap-[14px] p-6 pl-8 text-left text-[var(--k-text)]"
       onClick={onTake}
+      aria-label={`${name}, ${label}, tier ${tier}: ${text}${count > 0 ? `. Taken ${count} of ${cap}` : ''}`}
       data-pad-first={first || undefined}
       data-primary-action={first ? 'boon' : undefined}
       data-boon={id}
@@ -100,6 +101,7 @@ export function BoonCards({ stop, worn }: { stop: BoonStop; worn: readonly Buff[
   const take = (index: number) => {
     const res = useDelveStore.getState().takeStop({ kind: 'boon', index });
     if (res.ok) {
+      setMessage(null);
       playSound('upgradeTier');
       vibrate('success');
       showToast(`${registry.getBoon(stop.offers[index].id)!.name}: taken`);
@@ -125,7 +127,7 @@ export function BoonCards({ stop, worn }: { stop: BoonStop; worn: readonly Buff[
           if (!def) return null; // a row the data no longer holds
           return (
             <BoonCard
-              key={offer.id}
+              key={i}
               id={offer.id}
               family={def.family}
               tier={offer.tier}

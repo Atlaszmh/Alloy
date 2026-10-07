@@ -403,7 +403,7 @@ describe('StopScreen (between depths)', () => {
   it('with no power-up to offer, says so', () => {
     atStop(null);
     expect(screen.queryByTestId('stop')).toBeNull();
-    expect(screen.getByTestId('stop-none')).toHaveTextContent('No power-up at this stop.');
+    expect(screen.getByTestId('stop-none')).toHaveTextContent('Nothing on offer at this stop.');
     expect(screen.getByTestId('stop-road')).toBeInTheDocument();
   });
 

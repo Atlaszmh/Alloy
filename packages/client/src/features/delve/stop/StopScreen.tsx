@@ -303,7 +303,7 @@ export const StopScreen = memo(function StopScreen({
   ) : skipped ? (
     <span data-testid="stop-skipped">{what} skipped.</span>
   ) : !stop ? (
-    <span data-testid="stop-none">No power-up at this stop.</span>
+    <span data-testid="stop-none">Nothing on offer at this stop.</span>
   ) : null;
 
   return (
