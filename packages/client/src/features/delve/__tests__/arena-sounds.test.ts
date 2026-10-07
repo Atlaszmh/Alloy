@@ -64,6 +64,22 @@ describe('arena sounds', () => {
     expect(vibrate).not.toHaveBeenCalled();
   });
 
+  it("plays the frame's real hits before its echoes (an echo never takes their cooldown)", () => {
+    const hit = {
+      kind: 'hit',
+      id: 1,
+      x: 0,
+      y: 0,
+      amount: 5,
+      crit: false,
+      element: null,
+      heft: 1,
+      source: 'basic',
+    } as const;
+    playArenaEvents([{ ...hit, echo: true }, hit]);
+    expect(vi.mocked(playSound).mock.calls).toEqual([['attack'], ['attack', ECHO_GAIN]]);
+  });
+
   it("Obsidian's barrier breaks with a socket's pop", () => {
     playArenaEvents([{ kind: 'barrierBreak', x: 0, y: 0 }]);
     expect(playSound).toHaveBeenCalledWith('orbRemove');

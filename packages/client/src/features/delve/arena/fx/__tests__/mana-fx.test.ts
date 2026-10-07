@@ -410,4 +410,10 @@ describe('the hit fx budget', () => {
     expect(ids(hitFxPicks([...echoes, ...real], 2))).toEqual([1, 2]);
     expect(hitFxPicks([...echoes, ...real], 0).size).toBe(0);
   });
+
+  it('a hit `keep` passes over spends nothing', () => {
+    const hits = [1, 2, 3, 4].map((i) => hit(i));
+    const odd = (e: ArpgEvent) => (e as { id: number }).id % 2 === 1;
+    expect(ids(hitFxPicks(hits, 2, odd))).toEqual([1, 3]);
+  });
 });

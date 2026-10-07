@@ -345,7 +345,10 @@ describe('patterns on the floor', () => {
 });
 
 describe('hits under load', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useUIStore.getState().setFx('shake', 1);
+  });
 
   const hit = (id: number, echo: boolean, crit = false): ArpgEvent =>
     ({
@@ -383,7 +386,24 @@ describe('hits under load', () => {
     expect(view.floats).toHaveLength(14);
   });
 
-  afterEach(() => useUIStore.getState().setFx('shake', 1));
+  it('hits out of sight spend none of the bursts', () => {
+    const { r } = stage();
+    const w = floor();
+    show(r, w);
+    // Fog: everything in sight but the cell at (2, 2).
+    Object.assign(w.map, { open: false });
+    w.fog = new Uint8Array(w.map.width * w.map.height).fill(2);
+    w.fog[2 * w.map.width + 2] = 0;
+    const burst = vi.spyOn((r as unknown as { fx: ManaFx }).fx, 'burst');
+    const hidden = Array.from({ length: 30 }, (_, i) => ({
+      ...hit(200 + i, false),
+      x: 2.5,
+      y: 2.5,
+    }));
+    const seen = Array.from({ length: 5 }, (_, i) => hit(i, false));
+    r.handleEvents([...hidden, ...seen]);
+    expect(burst).toHaveBeenCalledTimes(5);
+  });
 
   it("an echo's crit doesn't shake the screen; a real one does", () => {
     useUIStore.getState().setFx('shake', 1);

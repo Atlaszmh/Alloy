@@ -129,20 +129,23 @@ export const HIT_FX_BUDGET = 24;
 
 /**
  * The frame's hits that draw their moment, at most `budget`: the real hits first, in order, then
- * the echoes' (`echo`) from what is left. A hit left out draws its floating number only.
+ * the echoes' (`echo`) from what is left. A hit left out draws its floating number only; one
+ * `keep` passes over (the renderer's: out of sight) spends nothing.
  */
 export function hitFxPicks(
   events: readonly ArpgEvent[],
   budget = HIT_FX_BUDGET,
+  keep: (e: ArpgEvent) => boolean = () => true,
 ): Set<ArpgEvent> {
   const picked = new Set<ArpgEvent>();
   for (const echo of [false, true])
     for (const e of events) {
       if (picked.size >= budget) return picked;
-      if (e.kind === 'hit' && !!e.echo === echo) picked.add(e);
+      if (e.kind === 'hit' && !!e.echo === echo && keep(e)) picked.add(e);
     }
   return picked;
 }
+
 const SWEEP_SECONDS = 0.1;
 /** A rune glyph's flash: how long it lasts, the share of that it is white, and the pixels it rises. */
 export const GLYPH_LIFE = 0.45;

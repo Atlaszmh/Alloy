@@ -451,9 +451,11 @@ export class ArenaRenderer {
     const w = this.world;
     if (!w) return;
     // The frame's hit moments (HIT_FX_BUDGET): real hits first, echoes from what is left. A hit
-    // left out floats its number and nothing else, here or on the pixel floor.
-    const fxHits = hitFxPicks(events);
-    this.pixelFloor?.handleEvents(events.filter((e) => e.kind !== 'hit' || fxHits.has(e)));
+    // left out floats its number and nothing else, here or on the pixel floor. The pixel floor
+    // draws hits out of sight too; the bursts here spend the budget on those in sight only.
+    const floorHits = hitFxPicks(events);
+    this.pixelFloor?.handleEvents(events.filter((e) => e.kind !== 'hit' || floorHits.has(e)));
+    const fxHits = hitFxPicks(events, undefined, (e) => e.kind === 'hit' && inSight(w, e.x, e.y));
     let numbers = 0;
     for (const e of events) {
       switch (e.kind) {

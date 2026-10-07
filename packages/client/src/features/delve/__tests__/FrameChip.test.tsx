@@ -24,6 +24,15 @@ describe('FrameChip', () => {
     expect(screen.getByTestId('training-frame')).toHaveTextContent('10.0 ms p95');
   });
 
+  it('drops a gap over 250 ms (a tab back from hidden)', () => {
+    render(<FrameChip />);
+    frame(0);
+    frame(10);
+    frame(4000); // hidden for 4 s; the readout refreshes here
+    frame(4010);
+    expect(screen.getByTestId('training-frame')).toHaveTextContent('10.0 ms p95');
+  });
+
   it('outside dev: nothing', () => {
     vi.stubEnv('DEV', false);
     render(<FrameChip />);

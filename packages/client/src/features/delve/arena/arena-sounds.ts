@@ -37,16 +37,19 @@ export function playArenaEvents(
   events: readonly ArpgEvent[],
   cues: Record<number, LootCue> = {},
 ): void {
+  // The frame's real hits first, then its echoes, so an echo never takes a real hit's cooldown.
+  for (const echo of [false, true])
+    for (const ev of events) {
+      if (ev.kind !== 'hit' || !!ev.echo !== echo) continue;
+      // An echo's hit: quieter, and no buzz (spec §8).
+      if (echo) playSound(ev.crit ? 'crit' : 'attack', ECHO_GAIN);
+      else {
+        playSound(ev.crit ? 'crit' : 'attack');
+        if (ev.crit) vibrate('light');
+      }
+    }
   for (const ev of events) {
     switch (ev.kind) {
-      case 'hit':
-        // An echo's hit: quieter, and no buzz (spec §8).
-        if (ev.echo) playSound(ev.crit ? 'crit' : 'attack', ECHO_GAIN);
-        else {
-          playSound(ev.crit ? 'crit' : 'attack');
-          if (ev.crit) vibrate('light');
-        }
-        break;
       case 'heroHit':
         if (ev.blocked) break; // Invulnerable: shown in grey, silent
         playSound(ev.dodged ? 'dodge' : 'heroHurt');
