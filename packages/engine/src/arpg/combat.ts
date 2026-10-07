@@ -541,14 +541,14 @@ function givenAway(ctx: SimCtx, m: MonsterEntity): void {
   for (const o of pack) if (o.aggro && !o.goingHome) Object.assign(o, { search, goal: search.at });
 }
 
+/** Hit sources that aren't the hero's own hit (a status tick, a reaction, thorns, a hazard). */
+const NOT_HERO: ReadonlySet<HitSource> = new Set(['dot', 'reaction', 'thorns', 'hazard']);
+
 /**
  * The boons' per-foe damage on the hero's own hits (the boons spec §2):
  * `lowLife` on a foe under its threshold, `nearFoes` per awake foe within its
  * radius of the hero, to its cap. 1 with neither.
  */
-/** Hit sources that aren't the hero's own hit (a status tick, a reaction, thorns, a hazard). */
-const NOT_HERO: ReadonlySet<HitSource> = new Set(['dot', 'reaction', 'thorns', 'hazard']);
-
 function boonFoeMult(ctx: SimCtx, m: MonsterEntity): number {
   const h = ctx.world.hero;
   const { lowLife, nearFoes } = h.boon;

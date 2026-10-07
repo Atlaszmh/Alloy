@@ -249,6 +249,8 @@ export function useArena(
   const boonKey = profile.dive?.diveBuffs.map((b) => `${b.boon}:${b.tier}`).join() ?? '';
   const stats = useMemo(
     () => diveStats(registry, { equipped, pair, dive: profile.dive }),
+    // diveStats reads only the dive's diveBuffs, and boonKey stands for them (the whole dive changes every bank).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [equipped, pair, boonKey, registry],
   );
   const chains = useMemo(() => heroChains(registry, equipped, pair), [equipped, pair, registry]);
