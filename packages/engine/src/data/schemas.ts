@@ -755,6 +755,7 @@ const KnobsSchema = z
     catalyst: z.number().min(0),
     manaOnHit: z.number().min(0),
     guardOnLand: z.number().min(0),
+    stackTime: z.number().min(0),
   })
   .partial()
   .strict();

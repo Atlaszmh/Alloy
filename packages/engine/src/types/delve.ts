@@ -1,6 +1,6 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, ChainSkill, FormId, Knobs, MoveKind } from './ability.js';
+import type { AbilitySlot, ChainSkill, FormId, Knobs, KnobsData, MoveKind } from './ability.js';
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
@@ -743,6 +743,11 @@ export interface HeroStats {
   elementPower: ManaMap;
   /** Equipped legendary powers → rolled value (best of duplicates). */
   legendaries: Record<string, number>;
+  /**
+   * The dive's boons' knob partials (`HeroStatsExtra.boonKnobs`; none outside a dive's fight):
+   * merged into every blow's knobs already, and into every move's by `resolveAbility`.
+   */
+  boonKnobs: KnobsData[];
 }
 
 // ── Dive & profile ─────────────────────────────────────────────────────────

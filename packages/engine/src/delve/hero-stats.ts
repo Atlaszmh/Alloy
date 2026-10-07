@@ -4,6 +4,7 @@ import {
   type AbilitySlot,
   type Blow,
   type Chains,
+  type KnobsData,
   type MoveKind,
   type ResolvedAbility,
   type ResolvedChain,
@@ -114,6 +115,12 @@ export interface HeroStatsExtra {
   filterAttunement?: boolean;
   /** The hero's basic chain (see the moves and chains spec). */
   basic?: Blow[];
+  /**
+   * The dive's boons' knob partials (`diveStats`; default none, so the sandbox, the DPS Lab,
+   * Power and `profileStats` see none): merged into each blow after its runes, and kept on
+   * `HeroStats.boonKnobs` for the moves (see the boons spec's 2a).
+   */
+  boonKnobs?: KnobsData[];
 }
 
 /** Total attunement per mana type from equipped gear (plus any `extra`); filtered to the pair on request. */
@@ -180,18 +187,21 @@ export function computeHeroStats(
     extra.basic ??
     defaultBasic(registry, armed?.id ?? null, primary ?? weaponItem?.mana ?? 'fire', secondary);
   const perAttune = bal.pair.basicPowerPerAttune;
+  const boonKnobs = extra.boonKnobs ?? [];
   const blows = chain.map((b) => {
     const row = feel[b.kind];
     // Its runes: those that fit the weapon and act on its kind (a Pierce does nothing on a row
-    // that bursts). Without any, it keeps the shared NEUTRAL.
+    // that bursts), then the dive's boons' knobs (never in its `runes`). Without any, it keeps
+    // the shared NEUTRAL.
     const on = { weapon: armed?.id ?? null, kind: b.kind, explode: (row.explode ?? 0) > 0 };
     const socketed = runeKnobs(registry, b.runes, on);
+    const parts = [...socketed.knobs, ...boonKnobs];
     return {
       ...row,
       kind: b.kind,
       element: b.element,
       attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
-      knobs: socketed.knobs.length > 0 ? mergeKnobs(...socketed.knobs) : NEUTRAL,
+      knobs: parts.length > 0 ? mergeKnobs(...parts) : NEUTRAL,
       runes: socketed.active,
     };
   });
@@ -259,6 +269,7 @@ export function computeHeroStats(
     attunement,
     elementPower,
     legendaries,
+    boonKnobs,
   };
 }
 

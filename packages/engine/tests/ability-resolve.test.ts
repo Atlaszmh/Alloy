@@ -228,6 +228,7 @@ describe('mergeKnobs', () => {
       catalyst: 0,
       manaOnHit: 0,
       guardOnLand: 0,
+      stackTime: 0,
     });
   });
 });
