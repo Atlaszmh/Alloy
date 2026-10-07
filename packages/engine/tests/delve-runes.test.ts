@@ -6,7 +6,7 @@ import { sameChain, setChains, transferMoveset } from '../src/delve/moveset.js';
 import { bankWorld, beginFloor, failFloor, startDive } from '../src/delve/dive.js';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import { setSandboxToggles } from '../src/arpg/sandbox.js';
-import { STOP_KINDS, rollStop, stopKinds, takeStop } from '../src/delve/stops.js';
+import { STOP_KINDS, stopKinds, takeStop } from '../src/delve/stops.js';
 import { chooseStartingMana } from '../src/delve/pair.js';
 import {
   addLootToBag,
@@ -1048,24 +1048,6 @@ describe("the stop's fifth kind: socket a rune", () => {
       move: { ...plain, kind: 'heavy', runes: [null] },
     });
     expect(primaryOf(third.profile).moves[2]).toEqual({ ...plain, kind: 'heavy' });
-  });
-
-  it('rolls every stop as it did when the rune kind does not apply', () => {
-    const ring = generateItem(
-      registry,
-      { uid: 'r1', ilvl: 2, rarity: 'magic', slot: 'ring', mana: 'fire' },
-      new SeededRNG(1),
-    );
-    const p = { ...createDelveProfile(registry, 3, { primary: 'fire' }), bag: [ring] };
-    const q = { ...p, links: 5, scrap: 1000 };
-    const offers = Array.from({ length: 40 }, (_, i) => {
-      const stop = rollStop(registry, q, { ...startDive(registry, q, 1).dive!, seed: i + 1 })!;
-      return stop.offers.map((k) => k[0]).join('');
-    });
-    // v0.50.0's stops for these forty seeds.
-    expect(offers.join(' ')).toBe(
-      'smu em mu esu esm mu esm es smu emu emu mu su es mu esu su su mu es eu su emu sm esu emu emu su es mu em smu smu esm esu su mu sm es es',
-    );
   });
 });
 

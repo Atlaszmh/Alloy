@@ -4,7 +4,7 @@ import { DelveDataSchema } from '../src/data/schemas.js';
 import delveData from '../src/data/delve.json';
 import { beginFloor, startDive } from '../src/delve/dive.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
-import { rollStop, takeAlcove, takeStop } from '../src/delve/stops.js';
+import { takeAlcove, takeStop } from '../src/delve/stops.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { DelveProfile, DiveStop } from '../src/types/delve.js';
@@ -36,20 +36,12 @@ function atStop(p: DelveProfile, stop: DiveStop | null): DelveProfile {
 const BOONS: DiveStop = { kind: 'boons', offers: [{ id: 'vigor', tier: 1 }], taken: false };
 
 describe('the stop union', () => {
-  it("rolls a 'powerups' stop", () => {
-    const p = hero();
-    expect(rollStop(registry, p, startDive(registry, p, 1).dive!)).toMatchObject({
-      kind: 'powerups',
-      taken: false,
-    });
-  });
-
-  it("refuses a boon on either kind of stop, and a power-up on a 'boons' stop", () => {
+  it("refuses a boon on a 'powerups' stop and a power-up on a 'boons' stop; takes a boon there", () => {
     const refused = { ok: false, reason: 'Not offered at this stop' };
     const powerups = atStop(hero(), { kind: 'powerups', offers: ['equip'], taken: false });
     expect(takeStop(registry, powerups, { kind: 'boon', index: 0 })).toMatchObject(refused);
     const boons = atStop(hero(), BOONS);
-    expect(takeStop(registry, boons, { kind: 'boon', index: 0 })).toMatchObject(refused);
+    expect(takeStop(registry, boons, { kind: 'boon', index: 0 }).ok).toBe(true);
     expect(takeStop(registry, boons, { kind: 'equip', uid: 'r1' })).toMatchObject(refused);
     expect(takeStop(registry, powerups, { kind: 'equip', uid: 'r1' }).ok).toBe(true);
   });
