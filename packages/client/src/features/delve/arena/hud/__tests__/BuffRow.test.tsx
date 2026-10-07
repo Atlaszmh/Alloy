@@ -58,6 +58,7 @@ describe('BuffRow', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
     fireEvent.mouseEnter(tile);
     const tip = screen.getByRole('tooltip');
+    expect(tile).toHaveAttribute('aria-describedby', tip.id);
     expect(tip).toHaveTextContent('Keen Edge');
     expect(tip).toHaveTextContent('This dive');
     expect(within(tip).getAllByRole('listitem').map((li) => li.textContent)).toEqual([

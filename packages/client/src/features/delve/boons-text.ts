@@ -16,7 +16,7 @@ export function wornBoons(registry: DataRegistry, buffs: readonly Buff[]): WornB
   for (const b of buffs) {
     const def = rows.find((r) => r.id === b.boon);
     if (!def) continue;
-    const line = def.tiers[b.tier - 1].text;
+    const line = def.tiers[b.tier - 1]?.text ?? def.name;
     const seen = out.get(b.boon);
     if (seen) {
       seen.count += 1;

@@ -32,6 +32,11 @@ describe('wornBoons', () => {
     expect(wornBoons(registry, [entry('no-such-boon')])).toEqual([]);
     expect(wornBoons(registry, [])).toEqual([]);
   });
+
+  it('names the boon for a tier the data no longer has', () => {
+    const worn = wornBoons(registry, [{ boon: 'vigor', tier: 9 as 1, effect: {} }]);
+    expect(worn[0].lines).toEqual([row('vigor').name]);
+  });
 });
 
 describe('boonsLine', () => {
