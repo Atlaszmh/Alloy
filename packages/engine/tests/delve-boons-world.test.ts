@@ -101,3 +101,25 @@ describe('exitRevealed (fog.ts)', () => {
     expect(floor([{ exitRevealed: true }]).fogVersion).toBe(0);
   });
 });
+
+describe('magnet (step.ts)', () => {
+  const scrapAt = (w: ArpgWorld, y: number): Drop => {
+    const d: Drop = { id: w.nextId++, kind: 'scrap', x: 13, y, amount: 1, born: 0, vacuum: false, dead: false };
+    w.drops.push(d);
+    return d;
+  };
+
+  it("Wide Net: the magnet's reach × (1 + Σ magnet)", () => {
+    const gap = bal.hero.magnetRadius * 1.25; // in reach at +40%, out of it without
+    // A foe far up the room keeps it uncleared, so no vacuum pulls the drop.
+    const plain = arena([dummy(13, 2)], { noBasic: true });
+    const far = scrapAt(plain, plain.hero.y - gap);
+    run(plain, 1);
+    expect([far.dead, far.y]).toEqual([false, plain.hero.y - gap]);
+
+    const w = wear(wear(arena([dummy(13, 2)], { noBasic: true }), { magnet: 0.2 }), { magnet: 0.2 });
+    const near = scrapAt(w, w.hero.y - gap);
+    run(w, 1);
+    expect(near.dead).toBe(true);
+  });
+});
