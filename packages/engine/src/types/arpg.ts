@@ -533,6 +533,10 @@ export interface HeroEntity {
   dodgeRechargeAt: number;
   /** Free Cast (a boon): an ability paid before this time is free (absent: none). */
   freeCastUntil?: number;
+  /** Last Stand (a boon) has fired on this floor. */
+  lastStandUsed?: boolean;
+  /** Last Stand's damage cut runs until this time. */
+  lastStandUntil?: number;
   /**
    * The last dodge, kept after the dash ends so a perfect dodge can be judged
    * from its start. The hero is dashing while `t < until`.

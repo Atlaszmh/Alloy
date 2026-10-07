@@ -334,3 +334,29 @@ describe("the Defensive's duration (forms.ts buff)", () => {
     expect(long.hero.defend!.until - cast).toBeCloseTo(d * 1.5, 9);
   });
 });
+
+describe('Last Stand (combat.ts hurtHero)', () => {
+  it('once a floor, crossing under its threshold takes less damage for its seconds', () => {
+    const w = wear(arena([], { noBasic: true }), {
+      lastStand: { below: 0.2, reduce: 0.5, seconds: 2 },
+    });
+    const ctx = ctxOf(w);
+    const h = w.hero;
+    const max = h.stats.maxHp;
+    /** Life lost to a hit of `f` × max life, as a fraction of max life. */
+    const hurt = (f: number) => {
+      const before = h.hp;
+      hurtHero(ctx, f * max, null, null, { unavoidable: true });
+      return (before - h.hp) / max;
+    };
+    h.hp = 0.3 * max;
+    expect(hurt(0.05)).toBeCloseTo(0.05, 9); // to 0.25: above it
+    expect(hurt(0.1)).toBeCloseTo(0.1, 9); // to 0.15: the crossing hit lands in full
+    expect(hurt(0.04)).toBeCloseTo(0.02, 9); // halved while it runs
+    w.t += 2.1;
+    expect(hurt(0.02)).toBeCloseTo(0.02, 9); // over
+    h.hp = 0.5 * max;
+    hurt(0.4); // crosses again: once a floor
+    expect(hurt(0.02)).toBeCloseTo(0.02, 9);
+  });
+});

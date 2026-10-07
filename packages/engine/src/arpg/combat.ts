@@ -965,12 +965,20 @@ export function hurtHero(
   }
   let dmg = raw;
   if (!opts.unavoidable) dmg *= 1 - armorReduction(bal, h.stats.armor, world.depth);
+  // Last Stand (a boon): less damage while it runs.
+  if (world.t < (h.lastStandUntil ?? 0)) dmg *= 1 - (h.boon.lastStand?.reduce ?? 0);
   dmg = shieldHero(ctx, dmg, source, !!opts.melee);
   if (dmg <= 0) return;
   world.hurt = true;
   // Invulnerable (Training Grounds): the hit lands and reports its damage, but takes no life.
   const blocked = !!world.sandbox?.invulnerable;
   if (!blocked) h.hp -= dmg;
+  // Last Stand starts as life first falls under its threshold on a floor.
+  const stand = h.boon.lastStand;
+  if (stand && !h.lastStandUsed && h.hp > 0 && h.hp < stand.below * h.stats.maxHp) {
+    h.lastStandUsed = true;
+    h.lastStandUntil = world.t + stand.seconds;
+  }
   h.lastHitAt = world.t;
   ctx.events.push({
     kind: 'heroHit',
