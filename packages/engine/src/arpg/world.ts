@@ -24,6 +24,7 @@ import {
 } from '../types/ability.js';
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { buffSum } from '../delve/boons.js';
+import { dodgeMax } from './dodge.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { clearanceOf } from './flow.js';
@@ -314,6 +315,7 @@ export function createHeroEntity(
   const stats = applyBuffs(unbuffed, diveBuffs);
   const pool = manaPool(stats, registry);
   const resolved = resolveAll(registry, chains, stats);
+  const boon = buffSum(diveBuffs); // its floor's buffs start empty
   return {
     x: opts.x,
     y: opts.y,
@@ -324,7 +326,7 @@ export function createHeroEntity(
     baseStats: stats,
     floorBuffs: [],
     diveBuffs,
-    boon: buffSum(diveBuffs), // its floor's buffs start empty
+    boon,
     mana: pool.max,
     manaMax: pool.max,
     manaRegen: pool.regen,
@@ -345,7 +347,7 @@ export function createHeroEntity(
     barrier: null,
     quickUntil: 0,
     reactionReadyAt: {},
-    dodgeCharges: registry.getDelveBalance().dodge.charges,
+    dodgeCharges: dodgeMax(registry.getDelveBalance(), boon),
     dodgeRechargeAt: 0,
     dodge: null,
     riposteUntil: 0,

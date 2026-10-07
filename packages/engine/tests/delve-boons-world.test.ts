@@ -77,6 +77,12 @@ describe('the floor start (world.ts)', () => {
     expect(floor([{ eliteChance: 0 }]).monsters).toEqual(floor().monsters);
   });
 
+  it('Third Wind and No Retreat: a floor begins at dodgeMax', () => {
+    expect(floor([{ dodgeCharges: 1 }]).hero.dodgeCharges).toBe(bal.dodge.charges + 1);
+    expect(floor([{ dodgeCharges: -1 }]).hero.dodgeCharges).toBe(1);
+    expect(floor().hero.dodgeCharges).toBe(bal.dodge.charges);
+  });
+
   it("Magpie: the dive boons' Find is on the loot from the start", () => {
     expect(floor([{ find: 25 }, { find: 15 }]).loot.find).toBe(floor().loot.find + 40);
   });
