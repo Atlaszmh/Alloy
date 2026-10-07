@@ -385,4 +385,35 @@ describe('the autopilot at a stop', () => {
     const broke = { ...atStop(hero(), stopOf('move', 'upgrade')), scrap: 0 };
     expect(takeBestStop(registry, broke)).toBe(broke);
   });
+
+  it('takes the boon of the highest tier, ties by family, never a pact', () => {
+    const took = (...offers: BoonOffer[]) =>
+      takeBestStop(registry, atStop(hero(), boonsStop(...offers))).dive!.diveBuffs.map(
+        (b) => `${b.boon}:${b.tier}`,
+      );
+    expect(
+      took(
+        { id: 'keen-edge', tier: 1 },
+        { id: 'glass-cannon', tier: 3 },
+        { id: 'stone-skin', tier: 2 },
+      ),
+    ).toEqual(['stone-skin:2']);
+    expect(
+      took({ id: 'magpie', tier: 2 }, { id: 'bulwark', tier: 2 }, { id: 'keen-edge', tier: 1 }),
+    ).toEqual(['bulwark:2']);
+    expect(
+      took({ id: 'cartographer', tier: 1 }, { id: 'magpie', tier: 1 }, { id: 'echo', tier: 1 }),
+    ).toEqual(['echo:1']);
+    expect(took({ id: 'pure-flame', tier: 1 }, { id: 'keen-edge', tier: 1 })).toEqual([
+      'keen-edge:1',
+    ]);
+    const pacts = atStop(
+      hero(),
+      boonsStop({ id: 'glass-cannon', tier: 3 }, { id: 'hunted', tier: 1 }),
+    );
+    expect(takeBestStop(registry, pacts)).toBe(pacts);
+    const taken = { ...atStop(hero(), boonsStop(...OFFER)) };
+    taken.dive = { ...taken.dive!, stop: { ...taken.dive!.stop!, taken: true } };
+    expect(takeBestStop(registry, taken)).toBe(taken);
+  });
 });
