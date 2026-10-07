@@ -1,5 +1,18 @@
-import type { ReactElement } from 'react';
-import { BOON_TIER_NAMES, type BoonFamily, type BoonTierIndex } from '@alloy/engine';
+import { useState, type ReactElement } from 'react';
+import {
+  BOON_TIER_NAMES,
+  boonCount,
+  type BoonFamily,
+  type BoonStop,
+  type BoonTierIndex,
+  type Buff,
+} from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
+import { useUIStore } from '@/stores/uiStore';
+import { showToast } from '@/components/Toast';
+import { playSound } from '@/shared/utils/sound-manager';
+import { vibrate } from '@/shared/utils/haptics';
+import { getDelveRegistry } from '../registry';
 import { RARITY_TEXT } from '../format';
 import { TIER_NUMERAL } from '../runes/rune-style';
 import { BOON_STYLE } from './boon-style';
@@ -73,5 +86,64 @@ export function BoonCard({
         </span>
       )}
     </button>
+  );
+}
+
+/**
+ * A boons stop's step 1 (the boons spec, 6): its offers as cards, each taken by a click, A or
+ * Enter through the store's `takeStop` (free; the stop is then taken and `StopScreen` moves to
+ * the road). A refusal shows the engine's reason under the cards.
+ */
+export function BoonCards({ stop, worn }: { stop: BoonStop; worn: readonly Buff[] }): ReactElement {
+  const registry = getDelveRegistry();
+  const [message, setMessage] = useState<string | null>(null);
+  const take = (index: number) => {
+    const res = useDelveStore.getState().takeStop({ kind: 'boon', index });
+    if (res.ok) {
+      playSound('upgradeTier');
+      vibrate('success');
+      showToast(`${registry.getBoon(stop.offers[index].id)!.name}: taken`);
+      useUIStore.getState().markSeen('stop');
+    } else {
+      playSound('combineFail');
+      setMessage(res.reason ?? 'Cannot take it');
+    }
+  };
+  return (
+    <section
+      aria-label="Boons"
+      className="flex min-h-0 flex-1 flex-col gap-4"
+      data-testid="stop-boon"
+    >
+      <div className="flex items-baseline justify-between">
+        <h2 className="k-section m-0 text-[26px] text-[var(--k-hot-hi)]">Take one boon</h2>
+        <span className="text-[16px] text-[var(--k-text-3)]">it lasts the dive, or skip it</span>
+      </div>
+      <div className="grid min-h-0 grid-cols-3 items-stretch gap-[18px]">
+        {stop.offers.map((offer, i) => {
+          const def = registry.getBoon(offer.id);
+          if (!def) return null; // a row the data no longer holds
+          return (
+            <BoonCard
+              key={offer.id}
+              id={offer.id}
+              family={def.family}
+              tier={offer.tier}
+              name={def.name}
+              text={def.tiers[offer.tier - 1].text}
+              count={boonCount(worn, offer.id)}
+              cap={def.cap}
+              first={i === 0}
+              onTake={() => take(i)}
+            />
+          );
+        })}
+      </div>
+      {message && (
+        <span role="alert" className="text-[18px] text-[var(--k-hot)]" data-testid="boon-refused">
+          {message}
+        </span>
+      )}
+    </section>
   );
 }
