@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ARENA_READY, seedProfile, startDive, stepTo } from './fixtures/delve';
+import { createDefaultRegistry, createDelveProfile, startDive as beginDive } from '@alloy/engine';
+import { ARENA_READY, armed, seedProfile, startDive, stepTo } from './fixtures/delve';
 
 /**
  * The Delve's type floor (the pad-first spec, 6): every drawn text's design px, the share under
@@ -99,10 +100,16 @@ test.describe('the type floor', () => {
   });
 
   test('TY02: the dive: the lean HUD, the pause list and the stop', async ({ page }) => {
-    await seedProfile(page); // the bot clears depth 1
+    // A dive in progress wearing two Devotion entries: the HUD's boon tile shows its count.
+    const registry = createDefaultRegistry();
+    const fresh = armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' }));
+    const { dive } = beginDive(registry, fresh, 1);
+    const devotion = { boon: 'devotion', tier: 1 as const, effect: registry.getBoons().find((b) => b.id === 'devotion')!.tiers[0].effect };
+    await seedProfile(page, 4242, true, undefined, { dive: { ...dive!, diveBuffs: [devotion, devotion] } }); // the bot clears depth 1
     await page.goto('/delve');
     await startDive(page);
     await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
+    await expect(page.locator('[data-buff="boon"][data-boon="devotion"] [data-count]')).toHaveText('2');
     await measure(page, 'hud');
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('pause-screen')).toBeVisible();
