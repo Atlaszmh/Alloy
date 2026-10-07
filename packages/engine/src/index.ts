@@ -175,7 +175,9 @@ export {
   holdCharge,
   inBeat,
   windupDir,
+  lifeCost,
 } from './arpg/abilities/cast.js';
+export { dodgeMax, dodgeRecharge } from './arpg/dodge.js';
 export {
   resolveAbility,
   resolveChain,
