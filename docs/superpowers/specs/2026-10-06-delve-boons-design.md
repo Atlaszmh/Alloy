@@ -41,7 +41,7 @@ interface BoonTier { text: string; effect: BoonEffect }
 - A stack adds its own tier's effect. Three commons of Keen Edge give 3 × its common; one epic gives the epic.
 - A boon whose worn count is at its `cap` is never offered.
 - `text` is the tier's whole card line, written in data. The client never formats a boon's number.
-- **Shrines become rows.** Each of today's six shrines is a row with `shrine` set to its old weight, all `weight` entries 0, and its effect in tier 1 (tiers 2 and 3 copy tier 1; a shrine always grants tier 1). Devotion keeps `duration: 'dive'`, the others `'floor'`. The sanctum draws among rows with `shrine > 0`, on the same stream as today. `shrines.json`, `ShrinesDataSchema`, `ShrineDef` and `ShrineId` are deleted; `getDelveData().shrines` goes.
+- **Shrines become rows.** Each of today's six shrines is a row with `shrine` set to its old weight, all `weight` entries 0, and its effect in tier 1 (tiers 2 and 3 copy tier 1; a shrine always grants tier 1). Devotion keeps `duration: 'dive'`, the others `'floor'`. The six shrine rows come first in `boons.json`, in `shrines.json`'s order, and the generator's draw (`generate.ts`, `weightedPick` over the rows with `shrine > 0`, in file order) is otherwise unchanged, so every floor rolls the same shrine as before. `tutorial-floor.ts`'s `shrines[0]` becomes `getBoon('vigor')`. `shrines.json`, `ShrinesDataSchema`, `ShrineDef` and `ShrineId` are deleted; `getDelveData().shrines` goes, and its readers move to `getBoons()`: the generator, `applyShrine`, the tutorial floor, `useArenaCore.ts`'s shrine name lookup and the maps tests that read `.shrines`.
 
 **Load checks** (`data/boons-check.ts`, `boonsProblems`, refused by `createDefaultRegistry` as `setPiecesProblems` is): ids unique; three tiers each with non-empty text; every `knobs` key a `Knobs` key; every `attune.element` a mana type; at least one row with a stop weight in each family; every shrine row's effect within the fields a shrine could already carry or a dive stat (no floor-shaping field on a `floor` shrine); `cap` 1–3.
 
@@ -53,49 +53,56 @@ interface BoonTier { text: string; effect: BoonEffect }
 interface Buff { boon: BoonId; tier: 1 | 2 | 3; effect: BoonEffect }
 ```
 
-`ShrineEffect` is renamed `BoonEffect` and grows. Every field is optional and **additive across entries** (multipliers stack as `1 + Σ`, not as a product, so a cap reads plainly). Each field has exactly one handler at one site; nothing reads a boon by id but the HUD.
+`ShrineEffect` is renamed `BoonEffect` and grows. Every field is optional. **Stacking:** a count or an additive bonus (charges, Find, life regen, chances, fractions of life, and the "× (1 + Σ)" fields: `dodgeWindow`, `defendDuration`, `magnet`, `scrap`) sums across entries, Σ being that sum; a multiplier (`damage`, `manaRegen`, `maxLife`, `tempo`, and the drop multipliers `flux`, `runes`, `gear`) multiplies per entry, as `applyBuffs` does today, so today's shrines read as before; `knobs` merge per entry through `mergeKnobs` (section 2a). Each field has exactly one handler at one site; nothing reads a boon by id but the HUD.
 
 | Field | Meaning | Applied where |
 |---|---|---|
-| `damage` | damage × (1 + Σ) | `applyBuffs` (`damageMult`) |
-| `manaRegen` | mana regen × (1 + Σ) | `applyBuffs` |
+| `damage` | damage × (1 + x) per entry | `applyBuffs` (`damageMult`) |
+| `manaRegen` | mana regen × (1 + x) per entry | `applyBuffs` |
 | `lifeRegen` | life a second, fraction of max | `applyBuffs` |
-| `maxLife` | max life × (1 + Σ), may be negative, floored at 0.3 | `applyBuffs` |
-| `tempo` | tempo × (1 − Σ), floored at 0.5 (shorter beats, faster holds) | `applyBuffs` (`HeroStats.tempo`) |
-| `attune` | `{ role: 'primary' \| 'secondary', points }`, added to that element of the pair | `applyBuffs` (it re-runs `manaPool`) |
-| `knobs` | a `KnobsData` partial | merged into every move and blow by `mergeKnobs`, beside the legendaries, in `resolveAbility` and `computeHeroStats` |
+| `maxLife` | max life × (1 + x) per entry, x may be negative; the product floored at 0.3 | `applyBuffs` |
+| `tempo` | tempo × (1 − x) per entry, the product floored at 0.5 (shorter beats, faster holds) | `applyBuffs` (`HeroStats.tempo`) |
+| `lifesteal` | added to `HeroStats.lifesteal` | `applyBuffs` |
+| `attune` | `{ role: 'primary' \| 'secondary', points }`, added to that element of the pair | `profileStats` (section 2a), never `applyBuffs` |
+| `knobs` | a `KnobsData` partial, ability moves only | `resolveAbility` (section 2a) |
 | `byKind` | `{ light?, medium?, heavy?, hold? }`, extra damage by the blow's or move's kind | `impact.ts` |
 | `firstMove` | extra damage on a chain's first move | `impact.ts` |
 | `stepBonus` | added to `delve.chains.stepBonus` | `resolve.ts` (`ResolvedChain.stepBonus`) |
-| `execute` | `{ below, mult }`: extra damage on foes under `below` of their life | `impact.ts` |
+| `lowLife` | `{ below, mult }`: extra damage on foes under `below` of their life (named apart from `Knobs.execute`, the frozen shatter) | `impact.ts` |
 | `nearFoes` | `{ per, cap, radius }`: extra damage per awake foe within `radius`, at most `cap` | `impact.ts` |
 | `dodgeCharges` | added to `dodge.charges`, may be negative, floored at 1 | `dodge.ts` |
 | `dodgeWindow` | `perfectWindow` × (1 + Σ) | `dodge.ts` |
 | `perfectAlways` | every dodge that would be hit counts as perfect | `dodge.ts` |
-| `freeCastAfterDodge` | the next ability within 1.5 s of a dodge costs no mana or charge | `cast.ts` (`HeroEntity.freeCastUntil`) |
+| `freeCast` | `{ seconds, damage }`: the first ability cast within `seconds` of a dodge costs nothing and deals `damage` more | `cast.ts` (`HeroEntity.freeCastUntil`; the cast's hits carry `freeCastDamage`) |
 | `defendDuration` | the Defensive's effect duration × (1 + Σ) | `defend.ts` |
 | `barrierOnFloor` | an Obsidian barrier of this fraction of max life at floor start | `world.ts` (`beginFloor`'s hero) |
 | `healOnClear` | life regained when a room clears, fraction of max | `interact.ts` (`onMonsterKilled`) |
 | `lastStand` | `{ below, reduce, seconds }`: once a floor, crossing under `below` life takes `reduce` less damage for `seconds` | `combat.ts` (`HeroEntity.lastStandUsed`, `lastStandUntil`) |
-| `lifeForMana` | abilities cost life (this fraction of their mana cost, as max-life fraction per mana point × pool) and mana regen is 0 | `cast.ts` (`pay`), `applyBuffs` |
-| `find` | Find points | `world.loot.find` (as the shrine's now) |
+| `bloodPrice` | `p`: an ability's mana cost `c` is paid in life instead, `c / manaMax × p × maxHp`; unaffordable when it would leave under 1 life; a cast chain's mana part likewise; a charge chain pays its charge as normal; mana regen and the basics' mana are 0 | `cast.ts` (`canAfford`, `pay`), `applyBuffs` (regen) |
+| `find` | Find points | `world.loot.find`: a dive entry's at floor start (`world.ts` already sums `diveBuffs`' `find` there), a floor shrine's at prayer |
 | `magnet` | `magnetRadius` × (1 + Σ) | `step.ts`'s magnet |
 | `metalUp` | added to `drops.metalUpChance` | `DropContext` in `material-drops.ts` |
 | `flux` | × the flux chance | `DropContext` |
 | `runes` | × a normal or elite foe's rune chance | `rune-drops.ts` |
 | `scrap` | kill scrap × (1 + Σ) | `material-drops.ts` |
-| `deathLoss` | subtracted from `crafting.deathLoss`, floored at 0 | `settleDive` (it reads `dive.diveBuffs` before clearing them) |
+| `deathLoss` | a fraction subtracted from `crafting.deathLoss` (0.4), floored at 0 | `settleDive` (reads `dive.diveBuffs`) |
 | `potions` | refill (shrine only, unchanged) | `applyShrine` |
 | `noPotions` | potions 0 at each floor start | `beginFloor` |
-| `eliteChance` | every pack's elite chance at least this | `FloorOptions` into `planFloor` (as `DoorMods.eliteChance`) |
+| `eliteChance` | every pack's elite chance at least this | `world.ts`'s spawn (`Math.max` beside `mods.eliteChance`; the `spawnRng` draw is made whatever the value, so no stream shifts) |
 | `gear` | × an elite's gear chance | `DropContext` |
-| `skip` | the next door goes this many depths further (consumed when a door is chosen) | `chooseDoor` |
+| `skip` | the next door goes this many depths further (consumed when a door is chosen, added to the door's own `DoorMods.skip`) | `chooseDoor` |
 | `exitRevealed` | a floor starts with its exit's room revealed | `fog.ts` (floor start) |
-| `alwaysShrine` | the generator makes at least one sanctum | `FloorOptions` into `generateFloor` (a `kindWeights` override that never moves the layout stream's earlier draws: it re-kinds the first non-start, non-exit, non-arena dead end) |
+| `shrinesLastDive` | a floor shrine's blessing goes on `diveBuffs` instead (a refill stays a refill) | `applyShrine` |
 | `noSlow` | slow ground doesn't slow the hero | `terrain.ts` (`groundSpeed`) |
-| `hazardsFriendly` | hazards recharge × (1 − Σ) and never hurt the hero | `objects.ts` |
+| `hazardsFriendly` | hazards recharge × (1 − x) (the largest entry) and never hurt the hero | `objects.ts` |
 
-`HeroEntity.diveBuffs` and `floorBuffs` hold the entries; the sites above read a summed view, `buffSum(buffs)` in `delve/boons.ts` (pure, one function, computed once a floor and on each change, kept on `HeroEntity.boon`). `applyBuffs` is the only place stats change.
+`HeroEntity.diveBuffs` and `floorBuffs` hold the entries; the sim sites read a combined view, `buffSum(buffs)` in `delve/boons.ts` (pure: counts and additive fields summed, multipliers multiplied, the knob partials listed; computed at floor start and whenever a buff is added, kept on `HeroEntity.boon`). `applyBuffs` is the only place `HeroStats` change, and it keeps its two passes (dive, then floor) and its per-entry products.
+
+### 2a. Knobs and attunement
+
+**Knobs reach ability moves only.** `applyBuffs` copies each entry's `knobs` onto `HeroStats.boonKnobs: KnobsData[]`. `resolveAll` in `world.ts` already runs on the buffed stats (after `applyBuffs`, at floor start and in `refreshWorldHero`), and `resolveAbility` appends `stats.boonKnobs` to the partials it hands `mergeKnobs`, beside the legendaries'. So each entry merges by `mergeKnobs`'s own rule: `lifesteal`, `stacksBonus`, `catalyst` and `stackTime` add, `quick.*` multiply, `echo` takes the largest of the move's runes and every boon entry. Basic blows never take boon knobs: an Echo on every blow would change the attack's feel and cost.
+
+**Attunement** goes in before stats exist: `profileStats(registry, profile)` adds the summed `attune` points of `profile.dive?.diveBuffs` to `pairExtra`'s `attunement` (each role resolved against `profile.pair`; a secondary while unbound goes to the primary), the path the Training Grounds' extra attunement takes, so blows' `attunePower`, masteries, the pool and the rune ease all see it. Its `Pick` gains `'dive'`. `beginFloor` and `refreshWorldHero`'s callers build stats through `profileStats`. `applyBuffs` ignores `attune`.
 
 A new boon from these fields is one data row. A boon that needs a new field adds it to `BoonEffect`, `BoonEffectSchema`, `buffSum` and its one handler.
 
@@ -109,10 +116,10 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Heavy Hand | offense | 2 | heavy and hold +20% | +30% | +45% | `byKind` | |
 | Opener | offense | 2 | a chain's first move +25% | +40% | +60% | `firstMove` | |
 | Closer | offense | 2 | step bonus +0.05 | +0.08 | +0.12 | `stepBonus` | |
-| Executioner | offense | 1 | +40% to foes under 25% life | +60% | +60% under 35% | `execute` | 3 |
+| Executioner | offense | 1 | +40% to foes under 25% life | +60% | +60% under 35% | `lowLife` | 3 |
 | Pack Breaker | offense | 2 | +5% per foe within 4, up to 4 | +8% | +12% | `nearFoes` | |
-| Catalyst | element | 2 | reactions +25% | +40% | +60% | `knobs.catalyst` | |
-| Saturate | element | 1 | +1 stack a hit | +1 | +2 | `knobs.stacksBonus` | 3 |
+| Catalyst | element | 2 | reaction bonuses grow 25% | 40% | 60% | `knobs.catalyst` 0.25 / 0.4 / 0.6 (it scales a reaction's own bonus, as the Catalyst legendary does) | |
+| Saturate | element | 1 | +1 stack a hit | +1, stacks last 20% longer | +2 | `knobs.stacksBonus`, `knobs.stackTime` | 3 |
 | Lingering Mark | element | 2 | stacks last +30% | +50% | +80% | `knobs` (stack duration; new knob `stackTime`) | |
 | Pure Flame | element | 3 | +4 primary attunement | +6 | +10 | `attune` primary | |
 | Second Flame | element | 3 | +4 secondary attunement | +6 | +10 | `attune` secondary | 2 |
@@ -121,12 +128,12 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Bulwark | defense | 2 | Defensive lasts +25% | +40% | +60% | `defendDuration` | |
 | Stone Skin | defense | 2 | barrier of 8% life each floor | 12% | 18% | `barrierOnFloor` | |
 | Deep Breath | defense | 2 | regain 4% life a room cleared | 6% | 10% | `healOnClear` | |
-| Vampire's Tithe | defense | 2 | 1.5% lifesteal | 2.5% | 4% | `knobs.lifesteal` | |
+| Vampire's Tithe | defense | 2 | 1.5% lifesteal | 2.5% | 4% | `lifesteal` | |
 | Last Stand | defense | 1 | under 20%: 40% less damage for 2 s, once a floor | 50%, 3 s | 60%, 4 s | `lastStand` | |
 | Quickstep | tempo | 2 | beats and holds 8% faster | 12% | 18% | `tempo` | |
-| Deep Charge | tempo | 2 | Quick I on every move | Quick II | Quick III | `knobs.quick` (Quick rune's tier rows) | |
-| Free Cast | tempo | 1 | an ability after a dodge is free | same, +10% damage | same, +25% damage | `freeCastAfterDodge` (+ `damage` on rare and epic only while free: the free cast carries it) | 3 |
-| Echo | tempo | 1 | moves echo at 15% | 25% | 40% | `knobs.echo` | 5 |
+| Swift Hands | tempo | 2 | ability cooldowns −8% | −12% | −18% | `knobs.quick.cooldown` 0.92 / 0.88 / 0.82 (no power cut, unlike the Quick rune) | |
+| Free Cast | tempo | 1 | an ability within 1.5 s of a dodge is free | same, +10% damage | same, +25% damage | `freeCast` { 1.5, 0 / 0.1 / 0.25 } | 3 |
+| Echo | tempo | 1 | abilities echo at 15% at least | 25% | 40% | `knobs.echo` (the largest of it and the move's runes) | 5 |
 | Overflow | tempo | 2 | +20% mana regen | +35% | +50% | `manaRegen` | |
 | Magpie | fortune | 2 | +25 Find | +40 | +60 | `find` | |
 | Wide Net | fortune | 1 | magnet +40% | +70% | +100% | `magnet` | |
@@ -134,16 +141,16 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Flux Nose | fortune | 2 | flux chance ×1.3 | ×1.5 | ×1.8 | `flux` | |
 | Rune Sense | fortune | 2 | rune chance ×1.3 | ×1.5 | ×1.8 | `runes` | |
 | Scrapper | fortune | 2 | kill scrap +20% | +35% | +50% | `scrap` | |
-| Insurance | fortune | 1 | a death loses 10 points less | 15 | 20 | `deathLoss` | |
+| Insurance | fortune | 1 | a death loses 30% of the banked haul, not 40% | 25% | 20% | `deathLoss` 0.10 / 0.15 / 0.20 | |
 | Glass Cannon | pact | 2 | +25% damage, −20% max life | +35%, −20% | +45%, −20% | `damage`, `maxLife` | 4 |
-| Blood Price | pact | 1 | abilities cost life, no mana regen, +20% damage | +30% | +40% | `lifeForMana`, `damage` | 6 |
+| Blood Price | pact | 1 | abilities cost life, no mana regen, +20% damage | +30% | +40% | `bloodPrice` 0.5, `damage` | 6 |
 | Hunted | pact | 1 | every pack elite-led; gear chance ×1.5, scrap +30% | ×1.8, +40% | ×2, +60% | `eliteChance`, `gear`, `scrap` | 6 |
 | No Retreat | pact | 1 | 1 dodge charge; every dodge perfect | same, +10% damage | same, +20% damage | `dodgeCharges` −1, `perfectAlways` | 4 |
 | Famine | pact | 1 | no potions; +15% damage, +30 Find | +20%, +40 | +25%, +60 | `noPotions`, `damage`, `find` | 4 |
 | Deeper Still | pact | 1 | the next door goes 1 depth further; Find +20 | 2 depths, +30 | 2 depths, +50 | `skip`, `find` | 4 |
 | Cartographer | floor | 1 | the exit's room revealed | same, Find +10 | same, Find +20 | `exitRevealed` | |
-| Sanctuary | floor | 1 | a shrine on every floor | same, Find +10 | same, Find +20 | `alwaysShrine` | |
-| Trailblazer | floor | 1 | slow ground doesn't slow you | same | same, magnet +30% | `noSlow` | |
+| Sanctuary | floor | 1 | shrine blessings last the dive | same, Find +10 | same, Find +20 | `shrinesLastDive` | |
+| Trailblazer | floor | 1 | slow ground doesn't slow you | same, magnet +15% | same, magnet +30% | `noSlow` | |
 | Arsonist | floor | 1 | hazards recharge 50% faster and spare you | 65% | 80% | `hazardsFriendly` | |
 
 Stop draw weights: every row `{ common: 10, rare: 6, epic: 3 }` but pacts `{ 4, 3, 2 }` and floor `{ 6, 4, 2 }`. The tier draw happens first (section 4), so these weights choose among rows within a tier.
@@ -185,13 +192,13 @@ type DiveStop =
 
 **The take** (`takeStop`). `StopAction` gains `{ kind: 'boon'; index: number }`. On a `boons` stop: the offer at `index` (refused if out of range, if the stop is taken, or on a `powerups` stop) becomes `{ boon, tier, effect: tiers[tier − 1].effect }` pushed onto `DiveState.diveBuffs`; the stop is marked taken. Free: no pooling, no lock lift, no `banked` spend, no quest or tutorial event. A power-up action on a `boons` stop is refused ("Not offered at this stop"). Skipping is choosing a door, as now.
 
-**Wearing it.** The next `beginFloor` wears `diveBuffs` through `FloorOptions.diveBuffs`, as a dive shrine's blessing is worn today. Floor-start effects (`barrierOnFloor`, `noPotions`, `exitRevealed`, `alwaysShrine`) read the summed view there. `skip` is consumed by `chooseDoor`: the door goes `skip` further and the boon's entry has its `skip` zeroed (the entry stays, so its count and Find stay).
+**Wearing it.** The next `beginFloor` wears `diveBuffs` through `FloorOptions.diveBuffs`, as a dive shrine's blessing is worn today. Floor-start effects (`barrierOnFloor`, `noPotions`, `exitRevealed`) read the summed view there. `skip` is consumed by `chooseDoor`: the door goes `skip` further and the boon's entry has its `skip` zeroed (the entry stays, so its count and Find stay).
 
 **Stacking.** `diveBuffs` is the record: a boon's worn count is its entries. `buffSum` adds every entry's effect.
 
 **The alcoves** keep power-ups: `alcoveOffers` and `takeAlcove` use `stopKinds` and `runStop` unchanged.
 
-**Settle.** A dive's end clears `diveBuffs` (a new dive starts with none). `settleDive` reads `deathLoss` before clearing.
+**Settle.** `settleDive` reads `deathLoss` from `dive.diveBuffs` and leaves them, so `DiveSummary` can list them; a new dive starts with none (`startDive` builds a fresh `DiveState`), so boons never outlive their dive.
 
 **Save.** `BuffSchema` becomes `{ boon, tier, effect }`; `DiveStopSchema` the union. The save version goes to 13; older saves reset, as every version change does.
 
@@ -218,11 +225,11 @@ Family colours (ENDESGA 32, in `stop/boon-style.ts`): offense red, element viole
 ## 7. Tests
 
 **Engine, unit:**
-- `delve-boons-data.test.ts`: `boonsProblems` is empty on the shipped data and catches a bad knob key, a bad element role, a cap of 4, and a family with no stop row.
+- `delve-boons-data.test.ts`: `boonsProblems` is empty on the shipped data and catches a bad knob key, a bad element role, a cap of 4, a family with no stop row, and a stop row whose three tiers are identical.
 - `delve-boons.test.ts`: `rollBoons` offers 3 distinct families, is deterministic per seed, never offers a capped boon, honours `minDepth`, falls back a tier when a tier is empty, bumps a tier under a door's `boons`; `buffSum` adds across entries and tiers.
 - `delve-stops.test.ts` (extend): `takeStop` with `boon` pushes the entry, spends nothing, marks taken, refuses a second take and a power-up action; a guided stop still offers power-ups and takes them; `alcoveOffers` and `takeAlcove` unchanged.
-- One short test per field at its site, in the file that owns the site's tests: `applyBuffs` (damage, maxLife floor, tempo floor, attune by role, lifeForMana's regen), dodge (charges, window, perfectAlways), impact (byKind, firstMove, execute, nearFoes), cast (free cast, life cost), defend (duration), combat (last stand once a floor), interact (heal on clear), drops (metalUp, flux, runes, scrap, gear), `settleDive` (deathLoss), `chooseDoor` (skip consumed), generate (alwaysShrine leaves other rooms' kinds and every other stream unchanged), fog (exitRevealed), terrain (noSlow), objects (hazardsFriendly), stacks (`stackTime`).
-- Shrines: every sanctum draw on a fixed seed gives the same shrine as before (the stream is unchanged).
+- One short test per field at its site, in the file that owns the site's tests: `applyBuffs` (damage per entry, maxLife floor, tempo floor, lifesteal, bloodPrice's regen, `boonKnobs`), `profileStats` (attune by role reaches a blow's `attunePower`), resolve (two Swift Hands entries multiply; Echo takes the larger of a rune and a boon; blows carry no boon knob), dodge (charges, window, perfectAlways), impact (byKind, firstMove, lowLife, nearFoes), cast (free cast and its damage, the life cost and its refusal), defend (duration), combat (last stand once a floor), interact (heal on clear, `shrinesLastDive`), drops (metalUp, flux, runes, scrap, gear), spawn (eliteChance), `settleDive` (deathLoss; buffs left on the settled dive), `chooseDoor` (skip consumed), fog (exitRevealed), terrain (noSlow), objects (hazardsFriendly), stacks (`stackTime`).
+- Shrines: over 20 seeds and six depths, every generated floor's sanctum holds the same shrine id as before the change (pinned from the current code), and the tutorial floor's shrine is still Vigor.
 - Profile schema: a v12 save resets; v13 round-trips a dive with boons and a `boons` stop.
 
 **Engine, pacing** (at the close, over 16 seeds, read before tuning): `delve-pacing.test.ts`, `delve-pacing-robust.test.ts`, `delve-pacing-pairs.test.ts`, `delve-tutorial-bot.test.ts`, `delve-maps-sweep.test.ts`. If a rail moves, tune the boon tiers' numbers first, then `tierWeights`, then the alcoves' `kindWeights`. Never the rails. Record the measured numbers in CLAUDE.md as the other systems do.
@@ -242,6 +249,7 @@ Family colours (ENDESGA 32, in `stop/boon-style.ts`): offense red, element viole
 ## Out of scope
 
 - Boons from shrines beyond today's six (a shrine is a row; more can come as data later).
+- A boon that adds a room or changes a floor's layout: it would shift the layout stream.
 - A boon index in the Codex.
 - Boon synergies or "duo" boons.
 - Boons in the Training Grounds.
