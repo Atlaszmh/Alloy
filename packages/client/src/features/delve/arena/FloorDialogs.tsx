@@ -50,7 +50,14 @@ export function ExitConfirm({
 /** `profile` at a stop offering `offers`: the alcove's dry runs ask the stop's own op, whose rules it shares. */
 function atStop(profile: DelveProfile, offers: StopKind[]): DelveProfile {
   return profile.dive
-    ? { ...profile, dive: { ...profile.dive, phase: 'choosing', stop: { offers, taken: false } } }
+    ? {
+        ...profile,
+        dive: {
+          ...profile.dive,
+          phase: 'choosing',
+          stop: { kind: 'powerups', offers, taken: false },
+        },
+      }
     : profile;
 }
 
@@ -81,7 +88,7 @@ export function AlcoveDialog({
   }, [offers, onTake, onClose]);
   return (
     <Dialog title="Anvil alcove" onClose={onClose} width={1120} testId="alcove-dialog">
-      <StopPanel stop={{ offers, taken: false }} ops={ops} />
+      <StopPanel stop={{ kind: 'powerups', offers, taken: false }} ops={ops} />
     </Dialog>
   );
 }

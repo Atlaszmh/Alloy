@@ -26,7 +26,7 @@ import {
   type ChainSkill,
   type DataRegistry,
   type DelveProfile,
-  type DiveStop,
+  type PowerupStop,
   type GearItem,
   type Move,
   type ProfileActionResult,
@@ -101,7 +101,7 @@ const STOP_OPS: StopOps = {
  * taking one spends the stop (the engine's `takeStop`), and skipping it is choosing a door. The
  * Anvil alcove (see the floor maps spec) shows the same cards over its own `ops`.
  */
-export function StopPanel({ stop, ops = STOP_OPS }: { stop: DiveStop; ops?: StopOps }) {
+export function StopPanel({ stop, ops = STOP_OPS }: { stop: PowerupStop; ops?: StopOps }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const upgradeCosts = upgradable(registry, profile).map((i) => upgradeCost(registry, i)!);

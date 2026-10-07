@@ -357,7 +357,7 @@ describe('DelveRun', () => {
           ...profile.dive!,
           phase: 'choosing',
           doorChoices: ['winding'],
-          stop: { offers: ['equip'], taken: false },
+          stop: { kind: 'powerups', offers: ['equip'], taken: false },
         },
       },
     });
@@ -396,7 +396,7 @@ describe('DelveRun', () => {
             ...profile.dive!,
             phase: 'choosing',
             doorChoices: ['winding'],
-            stop: { offers: ['equip'], taken: false },
+            stop: { kind: 'powerups', offers: ['equip'], taken: false },
           },
         },
       }),
@@ -422,7 +422,7 @@ describe('DelveRun', () => {
           ...profile.dive!,
           phase: 'choosing',
           doorChoices: ['winding'],
-          stop: { offers: ['equip'], taken: false },
+          stop: { kind: 'powerups', offers: ['equip'], taken: false },
         },
       },
     });

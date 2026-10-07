@@ -310,14 +310,14 @@ function promptOf(world: ArpgWorld, e: PromptEvent | null): InteractHud | undefi
   };
 }
 
-/** The shrines' blessings on the hero, the dive's then the floor's, by their shrine's name. */
+/** The shrines' blessings on the hero, the dive's then the floor's, by their boon row's name. */
 function blessings(h: ArpgWorld['hero']): HudBuff[] {
-  const shrines = getDelveRegistry().getDelveData().shrines;
+  const registry = getDelveRegistry();
   return [h.diveBuffs, h.floorBuffs].flatMap((list, i) =>
     list.map((b) => ({
       id: 'shrine' as const,
-      shrine: b.shrine,
-      name: shrines.find((s) => s.id === b.shrine)?.name ?? b.shrine,
+      shrine: b.boon,
+      name: registry.getBoon(b.boon)?.name ?? b.boon,
       dive: i === 0,
     })),
   );

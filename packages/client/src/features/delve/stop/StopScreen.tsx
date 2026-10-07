@@ -230,7 +230,8 @@ export const StopScreen = memo(function StopScreen({
     return () => clearTimeout(t);
   }, []);
   const mainRef = useRef<HTMLDivElement>(null);
-  const stop = dive.stop;
+  // The power-up cards (a boons stop's cards are the boons spec's C1; until then it goes to the road).
+  const stop = dive.stop?.kind === 'powerups' ? dive.stop : null;
   const offering = !!stop && !stop.taken;
   // A guided stop's required power-up holds step 1 (the engine refuses a door until it's taken).
   const required = !!stop?.required && !stop.taken;

@@ -85,7 +85,7 @@ function atStop(
       phase: 'choosing',
       bounty: 26,
       doorChoices: ['winding', 'gilded'],
-      stop: offers ? { offers, taken: false } : null,
+      stop: offers ? { kind: 'powerups' as const, offers, taken: false } : null,
       ...over,
     },
   });
@@ -256,7 +256,7 @@ describe('StopScreen (between depths)', () => {
   });
 
   it("opens on step 2 when the stop offers nothing, or what it offered is taken (a reload's)", () => {
-    atStop(['equip'], { stop: { offers: ['equip'], taken: true } });
+    atStop(['equip'], { stop: { kind: 'powerups', offers: ['equip'], taken: true } });
     expect(screen.getByTestId('stop-road')).toBeInTheDocument();
     expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Skip power-up' })).toBeNull();
@@ -363,7 +363,7 @@ describe('StopScreen (between depths)', () => {
   });
 
   it('with the power-up taken, or none on offer, the first door is the first focus', () => {
-    atStop(['equip'], { stop: { offers: ['equip'], taken: true } });
+    atStop(['equip'], { stop: { kind: 'powerups', offers: ['equip'], taken: true } });
     const first = store().profile.dive!.doorChoices[0];
     expect(screen.getByTestId(`door-${first}`)).toHaveAttribute('data-pad-first');
   });
@@ -419,7 +419,7 @@ describe("StopScreen (a guided start's stops)", () => {
   });
 
   it('a required power-up holds step 1: Skip is off and says why, and the roads come once it is taken', () => {
-    atStop(['equip'], { stop: { offers: ['equip'], taken: false, required: true } });
+    atStop(['equip'], { stop: { kind: 'powerups', offers: ['equip'], taken: false, required: true } });
     arm();
     const skip = screen.getByRole('button', { name: 'Skip power-up' });
     expect(skip).toBeDisabled();

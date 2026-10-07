@@ -224,8 +224,8 @@ describe('arena HUD snapshot: buffs and the map', () => {
 
   it("lists the shrines' blessings after them, the dive's then the floor's, by their shrine's name", () => {
     const w = sandbox();
-    w.hero.floorBuffs = [{ shrine: 'vigor', effect: { damage: 0.2 } }];
-    w.hero.diveBuffs = [{ shrine: 'devotion', effect: { damage: 0.1 } }];
+    w.hero.floorBuffs = [{ boon: 'vigor', tier: 1, effect: { damage: 0.2 } }];
+    w.hero.diveBuffs = [{ boon: 'devotion', tier: 1, effect: { damage: 0.1 } }];
     expect(snapshot(w, null).buffs).toEqual([
       { id: 'shrine', shrine: 'devotion', name: 'Shrine of Devotion', dive: true },
       { id: 'shrine', shrine: 'vigor', name: 'Shrine of Vigor', dive: false },
