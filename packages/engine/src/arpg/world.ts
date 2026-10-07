@@ -467,6 +467,21 @@ export function emptyPending(newFloor = false): WorldPending {
 }
 
 /**
+ * What the dive's boons do as a floor starts (the boons spec's §2): Stone Skin's Obsidian
+ * barrier of `barrierOnFloor` × max life, for the floor (`until: Infinity`); Famine's empty
+ * flasks (`noPotions`).
+ */
+function boonFloorStart(world: ArpgWorld): void {
+  const h = world.hero;
+  const { barrierOnFloor, noPotions } = h.boon;
+  if (barrierOnFloor) {
+    const hp = h.stats.maxHp * barrierOnFloor;
+    h.barrier = { hp, max: hp, until: Infinity };
+  }
+  if (noPotions) h.potions = 0;
+}
+
+/**
  * Build the arena for one depth: the open room (the hero at the bottom, packs spread
  * above), a generated floor (`planFloor`: the hero at its start, packs room by room),
  * or a guided start's hand-built floor (`opts.tutorial`: its map and foes as its data has them).
@@ -561,11 +576,17 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     tutorialFloor: built?.id ?? null,
     tutorial: opts.tutorial ? { ...opts.tutorial.state, tally: {} } : null,
   };
+  boonFloorStart(world);
 
   const mods = opts.door?.mods ?? {};
   const boss = isBossFloor(registry, opts.depth);
   const packs = opts.empty ? 0 : floorPacks(registry, opts.depth, opts.door);
-  const eliteChance = Math.max(bal.dive.eliteChance, mods.eliteChance ?? 0);
+  // Hunted (the boons spec's `eliteChance`) raises it like a door; the pack's draw is made whatever it is.
+  const eliteChance = Math.max(
+    bal.dive.eliteChance,
+    mods.eliteChance ?? 0,
+    world.hero.boon.eliteChance ?? 0,
+  );
 
   const spawn = (
     def: MonsterDef,
