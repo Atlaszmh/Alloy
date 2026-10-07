@@ -40,6 +40,14 @@ function interactableOf(world: ArpgWorld, id: string): Interactable | undefined 
 }
 
 /** A shrine's boon row (`boons.json`). */
+/** A shrine's line; under Sanctuary a floor shrine's blessing lasts the dive, and its line says so. */
+function shrineLine(world: ArpgWorld, shrine: BoonDef): string {
+  const { text } = shrine.tiers[0];
+  return world.hero.boon.shrinesLastDive && shrine.duration === 'floor'
+    ? text.replace(/ for this floor$/, ' for the dive (Sanctuary)')
+    : text;
+}
+
 function shrineOf(registry: DataRegistry, it: Interactable): BoonDef | undefined {
   return it.shrine === undefined ? undefined : registry.getBoon(it.shrine);
 }
@@ -115,7 +123,7 @@ export function interactTick(ctx: SimCtx): void {
   const text =
     it.kind === 'shrine'
       ? shrine
-        ? `${shrine.name}: ${shrine.tiers[0].text}`
+        ? `${shrine.name}: ${shrineLine(world, shrine)}`
         : 'Shrine'
       : NAMES[it.kind];
   events.push({ kind: 'interactPrompt', id: it.id, interactable: it.kind, text });
@@ -235,7 +243,8 @@ function openChest(ctx: SimCtx, it: Interactable): void {
 export function applyShrine(registry: DataRegistry, world: ArpgWorld, shrine: BoonDef): void {
   const h = world.hero;
   const { effect } = shrine.tiers[0];
-  if (effect.potions) h.potions = registry.getDelveBalance().dive.maxPotions;
+  // Famine (`noPotions`) means no potions at all: a Mercy shrine refills nothing while it is worn.
+  if (effect.potions && !h.boon.noPotions) h.potions = registry.getDelveBalance().dive.maxPotions;
   world.loot.find += effect.find ?? 0;
   if (Object.keys(effect).every((k) => k === 'potions')) return;
   const buff: Buff = { boon: shrine.id, tier: 1, effect };

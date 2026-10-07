@@ -8,6 +8,13 @@ const row = (id: string) => registry.getBoons().find((b) => b.id === id)!;
 const entry = (boon: string, tier: 1 | 2 | 3 = 1): Buff => ({ boon, tier, effect: {} });
 
 describe('wornBoons', () => {
+  it("a floor shrine worn for the dive (Sanctuary) says so in its line, not 'this floor'", () => {
+    const [vigor] = wornBoons(registry, [entry('vigor')], true);
+    expect(vigor.lines[0]).not.toMatch(/this floor/);
+    expect(vigor.lines[0].endsWith("for the dive (Sanctuary)")).toBe(true);
+    expect(wornBoons(registry, [entry('vigor')])[0].lines).toEqual([row('vigor').tiers[0].text]);
+  });
+
   it('groups entries by boon in first-taken order, counting them and listing each tier line', () => {
     const worn = wornBoons(registry, [entry('devotion'), entry('vigor'), entry('devotion', 2)]);
     expect(worn).toEqual([

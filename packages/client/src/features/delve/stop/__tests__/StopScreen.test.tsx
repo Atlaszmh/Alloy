@@ -307,6 +307,13 @@ describe('StopScreen (between depths)', () => {
     expect(screen.queryByTestId('door-potion')).toBeNull();
   });
 
+  it('Famine worn: the road offers no potion', () => {
+    const famine = { boon: 'famine', tier: 1 as const, effect: { noPotions: true as const } };
+    atStop(null, { heroHpFrac: 0.4, potions: 2, diveBuffs: [famine] });
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
+    expect(screen.queryByTestId('door-potion')).toBeNull();
+  });
+
   it("has no back at its top level: Esc and the pad's Menu open the pause; Enter with nothing focused doesn't", () => {
     const { onMenu } = atStop(['equip']);
     press('Escape'); // carried from the fight

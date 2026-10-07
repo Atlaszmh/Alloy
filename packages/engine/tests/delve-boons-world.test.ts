@@ -13,7 +13,15 @@ import { dropRune } from '../src/arpg/rune-drops.js';
 import { groundSpeed } from '../src/arpg/terrain.js';
 import { createFloorWorld, type FloorOptions } from '../src/arpg/world.js';
 import { buffSum } from '../src/delve/boons.js';
-import { beginFloor, chooseDoor, heroMaxHp, settleDive, startDive } from '../src/delve/dive.js';
+import {
+  beginFloor,
+  canDrinkBetweenFloors,
+  chooseDoor,
+  drinkPotionBetweenFloors,
+  heroMaxHp,
+  settleDive,
+  startDive,
+} from '../src/delve/dive.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import { emptyHaul, metalAt } from '../src/loot/materials.js';
@@ -156,6 +164,13 @@ describe('interact.ts', () => {
     const plain = arena([]);
     applyShrine(registry, plain, registry.getBoon('clarity')!);
     expect([plain.hero.floorBuffs.length, plain.hero.diveBuffs.length]).toEqual([1, 0]);
+  });
+
+  it('Famine: a Mercy shrine refills no potion while it is worn', () => {
+    const w = wear(arena([]), { noPotions: true });
+    w.hero.potions = 0;
+    applyShrine(registry, w, registry.getBoon('mercy')!);
+    expect(w.hero.potions).toBe(0);
   });
 });
 
@@ -374,5 +389,18 @@ describe('heroMaxHp (dive.ts)', () => {
   it('a Glass Cannon-like maxLife -0.2 entry lowers it', () => {
     const p = diving([]);
     expect(heroMaxHp(registry, diving([buff({ maxLife: -0.2 })]))).toBeCloseTo(heroMaxHp(registry, p) * 0.8, 6);
+  });
+});
+
+describe('Famine between floors (dive.ts)', () => {
+  it("refuses the stop's potion while Famine is worn", () => {
+    const p = startDive(registry, createDelveProfile(registry, 2), 1);
+    const dive = { ...p.dive!, phase: 'choosing' as const, heroHpFrac: 0.3, potions: 2 };
+    const thirsty: DelveProfile = { ...p, dive };
+    expect(canDrinkBetweenFloors(thirsty.dive!)).toBe(true);
+    expect(drinkPotionBetweenFloors(registry, thirsty)).not.toBeNull();
+    const famished: DelveProfile = { ...p, dive: { ...dive, diveBuffs: [buff({ noPotions: true }, 'famine')] } };
+    expect(canDrinkBetweenFloors(famished.dive!)).toBe(false);
+    expect(drinkPotionBetweenFloors(registry, famished)).toBeNull();
   });
 });

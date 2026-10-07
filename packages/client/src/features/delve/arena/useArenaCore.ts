@@ -330,7 +330,7 @@ function promptOf(world: ArpgWorld, e: PromptEvent | null): InteractHud | undefi
 function blessings(h: ArpgWorld['hero']): HudBuff[] {
   const registry = getDelveRegistry();
   return [h.diveBuffs, h.floorBuffs].flatMap((list, i) =>
-    wornBoons(registry, list).map((w) => ({ id: 'boon' as const, ...w, dive: i === 0 })),
+    wornBoons(registry, list, i === 0).map((w) => ({ id: 'boon' as const, ...w, dive: i === 0 })),
   );
 }
 

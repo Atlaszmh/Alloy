@@ -387,7 +387,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
   if (!dive.doorChoices.includes(doorId)) throw new Error(`Door not offered: ${doorId}`);
   const door = registry.getDoor(doorId);
   // Deeper Still (the boons spec's `skip`): the dive's boons add to the door's skip and are spent (each entry stays).
-  // Guided stops never offer boons, so a guided door never skips a depth.
+  // The guided start's dives meet no boons stop (its stops offer power-ups), so they wear no Deeper Still.
   const skip = buffSum(dive.diveBuffs).skip ?? 0;
   const depth = dive.depth + 1 + (door.mods.skip ?? 0) + skip;
   const diveBuffs = skip ? spendSkip(dive.diveBuffs) : dive.diveBuffs;
@@ -500,9 +500,19 @@ export function closeDive(registry: DataRegistry, profile: DelveProfile): DelveP
 }
 
 /** Drink a potion at the door screen (between floors). Null when nothing to heal. */
+/**
+ * Whether the stop's potion can be drunk: choosing, a potion left, life below full, and no
+ * Famine (`noPotions`) worn. The road offers it only then.
+ */
+export function canDrinkBetweenFloors(dive: DiveState): boolean {
+  return (
+    dive.phase === 'choosing' && dive.potions > 0 && dive.heroHpFrac < 1 && !buffSum(dive.diveBuffs).noPotions
+  );
+}
+
 export function drinkPotionBetweenFloors(registry: DataRegistry, profile: DelveProfile): DelveProfile | null {
   const dive = profile.dive;
-  if (!dive || dive.phase !== 'choosing' || dive.potions <= 0 || dive.heroHpFrac >= 1) return null;
+  if (!dive || !canDrinkBetweenFloors(dive)) return null;
   const heal = registry.getDelveBalance().dive.potionHeal;
   return { ...profile, dive: { ...dive, potions: dive.potions - 1, heroHpFrac: Math.min(1, dive.heroHpFrac + heal) } };
 }

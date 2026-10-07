@@ -191,6 +191,13 @@ describe('the shrine', () => {
     return w;
   }
 
+  it("under Sanctuary a floor shrine's prompt says its blessing lasts the dive", () => {
+    const w = praying('vigor');
+    w.hero.boon = { ...w.hero.boon, shrinesLastDive: true };
+    const prompt = of(run(w, STEP), 'interactPrompt')[0];
+    expect(prompt.text).toBe('Shrine of Vigor: +20% damage for the dive (Sanctuary)');
+  });
+
   it('prompts with its blessing; a press prays for ai.shrineChannel, then blesses the floor and is spent', () => {
     const w = praying('vigor');
     const prompt = of(run(w, STEP), 'interactPrompt')[0];

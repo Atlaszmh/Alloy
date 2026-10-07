@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import {
   RARITY_ORDER,
+  canDrinkBetweenFloors,
   isBossDepth,
   type DiveState,
   type DoorMods,
@@ -165,7 +166,7 @@ export function DoorPane({
   const tutorial = useDelveStore((s) => s.profile.tutorial);
   const extract = tutorialStop(tutorial)?.extract ?? true;
   const doors = dive.doorChoices.length > 0;
-  const thirsty = dive.potions > 0 && dive.heroHpFrac < 1;
+  const thirsty = canDrinkBetweenFloors(dive); // a potion left, life below full, no Famine worn
   return (
     <div className="flex min-h-0 items-stretch gap-5 [@media(max-height:809px)]:gap-3">
       <div

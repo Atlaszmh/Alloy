@@ -64,6 +64,7 @@ export {
   extractDive,
   closeDive,
   settleDive,
+  canDrinkBetweenFloors,
   drinkPotionBetweenFloors,
 } from './delve/dive.js';
 export type { BankResult, FloorResult } from './delve/dive.js';
