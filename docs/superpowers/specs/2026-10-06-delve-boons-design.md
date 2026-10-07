@@ -131,9 +131,9 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Third Wind | defense | 1 | +1 dodge charge | +1, dodges recharge 15% faster | +1, perfect window +30% | `dodgeCharges`, `dodgeRecharge` (rare), `dodgeWindow` (epic) | |
 | Perfect Form | defense | 2 | perfect window +30% | +50% | +80% | `dodgeWindow` | |
 | Bulwark | defense | 2 | Defensive lasts +25% | +40% | +60% | `defendDuration` | |
-| Stone Skin | defense | 2 | barrier of 8% life each floor | 12% | 18% | `barrierOnFloor` | |
+| Stone Skin | defense | 2 | barrier of 15% life each floor | 22% | 30% | `barrierOnFloor` | |
 | Deep Breath | defense | 2 | regain 4% life a room cleared | 6% | 10% | `healOnClear` | |
-| Vampire's Tithe | defense | 2 | 1.5% lifesteal | 2.5% | 4% | `lifesteal` | |
+| Vampire's Tithe | defense | 2 | 2.5% lifesteal | 4% | 6% | `lifesteal` | |
 | Last Stand | defense | 1 | under 20%: 40% less damage for 2 s, once a floor | 50%, 3 s | 60%, 4 s | `lastStand` | |
 | Quickstep | tempo | 2 | beats and holds 8% faster | 12% | 18% | `tempo` | |
 | Swift Hands | tempo | 2 | ability cooldowns −8% | −12% | −18% | `knobs.quick.cooldown` 0.92 / 0.88 / 0.82 (no power cut, unlike the Quick rune) | |
