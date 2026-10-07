@@ -371,8 +371,7 @@ describe('heroMaxHp (dive.ts)', () => {
     }
   });
 
-  // Needs B2's `applyBuffs` handler for `maxLife`: un-skip at B2's merge.
-  it.skip('a Glass Cannon-like maxLife -0.2 entry lowers it', () => {
+  it('a Glass Cannon-like maxLife -0.2 entry lowers it', () => {
     const p = diving([]);
     expect(heroMaxHp(registry, diving([buff({ maxLife: -0.2 })]))).toBeCloseTo(heroMaxHp(registry, p) * 0.8, 6);
   });
