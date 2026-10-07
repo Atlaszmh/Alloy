@@ -303,3 +303,39 @@ describe('noSlow (terrain.ts)', () => {
     expect(groundSpeed(free.w, { x: free.w.hero.x, y: free.w.hero.y })).toBe(bal.terrain.slowMult);
   });
 });
+
+describe('hazardsFriendly (objects.ts)', () => {
+  const blast = (effects: BoonEffect[]) => {
+    const w = arena([], { noBasic: true });
+    for (const e of effects) wear(w, e);
+    w.hero.stats = { ...w.hero.stats, dodge: 0 };
+    const hz: HazardEntity = {
+      type: 'hazard',
+      id: 900,
+      kind: 'brazier',
+      element: 'fire',
+      x: 13,
+      y: 34.5,
+      radius: 0.4,
+      burst: 2.5,
+      state: 'ready',
+      until: 0,
+    };
+    w.hazards = [hz];
+    hitObject(makeCtx(registry, w, []), hz, 'foe');
+    const hp = w.hero.hp;
+    run(w, 1);
+    return { hz, hurt: hp - w.hero.hp };
+  };
+
+  it('Arsonist: hazards recharge × (1 − the largest entry) and never hurt the hero', () => {
+    const { fuse, recharge } = bal.terrain;
+    const plain = blast([]);
+    expect(plain.hurt).toBeGreaterThan(0);
+    expect(plain.hz.state).toBe('dormant');
+    expect(plain.hz.until).toBeCloseTo(fuse + recharge, 0);
+    const kind = blast([{ hazardsFriendly: 0.5 }, { hazardsFriendly: 0.8 }]);
+    expect(kind.hurt).toBeLessThanOrEqual(0);
+    expect(kind.hz.until).toBeCloseTo(fuse + recharge * 0.2, 0);
+  });
+});

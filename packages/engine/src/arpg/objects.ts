@@ -117,19 +117,22 @@ function prime(ctx: SimCtx, hz: HazardEntity): void {
  * with its element's stacks as a heavy blow brings them, reactions as usual.
  * It wears crumbling
  * cover, sets off the hazards and breaks the props it reaches (a chain), and
- * is dormant for `terrain.recharge`.
+ * is dormant for `terrain.recharge` (× (1 − `hazardsFriendly`) under Arsonist, which also
+ * spares the hero).
  */
 function burst(ctx: SimCtx, hz: HazardEntity): void {
   const { world, bal, registry } = ctx;
   const g = depthGrowth(registry, world.depth);
   const damage = bal.terrain.hazardDamage * bal.monster.baseDmg * g.dmg * g.ramp;
   const { id, kind: hazard, element, x, y, burst: radius } = hz;
+  // Arsonist (the boons spec's `hazardsFriendly`): a quicker recharge, and the hero is spared.
+  const friendly = world.hero.boon.hazardsFriendly ?? 0;
   hz.state = 'dormant';
-  hz.until = world.t + bal.terrain.recharge;
+  hz.until = world.t + bal.terrain.recharge * (1 - friendly);
   ctx.events.push({ kind: 'hazardBurst', id, hazard, element, x, y, radius });
   const reaches = (b: { x: number; y: number; radius: number }) =>
     dist(x, y, b.x, b.y) <= radius + b.radius && sees(world.map, hz, b);
-  if (reaches(world.hero)) hurtHero(ctx, damage, element, null, { noPerfect: true });
+  if (!friendly && reaches(world.hero)) hurtHero(ctx, damage, element, null, { noPerfect: true });
   for (const m of world.monsters)
     if (!m.dead && reaches(m))
       hitMonster(ctx, m, (damage * bal.terrain.hazardFoeMult * g.hpRamp) / g.ramp, element, {
