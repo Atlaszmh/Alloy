@@ -45,6 +45,7 @@ function report(seed: number, depths: number[]): EconomyReport {
         salvaged: { ...emptyHaul(), scrap: 5 },
         spent: { ...emptyHaul(), scrap: 10 },
         stops: emptyHaul(),
+        boons: { offense: seed, element: 0, defense: 1, tempo: 0, fortune: 0, pact: 0, floor: 0 },
         forged: { ...NONE, rare: seed },
         depth,
         died,
@@ -101,6 +102,9 @@ describe('EconomyView', () => {
       '0 · 0 · 0 · 7.5 · 0 · 0',
       '750 / 20 / 5 / 10 / 30',
     ]);
+    // The last column: the boons by family, offense to floor, means over the seeds.
+    expect(cells(rows[0]).at(-1)).toBe('7.5 · 0 · 1 · 0 · 0 · 0 · 0');
+    expect(screen.getByTestId('economy-table')).toHaveTextContent('Boons (offense to floor)');
   });
 
   it("charts a material's income, spending and death loss, the items forged by rarity, the depth or the deaths", () => {
@@ -120,6 +124,9 @@ describe('EconomyView', () => {
       expect(screen.getByTestId('economy-legend')).toHaveTextContent(label);
     fireEvent.change(show, { target: { value: 'forged' } });
     expect(screen.getAllByTestId('economy-line')).toHaveLength(6);
+    fireEvent.change(show, { target: { value: 'boons' } });
+    expect(screen.getAllByTestId('economy-line')).toHaveLength(7);
+    expect(screen.getByTestId('economy-legend')).toHaveTextContent('Offense');
     fireEvent.change(show, { target: { value: 'deaths' } });
     expect(screen.getAllByTestId('economy-line')).toHaveLength(1);
     // The read-out is the last dive's until the pointer picks one: all three seeds died on dive 2.

@@ -1,5 +1,5 @@
 import { useEffect, useState, type PointerEvent } from 'react';
-import { RARITY_ORDER, type EconomyReport } from '@alloy/engine';
+import { BOON_FAMILIES, RARITY_ORDER, type EconomyReport } from '@alloy/engine';
 import { Button, Panel } from '../kit';
 import { niceCeil } from './LabChart';
 import {
@@ -21,6 +21,7 @@ const HEAD = 'px-1 py-1 text-left font-normal text-stone-500';
 /** What the chart shows besides a material. */
 const OTHER_CHARTS = [
   { id: 'forged', label: 'Items forged' },
+  { id: 'boons', label: 'Boons by family' },
   { id: 'depth', label: 'Deepest depth' },
   { id: 'deaths', label: 'Deaths' },
 ];
@@ -30,7 +31,7 @@ const OTHER_CHARTS = [
  * engine's economy sim (the autopilot over N dives from a new save) for the
  * chosen seeds, run in a worker on Run, charted dive by dive (a material's
  * income, quest rewards claimed, Anvil salvage, spending (the Anvil's and the stops') and death loss,
- * the items forged by rarity, the deepest
+ * the items forged by rarity, the boons taken by family, the deepest
  * depth or the deaths) over a table of every dive. Each value is the mean over the seeds;
  * deaths are a count. The page keeps it mounted, `hidden` under the other views.
  */
@@ -73,6 +74,7 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
   const depth = perDive(reports, (d) => d.depth);
   const deaths = perDive(reports, (d) => (d.died ? 1 : 0), true);
   const forged = RARITY_ORDER.map((r) => perDive(reports, (d) => d.forged[r] ?? 0));
+  const boons = BOON_FAMILIES.map((f) => perDive(reports, (d) => d.boons[f]));
   const materials = MATERIAL_TOTALS.map((m) => [
     perDive(reports, (d) => m.of(d.income)),
     perDive(reports, (d) => m.of(d.quests)),
@@ -165,6 +167,7 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
                       {m.label} in / quests / salvaged / spent / lost
                     </th>
                   ))}
+                  <th className={HEAD}>Boons (offense to floor)</th>
                 </tr>
               </thead>
               <tbody>
@@ -179,6 +182,7 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
                         {cols.map((c) => formatAmount(c[i])).join(' / ')}
                       </td>
                     ))}
+                    <td className="px-1">{boons.map((b) => formatAmount(b[i])).join(' · ')}</td>
                   </tr>
                 ))}
               </tbody>
