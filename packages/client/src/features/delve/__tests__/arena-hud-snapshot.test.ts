@@ -222,13 +222,33 @@ describe('arena HUD snapshot: buffs and the map', () => {
     expect(snapshot(w, null).buffs.map((b) => b.id)).toEqual(['barrier']);
   });
 
-  it("lists the shrines' blessings after them, the dive's then the floor's, by their shrine's name", () => {
+  it("lists the worn boons after them, one per boon, the dive's then the floor's, with count and lines", () => {
     const w = sandbox();
+    const row = (id: string) => registry.getBoons().find((b) => b.id === id)!;
+    w.hero.diveBuffs = [
+      { boon: 'devotion', tier: 1, effect: { damage: 0.1 } },
+      { boon: 'devotion', tier: 1, effect: { damage: 0.1 } },
+    ];
     w.hero.floorBuffs = [{ boon: 'vigor', tier: 1, effect: { damage: 0.2 } }];
-    w.hero.diveBuffs = [{ boon: 'devotion', tier: 1, effect: { damage: 0.1 } }];
     expect(snapshot(w, null).buffs).toEqual([
-      { id: 'shrine', shrine: 'devotion', name: 'Shrine of Devotion', dive: true },
-      { id: 'shrine', shrine: 'vigor', name: 'Shrine of Vigor', dive: false },
+      {
+        id: 'boon',
+        boon: 'devotion',
+        name: row('devotion').name,
+        family: row('devotion').family,
+        count: 2,
+        dive: true,
+        lines: [row('devotion').tiers[0].text, row('devotion').tiers[0].text],
+      },
+      {
+        id: 'boon',
+        boon: 'vigor',
+        name: row('vigor').name,
+        family: row('vigor').family,
+        count: 1,
+        dive: false,
+        lines: [row('vigor').tiers[0].text],
+      },
     ]);
   });
 

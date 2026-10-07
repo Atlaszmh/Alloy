@@ -17,6 +17,8 @@ import {
   type ArpgEvent,
   type ArpgWorld,
   type Chains,
+  type BoonFamily,
+  type BoonId,
   type Drop,
   type FormId,
   type GearItem,
@@ -29,6 +31,7 @@ import {
   type RuneRef,
   type Vec,
 } from '@alloy/engine';
+import { wornBoons } from '../boons-text';
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer, seenAt } from './ArenaRenderer';
 import { floatPay } from './hud/floatPay';
@@ -118,8 +121,19 @@ export type HudBuff =
       /** Its whole length when the balance fixes one; null for the barrier (its source sets it). */
       total: number | null;
     }
-  /** A shrine's blessing (see the floor maps spec): for this floor or the rest of the dive. */
-  | { id: 'shrine'; shrine: string; name: string; dive: boolean };
+  /** A worn boon (a shrine's blessing is one too): one per boon, its entries counted, for this floor or the dive. */
+  | {
+      id: 'boon';
+      boon: BoonId;
+      name: string;
+      family: BoonFamily;
+      /** Its entries worn (stacks), 1 or more. */
+      count: number;
+      /** For the rest of the dive (gold), or this floor (cyan). */
+      dive: boolean;
+      /** Each entry's tier line, in the order taken: the tooltip's. */
+      lines: string[];
+    };
 
 /** The minimap's floor, in world units. */
 export interface HudMap {
@@ -310,16 +324,11 @@ function promptOf(world: ArpgWorld, e: PromptEvent | null): InteractHud | undefi
   };
 }
 
-/** The shrines' blessings on the hero, the dive's then the floor's, by their boon row's name. */
+/** The boons on the hero, one per boon, the dive's then the floor's. */
 function blessings(h: ArpgWorld['hero']): HudBuff[] {
   const registry = getDelveRegistry();
   return [h.diveBuffs, h.floorBuffs].flatMap((list, i) =>
-    list.map((b) => ({
-      id: 'shrine' as const,
-      shrine: b.boon,
-      name: registry.getBoon(b.boon)?.name ?? b.boon,
-      dive: i === 0,
-    })),
+    wornBoons(registry, list).map((w) => ({ id: 'boon' as const, ...w, dive: i === 0 })),
   );
 }
 
