@@ -43,7 +43,7 @@ interface BoonTier { text: string; effect: BoonEffect }
 - `text` is the tier's whole card line, written in data. The client never formats a boon's number.
 - **Shrines become rows.** Each of today's six shrines is a row with `shrine` set to its old weight, all `weight` entries 0, and its effect in tier 1 (tiers 2 and 3 copy tier 1; a shrine always grants tier 1). Devotion keeps `duration: 'dive'`, the others `'floor'`. The six shrine rows come first in `boons.json`, in `shrines.json`'s order, and the generator's draw (`generate.ts`, `weightedPick` over the rows with `shrine > 0`, in file order) is otherwise unchanged, so every floor rolls the same shrine as before. `tutorial-floor.ts`'s `shrines[0]` becomes `getBoon('vigor')`. `shrines.json`, `ShrinesDataSchema`, `ShrineDef` and `ShrineId` are deleted; `getDelveData().shrines` goes, and its readers move to `getBoons()`: the generator, `applyShrine`, the tutorial floor, `useArenaCore.ts`'s shrine name lookup and the maps tests that read `.shrines`.
 
-**Load checks** (`data/boons-check.ts`, `boonsProblems`, refused by `createDefaultRegistry` as `setPiecesProblems` is): ids unique; three tiers each with non-empty text; every `knobs` key a `Knobs` key; every `attune.element` a mana type; at least one row with a stop weight in each family; every shrine row's effect within the fields a shrine could already carry or a dive stat (no floor-shaping field on a `floor` shrine); `cap` 1–3.
+**Load checks** (`data/boons-check.ts`, `boonsProblems`, refused by `createDefaultRegistry` as `setPiecesProblems` is): ids unique; three tiers each with non-empty text; every `knobs` key a `Knobs` key; every `attune.role` `'primary'` or `'secondary'`; no stop row's three tiers identical; at least one row with a stop weight in each family; every shrine row's effect within the fields a shrine could already carry or a dive stat (no floor-shaping field on a `floor` shrine); `cap` 1–3.
 
 ## 2. The effect and where each field applies
 
@@ -53,7 +53,7 @@ interface BoonTier { text: string; effect: BoonEffect }
 interface Buff { boon: BoonId; tier: 1 | 2 | 3; effect: BoonEffect }
 ```
 
-`ShrineEffect` is renamed `BoonEffect` and grows. Every field is optional. **Stacking:** a count or an additive bonus (charges, Find, life regen, chances, fractions of life, and the "× (1 + Σ)" fields: `dodgeWindow`, `defendDuration`, `magnet`, `scrap`) sums across entries, Σ being that sum; a multiplier (`damage`, `manaRegen`, `maxLife`, `tempo`, and the drop multipliers `flux`, `runes`, `gear`) multiplies per entry, as `applyBuffs` does today, so today's shrines read as before; `knobs` merge per entry through `mergeKnobs` (section 2a). Each field has exactly one handler at one site; nothing reads a boon by id but the HUD.
+`ShrineEffect` is renamed `BoonEffect` and grows. Every field is optional. **Units** (stated in `BoonEffectSchema`'s docs): a bonus field is the added fraction (`damage: 0.25` is +25%), a drop multiplier (`flux`, `runes`, `gear`) is the raw factor (`1.3`). **Stacking:** a count or an additive bonus (charges, Find, life regen, chances, fractions of life, and the "× (1 + Σ)" fields: `dodgeWindow`, `dodgeRecharge`, `defendDuration`, `magnet`, `scrap`) sums across entries, Σ being that sum; `hazardsFriendly` takes its largest entry (its boon has cap 1, so this only matters if a second source comes); a multiplier (`damage`, `manaRegen`, `maxLife`, `tempo`, and the drop multipliers `flux`, `runes`, `gear`) multiplies per entry, as `applyBuffs` does today, so today's shrines read as before; `knobs` merge per entry through `mergeKnobs` (section 2a). Each field has exactly one handler at one site; nothing reads a boon by id but the HUD.
 
 | Field | Meaning | Applied where |
 |---|---|---|
@@ -72,6 +72,7 @@ interface Buff { boon: BoonId; tier: 1 | 2 | 3; effect: BoonEffect }
 | `nearFoes` | `{ per, cap, radius }`: extra damage per awake foe within `radius`, at most `cap` | `impact.ts` |
 | `dodgeCharges` | added to `dodge.charges`, may be negative, floored at 1 | `dodge.ts` |
 | `dodgeWindow` | `perfectWindow` × (1 + Σ) | `dodge.ts` |
+| `dodgeRecharge` | `dodge.recharge` × (1 − Σ), floored at 0.5 × | `dodge.ts` |
 | `perfectAlways` | every dodge that would be hit counts as perfect | `dodge.ts` |
 | `freeCast` | `{ seconds, damage }`: the first ability cast within `seconds` of a dodge costs nothing and deals `damage` more | `cast.ts` (`HeroEntity.freeCastUntil`; the cast's hits carry `freeCastDamage`) |
 | `defendDuration` | the Defensive's effect duration × (1 + Σ) | `defend.ts` |
@@ -100,9 +101,9 @@ interface Buff { boon: BoonId; tier: 1 | 2 | 3; effect: BoonEffect }
 
 ### 2a. Knobs and attunement
 
-**Knobs reach ability moves only.** `applyBuffs` copies each entry's `knobs` onto `HeroStats.boonKnobs: KnobsData[]`. `resolveAll` in `world.ts` already runs on the buffed stats (after `applyBuffs`, at floor start and in `refreshWorldHero`), and `resolveAbility` appends `stats.boonKnobs` to the partials it hands `mergeKnobs`, beside the legendaries'. So each entry merges by `mergeKnobs`'s own rule: `lifesteal`, `stacksBonus`, `catalyst` and `stackTime` add, `quick.*` multiply, `echo` takes the largest of the move's runes and every boon entry. Basic blows never take boon knobs: an Echo on every blow would change the attack's feel and cost.
+**Knobs reach ability moves only.** `applyBuffs` copies each entry's `knobs` onto `HeroStats.boonKnobs: KnobsData[]`, which `computeHeroStats` sets to `[]`, so the sandbox and the DPS Lab need no change. `resolveAll` in `world.ts` already runs on the buffed stats (after `applyBuffs`, at floor start and in `refreshWorldHero`), and `resolveAbility` appends `stats.boonKnobs` to the partials it hands `mergeKnobs`, beside the legendaries'. So each entry merges by `mergeKnobs`'s own rule: `lifesteal`, `stacksBonus`, `catalyst` and `stackTime` add, `quick.*` multiply, `echo` takes the largest of the move's runes and every boon entry. Basic blows never take boon knobs: an Echo on every blow would change the attack's feel and cost.
 
-**Attunement** goes in before stats exist: `profileStats(registry, profile)` adds the summed `attune` points of `profile.dive?.diveBuffs` to `pairExtra`'s `attunement` (each role resolved against `profile.pair`; a secondary while unbound goes to the primary), the path the Training Grounds' extra attunement takes, so blows' `attunePower`, masteries, the pool and the rune ease all see it. Its `Pick` gains `'dive'`. `beginFloor` and `refreshWorldHero`'s callers build stats through `profileStats`. `applyBuffs` ignores `attune`.
+**Attunement** goes in before stats exist, and only in the fight. A new `diveStats(registry, profile)` (`delve/pair.ts`) is `profileStats` plus the summed `attune` points of `profile.dive?.diveBuffs`, passed as `HeroStatsExtra.attunement` (each role resolved against `profile.pair`; a secondary while unbound goes to the primary; `pairExtra` gains an optional attunement argument). That is the path the Training Grounds' extra attunement takes, so blows' `attunePower`, masteries, the pool and the rune ease all see it. Only `beginFloor` and `refreshWorldHero`'s callers (`takeAlcove`, the store's refresh) switch to `diveStats`. `profileStats` is unchanged, so the forge's roll floor, `overtakeProgress`, Power and `compareItem` never see a boon. `applyBuffs` ignores `attune`.
 
 A new boon from these fields is one data row. A boon that needs a new field adds it to `BoonEffect`, `BoonEffectSchema`, `buffSum` and its one handler.
 
@@ -123,7 +124,7 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Lingering Mark | element | 2 | stacks last +30% | +50% | +80% | `knobs` (stack duration; new knob `stackTime`) | |
 | Pure Flame | element | 3 | +4 primary attunement | +6 | +10 | `attune` primary | |
 | Second Flame | element | 3 | +4 secondary attunement | +6 | +10 | `attune` secondary | 2 |
-| Third Wind | defense | 1 | +1 dodge charge | +1 | +1, perfect window +30% | `dodgeCharges`, `dodgeWindow` | |
+| Third Wind | defense | 1 | +1 dodge charge | +1, dodges recharge 15% faster | +1, perfect window +30% | `dodgeCharges`, `dodgeRecharge` (rare), `dodgeWindow` (epic) | |
 | Perfect Form | defense | 2 | perfect window +30% | +50% | +80% | `dodgeWindow` | |
 | Bulwark | defense | 2 | Defensive lasts +25% | +40% | +60% | `defendDuration` | |
 | Stone Skin | defense | 2 | barrier of 8% life each floor | 12% | 18% | `barrierOnFloor` | |
@@ -141,7 +142,7 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Flux Nose | fortune | 2 | flux chance ×1.3 | ×1.5 | ×1.8 | `flux` | |
 | Rune Sense | fortune | 2 | rune chance ×1.3 | ×1.5 | ×1.8 | `runes` | |
 | Scrapper | fortune | 2 | kill scrap +20% | +35% | +50% | `scrap` | |
-| Insurance | fortune | 1 | a death loses 30% of the banked haul, not 40% | 25% | 20% | `deathLoss` 0.10 / 0.15 / 0.20 | |
+| Insurance | fortune | 1 | a death loses 10 points less of the banked haul | 15 points | 20 points | `deathLoss` 0.10 / 0.15 / 0.20 | |
 | Glass Cannon | pact | 2 | +25% damage, −20% max life | +35%, −20% | +45%, −20% | `damage`, `maxLife` | 4 |
 | Blood Price | pact | 1 | abilities cost life, no mana regen, +20% damage | +30% | +40% | `bloodPrice` 0.5, `damage` | 6 |
 | Hunted | pact | 1 | every pack elite-led; gear chance ×1.5, scrap +30% | ×1.8, +40% | ×2, +60% | `eliteChance`, `gear`, `scrap` | 6 |
@@ -194,7 +195,7 @@ type DiveStop =
 
 **Wearing it.** The next `beginFloor` wears `diveBuffs` through `FloorOptions.diveBuffs`, as a dive shrine's blessing is worn today. Floor-start effects (`barrierOnFloor`, `noPotions`, `exitRevealed`) read the summed view there. `skip` is consumed by `chooseDoor`: the door goes `skip` further and the boon's entry has its `skip` zeroed (the entry stays, so its count and Find stay).
 
-**Stacking.** `diveBuffs` is the record: a boon's worn count is its entries. `buffSum` adds every entry's effect.
+**Stacking.** `diveBuffs` is the record: a boon's worn count is its entries. `buffSum` combines them by section 2's stacking rule.
 
 **The alcoves** keep power-ups: `alcoveOffers` and `takeAlcove` use `stopKinds` and `runStop` unchanged.
 
