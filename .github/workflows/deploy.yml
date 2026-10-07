@@ -23,7 +23,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -F @alloy/engine build
-      - run: pnpm -F @alloy/client test --testTimeout=30000
+      - run: pnpm -F @alloy/client test -- --testTimeout=30000
       - run: pnpm -F @alloy/client build
         env:
           ALLOY_BASE: /alloy/
