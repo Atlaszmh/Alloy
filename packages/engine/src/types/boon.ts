@@ -1,4 +1,4 @@
-import type { KnobsData } from './ability.js';
+import type { KnobsData, MoveKind } from './ability.js';
 
 // The boons (see the boons spec): dive-scoped rewards taken at the stops between depths, and the
 // sanctums' shrine blessings, which are boon rows too (`boons.json`).
@@ -37,7 +37,7 @@ export interface BoonEffect {
   attune?: { role: 'primary' | 'secondary'; points: number };
   knobs?: KnobsData;
   // the damage path
-  byKind?: Partial<Record<'light' | 'medium' | 'heavy' | 'hold', number>>;
+  byKind?: Partial<Record<MoveKind, number>>;
   firstMove?: number;
   stepBonus?: number;
   lowLife?: { below: number; mult: number };

@@ -375,7 +375,8 @@ export function createHeroEntity(
  * drops its wind-up (as a dodge does), its hold, its beat, its waiting press
  * and its queued echo, and a new Defensive ends the old one's buff and Ward at once, without
  * bursting. A skill left out has no chain (and so no cooldowns or charge).
- * `unbuffed` is the hero's gear (`profileStats`): its dive's and floor's
+ * `unbuffed` is the hero's gear (`diveStats`: the dive's boon knobs and attunement
+ * in): its dive's and floor's
  * blessings go back on (see the floor maps spec), so a refresh never wipes them.
  */
 export function refreshWorldHero(
