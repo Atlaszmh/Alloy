@@ -395,6 +395,11 @@ describe('StopScreen (between depths)', () => {
     expect(terms('cursed')).toEqual({ cost: ['Foes hit 40% harder'], gain: ['Tier up 35%'] });
   });
 
+  it("words a door's boon bump as a gain: the next stop's cards a tier up at its chance", () => {
+    expect(doorTerms({ boons: 0.5 })).toEqual({ cost: [], gain: ['Rarer boons 50%'] });
+    expect(doorTerms({ boons: 0 })).toEqual({ cost: [], gain: [] });
+  });
+
   it('with no power-up to offer, says so', () => {
     atStop(null);
     expect(screen.queryByTestId('stop')).toBeNull();

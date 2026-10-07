@@ -125,6 +125,8 @@ export function doorTerms(mods: DoorMods): DoorTerms {
     if (v !== undefined && v !== 1) (v > 1 ? gain : cost).push(`${label} ×${v}`);
   if (mods.find) gain.push(`Find +${mods.find}%`);
   if (mods.shardTier) gain.push(`Tier up ${pct(mods.shardTier)}`);
+  // The next stop's boon cards a tier up at this chance (the boons spec, 4).
+  if (mods.boons) gain.push(`Rarer boons ${pct(mods.boons)}`);
   return { cost, gain };
 }
 
