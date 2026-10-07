@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { BuffRow, type HudBuff } from '../BuffRow';
+import { BOON_STYLE } from '../../../boon-style';
 
 const boon = (over: Partial<Extract<HudBuff, { id: 'boon' }>> = {}): HudBuff => ({
   id: 'boon',
@@ -41,6 +42,12 @@ describe('BuffRow', () => {
     const tile = screen.getByRole('img', { name: 'Shrine of Renewal, this floor' });
     expect(tile).toHaveAttribute('data-boon', 'renewal');
     expect(tile.querySelector('[data-glyph="barrier"]')).not.toBeNull();
+  });
+
+  it("tints a boon's glyph in its family's colour", () => {
+    render(<BuffRow buffs={[boon({ family: 'tempo' })]} />);
+    const glyph = screen.getByRole('img', { name: 'Keen Edge, this dive' }).querySelector('[data-glyph="rune-tempo"]')!;
+    expect(glyph.querySelector(`rect[fill="${BOON_STYLE.tempo.color}"]`)).not.toBeNull();
   });
 
   it('shows the count in the corner only above 1, at 16 design px', () => {

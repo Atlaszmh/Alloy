@@ -15,7 +15,7 @@ import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from '../registry';
 import { RARITY_TEXT } from '../format';
 import { TIER_NUMERAL } from '../runes/rune-style';
-import { BOON_STYLE } from './boon-style';
+import { BOON_STYLE } from '../boon-style';
 
 export interface BoonCardProps {
   /** The boon's id (the card's `data-boon`). */

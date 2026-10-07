@@ -1,5 +1,6 @@
-import type { BoonFamily } from '@alloy/engine';
-import { Glyph, Tooltip, TooltipCard, type GlyphId } from '@/features/delve/kit';
+import { Glyph, Tooltip, TooltipCard } from '@/features/delve/kit';
+
+import { BOON_STYLE } from '../../boon-style';
 
 import type { HudBuff } from '../useArenaCore';
 
@@ -15,17 +16,6 @@ const BUFF: Record<Exclude<HudBuff['id'], 'boon'>, { name: string; color: string
 
 /** A boon's border: for the floor, or the rest of the dive. */
 const BLESSING = { floor: '#2ce8f5', dive: '#feae34' };
-
-/** Each family's glyph on its tile (existing art; `quick` is left to the timed buff). */
-const FAMILY_GLYPH: Record<BoonFamily, GlyphId> = {
-  offense: 'attack',
-  element: 'rune-elemental',
-  defense: 'barrier',
-  tempo: 'rune-tempo',
-  fortune: 'chest',
-  pact: 'skull',
-  floor: 'door',
-};
 
 /** The dock's buff tiles: 38 px each, its glyph and its seconds left (a boon has none: its count instead). */
 export function BuffRow({ buffs }: { buffs: readonly HudBuff[] }) {
@@ -84,7 +74,7 @@ function BoonTile({ b }: { b: BoonBuff }) {
         className="pointer-events-auto relative flex h-[38px] w-[38px] items-center justify-center bg-[var(--k-well)]"
         style={{ border: `2px solid ${b.dive ? BLESSING.dive : BLESSING.floor}` }}
       >
-        <Glyph id={FAMILY_GLYPH[b.family]} size={20} />
+        <Glyph id={BOON_STYLE[b.family].glyph} color={BOON_STYLE[b.family].color} size={20} />
         {b.count > 1 && (
           <span
             data-count

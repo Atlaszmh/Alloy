@@ -5,7 +5,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { useUIStore } from '@/stores/uiStore';
 import { getDelveRegistry } from '../../registry';
 import { RARITY_TEXT } from '../../format';
-import { BOON_STYLE } from '../boon-style';
+import { BOON_STYLE } from '../../boon-style';
 import { BoonCard, BoonCards } from '../BoonCards';
 
 const registry = getDelveRegistry();
