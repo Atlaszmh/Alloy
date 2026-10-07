@@ -213,9 +213,9 @@
     "id": "stone-skin", "name": "Stone Skin", "family": "defense", "duration": "dive", "cap": 2,
     "weight": { "common": 10, "rare": 6, "epic": 3 },
     "tiers": [
-      { "text": "Start each floor behind a barrier of 8% of your life", "effect": { "barrierOnFloor": 0.08 } },
-      { "text": "Start each floor behind a barrier of 12% of your life", "effect": { "barrierOnFloor": 0.12 } },
-      { "text": "Start each floor behind a barrier of 18% of your life", "effect": { "barrierOnFloor": 0.18 } }
+      { "text": "Start each floor behind a barrier of 15% of your life", "effect": { "barrierOnFloor": 0.15 } },
+      { "text": "Start each floor behind a barrier of 22% of your life", "effect": { "barrierOnFloor": 0.22 } },
+      { "text": "Start each floor behind a barrier of 30% of your life", "effect": { "barrierOnFloor": 0.3 } }
     ]
   },
   {
@@ -231,9 +231,9 @@
     "id": "vampires-tithe", "name": "Vampire's Tithe", "family": "defense", "duration": "dive", "cap": 2,
     "weight": { "common": 10, "rare": 6, "epic": 3 },
     "tiers": [
-      { "text": "1.5% lifesteal", "effect": { "lifesteal": 0.015 } },
       { "text": "2.5% lifesteal", "effect": { "lifesteal": 0.025 } },
-      { "text": "4% lifesteal", "effect": { "lifesteal": 0.04 } }
+      { "text": "4% lifesteal", "effect": { "lifesteal": 0.04 } },
+      { "text": "6% lifesteal", "effect": { "lifesteal": 0.06 } }
     ]
   },
   {
