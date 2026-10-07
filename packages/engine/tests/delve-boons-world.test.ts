@@ -123,3 +123,32 @@ describe('magnet (step.ts)', () => {
     expect(near.dead).toBe(true);
   });
 });
+
+describe('interact.ts', () => {
+  it("Deep Breath: a room's clear gives back Σ healOnClear × max life", () => {
+    const clear = (w: ArpgWorld) => {
+      w.hero.hp = w.hero.stats.maxHp / 2;
+      killMonster(makeCtx(registry, w, []), w.monsters[0]);
+      expect(w.map.rooms[1].cleared).toBe(true);
+      return w.hero.hp;
+    };
+    const plain = clear(floorWorld(twoRooms('combat'), [dummy(16, 3, { roomId: 1 })]));
+    const w = wear(floorWorld(twoRooms('combat'), [dummy(16, 3, { roomId: 1 })]), { healOnClear: 0.06 });
+    expect(clear(w) - plain).toBeCloseTo(w.hero.stats.maxHp * 0.06, 6);
+  });
+
+  it("Sanctuary: a floor shrine's blessing goes on the dive's and the bank's; a refill stays a refill", () => {
+    const w = wear(arena([]), { shrinesLastDive: true });
+    applyShrine(registry, w, registry.getBoon('clarity')!);
+    expect(w.hero.floorBuffs).toEqual([]);
+    expect(w.hero.diveBuffs.map((b) => b.boon)).toEqual(['test', 'clarity']);
+    expect(w.pending.diveBuffs.map((b) => b.boon)).toEqual(['clarity']);
+    w.hero.potions = 0;
+    applyShrine(registry, w, registry.getBoon('mercy')!);
+    expect([w.hero.potions, w.hero.diveBuffs.length]).toEqual([bal.dive.maxPotions, 2]);
+
+    const plain = arena([]);
+    applyShrine(registry, plain, registry.getBoon('clarity')!);
+    expect([plain.hero.floorBuffs.length, plain.hero.diveBuffs.length]).toEqual([1, 0]);
+  });
+});
