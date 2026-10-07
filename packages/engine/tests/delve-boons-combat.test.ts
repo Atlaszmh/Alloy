@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { applyBuffs, computeHeroStats } from '../src/delve/hero-stats.js';
 import { buffSum } from '../src/delve/boons.js';
-import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { hitMonster, hurtHero, makeCtx } from '../src/arpg/combat.js';
+import { dodgeMax, dodgeRecharge, perfectOrigin, refundDodgeCharge } from '../src/arpg/dodge.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { BoonEffect, Buff } from '../src/types/boon.js';
 import { abilityHit, knobHitOpts } from '../src/arpg/abilities/impact.js';
@@ -9,6 +10,7 @@ import { NEUTRAL, stepBonus } from '../src/arpg/abilities/resolve.js';
 import {
   arena,
   bal,
+  dodge,
   dummy,
   firstBlow,
   gear,
@@ -168,5 +170,56 @@ describe('stackTime (combat.ts applyStacks)', () => {
     expect(m.status.stackUntil.fire).toBeCloseTo(w.t + bal.stacks.duration.fire, 9);
     hitMonster(ctx, m, 10, 'fire', { ...fire, applies: [...fire.applies], stackTime: 0.5 });
     expect(m.status.stackUntil.fire).toBeCloseTo(w.t + bal.stacks.duration.fire * 1.5, 9);
+  });
+});
+
+describe('the dodge (dodge.ts)', () => {
+  it('dodgeCharges: more charges (at least 1), refunded and refilled to the new max', () => {
+    const w = wear(arena([], { noBasic: true }), { dodgeCharges: 1 });
+    const max = bal.dodge.charges + 1;
+    expect(dodgeMax(bal, w.hero.boon)).toBe(max);
+    expect(dodgeMax(bal, buffSum([buff({ dodgeCharges: -5 })]))).toBe(1);
+    w.hero.dodgeCharges = max - 1;
+    refundDodgeCharge(ctxOf(w));
+    expect(w.hero.dodgeCharges).toBe(max);
+    w.hero.dodgeCharges = 0;
+    w.hero.dodgeRechargeAt = w.t + bal.dodge.recharge;
+    run(w, bal.dodge.recharge * max + 0.1);
+    expect([w.hero.dodgeCharges, w.hero.dodgeRechargeAt]).toEqual([max, 0]);
+  });
+
+  it('dodgeRecharge: a charge comes back sooner, at most twice as fast', () => {
+    const fast = dodgeRecharge(bal, buffSum([buff({ dodgeRecharge: 0.9 })]));
+    expect(fast).toBeCloseTo(bal.dodge.recharge * 0.5, 12);
+    const w = wear(arena([], { noBasic: true }), { dodgeRecharge: 0.2 });
+    dodge(w);
+    expect(w.hero.dodgeRechargeAt - w.hero.dodge!.start).toBeCloseTo(bal.dodge.recharge * 0.8, 9);
+  });
+
+  it('dodgeWindow lengthens the perfect window, never past the i-frames', () => {
+    const { perfectWindow: pw, iframes } = bal.dodge;
+    const late = (pw + iframes) / 2;
+    const perfectAt = (seconds: number, ...effects: BoonEffect[]) => {
+      const w = wear(arena([], { noBasic: true }), ...effects);
+      dodge(w);
+      w.t = w.hero.dodge!.start + seconds;
+      return perfectOrigin(ctxOf(w)) !== null;
+    };
+    expect(perfectAt(late)).toBe(false);
+    expect(perfectAt(late, { dodgeWindow: late / pw - 1 + 0.01 })).toBe(true);
+    expect(perfectAt(iframes + 0.01, { dodgeWindow: 5 })).toBe(false);
+  });
+
+  it('perfectAlways: a hit anywhere in the i-frames makes a perfect dodge', () => {
+    const perfect = (always: boolean) => {
+      const w = arena([], { noBasic: true });
+      if (always) wear(w, { perfectAlways: true });
+      dodge(w);
+      w.t = w.hero.dodge!.start + bal.dodge.iframes - 0.01;
+      const events: ArpgEvent[] = [];
+      hurtHero(makeCtx(registry, w, events), 50, null, null);
+      return events.some((e) => e.kind === 'perfectDodge');
+    };
+    expect([perfect(false), perfect(true)]).toEqual([false, true]);
   });
 });
