@@ -272,6 +272,7 @@ export const DelveDataSchema = z.object({
           essence: z.number().positive().optional(),
           shardTier: z.number().min(0).max(1).optional(),
           find: z.number().optional(),
+          boons: z.number().min(0).max(1).optional(),
         }),
       }),
     )

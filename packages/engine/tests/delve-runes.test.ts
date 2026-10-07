@@ -951,7 +951,7 @@ describe("the stop's fifth kind: socket a rune", () => {
   /** `p` diving, on the door screen after depth 1, its stop offering `offers`. */
   const atStop = (p: DelveProfile, offers: StopKind[] = [...STOP_KINDS]): DelveProfile => {
     const diving = startDive(registry, p, 1);
-    const stop = { offers, taken: false };
+    const stop = { kind: 'powerups' as const, offers, taken: false };
     const dive = { ...diving.dive!, phase: 'choosing' as const, depthsCleared: 1, stop };
     return { ...diving, dive: { ...dive, doorChoices: ['winding'] } };
   };

@@ -536,7 +536,7 @@ export function takeBestAlcove(
   const dive = profile.dive;
   const offers = alcoveOffers(registry, profile, world, id);
   if (!dive || offers.length === 0) return profile;
-  const stop = { offers, taken: false };
+  const stop = { kind: 'powerups' as const, offers, taken: false };
   const banked = addHaul(dive.banked, dive.haul);
   const atStop: DelveProfile = { ...profile, dive: { ...dive, phase: 'choosing', banked, stop } };
   const picks = new Map<DelveProfile, StopAction>();
@@ -556,7 +556,7 @@ function bestStop(
   take: (action: StopAction) => DelveProfile | null,
 ): DelveProfile {
   const stop = profile.dive?.stop;
-  if (!stop || stop.taken) return profile;
+  if (!stop || stop.taken || stop.kind !== 'powerups') return profile;
   if (stop.offers.includes('equip')) {
     const best = bestGain(registry, profile, 'asIs');
     const equipped = best && take({ kind: 'equip', uid: best });
@@ -588,13 +588,13 @@ function bestStop(
 function takeGuidedStop(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const laddered = takeBestStop(registry, profile);
   const stop = laddered.dive?.stop;
-  if (!stop || stop.taken) return laddered;
+  if (!stop || stop.taken || stop.kind !== 'powerups') return laddered;
   const take = (action: StopAction) => {
     const res = takeStop(registry, profile, action);
     return res.ok ? res.profile : null;
   };
   const items = [...GEAR_SLOTS.flatMap((s) => profile.equipped[s] ?? []), ...profile.bag];
-  const actions: StopAction[] = [
+  const actions: Exclude<StopAction, { kind: 'boon' }>[] = [
     ...profile.bag.map((i) => ({ kind: 'equip', uid: i.uid }) as const),
     ...items.map((i) => ({ kind: 'upgrade', uid: i.uid }) as const),
   ];
@@ -1140,7 +1140,8 @@ export function runAutopilot(
       const before = p;
       // A guided stop: its power-up, then its one road (Extract, or a door); never `closeDive`.
       const guided = tutorialStep(registry, p.tutorial)?.stop;
-      if (guided) run?.stops.push(p.dive!.stop?.offers ?? []);
+      const stop = p.dive!.stop;
+      if (guided) run?.stops.push(stop?.kind === 'powerups' ? stop.offers : []);
       p = guided ? takeGuidedStop(registry, p) : takeBestStop(registry, p);
       stops = addHaul(stops, outflow(before, p));
       if (guided?.extract) {

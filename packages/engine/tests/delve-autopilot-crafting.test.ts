@@ -286,7 +286,7 @@ describe('the autopilot at the Anvil', () => {
         ...dive,
         phase: 'choosing',
         doorChoices: ['winding'],
-        stop: { offers: ['upgrade'], taken: false },
+        stop: { kind: 'powerups', offers: ['upgrade'], taken: false },
         banked: { ...dive.banked, scrap: cost },
       },
     };

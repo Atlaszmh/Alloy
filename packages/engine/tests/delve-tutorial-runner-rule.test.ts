@@ -272,7 +272,7 @@ describe('skip and retry', () => {
       dive: {
         ...p.dive!,
         tutorialEntry: { ...p, dive },
-        stop: { offers: ['equip'], taken: false, required: true },
+        stop: { kind: 'powerups', offers: ['equip'], taken: false, required: true },
       },
     };
   }
@@ -281,7 +281,12 @@ describe('skip and retry', () => {
     const p = skipTutorial(guided());
     expect(p.tutorial).toBeNull();
     expect(p.dive!.tutorialEntry).toBeNull();
-    expect(p.dive!.stop).toEqual({ offers: ['equip'], taken: false, required: false });
+    expect(p.dive!.stop).toEqual({
+      kind: 'powerups',
+      offers: ['equip'],
+      taken: false,
+      required: false,
+    });
   });
 
   it("and a floor's: its state gone, its held doors let go (the floor plays out)", () => {

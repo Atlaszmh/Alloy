@@ -20,7 +20,7 @@ function guided(p: DelveProfile): DelveProfile {
     dive: {
       ...p.dive!,
       tutorialEntry: entry,
-      stop: { offers: ['equip'], taken: false, required: true },
+      stop: { kind: 'powerups', offers: ['equip'], taken: false, required: true },
     },
   };
 }

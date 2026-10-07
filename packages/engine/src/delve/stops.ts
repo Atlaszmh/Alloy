@@ -29,8 +29,9 @@ import { applyTutorialEvents, tutorialStep } from './tutorial.js';
 /** The five kinds, in the order a stop lists them. */
 export const STOP_KINDS: readonly StopKind[] = ['equip', 'slot', 'move', 'upgrade', 'rune'];
 
-/** What a stop's player takes: the kind and what it acts on. */
+/** What a stop's player takes: the kind and what it acts on (`boon`: a `boons` stop's card by index). */
 export type StopAction =
+  | { kind: 'boon'; index: number }
   | { kind: 'equip'; uid: string }
   | { kind: 'slot'; skill: ChainSkill }
   | { kind: 'move'; skill: ChainSkill; index: number; move: Move | Blow }
@@ -168,10 +169,11 @@ export function rollStop(
   if (step?.stop) {
     const offers = kinds.filter((k) => step.stop!.kinds.includes(k));
     if (offers.length === 0) return null;
-    return { offers, taken: false, required: step.trigger.type === 'takeStop' };
+    return { kind: 'powerups', offers, taken: false, required: step.trigger.type === 'takeStop' };
   }
   if (kinds.length === 0) return null;
   return {
+    kind: 'powerups',
     offers: pickKinds(kinds, new SeededRNG(dive.seed).fork(`stop:${dive.depth}`)),
     taken: false,
   };
@@ -195,11 +197,14 @@ function moveShaped(move: unknown): move is Move | Blow {
   return 'form' in move ? Array.isArray((move as Move).elements) : 'element' in move;
 }
 
+/** A power-up's action: what `runStop` runs. */
+type PowerupAction = Exclude<StopAction, { kind: 'boon' }>;
+
 /** The stop's one op on `profile` (whose dive the caller has lifted). */
 function runStop(
   registry: DataRegistry,
   profile: DelveProfile,
-  action: StopAction,
+  action: PowerupAction,
 ): ProfileActionResult {
   switch (action.kind) {
     case 'equip':
@@ -269,7 +274,8 @@ export function takeStop(
   const stop = dive?.phase === 'choosing' && !dive.settled ? dive.stop : null;
   if (!dive || !stop) return { ok: false, profile, reason: 'No stop here' };
   if (stop.taken) return { ok: false, profile, reason: "This stop's power-up is taken" };
-  if (!stop.offers.includes(action.kind))
+  // A boon is refused until the stop rolls boons (the boons spec's B1); a power-up only where offered.
+  if (action.kind === 'boon' || stop.kind !== 'powerups' || !stop.offers.includes(action.kind))
     return { ok: false, profile, reason: 'Not offered at this stop' };
   const res = runStop(registry, { ...pooled(profile), dive: null }, action);
   if (!res.ok) return { ...res, profile };
@@ -336,7 +342,10 @@ export function takeAlcove(
   const alcove = alcovesOf(world).find((a) => a.id === openedAlcove(world));
   const live = profile.dive?.phase === 'fighting' && !profile.dive.settled;
   if (!live || !alcove) return { ok: false, profile, reason: 'No anvil here' };
-  if (!alcoveOffers(registry, profile, world, alcove.id).includes(action.kind))
+  if (
+    action.kind === 'boon' ||
+    !alcoveOffers(registry, profile, world, alcove.id).includes(action.kind)
+  )
     return { ok: false, profile, reason: 'Not offered at this anvil' };
   const pending = world.pending;
   const banked = bankWorld(registry, profile, world).profile;

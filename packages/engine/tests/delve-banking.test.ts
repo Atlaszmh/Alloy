@@ -253,7 +253,7 @@ describe('a settled dive', () => {
     const world = beginFloor(registry, p);
     clearFloor(world);
     const cleared = completeFloor(registry, p, world).profile;
-    const stop = { offers: ['slot' as const], taken: false };
+    const stop = { kind: 'powerups' as const, offers: ['slot' as const], taken: false };
     const atStop = { ...cleared, dive: { ...cleared.dive!, stop } };
     const left = settleDive(registry, atStop, 'abandon');
     expect(isDiveActive(atStop)).toBe(true);

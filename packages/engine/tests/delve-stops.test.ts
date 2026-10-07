@@ -43,7 +43,7 @@ function atStop(p: DelveProfile, stop: DiveStop | null): DelveProfile {
   };
 }
 
-const ALL: DiveStop = { offers: [...STOP_KINDS], taken: false };
+const ALL: DiveStop = { kind: 'powerups', offers: [...STOP_KINDS], taken: false };
 
 /** The kinds before runes: what a hero with an empty pouch can be offered. */
 const FOUR: StopKind[] = ['equip', 'slot', 'move', 'upgrade'];
@@ -92,7 +92,7 @@ describe('the stop after a cleared depth', () => {
   });
 
   it('counts and spends what the dive banked first, then the stockpile (S9)', () => {
-    const p = atStop(hero(), { offers: ['slot'], taken: false });
+    const p = atStop(hero(), { kind: 'powerups', offers: ['slot'], taken: false });
     const banking = (links: number, scrap: number, on: DelveProfile = p) => ({
       ...on,
       dive: { ...on.dive!, banked: { ...on.dive!.banked, links, scrap } },
@@ -126,11 +126,19 @@ describe('the stop after a cleared depth', () => {
     expect([...seen].sort()).toEqual([...FOUR].sort());
     const two = { ...createDelveProfile(registry, 3, { primary: 'fire' }), scrap: 1000 };
     const dive = startDive(registry, two, 1).dive!;
-    expect(rollStop(registry, two, dive)).toEqual({ offers: ['move', 'upgrade'], taken: false });
+    expect(rollStop(registry, two, dive)).toEqual({
+      kind: 'powerups',
+      offers: ['move', 'upgrade'],
+      taken: false,
+    });
     // One kind that applies: that one alone.
     const bare = unequipSlot(registry, two, 'weapon');
     const one = { ...bare, bag: [] };
-    expect(rollStop(registry, one, dive)).toEqual({ offers: ['upgrade'], taken: false });
+    expect(rollStop(registry, one, dive)).toEqual({
+      kind: 'powerups',
+      offers: ['upgrade'],
+      taken: false,
+    });
   });
 });
 
@@ -197,7 +205,7 @@ describe('takeStop', () => {
   });
 
   it('refuses a kind not offered, no stop, and leaves the stop open when the op is refused', () => {
-    const p = atStop(hero(), { offers: ['equip', 'slot'], taken: false });
+    const p = atStop(hero(), { kind: 'powerups', offers: ['equip', 'slot'], taken: false });
     expect(takeStop(registry, p, { kind: 'upgrade', uid: 'r1' }).reason).toBe(
       'Not offered at this stop',
     );
@@ -245,7 +253,7 @@ describe('takeStop', () => {
   });
 
   it('the save keeps the stop; a dive saved without one reads as none', () => {
-    const p = atStop(hero(), { offers: ['equip', 'move'], taken: true });
+    const p = atStop(hero(), { kind: 'powerups', offers: ['equip', 'move'], taken: true });
     const json = (x: unknown) => JSON.parse(JSON.stringify(x));
     expect(parseDelveProfile(registry, json(p))!.profile.dive!.stop).toEqual(p.dive!.stop);
     const { stop: _stop, ...older } = p.dive!;
@@ -254,7 +262,7 @@ describe('takeStop', () => {
 });
 
 describe('the autopilot at a stop', () => {
-  const stopOf = (...offers: StopKind[]): DiveStop => ({ offers, taken: false });
+  const stopOf = (...offers: StopKind[]): DiveStop => ({ kind: 'powerups', offers, taken: false });
   const plain = (uid: string): GearItem =>
     generateItem(
       registry,

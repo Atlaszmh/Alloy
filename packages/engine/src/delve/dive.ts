@@ -376,7 +376,7 @@ export function failFloor(
 export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId: string): DelveProfile {
   const bal = registry.getDelveBalance();
   const dive = requireDive(profile, 'choosing');
-  if (dive.stop?.required && !dive.stop.taken) throw new Error('Take the power-up first');
+  if (dive.stop?.kind === 'powerups' && dive.stop.required && !dive.stop.taken) throw new Error('Take the power-up first');
   if (!dive.doorChoices.includes(doorId)) throw new Error(`Door not offered: ${doorId}`);
   const door = registry.getDoor(doorId);
   const depth = dive.depth + 1 + (door.mods.skip ?? 0);

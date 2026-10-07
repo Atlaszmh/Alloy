@@ -148,7 +148,12 @@ describe('the guided path', () => {
     w.pending.items.push(sword('uncommon', 'b1'));
     const stopped = completeFloor(registry, p, w).profile;
     expect(stopped.tutorial).toEqual(st('s1-equip'));
-    expect(stopped.dive!.stop).toEqual({ offers: ['equip'], taken: false, required: true });
+    expect(stopped.dive!.stop).toEqual({
+      kind: 'powerups',
+      offers: ['equip'],
+      taken: false,
+      required: true,
+    });
     expect(stopped.dive!.doorChoices).toEqual(['winding']);
     const taken = takeStop(registry, stopped, { kind: 'equip', uid: 'b1' }).profile;
     expect(taken.tutorial).toEqual(st('s1-door'));

@@ -6,7 +6,7 @@ import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
 import type { AiBalance, LayoutBalance, LayoutsData, TerrainBalance } from './floor-map.js';
-import type { Buff } from './boon.js';
+import type { BoonOffer, Buff } from './boon.js';
 import type { TutorialState } from './tutorial.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
@@ -178,6 +178,8 @@ export interface DoorMods {
   shardTier?: number;
   /** Added to Find, in percentage points. */
   find?: number;
+  /** Chance each card of the stop after this door's depth comes a tier up (see the boons spec's 4). */
+  boons?: number;
 }
 
 export interface DoorDef {
@@ -758,12 +760,16 @@ export type DivePhase = 'fighting' | 'choosing' | 'dead' | 'extracted';
 export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade' | 'rune';
 
 /** A stop between depths (see the weapon movesets spec): the kinds offered, and whether one is taken. */
-export interface DiveStop {
-  offers: StopKind[];
-  taken: boolean;
-  /** A tutorial stop's power-up must be taken before a door (see the tutorial spec's gates). */
-  required?: boolean;
-}
+/**
+ * The stop between depths (see the boons spec's 4): an ordinary stop's three boons, or a guided
+ * stop's power-ups (`required`: a tutorial stop's power-up must be taken before a door; see the
+ * tutorial spec's gates). Every reader narrows on `kind` before `offers`.
+ */
+export type DiveStop =
+  | { kind: 'boons'; offers: BoonOffer[]; taken: boolean }
+  | { kind: 'powerups'; offers: StopKind[]; taken: boolean; required?: boolean };
+export type BoonStop = Extract<DiveStop, { kind: 'boons' }>;
+export type PowerupStop = Extract<DiveStop, { kind: 'powerups' }>;
 
 export interface DiveState {
   seed: number;

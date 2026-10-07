@@ -740,7 +740,7 @@ describe('save v9: sockets and the pouch', () => {
     const p = startDive(registry, fresh(), 1);
     expect(p.dive!.runesEarned).toBe(0);
     const { runesEarned: _r, ...dive } = p.dive!;
-    const stop = { offers: ['rune'], taken: false };
+    const stop = { kind: 'powerups' as const, offers: ['rune'], taken: false };
     const res = parseDelveProfile(registry, json({ ...p, dive: { ...dive, stop } }))!;
     expect(res.profile.dive).toMatchObject({ runesEarned: 0, stop });
   });
