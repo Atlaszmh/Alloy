@@ -108,6 +108,7 @@ export {
   takeAlcove,
 } from './delve/stops.js';
 export type { StopAction } from './delve/stops.js';
+export { buffSum, boonCount } from './delve/boons.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
   inPair,

@@ -5,7 +5,8 @@ import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
 import type { QuestEvent } from './quests.js';
-import type { Buff, FloorMap, InteractableKind } from './floor-map.js';
+import type { FloorMap, InteractableKind } from './floor-map.js';
+import type { BoonSum, Buff } from './boon.js';
 import type { WorldTutorial } from './tutorial.js';
 import type { TutorialScript } from './tutorial-floor.js';
 import type {
@@ -418,6 +419,11 @@ export interface HeroEntity {
   floorBuffs: Buff[];
   /** The dive's blessings: those it began the floor with, and any taken on it. */
   diveBuffs: Buff[];
+  /**
+   * `buffSum` of `diveBuffs` and `floorBuffs` (see the boons spec): the combined view every
+   * boon field's site reads; set when the hero is made and whenever a buff is added.
+   */
+  boon: BoonSum;
   /** The one mana pool: basic hits fill it, abilities spend it. */
   mana: number;
   manaMax: number;

@@ -23,6 +23,7 @@ import {
   type ResolvedChain,
 } from '../types/ability.js';
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
+import { buffSum } from '../delve/boons.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { clearanceOf } from './flow.js';
@@ -322,6 +323,7 @@ export function createHeroEntity(
     baseStats: stats,
     floorBuffs: [],
     diveBuffs,
+    boon: buffSum(diveBuffs), // its floor's buffs start empty
     mana: pool.max,
     manaMax: pool.max,
     manaRegen: pool.regen,

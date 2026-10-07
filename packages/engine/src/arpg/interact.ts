@@ -5,6 +5,7 @@ import type { MaterialRef } from '../types/crafting.js';
 import type { Interactable } from '../types/floor-map.js';
 import type { BoonDef, Buff } from '../types/boon.js';
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
+import { buffSum } from '../delve/boons.js';
 import { shardTiersOf } from '../loot/materials.js';
 import type { SimCtx } from './combat.js';
 import { dist } from './geometry.js';
@@ -239,6 +240,7 @@ export function applyShrine(registry: DataRegistry, world: ArpgWorld, shrine: Bo
     world.pending.diveBuffs.push(buff);
     h.baseStats = applyBuffs(h.baseStats, [buff]);
   } else h.floorBuffs.push(buff);
+  h.boon = buffSum([...h.diveBuffs, ...h.floorBuffs]);
   h.stats = applyBuffs(h.baseStats, h.floorBuffs);
   const pool = manaPool(h.stats, registry);
   h.manaMax = pool.max;
