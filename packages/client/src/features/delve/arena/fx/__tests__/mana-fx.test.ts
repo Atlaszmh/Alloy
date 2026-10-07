@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Graphics } from 'pixi.js';
-import type { ArpgWorld } from '@alloy/engine';
-import { HAND, ManaFx, finisherRing, spawnCount } from '../mana-fx';
+import type { ArpgEvent, ArpgWorld } from '@alloy/engine';
+import { HAND, HIT_FX_BUDGET, ManaFx, finisherRing, hitFxPicks, spawnCount } from '../mana-fx';
 import { drawAnticipation, drawInfusions, drawProjectiles } from '../draw-world';
 import { INFUSION_BUDGET, drawInfusion, type PathShape } from '../infusion';
 
@@ -374,5 +374,40 @@ describe('finisherRing', () => {
       expect(finisherRing({ ...blow, moveKind }, Math.PI / 2, 1.6)).toBeNull();
       expect(finisherRing({ ...blow, melee: false, moveKind }, Math.PI / 2, 1.6)).toBeNull();
     }
+  });
+});
+
+describe('the hit fx budget', () => {
+  const hit = (id: number, echo = false): ArpgEvent =>
+    ({
+      kind: 'hit',
+      id,
+      x: 0,
+      y: 0,
+      amount: 1,
+      crit: false,
+      element: null,
+      heft: 0,
+      source: 'basic',
+      ...(echo ? { echo: true } : {}),
+    }) as ArpgEvent;
+  const ids = (s: Set<ArpgEvent>) => [...s].map((e) => (e as { id: number }).id);
+
+  it('is 24 hit moments a frame', () => {
+    expect(HIT_FX_BUDGET).toBe(24);
+  });
+
+  it('under the budget, every hit; nothing but hits', () => {
+    const death = { kind: 'death', id: 9, x: 0, y: 0, monsterKind: 'normal', scrap: 0 } as ArpgEvent;
+    expect(ids(hitFxPicks([hit(1), death, hit(2, true)]))).toEqual([1, 2]);
+  });
+
+  it('real hits first, in order, then echoes from what is left', () => {
+    const echoes = [10, 11, 12].map((i) => hit(i, true));
+    const real = [1, 2, 3].map((i) => hit(i));
+    // Echoes first in the frame, yet the real hits take the budget.
+    expect(ids(hitFxPicks([...echoes, ...real], 4))).toEqual([1, 2, 3, 10]);
+    expect(ids(hitFxPicks([...echoes, ...real], 2))).toEqual([1, 2]);
+    expect(hitFxPicks([...echoes, ...real], 0).size).toBe(0);
   });
 });
