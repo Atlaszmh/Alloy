@@ -3,6 +3,7 @@ import type { BiomeDef, DiveState } from '@alloy/engine';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { Button, Dialog, Footer, Glyph, Header, Screen, usePrompts, type Prompt } from '../kit';
 import { SkipTutorialConfirm } from '../tutorial/SkipTutorial';
+import { boonsLine, wornBoons } from '../boons-text';
 import { getDelveRegistry } from '../registry';
 import { formatNumber } from '../format';
 import { materialCount, runeCount } from '../materials/material-style';
@@ -183,7 +184,7 @@ function PauseList({
 /**
  * The dive as it stands, beside the list: the depth and biome (cleared, over the stop), a generated
  * floor's rooms explored or the open room's foes left, what the dive has banked and the bounty, the
- * death-loss line, and the first tracked quest's next objective.
+ * death-loss line, the dive's boons, and the first tracked quest's next objective.
  */
 function PauseState({
   dive,
@@ -204,6 +205,7 @@ function PauseState({
   ].filter(Boolean);
   const quest = quests.find((q) => q.tracked && q.status !== 'claimed');
   const goal = quest?.objectives.find((o) => !o.done);
+  const boons = wornBoons(registry, dive.diveBuffs);
   return (
     <div
       className="flex min-w-0 flex-1 flex-col gap-3 text-[18px] text-[var(--k-text-2)]"
@@ -225,6 +227,7 @@ function PauseState({
         bounty on extract
       </span>
       <span className="text-[var(--k-hot)]">Banked this dive · dying loses {loss}% of it</span>
+      {boons.length > 0 && <span data-testid="dive-boons">Boons: {boonsLine(boons)}</span>}
       {quest && (
         <span>
           {quest.name}: {goal ? `${goal.text} ${objectiveCount(goal)}`.trim() : 'Ready to claim'}

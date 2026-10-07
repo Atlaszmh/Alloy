@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, render, screen, fireEvent, within } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, within } from '@testing-library/react';
 import { addMaterial, emptyHaul, generateItem, SeededRNG } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import type { PadButton } from '@/features/gamepad/gamepad';
@@ -312,6 +312,29 @@ describe('PauseScreen', () => {
     const quest = SAMPLE_QUESTS.find((q) => q.tracked && q.status !== 'claimed')!;
     expect(state).toHaveTextContent(
       `${quest.name}: ${quest.objectives.find((o) => !o.done)!.text}`,
+    );
+  });
+
+  it("the state lists the dive's boons by name and count, and nothing when none", () => {
+    renderPause();
+    expect(screen.queryByTestId('dive-boons')).toBeNull();
+    cleanup();
+    const dive = store().profile.dive!;
+    const row = (id: string) => registry.getBoons().find((b) => b.id === id)!;
+    store().setProfile({
+      ...store().profile,
+      dive: {
+        ...dive,
+        diveBuffs: [
+          { boon: 'devotion', tier: 1, effect: {} },
+          { boon: 'vigor', tier: 1, effect: {} },
+          { boon: 'devotion', tier: 1, effect: {} },
+        ],
+      },
+    });
+    renderPause();
+    expect(within(screen.getByTestId('pause-state')).getByTestId('dive-boons')).toHaveTextContent(
+      `Boons: ${row('devotion').name} ×2 · ${row('vigor').name}`,
     );
   });
 
