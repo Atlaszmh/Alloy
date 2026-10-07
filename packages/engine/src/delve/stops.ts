@@ -283,7 +283,7 @@ export function takeStop(
     const buff: Buff = {
       boon: offer.id,
       tier: offer.tier,
-      effect: def.tiers[offer.tier - 1].effect,
+      effect: { ...def.tiers[offer.tier - 1].effect },
     };
     const taken = { ...dive, diveBuffs: [...dive.diveBuffs, buff], stop: { ...stop, taken: true } };
     return { ok: true, profile: { ...profile, dive: taken } };

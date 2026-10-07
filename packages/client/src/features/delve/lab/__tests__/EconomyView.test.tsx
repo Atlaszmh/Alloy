@@ -102,9 +102,13 @@ describe('EconomyView', () => {
       '0 · 0 · 0 · 7.5 · 0 · 0',
       '750 / 20 / 5 / 10 / 30',
     ]);
-    // The last column: the boons by family, offense to floor, means over the seeds.
-    expect(cells(rows[0]).at(-1)).toBe('7.5 · 0 · 1 · 0 · 0 · 0 · 0');
-    expect(screen.getByTestId('economy-table')).toHaveTextContent('Boons (offense to floor)');
+    // The last column: the boons by family, offense to floor but pact, means over the seeds.
+    // No pact column: the bot never takes one.
+    expect(cells(rows[0]).at(-1)).toBe('7.5 · 0 · 1 · 0 · 0 · 0');
+    expect(within(screen.getByTestId('economy-table')).getByText('Boons')).toHaveAttribute(
+      'title',
+      'offense · element · defense · tempo · fortune · floor',
+    );
   });
 
   it("charts a material's income, spending and death loss, the items forged by rarity, the depth or the deaths", () => {

@@ -120,7 +120,7 @@ describe('rollBoons', () => {
 
 describe("economySim's boons", () => {
   it('counts the boons each dive took by family, every family, never a pact', () => {
-    const report = economySim(registry, 1, 2);
+    const report = economySim(registry, 1, 4);
     let total = 0;
     for (const d of report.dives) {
       expect(Object.keys(d.boons)).toEqual([...BOON_FAMILIES]);
@@ -128,7 +128,7 @@ describe("economySim's boons", () => {
       for (const n of Object.values(d.boons)) expect(Number.isInteger(n) && n >= 0).toBe(true);
       total += Object.values(d.boons).reduce((a, b) => a + b, 0);
     }
-    expect(total).toBeGreaterThan(0); // seed 1 clears depths in its first dives
+    expect(total).toBeGreaterThan(0); // seed 1 clears depths in its first four dives
     expect(structuredClone(report.dives)).toEqual(report.dives);
-  }, 30000);
+  }, 60000);
 });

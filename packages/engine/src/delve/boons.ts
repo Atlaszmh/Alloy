@@ -129,7 +129,9 @@ const weightAt = (b: BoonDef, t: BoonTierIndex) => b.weight[BOON_TIER_NAMES[t - 
  * tier up at the chance of the door that led here (`DoorMods.boons`), then a row
  * by its weight at that tier among those with `minDepth` met, under their `cap`
  * in `dive.diveBuffs`, and of a family not yet offered. A tier with no such row
- * falls back lower, then higher; with none at all the offer ends.
+ * falls back lower, then higher; with none at all the offer ends. The bump is
+ * drawn for every card, even at a chance of 0, so the draws (and the offers a
+ * seed gives) don't depend on the door.
  */
 export function rollBoons(
   registry: DataRegistry,

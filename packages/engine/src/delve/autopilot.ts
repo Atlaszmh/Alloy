@@ -521,8 +521,12 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
   const stop = profile.dive?.stop;
   if (stop?.kind === 'boons') {
     if (stop.taken) return profile;
+    // An id the data lacks (or a pact) has no place in BOON_ORDER: passed over.
     const best = stop.offers
-      .map((o, index) => ({ index, tier: o.tier, order: BOON_ORDER.indexOf(registry.getBoon(o.id)!.family) }))
+      .map((o, index) => {
+        const family = registry.getBoon(o.id)?.family;
+        return { index, tier: o.tier, order: family ? BOON_ORDER.indexOf(family) : -1 };
+      })
       .filter((o) => o.order >= 0)
       .sort((a, b) => b.tier - a.tier || a.order - b.order)[0];
     const res = best && takeStop(registry, profile, { kind: 'boon', index: best.index });
@@ -1161,8 +1165,10 @@ export function runAutopilot(
       if (guided) run?.stops.push(stop?.kind === 'powerups' ? stop.offers : []);
       p = guided ? takeGuidedStop(registry, p) : takeBestStop(registry, p);
       stops = addHaul(stops, outflow(before, p));
-      for (const b of p.dive!.diveBuffs.slice(before.dive!.diveBuffs.length))
-        boons[registry.getBoon(b.boon)!.family]++;
+      for (const b of p.dive!.diveBuffs.slice(before.dive!.diveBuffs.length)) {
+        const family = registry.getBoon(b.boon)?.family;
+        if (family) boons[family]++;
+      }
       if (guided?.extract) {
         p = extractDive(registry, p);
         result = 'extracted';

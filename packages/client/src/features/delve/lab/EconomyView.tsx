@@ -74,7 +74,9 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
   const depth = perDive(reports, (d) => d.depth);
   const deaths = perDive(reports, (d) => (d.died ? 1 : 0), true);
   const forged = RARITY_ORDER.map((r) => perDive(reports, (d) => d.forged[r] ?? 0));
-  const boons = BOON_FAMILIES.map((f) => perDive(reports, (d) => d.boons[f]));
+  /** The bot never takes a pact (the boons spec's 5), so the column leaves it out. */
+  const boonFamilies = BOON_FAMILIES.filter((f) => f !== 'pact');
+  const boons = boonFamilies.map((f) => perDive(reports, (d) => d.boons[f]));
   const materials = MATERIAL_TOTALS.map((m) => [
     perDive(reports, (d) => m.of(d.income)),
     perDive(reports, (d) => m.of(d.quests)),
@@ -167,7 +169,9 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
                       {m.label} in / quests / salvaged / spent / lost
                     </th>
                   ))}
-                  <th className={HEAD}>Boons (offense to floor)</th>
+                  <th className={HEAD} title={boonFamilies.join(' · ')}>
+                    Boons
+                  </th>
                 </tr>
               </thead>
               <tbody>

@@ -279,6 +279,10 @@ describe('takeStop', () => {
       { boon: 'magpie', tier: 3, effect: { find: 60 } },
     ]);
     expect(res.profile.dive!.stop).toEqual({ ...p.dive!.stop, taken: true });
+    // The buff's effect is its own copy, never the registry's row.
+    expect(res.profile.dive!.diveBuffs.at(-1)!.effect).not.toBe(
+      registry.getBoon('magpie')!.tiers[2].effect,
+    );
     // Nothing spent, banked or otherwise changed.
     expect({ ...res.profile, dive: null }).toEqual({ ...p, dive: null });
     expect({ ...res.profile.dive!, diveBuffs: [], stop: null }).toEqual({
@@ -415,5 +419,9 @@ describe('the autopilot at a stop', () => {
     const taken = { ...atStop(hero(), boonsStop(...OFFER)) };
     taken.dive = { ...taken.dive!, stop: { ...taken.dive!.stop!, taken: true } };
     expect(takeBestStop(registry, taken)).toBe(taken);
+    // An id the data lacks is passed over, never thrown on.
+    expect(took({ id: 'no-such-boon', tier: 3 }, { id: 'magpie', tier: 1 })).toEqual(['magpie:1']);
+    const unknown = atStop(hero(), boonsStop({ id: 'no-such-boon', tier: 3 }));
+    expect(takeBestStop(registry, unknown)).toBe(unknown);
   });
 });
