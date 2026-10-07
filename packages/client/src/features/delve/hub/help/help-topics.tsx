@@ -123,6 +123,7 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
           Between depths, push deeper or <b className="text-[var(--k-hot)]">extract</b> to bring the
           dive home: each depth you clear banks its haul. Die and you lose the floor's haul and{' '}
           {loss} of what the dive banked; the gear and patterns you pick up are always yours.
+          {' '}Each stop offers three boons. Take one: it lasts the dive, and some stack.
         </p>
       )}
     </div>
