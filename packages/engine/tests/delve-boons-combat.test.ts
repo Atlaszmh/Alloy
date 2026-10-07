@@ -318,3 +318,19 @@ describe('Blood Price (cast.ts, basic.ts)', () => {
     expect(gain(true)).toBe(0);
   });
 });
+
+describe("the Defensive's duration (forms.ts buff)", () => {
+  it('defendDuration lengthens its effect', () => {
+    const warded = (x: number) => {
+      const w = arena([dummy(13, 30)], { noBasic: true });
+      if (x) wear(w, { defendDuration: x });
+      press(w, 1);
+      return w;
+    };
+    const plain = warded(0);
+    const long = warded(0.5);
+    const d = moveOf(plain, 1).duration;
+    const cast = plain.hero.defend!.until - d;
+    expect(long.hero.defend!.until - cast).toBeCloseTo(d * 1.5, 9);
+  });
+});
