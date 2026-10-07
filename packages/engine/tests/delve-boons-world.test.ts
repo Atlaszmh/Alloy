@@ -81,3 +81,23 @@ describe('the floor start (world.ts)', () => {
     expect(floor([{ find: 25 }, { find: 15 }]).loot.find).toBe(floor().loot.find + 40);
   });
 });
+
+describe('exitRevealed (fog.ts)', () => {
+  it("Cartographer: a generated floor starts with its exit's room revealed, on the minimap", () => {
+    const plain = floor([], { layout: 'generated' });
+    const exit = roomAt(plain.map, plain.map.exit.x, plain.map.exit.y)!;
+    expect(exit.id).not.toBe(roomAt(plain.map, plain.map.start.x, plain.map.start.y)!.id);
+    expect([exit.revealed, hudMapOf(plain).exit]).toEqual([false, null]);
+
+    const w = floor([{ exitRevealed: true }], { layout: 'generated' });
+    const room = roomAt(w.map, w.map.exit.x, w.map.exit.y)!;
+    expect(room.revealed).toBe(true);
+    expect(hudMapOf(w).exit).toEqual(w.map.exit);
+    expect(w.fog[(room.rect.y + 1) * w.map.width + room.rect.x + 1]).toBe(1);
+    expect(w.fogVersion).toBe(1);
+  });
+
+  it('a no-op on the open room', () => {
+    expect(floor([{ exitRevealed: true }]).fogVersion).toBe(0);
+  });
+});

@@ -29,6 +29,7 @@ import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { clearanceOf } from './flow.js';
 import { dist } from './geometry.js';
 import { bindTerrain, openRoom, snapToWalkable, solid } from './grid.js';
+import { revealExit } from './fog.js';
 import { footprintsOf } from './layout/furnish.js';
 import { floorPacks, planFloor } from './layout/generate.js';
 import { placeObjects } from './objects-base.js';
@@ -469,11 +470,12 @@ export function emptyPending(newFloor = false): WorldPending {
 /**
  * What the dive's boons do as a floor starts (the boons spec's §2): Stone Skin's Obsidian
  * barrier of `barrierOnFloor` × max life, for the floor (`until: Infinity`); Famine's empty
- * flasks (`noPotions`).
+ * flasks (`noPotions`); Cartographer's exit room revealed (`exitRevealed`, `revealExit`).
  */
 function boonFloorStart(world: ArpgWorld): void {
   const h = world.hero;
-  const { barrierOnFloor, noPotions } = h.boon;
+  const { barrierOnFloor, noPotions, exitRevealed } = h.boon;
+  if (exitRevealed) revealExit(world);
   if (barrierOnFloor) {
     const hp = h.stats.maxHp * barrierOnFloor;
     h.barrier = { hp, max: hp, until: Infinity };
