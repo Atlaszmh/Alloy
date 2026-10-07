@@ -3,6 +3,9 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
 
+/** An echo's hit plays its sound at this share of the volume, through the sound's own throttle. */
+export const ECHO_GAIN = 0.5;
+
 /** A drop with a sound of its own: gear that is an upgrade as it comes (▲), or an essence. */
 export type LootCue = 'upgrade' | 'essence';
 
@@ -37,8 +40,12 @@ export function playArenaEvents(
   for (const ev of events) {
     switch (ev.kind) {
       case 'hit':
-        playSound(ev.crit ? 'crit' : 'attack');
-        if (ev.crit) vibrate('light');
+        // An echo's hit: quieter, and no buzz (spec §8).
+        if (ev.echo) playSound(ev.crit ? 'crit' : 'attack', ECHO_GAIN);
+        else {
+          playSound(ev.crit ? 'crit' : 'attack');
+          if (ev.crit) vibrate('light');
+        }
         break;
       case 'heroHit':
         if (ev.blocked) break; // Invulnerable: shown in grey, silent

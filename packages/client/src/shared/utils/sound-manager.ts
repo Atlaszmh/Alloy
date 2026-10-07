@@ -461,8 +461,11 @@ export class SoundManager {
     }
   }
 
-  /** Play a sound by name. Respects mute, volume, cooldowns, and pitch variation. */
-  play(name: SoundName): void {
+  /**
+   * Play a sound by name. Respects mute, volume, cooldowns, and pitch variation. `gain` scales
+   * this play's volume (an echo's hit plays at half); the cooldown is the sound's, whatever the gain.
+   */
+  play(name: SoundName, gain = 1): void {
     // Check mute
     if (useUIStore.getState().isMuted) return;
 
@@ -479,7 +482,8 @@ export class SoundManager {
     }
 
     // Compute effective volume
-    const effectiveVolume = entry.volume * this.masterVolume * this.categoryVolumes[entry.category];
+    const effectiveVolume =
+      entry.volume * this.masterVolume * this.categoryVolumes[entry.category] * gain;
     if (effectiveVolume <= 0) return;
 
     // Compute pitch variation
@@ -541,7 +545,7 @@ export class SoundManager {
 
 export const soundManager = new SoundManager();
 
-/** Play a sound by name. Drop-in replacement for the old playSound. */
-export function playSound(name: SoundName): void {
-  soundManager.play(name);
+/** Play a sound by name, at `gain` × its volume. Drop-in replacement for the old playSound. */
+export function playSound(name: SoundName, gain?: number): void {
+  soundManager.play(name, gain);
 }

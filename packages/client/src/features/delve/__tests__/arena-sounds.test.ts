@@ -7,7 +7,7 @@ vi.mock('@/components/Toast', () => ({ showToast: vi.fn() }));
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
-import { lootCues, noManaToaster, playArenaEvents } from '../arena/arena-sounds';
+import { ECHO_GAIN, lootCues, noManaToaster, playArenaEvents } from '../arena/arena-sounds';
 import {
   computeHeroStats,
   createSandboxWorld,
@@ -40,6 +40,28 @@ describe('arena sounds', () => {
     expect(playSound).toHaveBeenCalledWith('synergyActivate');
     expect(vibrate).toHaveBeenCalledWith('light');
     expect(vibrate).toHaveBeenCalledWith('success');
+  });
+
+  it("an echo's hit plays its sound at half volume and doesn't buzz", () => {
+    const hit = {
+      kind: 'hit',
+      id: 1,
+      x: 0,
+      y: 0,
+      amount: 5,
+      element: null,
+      heft: 1,
+      source: 'basic',
+      echo: true,
+    } as const;
+    playArenaEvents([
+      { ...hit, crit: true },
+      { ...hit, crit: false },
+    ]);
+    expect(playSound).toHaveBeenCalledWith('crit', ECHO_GAIN);
+    expect(playSound).toHaveBeenCalledWith('attack', ECHO_GAIN);
+    expect(ECHO_GAIN).toBe(0.5);
+    expect(vibrate).not.toHaveBeenCalled();
   });
 
   it("Obsidian's barrier breaks with a socket's pop", () => {

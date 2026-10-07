@@ -226,5 +226,14 @@ describe('SoundManager', () => {
       // Expected: 0.7 * 0.5 * 0.5 = 0.175
       expect(mockVolume).toHaveBeenCalledWith(expect.closeTo(0.175, 3), expect.any(Number));
     });
+
+    it('scales by the play’s gain: an echo’s hit at half', () => {
+      const mgr = freshManager();
+      mgr.loadFiles();
+      mgr.setMasterVolume(0.5);
+      mgr.setCategoryVolume('sfx', 0.5);
+      mgr.play('orbConfirm', 0.5);
+      expect(mockVolume).toHaveBeenCalledWith(expect.closeTo(0.0875, 4), expect.any(Number));
+    });
   });
 });
