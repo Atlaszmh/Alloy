@@ -144,7 +144,8 @@ export function interactTick(ctx: SimCtx): void {
 /**
  * A vault chest's haul (`drops.vault`): flux and shards by the floor's depth,
  * the door and Find, the shards `shardTierUp` tiers up, and an essence at
- * `essenceChance` × the door's `essence` × Lucky Charm's boost; never gear.
+ * `essenceChance` × the door's `essence` × Lucky Charm's boost; the hero's Prospector and
+ * Flux Nose apply as to a foe's drops; never gear.
  */
 export function rollVault(
   registry: DataRegistry,
@@ -166,6 +167,9 @@ export function rollVault(
       find: loot.find,
       legendaryBoost: loot.legendaryBoost,
       patterns: loot.patterns,
+      // Prospector and Flux Nose (the boons spec's `metalUp`, `flux`) reach a chest as a foe's drops.
+      metalUp: world.hero.boon.metalUp,
+      flux: world.hero.boon.flux,
     },
     rng,
   );

@@ -152,3 +152,98 @@ describe('interact.ts', () => {
     expect([plain.hero.floorBuffs.length, plain.hero.diveBuffs.length]).toEqual([1, 0]);
   });
 });
+
+describe('drops (material-drops.ts, rune-drops.ts)', () => {
+  const biome = registry.getBiomeForDepth(1);
+  const roll = (seed: number, o: Partial<MaterialDropContext> = {}) =>
+    rollMaterialDrops(
+      registry,
+      {
+        depth: 1,
+        kind: 'elite',
+        biomeId: biome.id,
+        biomeMana: biome.mana,
+        door: null,
+        find: 0,
+        legendaryBoost: 1,
+        patterns: [],
+        ...o,
+      },
+      new SeededRNG(seed),
+    );
+  const kinds = (r: ReturnType<typeof roll>) => r.materials.map((m) => m.material.kind);
+
+  it('neutral boons roll exactly as none', () => {
+    for (let s = 1; s <= 20; s++) expect(roll(s, { metalUp: 0, flux: 1 })).toEqual(roll(s));
+  });
+
+  it("Prospector: metalUp adds to the next metal's chance; no draw moves", () => {
+    const metals = registry.getCraftingData().metals;
+    const next = metals[metals.indexOf(metalAt(registry, 1)) + 1].id;
+    for (let s = 1; s <= 30; s++) {
+      const up = roll(s, { metalUp: 1 });
+      expect(kinds(up)).toEqual(kinds(roll(s)));
+      for (const { material } of up.materials)
+        if (material.kind === 'metal') expect(material.metal).toBe(next);
+    }
+  });
+
+  it('Flux Nose: × the flux chance', () => {
+    for (let s = 1; s <= 30; s++) expect(kinds(roll(s, { flux: 10 }))).toContain('flux');
+  });
+
+  it('Scrapper: kill scrap × (1 + Σ), over as many pickups; every other drop as before', () => {
+    const drop = (effects: BoonEffect[]) => {
+      const w = arena([dummy(13, 20)]);
+      for (const e of effects) wear(w, e);
+      dropMaterials(makeCtx(registry, w, []), w.monsters[0], 9);
+      return w.drops;
+    };
+    const scrap = (ds: Drop[]) =>
+      ds.filter((d) => d.kind === 'scrap').reduce((n, d) => n + d.amount, 0);
+    const plain = drop([]);
+    const more = drop([{ scrap: 0.5 }, { scrap: 0.5 }]);
+    expect([scrap(plain), scrap(more)]).toEqual([9, 18]);
+    expect(more.map((d) => [d.kind, d.x, d.y])).toEqual(plain.map((d) => [d.kind, d.x, d.y]));
+  });
+
+  it("Rune Sense: × a foe's rune chance", () => {
+    const foes = Array.from({ length: 10 }, (_, i) => dummy(3 + 2 * i, 20));
+    const runes = (w: ArpgWorld) => {
+      const ctx = makeCtx(registry, w, []);
+      for (const m of w.monsters) dropRune(ctx, m);
+      return w.drops.filter((d) => d.kind === 'rune').length;
+    };
+    expect(runes(arena(foes))).toBeLessThan(10);
+    expect(runes(wear(arena(foes), { runes: 1000 }))).toBe(10);
+  });
+  const metalOf = (r: { material: { kind: string; metal?: string } }[]) =>
+    r.filter((m) => m.material.kind === 'metal').map((m) => m.material.metal);
+  const vaultKinds = (r: { material: { kind: string } }[]) => r.map((m) => m.material.kind);
+
+  it('Prospector reaches a vault chest; no draw moves', () => {
+    // The chest's table holds no bars today: give it one for the test.
+    const vault = bal.drops.vault as Record<string, unknown>;
+    vault.bars = { chance: 1, count: [1, 1] };
+    try {
+      const metals = registry.getCraftingData().metals;
+      const next = metals[metals.indexOf(metalAt(registry, 2)) + 1].id;
+      for (let s = 1; s <= 20; s++) {
+        const plain = rollVault(registry, arena([]), new SeededRNG(s));
+        const up = rollVault(registry, wear(arena([]), { metalUp: 1 }), new SeededRNG(s));
+        expect(vaultKinds(up)).toEqual(vaultKinds(plain));
+        expect(metalOf(up)).toEqual([next]);
+      }
+    } finally {
+      delete vault.bars;
+    }
+  });
+
+  it("Flux Nose reaches a vault chest: × its flux chance (already 1, so × 0 shows the factor)", () => {
+    for (let s = 1; s <= 20; s++) {
+      expect(vaultKinds(rollVault(registry, arena([]), new SeededRNG(s)))).toContain('flux');
+      const none = rollVault(registry, wear(arena([]), { flux: 0 }), new SeededRNG(s));
+      expect(vaultKinds(none)).not.toContain('flux');
+    }
+  });
+});
