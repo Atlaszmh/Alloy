@@ -13,7 +13,7 @@ import { dropRune } from '../src/arpg/rune-drops.js';
 import { groundSpeed } from '../src/arpg/terrain.js';
 import { createFloorWorld, type FloorOptions } from '../src/arpg/world.js';
 import { buffSum } from '../src/delve/boons.js';
-import { chooseDoor, settleDive, startDive } from '../src/delve/dive.js';
+import { beginFloor, chooseDoor, heroMaxHp, settleDive, startDive } from '../src/delve/dive.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { createDelveProfile } from '../src/delve/profile.js';
 import { emptyHaul, metalAt } from '../src/loot/materials.js';
@@ -337,5 +337,25 @@ describe('hazardsFriendly (objects.ts)', () => {
     const kind = blast([{ hazardsFriendly: 0.5 }, { hazardsFriendly: 0.8 }]);
     expect(kind.hurt).toBeLessThanOrEqual(0);
     expect(kind.hz.until).toBeCloseTo(fuse + recharge * 0.2, 0);
+  });
+});
+
+describe('heroMaxHp (dive.ts)', () => {
+  const diving = (buffs: Buff[]): DelveProfile => {
+    const p = startDive(registry, createDelveProfile(registry, 5), 1);
+    return { ...p, dive: { ...p.dive!, diveBuffs: buffs } };
+  };
+
+  it("is the floor hero's max life, its dive boons worn", () => {
+    for (const buffs of [[], [buff({ maxLife: -0.2 })], [buff({ attune: { role: 'primary', points: 10 } })]]) {
+      const p = diving(buffs);
+      expect(heroMaxHp(registry, p)).toBe(beginFloor(registry, p).hero.stats.maxHp);
+    }
+  });
+
+  // Needs B2's `applyBuffs` handler for `maxLife`: un-skip at B2's merge.
+  it.skip('a Glass Cannon-like maxLife -0.2 entry lowers it', () => {
+    const p = diving([]);
+    expect(heroMaxHp(registry, diving([buff({ maxLife: -0.2 })]))).toBeCloseTo(heroMaxHp(registry, p) * 0.8, 6);
   });
 });

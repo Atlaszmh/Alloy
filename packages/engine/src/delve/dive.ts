@@ -8,11 +8,11 @@ import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gear.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, emptyPending, isBossFloor } from '../arpg/world.js';
-import { diveStats, profileStats } from './pair.js';
+import { diveStats } from './pair.js';
 import { heroChains } from '../loot/moveset.js';
 import { rollStop } from './stops.js';
 import { buffSum } from './boons.js';
-import { pairElements } from './hero-stats.js';
+import { applyBuffs, pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 import { addToPouch } from '../loot/runes.js';
 import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
@@ -500,7 +500,7 @@ export function drinkPotionBetweenFloors(registry: DataRegistry, profile: DelveP
   return { ...profile, dive: { ...dive, potions: dive.potions - 1, heroHpFrac: Math.min(1, dive.heroHpFrac + heal) } };
 }
 
-/** Life fraction the hero would enter the next floor with. */
+/** The max life the hero enters the next floor with (its life fractions' base): the floor hero's, its dive boons worn. */
 export function heroMaxHp(registry: DataRegistry, profile: DelveProfile): number {
-  return profileStats(registry, profile).maxHp;
+  return applyBuffs(diveStats(registry, profile), profile.dive?.diveBuffs ?? []).maxHp;
 }
