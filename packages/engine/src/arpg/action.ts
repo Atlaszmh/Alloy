@@ -84,7 +84,8 @@ function slice(ctx: SimCtx, p: Push, k: number, steer: Vec | null): boolean {
   const h = world.hero;
   const foe = p.stopId === null ? null : world.monsters.find((m) => m.id === p.stopId && !m.dead);
   if (p.stopId !== null && !foe) return false;
-  const ground = groundAt(world.map, h);
+  // Trailblazer frees the pushes too, as `groundSpeed` does the walk.
+  const ground = h.boon.noSlow ? 1 : groundAt(world.map, h);
   let dx = p.dx * (k - p.done) * ground;
   let dy = p.dy * (k - p.done) * ground;
   p.done = k;

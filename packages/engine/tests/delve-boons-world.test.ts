@@ -283,3 +283,23 @@ describe('dive.ts', () => {
     expect(chooseDoor(registry, choosing(diving([]), 'winding'), 'winding').dive!.depth).toBe(2);
   });
 });
+
+describe('noSlow (terrain.ts)', () => {
+  const walk = (effects: BoonEffect[]) => {
+    const w = onMap(arena([], { noBasic: true }), []);
+    bindTerrain(w.map, bal.terrain);
+    for (let y = 20; y < 40; y++) for (let x = 8; x < 18; x++) w.map.cells[y * w.width + x] = CELL.slow;
+    for (const e of effects) wear(w, e);
+    const y0 = w.hero.y;
+    run(w, 0.5, { x: 0, y: -1 });
+    return { w, moved: y0 - w.hero.y };
+  };
+
+  it('Trailblazer: the hero walks slow ground at full pace; anything else there is still slowed', () => {
+    const slowed = walk([]);
+    const free = walk([{ noSlow: true }]);
+    expect(free.moved / slowed.moved).toBeCloseTo(1 / bal.terrain.slowMult, 1);
+    expect(groundSpeed(free.w, free.w.hero)).toBe(1);
+    expect(groundSpeed(free.w, { x: free.w.hero.x, y: free.w.hero.y })).toBe(bal.terrain.slowMult);
+  });
+});
