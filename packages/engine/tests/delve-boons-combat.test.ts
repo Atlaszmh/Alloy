@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyBuffs, computeHeroStats } from '../src/delve/hero-stats.js';
 import { buffSum } from '../src/delve/boons.js';
-import { makeCtx } from '../src/arpg/combat.js';
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { BoonEffect, Buff } from '../src/types/boon.js';
 import { abilityHit } from '../src/arpg/abilities/impact.js';
@@ -118,5 +118,41 @@ describe('the damage path: kind, first move, step bonus (impact.ts, resolve.ts)'
     };
     const s = bal.chains.stepBonus;
     expect(second(true)).toBeCloseTo((second(false) * (1 + s + 0.1)) / (1 + s), 6);
+  });
+});
+
+describe('the damage path: per foe (combat.ts)', () => {
+  it("lowLife: more on a foe under its threshold, from the hero's hits only", () => {
+    const w = wear(arena([dummy(13, 30)], { noBasic: true }), {
+      lowLife: { below: 0.25, mult: 0.4 },
+    });
+    const ctx = ctxOf(w);
+    const [m] = w.monsters;
+    m.hp = m.maxHp * 0.5;
+    expect(hitMonster(ctx, m, 100, null, { source: 'skill' })).toBeCloseTo(100, 9);
+    m.hp = m.maxHp * 0.2;
+    expect(hitMonster(ctx, m, 100, null, { source: 'skill' })).toBeCloseTo(140, 9);
+    expect(hitMonster(ctx, m, 100, null, { source: 'dot' })).toBeCloseTo(100, 9);
+  });
+
+  it('nearFoes: more per awake foe within its radius of the hero, to its cap', () => {
+    const near = (aggro: boolean) => [
+      dummy(13, 34, { aggro }),
+      dummy(14, 35, { aggro }),
+      dummy(12, 35, { aggro }),
+    ];
+    const boon = { nearFoes: { per: 0.05, cap: 2, radius: 4 } };
+    const awake = wear(
+      arena([...near(true), dummy(13, 20, { aggro: true })], { noBasic: true }),
+      boon,
+    );
+    expect(hitMonster(ctxOf(awake), awake.monsters[3], 100, null, { source: 'skill' })).toBeCloseTo(
+      110,
+      9,
+    );
+    const asleep = wear(arena(near(false), { noBasic: true }), boon);
+    expect(
+      hitMonster(ctxOf(asleep), asleep.monsters[0], 100, null, { source: 'skill' }),
+    ).toBeCloseTo(100, 9);
   });
 });

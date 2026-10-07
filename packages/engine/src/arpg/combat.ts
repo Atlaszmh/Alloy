@@ -531,6 +531,25 @@ function givenAway(ctx: SimCtx, m: MonsterEntity): void {
   for (const o of pack) if (o.aggro && !o.goingHome) Object.assign(o, { search, goal: search.at });
 }
 
+/**
+ * The boons' per-foe damage on the hero's own hits (the boons spec §2):
+ * `lowLife` on a foe under its threshold, `nearFoes` per awake foe within its
+ * radius of the hero, to its cap. 1 with neither.
+ */
+function boonFoeMult(ctx: SimCtx, m: MonsterEntity): number {
+  const h = ctx.world.hero;
+  const { lowLife, nearFoes } = h.boon;
+  let mult = 1;
+  if (lowLife && m.hp < lowLife.below * m.maxHp) mult *= 1 + lowLife.mult;
+  if (nearFoes) {
+    const n = ctx.world.monsters.filter(
+      (f) => !f.dead && f.aggro && dist(h.x, h.y, f.x, f.y) <= nearFoes.radius,
+    ).length;
+    mult *= 1 + nearFoes.per * Math.min(n, nearFoes.cap);
+  }
+  return mult;
+}
+
 export function hitMonster(
   ctx: SimCtx,
   m: MonsterEntity,
@@ -556,6 +575,7 @@ export function hitMonster(
     h.riposteUntil = 0;
   }
   if (crit) amount *= stats.critMultiplier;
+  if (opts.source === 'basic' || opts.source === 'skill') amount *= boonFoeMult(ctx, m);
 
   // A dummy resists as its own setting says (Neutral: nothing); its `element` is only its look.
   const resists = m.dummy ? m.dummy.element : m.element;
