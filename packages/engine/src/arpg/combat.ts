@@ -652,8 +652,10 @@ export function hitMonster(
     // Drain: mana per foe hit while the cast's budget lasts (`drainFoes` foe-hits since its
     // skill last fired, and `drainLeft` mana; the basic attack's at index 3).
     const drain = opts.slot ?? 3;
-    if (opts.manaOnHit && h.drained[drain] < bal.runes.drainFoes && h.drainLeft[drain] > 0) {
-      const gain = Math.min(opts.manaOnHit, h.drainLeft[drain]);
+    // Under Blood Price (a boon) Drain gives no mana, as the basics give none.
+    const drains = !h.boon.bloodPrice && opts.manaOnHit;
+    if (drains && h.drained[drain] < bal.runes.drainFoes && h.drainLeft[drain] > 0) {
+      const gain = Math.min(drains, h.drainLeft[drain]);
       h.drained[drain]++;
       h.drainLeft[drain] -= gain;
       h.mana = Math.min(h.manaMax, h.mana + gain);

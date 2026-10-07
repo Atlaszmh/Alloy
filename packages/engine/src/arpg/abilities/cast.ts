@@ -15,11 +15,21 @@ const DEFENSIVE = 1;
 /**
  * Can the hero pay for it? Infinite mana (Training Grounds) ignores cost, even
  * one dearer than the whole pool, as does a Free Cast's window after a dodge.
+ * Under Blood Price the cost is life, refused when it would leave under 1.
  */
 export function canAfford(world: ArpgWorld, ab: ResolvedAbility): boolean {
   const h = world.hero;
   if (world.sandbox?.infiniteMana || world.t < (h.freeCastUntil ?? 0)) return true;
-  return h.mana >= ab.cost;
+  return h.boon.bloodPrice ? h.hp - lifeCost(h, ab.cost) >= 1 : h.mana >= ab.cost;
+}
+
+/**
+ * Blood Price's life for a mana cost (the boons spec §2): `cost / manaMax × p ×
+ * maxHp`; 0 without it, and for a charge move (its cost is 0).
+ */
+export function lifeCost(h: HeroEntity, cost: number): number {
+  const p = h.boon.bloodPrice ?? 0;
+  return p > 0 ? (cost / h.manaMax) * p * h.stats.maxHp : 0;
 }
 
 /** Whether the slot's beat still runs at `t` (its next move waits for its end). */
@@ -178,8 +188,9 @@ function fire(
 }
 
 /**
- * Pay for move `step`: its mana, its own cooldown (from `from`), its charge from
- * the slot's meter. A Free Cast's window, while it runs, waives the mana and
+ * Pay for move `step`: its mana (under Blood Price, its life: `lifeCost`), its
+ * own cooldown (from `from`), its charge from the slot's meter. A Free Cast's
+ * window, while it runs, waives the mana (or the life) and
  * closes. A `pay` event says what it really cost: infinite mana's mana and no
  * cooldowns' charge come straight back, so they're free. Returns a Free Cast's
  * damage bonus (0 for any other payment).
@@ -188,12 +199,14 @@ function pay(ctx: SimCtx, slot: number, step: number, ab: ResolvedAbility, from:
   const h = ctx.world.hero;
   const sandbox = ctx.world.sandbox;
   const free = ctx.world.t < (h.freeCastUntil ?? 0);
+  const blood = !free && !!h.boon.bloodPrice;
   if (free) h.freeCastUntil = 0;
+  else if (blood) h.hp -= lifeCost(h, ab.cost);
   else h.mana -= ab.cost;
   // No cooldowns (Training Grounds): no cooldown, and so no charge lockout.
   if (!sandbox?.noCooldowns) h.cooldowns[slot][step] = from + ab.cooldown;
   if (ab.payment === 'charge') h.charge[slot] = Math.max(0, h.charge[slot] - ab.chargeNeed);
-  const mana = sandbox?.infiniteMana || free ? 0 : ab.cost;
+  const mana = sandbox?.infiniteMana || free || blood ? 0 : ab.cost;
   const charge = ab.payment === 'charge' && !sandbox?.noCooldowns ? ab.chargeNeed : 0;
   if (mana > 0 || charge > 0) ctx.events.push({ kind: 'pay', slot, mana, charge });
   return free ? (h.boon.freeCast?.damage ?? 0) : 0;

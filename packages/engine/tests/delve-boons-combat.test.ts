@@ -5,6 +5,7 @@ import { hitMonster, hurtHero, makeCtx } from '../src/arpg/combat.js';
 import { dodgeMax, dodgeRecharge, perfectOrigin, refundDodgeCharge } from '../src/arpg/dodge.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { BoonEffect, Buff } from '../src/types/boon.js';
+import { canAfford, lifeCost } from '../src/arpg/abilities/cast.js';
 import { abilityHit, knobHitOpts } from '../src/arpg/abilities/impact.js';
 import { NEUTRAL, stepBonus } from '../src/arpg/abilities/resolve.js';
 import {
@@ -16,6 +17,7 @@ import {
   gear,
   moveOf,
   press,
+  pressOnly,
   registry,
   run,
   STEP,
@@ -258,5 +260,61 @@ describe('Free Cast (cast.ts)', () => {
       return firstHit([...press(w, 0), ...run(w, 1)], 'skill');
     };
     expect(hit(0.25)).toBeCloseTo(hit(0) * 1.25, 6);
+  });
+});
+
+describe('Blood Price (cast.ts, basic.ts)', () => {
+  const bleeder = () => {
+    const w = wear(arena([dummy(13, 30)], { noBasic: true }), { bloodPrice: 0.5 });
+    w.hero.manaRegen = 0;
+    w.hero.stats = { ...w.hero.stats, lifeRegen: 0 };
+    return w;
+  };
+
+  it('an ability costs life, not mana: cost / manaMax × p × maxHp', () => {
+    const w = bleeder();
+    const h = w.hero;
+    const cost = moveOf(w, 0).cost;
+    const life = lifeCost(h, cost);
+    expect(life).toBeCloseTo((cost / h.manaMax) * 0.5 * h.stats.maxHp, 9);
+    const [hp, mana] = [h.hp, h.mana];
+    pressOnly(w, 0);
+    expect(h.mana).toBe(mana);
+    expect(h.hp).toBeCloseTo(hp - life, 9);
+  });
+
+  it('refuses a cast that would leave under 1 life; a move costing no mana costs no life', () => {
+    const w = bleeder();
+    const ab = moveOf(w, 0);
+    w.hero.hp = lifeCost(w.hero, ab.cost) + 0.5;
+    const events = pressOnly(w, 0);
+    expect(events.some((e) => e.kind === 'noMana')).toBe(true);
+    expect(w.hero.windup).toBeNull();
+    expect(canAfford(w, { ...ab, cost: 0 })).toBe(true);
+  });
+
+  it('Drain gives no mana under it', () => {
+    const drained = (blood: boolean) => {
+      const w = bleeder();
+      if (!blood) wear(w);
+      w.hero.mana = 0;
+      w.hero.drainLeft[0] = 10;
+      hitMonster(ctxOf(w), w.monsters[0], 10, null, { source: 'skill', slot: 0, manaOnHit: 2 });
+      return w.hero.mana;
+    };
+    expect([drained(false), drained(true)]).toEqual([2, 0]);
+  });
+
+  it('basic hits give no mana under it', () => {
+    const gain = (blood: boolean) => {
+      const w = arena([dummy(13, 34.5)]);
+      if (blood) wear(w, { bloodPrice: 0.5 });
+      w.hero.manaRegen = 0;
+      w.hero.mana = 0;
+      firstBlow(w);
+      return w.hero.mana;
+    };
+    expect(gain(false)).toBeGreaterThan(0);
+    expect(gain(true)).toBe(0);
   });
 });

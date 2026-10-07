@@ -247,7 +247,8 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
     dir,
   });
   if (landed) {
-    h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+    // Under Blood Price (a boon) the basics give no mana.
+    if (!h.boon.bloodPrice) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
     guardLand(ctx, blow.knobs);
   }
   // Echo: the blow again (a held blow at its stage), along its way, from where the hero stands then.
