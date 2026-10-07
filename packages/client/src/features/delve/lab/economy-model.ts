@@ -1,4 +1,5 @@
 import {
+  BOON_FAMILIES,
   FLUX_GRADES,
   RARITY_ORDER,
   type EconomyRow,
@@ -88,7 +89,7 @@ export interface EconomyLine {
 /**
  * The chart's lines for a choice: a material's income, quest rewards, Anvil salvage, spending and death loss
  * (its id; `lost` null counts 0), the items forged by rarity (`'forged'`), the
- * deepest depth (`'depth'`) or the deaths (`'deaths'`, a count). One choice at a
+ * boons taken by family (`'boons'`), the deepest depth (`'depth'`) or the deaths (`'deaths'`, a count). One choice at a
  * time, so one axis holds one unit.
  */
 export function economyLines(reports: readonly EconomyReport[], show: string): EconomyLine[] {
@@ -98,6 +99,13 @@ export function economyLines(reports: readonly EconomyReport[], show: string): E
       label: RARITY_LABEL[r],
       color: RARITY_COLOR[r],
       values: perDive(reports, (d) => d.forged[r] ?? 0),
+    }));
+  if (show === 'boons')
+    return BOON_FAMILIES.map((f, i) => ({
+      key: `boons:${f}`,
+      label: f[0].toUpperCase() + f.slice(1),
+      color: PALETTE[i % PALETTE.length],
+      values: perDive(reports, (d) => d.boons[f]),
     }));
   if (show === 'depth')
     return [

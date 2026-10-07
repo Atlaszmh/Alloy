@@ -9,7 +9,8 @@ import {
   parseDelveProfile,
   unequipSlot,
 } from '../src/delve/profile.js';
-import { STOP_KINDS, rollStop, stopKinds, takeStop } from '../src/delve/stops.js';
+import { STOP_KINDS, alcoveOffers, rollStop, stopKinds, takeStop } from '../src/delve/stops.js';
+import type { BoonOffer } from '../src/types/boon.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { upgradeCost } from '../src/loot/smithing.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
@@ -17,6 +18,7 @@ import type { DelveProfile, DiveStop, StopKind } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
 import { bal, chainsOf, registry, run } from './fixtures/arena.js';
 import { armed } from './fixtures/carries.js';
+import { onMap, twoRooms } from './fixtures/flow-map.js';
 
 // See the weapon movesets spec's "Stops between depths".
 
@@ -48,8 +50,17 @@ const ALL: DiveStop = { kind: 'powerups', offers: [...STOP_KINDS], taken: false 
 /** The kinds before runes: what a hero with an empty pouch can be offered. */
 const FOUR: StopKind[] = ['equip', 'slot', 'move', 'upgrade'];
 
+/** A boons stop offering `offers`. */
+const boonsStop = (...offers: BoonOffer[]): DiveStop => ({ kind: 'boons', offers, taken: false });
+const OFFER: BoonOffer[] = [
+  { id: 'keen-edge', tier: 2 },
+  { id: 'stone-skin', tier: 1 },
+  { id: 'magpie', tier: 3 },
+];
+const st = (step: string) => ({ step, count: 0, misses: 0 });
+
 describe('the stop after a cleared depth', () => {
-  it('holds 2 or 3 of the kinds that apply, the same from the same dive', () => {
+  it('an ordinary stop holds three boons, the same from the same dive', () => {
     const p = startDive(registry, { ...hero(), scrap: 1000, manaDust: 50 }, 1);
     const clear = () => {
       const world = beginFloor(registry, p);
@@ -61,10 +72,9 @@ describe('the stop after a cleared depth', () => {
     const once = clear();
     expect(once.dive!.phase).toBe('choosing');
     const stop = once.dive!.stop!;
+    expect(stop.kind).toBe('boons');
     expect(stop.taken).toBe(false);
-    expect(stop.offers.length).toBeGreaterThanOrEqual(2);
-    expect(stop.offers.length).toBeLessThanOrEqual(3);
-    for (const k of stop.offers) expect(stopKinds(registry, once)).toContain(k);
+    expect(stop.offers).toHaveLength(3);
     expect(clear().dive!.stop).toEqual(stop);
   });
 
@@ -88,7 +98,8 @@ describe('the stop after a cleared depth', () => {
       equipped: { chest: maxed(bare.equipped.chest!) },
     };
     expect(stopKinds(registry, spent)).toEqual([]);
-    expect(rollStop(registry, spent, startDive(registry, spent, 1).dive!)).toBeNull();
+    // A hero with nothing to pay still meets boons: they are free.
+    expect(rollStop(registry, spent, startDive(registry, spent, 1).dive!)?.kind).toBe('boons');
   });
 
   it('counts and spends what the dive banked first, then the stockpile (S9)', () => {
@@ -111,34 +122,33 @@ describe('the stop after a cleared depth', () => {
     expect(res.profile.dive!.stop!.taken).toBe(true);
   });
 
-  it('offers 2 or 3 at random in the kinds order, all of them when only two apply', () => {
-    const p = { ...hero(), links: 5, scrap: 1000 };
-    const counts = new Set<number>();
-    const seen = new Set<StopKind>();
-    for (let seed = 1; seed <= 40; seed++) {
-      const dive = { ...startDive(registry, p, 1).dive!, seed };
-      const stop = rollStop(registry, p, dive)!;
-      counts.add(stop.offers.length);
-      stop.offers.forEach((k) => seen.add(k));
-      expect(stop.offers).toEqual(STOP_KINDS.filter((k) => stop.offers.includes(k)));
-    }
-    expect([...counts].sort()).toEqual([2, 3]);
-    expect([...seen].sort()).toEqual([...FOUR].sort());
-    const two = { ...createDelveProfile(registry, 3, { primary: 'fire' }), scrap: 1000 };
-    const dive = startDive(registry, two, 1).dive!;
-    expect(rollStop(registry, two, dive)).toEqual({
+  it('a guided stop offers the power-ups its step names, required; a step naming none, no stop', () => {
+    const dive = startDive(registry, hero(), 1).dive!;
+    expect(rollStop(registry, { ...hero(), tutorial: st('s1-equip') }, dive)).toEqual({
       kind: 'powerups',
-      offers: ['move', 'upgrade'],
+      offers: ['equip'],
       taken: false,
+      required: true,
     });
-    // One kind that applies: that one alone.
-    const bare = unequipSlot(registry, two, 'weapon');
-    const one = { ...bare, bag: [] };
-    expect(rollStop(registry, one, dive)).toEqual({
-      kind: 'powerups',
-      offers: ['upgrade'],
-      taken: false,
-    });
+    expect(rollStop(registry, { ...hero(), tutorial: st('s3-home') }, dive)).toBeNull();
+    const guided = {
+      ...atStop(hero(), { kind: 'powerups', offers: ['equip'], taken: false, required: true }),
+      tutorial: st('s1-equip'),
+    };
+    const res = takeStop(registry, guided, { kind: 'equip', uid: 'r1' });
+    expect(res.ok).toBe(true);
+    expect(res.profile.equipped.ring!.uid).toBe('r1');
+    expect(takeStop(registry, guided, { kind: 'boon', index: 0 }).reason).toBe(
+      'Not offered at this stop',
+    );
+  });
+
+  it('an anvil alcove still offers 2 or 3 paid power-ups', () => {
+    const p = startDive(registry, { ...hero(), scrap: 1000 }, 1);
+    const w = onMap(beginFloor(registry, p), twoRooms('alcove', { kind: 'alcove' }, 1));
+    const offers = alcoveOffers(registry, p, w, '1:1');
+    expect(offers.length).toBeGreaterThanOrEqual(2);
+    for (const k of offers) expect(STOP_KINDS).toContain(k);
   });
 });
 
@@ -259,6 +269,74 @@ describe('takeStop', () => {
     const { stop: _stop, ...older } = p.dive!;
     expect(parseDelveProfile(registry, json({ ...p, dive: older }))!.profile.dive!.stop).toBeNull();
   });
+
+  it("takes a boon: its tier's effect onto the dive, free, the stop taken", () => {
+    const p = { ...atStop(hero(), boonsStop(...OFFER)), scrap: 77, links: 2 };
+    const res = takeStop(registry, p, { kind: 'boon', index: 2 });
+    expect(res.ok).toBe(true);
+    expect(res.profile.dive!.diveBuffs).toEqual([
+      ...p.dive!.diveBuffs,
+      { boon: 'magpie', tier: 3, effect: { find: 60 } },
+    ]);
+    expect(res.profile.dive!.stop).toEqual({ ...p.dive!.stop, taken: true });
+    // The buff's effect is its own copy, never the registry's row.
+    expect(res.profile.dive!.diveBuffs.at(-1)!.effect).not.toBe(
+      registry.getBoon('magpie')!.tiers[2].effect,
+    );
+    // Nothing spent, banked or otherwise changed.
+    expect({ ...res.profile, dive: null }).toEqual({ ...p, dive: null });
+    expect({ ...res.profile.dive!, diveBuffs: [], stop: null }).toEqual({
+      ...p.dive!,
+      diveBuffs: [],
+      stop: null,
+    });
+    expect(takeStop(registry, res.profile, { kind: 'boon', index: 0 }).reason).toBe(
+      "This stop's boon is taken",
+    );
+  });
+
+  it('refuses a card it does not hold, a power-up at a boons stop, and a boon at a power-up stop', () => {
+    const p = atStop(hero(), boonsStop(...OFFER));
+    for (const index of [3, -1, 0.5])
+      expect(takeStop(registry, p, { kind: 'boon', index })).toMatchObject({
+        ok: false,
+        reason: 'Take a boon the stop offers',
+        profile: p,
+      });
+    expect(takeStop(registry, p, { kind: 'equip', uid: 'r1' }).reason).toBe(
+      'Not offered at this stop',
+    );
+    expect(takeStop(registry, atStop(hero(), ALL), { kind: 'boon', index: 0 }).reason).toBe(
+      'Not offered at this stop',
+    );
+    expect(
+      takeStop(registry, startDive(registry, hero(), 1), { kind: 'boon', index: 0 }).reason,
+    ).toBe('No stop here');
+  });
+
+  it('stacks: a second stop adds a second entry of the same boon', () => {
+    const one = takeStop(registry, atStop(hero(), boonsStop(...OFFER)), {
+      kind: 'boon',
+      index: 0,
+    }).profile;
+    const again = { ...one, dive: { ...one.dive!, stop: boonsStop({ id: 'keen-edge', tier: 1 }) } };
+    const two = takeStop(registry, again, { kind: 'boon', index: 0 }).profile;
+    expect(two.dive!.diveBuffs.map((b) => [b.boon, b.tier])).toEqual([
+      ['keen-edge', 2],
+      ['keen-edge', 1],
+    ]);
+  });
+
+  it('the save keeps a boons stop and the boons worn', () => {
+    const p = takeStop(registry, atStop(hero(), boonsStop(...OFFER)), {
+      kind: 'boon',
+      index: 1,
+    }).profile;
+    const json = (x: unknown) => JSON.parse(JSON.stringify(x));
+    const back = parseDelveProfile(registry, json(p))!.profile.dive!;
+    expect(back.stop).toEqual(p.dive!.stop);
+    expect(back.diveBuffs).toEqual(p.dive!.diveBuffs);
+  });
 });
 
 describe('the autopilot at a stop', () => {
@@ -310,5 +388,40 @@ describe('the autopilot at a stop', () => {
     expect(weapon!.moveset!.slots.primary).toBe(1);
     const broke = { ...atStop(hero(), stopOf('move', 'upgrade')), scrap: 0 };
     expect(takeBestStop(registry, broke)).toBe(broke);
+  });
+
+  it('takes the boon of the highest tier, ties by family, never a pact', () => {
+    const took = (...offers: BoonOffer[]) =>
+      takeBestStop(registry, atStop(hero(), boonsStop(...offers))).dive!.diveBuffs.map(
+        (b) => `${b.boon}:${b.tier}`,
+      );
+    expect(
+      took(
+        { id: 'keen-edge', tier: 1 },
+        { id: 'glass-cannon', tier: 3 },
+        { id: 'stone-skin', tier: 2 },
+      ),
+    ).toEqual(['stone-skin:2']);
+    expect(
+      took({ id: 'magpie', tier: 2 }, { id: 'bulwark', tier: 2 }, { id: 'keen-edge', tier: 1 }),
+    ).toEqual(['bulwark:2']);
+    expect(
+      took({ id: 'cartographer', tier: 1 }, { id: 'magpie', tier: 1 }, { id: 'echo', tier: 1 }),
+    ).toEqual(['echo:1']);
+    expect(took({ id: 'pure-flame', tier: 1 }, { id: 'keen-edge', tier: 1 })).toEqual([
+      'keen-edge:1',
+    ]);
+    const pacts = atStop(
+      hero(),
+      boonsStop({ id: 'glass-cannon', tier: 3 }, { id: 'hunted', tier: 1 }),
+    );
+    expect(takeBestStop(registry, pacts)).toBe(pacts);
+    const taken = { ...atStop(hero(), boonsStop(...OFFER)) };
+    taken.dive = { ...taken.dive!, stop: { ...taken.dive!.stop!, taken: true } };
+    expect(takeBestStop(registry, taken)).toBe(taken);
+    // An id the data lacks is passed over, never thrown on.
+    expect(took({ id: 'no-such-boon', tier: 3 }, { id: 'magpie', tier: 1 })).toEqual(['magpie:1']);
+    const unknown = atStop(hero(), boonsStop({ id: 'no-such-boon', tier: 3 }));
+    expect(takeBestStop(registry, unknown)).toBe(unknown);
   });
 });

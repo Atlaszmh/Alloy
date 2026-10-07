@@ -1477,7 +1477,8 @@
         "find": 75,
         "flux": 1.5,
         "essence": 1.5,
-        "monsterHp": 0.25
+        "monsterHp": 0.25,
+        "boons": 0.5
       }
     },
     {
@@ -1488,7 +1489,8 @@
       "weight": 2,
       "mods": {
         "eliteChance": 1,
-        "bountyMult": 1.5
+        "bountyMult": 1.5,
+        "boons": 0.3
       }
     },
     {

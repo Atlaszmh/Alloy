@@ -18,6 +18,15 @@ import {
 } from '../economy-model';
 
 const NONE = { common: 0, uncommon: 0, magic: 0, rare: 0, epic: 0, legendary: 0 };
+const NO_BOONS = {
+  offense: 0,
+  element: 0,
+  defense: 0,
+  tempo: 0,
+  fortune: 0,
+  pact: 0,
+  floor: 0,
+};
 /** A report's final save: the view never reads it. */
 const PROFILE = createDelveProfile(getDelveRegistry(), 1);
 const haul = (over: Partial<Haul> = {}): Haul => ({ ...emptyHaul(), ...over });
@@ -29,6 +38,7 @@ function dive(n: number, over: Partial<EconomyRow> = {}): EconomyRow {
     salvaged: haul(),
     spent: haul(),
     stops: haul(),
+    boons: NO_BOONS,
     forged: NONE,
     depth: n,
     died: false,
@@ -140,5 +150,24 @@ describe('the Economy view model', () => {
     expect(parseSeeds('1, 2,3  2 x -4 5.5')).toEqual([1, 2, 3]);
     expect(parseSeeds('')).toEqual([]);
     expect([3, 2.5, 1234].map(formatAmount)).toEqual(['3', '2.5', '1.2k']);
+  });
+
+  it('draws the boons taken, a line a family', () => {
+    const r: EconomyReport = {
+      seed: 1,
+      dives: [dive(1, { boons: { ...NO_BOONS, offense: 2, floor: 1 } }), dive(2)],
+      profile: PROFILE,
+    };
+    const lines = economyLines([r], 'boons');
+    expect(lines.map((l) => [l.label, l.values])).toEqual([
+      ['Offense', [2, 0]],
+      ['Element', [0, 0]],
+      ['Defense', [0, 0]],
+      ['Tempo', [0, 0]],
+      ['Fortune', [0, 0]],
+      ['Pact', [0, 0]],
+      ['Floor', [1, 0]],
+    ]);
+    expect(new Set(lines.map((l) => l.color)).size).toBe(7);
   });
 });

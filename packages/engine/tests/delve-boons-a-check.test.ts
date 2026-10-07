@@ -10,8 +10,12 @@ import type { BoonDef } from '../src/types/boon.js';
 
 const registry = createDefaultRegistry();
 const data = loadAndValidateData();
-const withBoons = (boons: BoonDef[]) => boonsProblems(new DataRegistry({ ...data, boons }));
+/** `boons` plus the shipped stop rows (which add no problem), so only `boons`' own show. */
+const withBoons = (boons: BoonDef[]) =>
+  boonsProblems(new DataRegistry({ ...data, boons: [...boons, ...data.boons.slice(6)] }));
 const vigor = data.boons[0];
+/** `vigor` as no shrine, so the shrine rows' own check (no knobs, no attunement) stays out. */
+const plain: BoonDef = { ...vigor, shrine: undefined };
 const tiers = (effect: object) => [0, 1, 2].map(() => ({ text: 'x', effect })) as BoonDef['tiers'];
 
 describe('boonsProblems', () => {
@@ -26,13 +30,13 @@ describe('boonsProblems', () => {
       tiers: [vigor.tiers[0], { ...vigor.tiers[1], text: ' ' }, vigor.tiers[2]],
     };
     expect(withBoons([blank as BoonDef])).toEqual(['vigor: tier 2 has no text']);
-    expect(withBoons([{ ...vigor, tiers: tiers({ knobs: { haste: 1 } }) }])).toEqual([
+    expect(withBoons([{ ...plain, tiers: tiers({ knobs: { haste: 1 } }) }])).toEqual([
       "vigor: tier 1's knob haste is no Knobs key",
       "vigor: tier 2's knob haste is no Knobs key",
       "vigor: tier 3's knob haste is no Knobs key",
     ]);
     expect(
-      withBoons([{ ...vigor, tiers: tiers({ attune: { role: 'third', points: 4 } }) }]),
+      withBoons([{ ...plain, tiers: tiers({ attune: { role: 'third', points: 4 } }) }]),
     ).toHaveLength(3);
     expect(withBoons([{ ...vigor, cap: 4 as never }])).toEqual(['vigor: a cap of 4, not 1 to 3']);
   });

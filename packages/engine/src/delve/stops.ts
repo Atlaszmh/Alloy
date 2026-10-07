@@ -1,6 +1,8 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { ArpgWorld } from '../types/arpg.js';
 import type { Interactable } from '../types/floor-map.js';
+import type { Buff } from '../types/boon.js';
+import { rollBoons } from './boons.js';
 import { refreshWorldHero } from '../arpg/world.js';
 import { carriedByText, heroChains, movesetOf } from '../loot/moveset.js';
 import { upgradeCost } from '../loot/smithing.js';
@@ -21,9 +23,10 @@ import { diveStats } from './pair.js';
 import { applyTutorialEvents, tutorialStep } from './tutorial.js';
 
 /**
- * Stops between depths (see the weapon movesets spec): after a depth is
- * cleared, the door screen holds one power-up, taken with the dive lock lifted
- * for that one op. dive.ts imports this module back: keep to function declarations.
+ * Stops between depths: after a depth is cleared, an ordinary stop offers three
+ * boons, one taken free (the boons spec §4); a guided stop and an anvil alcove
+ * hold power-ups, each taken with the dive lock lifted for that one op (the
+ * weapon movesets spec). dive.ts imports this module back: keep to function declarations.
  */
 
 /** The five kinds, in the order a stop lists them. */
@@ -152,31 +155,27 @@ function canEdit(registry: DataRegistry, profile: DelveProfile): boolean {
 }
 
 /**
- * The stop after `dive`'s depth is cleared (`completeFloor`): 2 or 3 of the
- * kinds that apply, at random from the dive seed's fork `stop:<depth>`, or all
- * of them when fewer apply; none apply, no stop. A guided stop (the profile's
- * current step a stop step) offers the kinds its step names that apply, all of
- * them, required before a door when its step waits for the power-up
- * (`takeStop`; see the tutorial spec's gates).
+ * The stop after `dive`'s depth is cleared (`completeFloor`). A guided stop
+ * (the profile's current step a stop step) offers the kinds its step names that
+ * apply, all of them, required before a door when its step waits for the
+ * power-up (`takeStop`; see the tutorial spec's gates), and none apply, no stop.
+ * Any other stop offers boons (`rollBoons`, on the dive seed's fork
+ * `stop:<depth>`); none left, no stop.
  */
 export function rollStop(
   registry: DataRegistry,
   profile: DelveProfile,
   dive: DiveState,
 ): DiveStop | null {
-  const kinds = stopKinds(registry, { ...profile, dive });
   const step = tutorialStep(registry, profile.tutorial);
   if (step?.stop) {
+    const kinds = stopKinds(registry, { ...profile, dive });
     const offers = kinds.filter((k) => step.stop!.kinds.includes(k));
     if (offers.length === 0) return null;
     return { kind: 'powerups', offers, taken: false, required: step.trigger.type === 'takeStop' };
   }
-  if (kinds.length === 0) return null;
-  return {
-    kind: 'powerups',
-    offers: pickKinds(kinds, new SeededRNG(dive.seed).fork(`stop:${dive.depth}`)),
-    taken: false,
-  };
+  const offers = rollBoons(registry, dive, new SeededRNG(dive.seed).fork(`stop:${dive.depth}`));
+  return offers.length > 0 ? { kind: 'boons', offers, taken: false } : null;
 }
 
 /** 2 or 3 of `kinds` at random on `rng` (all of them when fewer), in their order. */
@@ -256,14 +255,16 @@ function runStop(
 }
 
 /**
- * Take the stop's power-up: its kind must be offered and the stop not yet
- * taken. The op runs at its normal price with the dive lock lifted for it
- * alone (equipping is free, and a weapon brings its own moveset); `move`
- * changes one move of one chain (its sockets and runes stay as saved); `rune`
- * sockets a pouch rune into an empty socket, free. It spends what the dive
- * has banked first, then the stockpile (so a rune found this dive can be
- * socketed). A refused op leaves the stop open; one taken marks it taken.
- * Skipping is choosing a door.
+ * Take what the stop offers. At a boons stop, the offer at `index`: its tier's
+ * effect goes onto the dive (`DiveState.diveBuffs`) and the stop is taken, free
+ * (nothing pooled, spent or locked; no quest or tutorial event). At a power-up
+ * stop, the kind must be offered and the stop not yet taken. The op runs at
+ * its normal price with the dive lock lifted for it alone (equipping is free,
+ * and a weapon brings its own moveset); `move` changes one move of one chain
+ * (its sockets and runes stay as saved); `rune` sockets a pouch rune into an
+ * empty socket, free. It spends what the dive has banked first, then the
+ * stockpile (so a rune found this dive can be socketed). A refused op leaves
+ * the stop open; one taken marks it taken. Skipping is choosing a door.
  */
 export function takeStop(
   registry: DataRegistry,
@@ -273,9 +274,22 @@ export function takeStop(
   const dive = profile.dive;
   const stop = dive?.phase === 'choosing' && !dive.settled ? dive.stop : null;
   if (!dive || !stop) return { ok: false, profile, reason: 'No stop here' };
+  if (stop.kind === 'boons') {
+    if (action.kind !== 'boon') return { ok: false, profile, reason: 'Not offered at this stop' };
+    if (stop.taken) return { ok: false, profile, reason: "This stop's boon is taken" };
+    const offer = stop.offers[action.index];
+    const def = offer && registry.getBoon(offer.id);
+    if (!offer || !def) return { ok: false, profile, reason: 'Take a boon the stop offers' };
+    const buff: Buff = {
+      boon: offer.id,
+      tier: offer.tier,
+      effect: { ...def.tiers[offer.tier - 1].effect },
+    };
+    const taken = { ...dive, diveBuffs: [...dive.diveBuffs, buff], stop: { ...stop, taken: true } };
+    return { ok: true, profile: { ...profile, dive: taken } };
+  }
   if (stop.taken) return { ok: false, profile, reason: "This stop's power-up is taken" };
-  // A boon is refused until the stop rolls boons (the boons spec's B1); a power-up only where offered.
-  if (action.kind === 'boon' || stop.kind !== 'powerups' || !stop.offers.includes(action.kind))
+  if (action.kind === 'boon' || !stop.offers.includes(action.kind))
     return { ok: false, profile, reason: 'Not offered at this stop' };
   const res = runStop(registry, { ...pooled(profile), dive: null }, action);
   if (!res.ok) return { ...res, profile };

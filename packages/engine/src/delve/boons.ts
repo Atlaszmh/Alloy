@@ -1,4 +1,17 @@
-import type { BoonId, BoonSum, Buff } from '../types/boon.js';
+import type { DataRegistry } from '../data/registry.js';
+import { weightedPick } from '../loot/item-generator.js';
+import type { SeededRNG } from '../rng/seeded-rng.js';
+import {
+  BOON_TIER_NAMES,
+  type BoonId,
+  type BoonSum,
+  type Buff,
+  type BoonDef,
+  type BoonFamily,
+  type BoonOffer,
+  type BoonTierIndex,
+} from '../types/boon.js';
+import type { DiveState } from '../types/delve.js';
 
 // The boons' pure parts (see the boons spec): the combined view the sim reads, and a boon's count.
 
@@ -96,4 +109,56 @@ export function buffSum(buffs: readonly Buff[]): BoonSum {
 /** How many of `id` the hero wears: its entries (a boon's stacks). */
 export function boonCount(buffs: readonly Buff[], id: BoonId): number {
   return buffs.filter((b) => b.boon === id).length;
+}
+
+/** A tier, then the lower ones, then the higher ones (the boons spec §4's fallback). */
+const FALLBACK: Record<BoonTierIndex, BoonTierIndex[]> = {
+  1: [1, 2, 3],
+  2: [2, 1, 3],
+  3: [3, 2, 1],
+};
+const TIERS = [1, 2, 3] as const;
+
+/** A row's stop weight at a tier. */
+const weightAt = (b: BoonDef, t: BoonTierIndex) => b.weight[BOON_TIER_NAMES[t - 1]];
+
+/**
+ * A stop's boon offer (the boons spec §4), drawn on `rng` (the dive seed's
+ * `stop:<depth>` fork): up to `delve.boons.offers` cards, each a tier by the
+ * depth's band (the last `tierWeights` entry from at most `dive.depth`), one
+ * tier up at the chance of the door that led here (`DoorMods.boons`), then a row
+ * by its weight at that tier among those with `minDepth` met, under their `cap`
+ * in `dive.diveBuffs`, and of a family not yet offered. A tier with no such row
+ * falls back lower, then higher; with none at all the offer ends. The bump is
+ * drawn for every card, even at a chance of 0, so the draws (and the offers a
+ * seed gives) don't depend on the door.
+ */
+export function rollBoons(
+  registry: DataRegistry,
+  dive: Pick<DiveState, 'depth' | 'door' | 'diveBuffs'>,
+  rng: SeededRNG,
+): BoonOffer[] {
+  const { offers, tierWeights } = registry.getDelveBalance().boons;
+  const band = tierWeights.filter((b) => b.fromDepth <= dive.depth).at(-1) ?? tierWeights[0];
+  const bump = dive.door?.mods.boons ?? 0;
+  const open = registry
+    .getBoons()
+    .filter((b) => (b.minDepth ?? 1) <= dive.depth && boonCount(dive.diveBuffs, b.id) < b.cap);
+  const families = new Set<BoonFamily>();
+  const out: BoonOffer[] = [];
+  for (let n = 0; n < offers; n++) {
+    let tier: BoonTierIndex = weightedPick(TIERS, (t) => band.weights[t - 1], rng);
+    if (rng.next() < bump) tier = Math.min(3, tier + 1) as BoonTierIndex;
+    const left = open.filter((b) => !families.has(b.family));
+    const t = FALLBACK[tier].find((x) => left.some((b) => weightAt(b, x) > 0));
+    if (t === undefined) break;
+    const row = weightedPick(
+      left.filter((b) => weightAt(b, t) > 0),
+      (b) => weightAt(b, t),
+      rng,
+    );
+    families.add(row.family);
+    out.push({ id: row.id, tier: t });
+  }
+  return out;
 }

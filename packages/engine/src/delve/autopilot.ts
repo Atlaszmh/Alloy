@@ -1,4 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
+import { BOON_FAMILIES, type BoonFamily } from '../types/boon.js';
 import type { DelveProfile, StopKind } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS, RARITY_ORDER, rarityIndex } from '../types/gear.js';
@@ -505,13 +506,32 @@ function runeStop(
   return best?.profile ?? null;
 }
 
+/** A boons stop's tie-break by family (the boons spec §5); a pact is never taken. */
+const BOON_ORDER: readonly BoonFamily[] = ['offense', 'defense', 'element', 'tempo', 'fortune', 'floor'];
+
 /**
- * At a stop between depths, by preference: equip the bag item that beats its
+ * At a stop between depths. A boons stop: the boon of the highest tier, ties by
+ * family in `BOON_ORDER`, never a pact (nothing taken when only pacts are
+ * offered). A power-up stop, by preference: equip the bag item that beats its
  * gear the most as it is; else socket the pouch rune that raises Power most
  * into an empty socket (free); else upgrade its cheapest affordable equipped
  * item; else add an affordable slot (in `SLOT_ORDER`); else skip (the door).
  */
 export function takeBestStop(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const stop = profile.dive?.stop;
+  if (stop?.kind === 'boons') {
+    if (stop.taken) return profile;
+    // An id the data lacks (or a pact) has no place in BOON_ORDER: passed over.
+    const best = stop.offers
+      .map((o, index) => {
+        const family = registry.getBoon(o.id)?.family;
+        return { index, tier: o.tier, order: family ? BOON_ORDER.indexOf(family) : -1 };
+      })
+      .filter((o) => o.order >= 0)
+      .sort((a, b) => b.tier - a.tier || a.order - b.order)[0];
+    const res = best && takeStop(registry, profile, { kind: 'boon', index: best.index });
+    return res?.ok ? res.profile : profile;
+  }
   return bestStop(registry, profile, (action) => {
     const res = takeStop(registry, profile, action);
     return res.ok ? res.profile : null;
@@ -1128,6 +1148,7 @@ export function runAutopilot(
     let timedOut = 0;
     let result: AutopilotDiveReport['result'] = 'dead';
     let stops = emptyHaul();
+    const boons = Object.fromEntries(BOON_FAMILIES.map((f) => [f, 0])) as Record<BoonFamily, number>;
 
     while (p.dive && (p.dive.phase === 'fighting' || p.dive.phase === 'choosing')) {
       if (p.dive.phase === 'fighting') {
@@ -1144,6 +1165,10 @@ export function runAutopilot(
       if (guided) run?.stops.push(stop?.kind === 'powerups' ? stop.offers : []);
       p = guided ? takeGuidedStop(registry, p) : takeBestStop(registry, p);
       stops = addHaul(stops, outflow(before, p));
+      for (const b of p.dive!.diveBuffs.slice(before.dive!.diveBuffs.length)) {
+        const family = registry.getBoon(b.boon)?.family;
+        if (family) boons[family]++;
+      }
       if (guided?.extract) {
         p = extractDive(registry, p);
         result = 'extracted';
@@ -1195,6 +1220,7 @@ export function runAutopilot(
       quests: visit.quests,
       spent: visit.spent,
       stops,
+      boons,
       lost: dive.lost,
       forged,
       depth: dive.depth,
