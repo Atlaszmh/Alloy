@@ -20,6 +20,8 @@ import { depthGrowth } from './world.js';
  * the dodge, knockback and a charger's dash never do.
  */
 export function groundSpeed(world: ArpgWorld, body: Vec, boss = false): number {
+  // Trailblazer (the boons spec's `noSlow`): the hero walks slow ground at full pace.
+  if (body === world.hero && world.hero.boon.noSlow) return 1;
   return groundAt(world.map, body, boss);
 }
 

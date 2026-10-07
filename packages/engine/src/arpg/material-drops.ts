@@ -37,6 +37,10 @@ export interface MaterialDropContext {
   legendaryBoost: number;
   /** The patterns the hero knows: a pattern drop is one it doesn't. */
   patterns: string[];
+  /** Prospector (the boons spec's `metalUp`): added to `drops.metalUpChance` (default 0). */
+  metalUp?: number;
+  /** Flux Nose (`flux`): × every flux entry's chance, beside the door's (default 1). */
+  flux?: number;
 }
 
 export interface MaterialDrops {
@@ -56,12 +60,15 @@ export function essenceAllowed(registry: DataRegistry, depth: number): boolean {
   return depth >= registry.getDelveBalance().drops.essenceMinDepth;
 }
 
-/** The bar a floor at `depth` drops: its item level's metal, the next one up at `drops.metalUpChance`. */
-export function rollMetal(registry: DataRegistry, depth: number, rng: SeededRNG): MetalId {
+/**
+ * The bar a floor at `depth` drops: its item level's metal, the next one up at
+ * `drops.metalUpChance` + `up` (Prospector's; one draw either way).
+ */
+export function rollMetal(registry: DataRegistry, depth: number, rng: SeededRNG, up = 0): MetalId {
   const metals = registry.getCraftingData().metals;
   const at = metals.indexOf(metalAt(registry, depth));
-  const up = rng.next() < registry.getDelveBalance().drops.metalUpChance ? 1 : 0;
-  return metals[Math.min(metals.length - 1, at + up)].id;
+  const bump = rng.next() < registry.getDelveBalance().drops.metalUpChance + up ? 1 : 0;
+  return metals[Math.min(metals.length - 1, at + bump)].id;
 }
 
 /**
@@ -138,8 +145,8 @@ export function rollMaterialDrops(
   const one = (material: MaterialRef) => materials.push({ material, amount: 1 });
 
   for (let n = count(table.bars); n > 0; n--)
-    one({ kind: 'metal', metal: rollMetal(registry, ctx.depth, rng) });
-  for (let n = count(table.flux, mods.flux ?? 1); n > 0; n--) {
+    one({ kind: 'metal', metal: rollMetal(registry, ctx.depth, rng, ctx.metalUp) });
+  for (let n = count(table.flux, (mods.flux ?? 1) * (ctx.flux ?? 1)); n > 0; n--) {
     const grade = rollTier(registry, drops.fluxGradeDepths, ctx.depth, FLUX_GRADES.length, up, rng);
     one({ kind: 'flux', grade: FLUX_GRADES[grade - 1] });
   }
@@ -188,6 +195,8 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
       find: loot.find,
       legendaryBoost: loot.legendaryBoost,
       patterns: loot.patterns,
+      metalUp: world.hero.boon.metalUp,
+      flux: world.hero.boon.flux,
     },
     rng,
   );
@@ -213,9 +222,12 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
     ctx.events.push({ kind: 'drop', dropId: id, x, y, dropKind: extra.kind });
   };
 
+  // Scrapper (the boons spec's `scrap`): the kill's scrap × (1 + Σ), over the pickups the
+  // unboosted scrap makes, so no draw moves.
+  const total = Math.round(scrap * (1 + (world.hero.boon.scrap ?? 0)));
   const pieces = Math.min(registry.getDelveBalance().drops.scrapPickups[m.kind], scrap);
   for (let i = 0; i < pieces; i++) {
-    const amount = Math.floor(scrap / pieces) + (i < scrap % pieces ? 1 : 0);
+    const amount = Math.floor(total / pieces) + (i < total % pieces ? 1 : 0);
     spawn({ kind: 'scrap', amount });
   }
   for (const { material, amount } of rolled.materials)
