@@ -376,11 +376,11 @@ describe('StopScreen (between depths)', () => {
     expect(terms('winding')).toEqual({ cost: [], gain: [] });
     expect(terms('gilded')).toEqual({
       cost: ['Foes +25% life'],
-      gain: ['Flux ×1.5', 'Essences ×1.5', 'Find +75%'],
+      gain: ['Flux ×1.5', 'Essences ×1.5', 'Find +75%', 'Rarer boons 50%'],
     });
     expect(terms('champions')).toEqual({
       cost: ['An elite leads every pack'],
-      gain: ['Bounty ×1.5'],
+      gain: ['Bounty ×1.5', 'Rarer boons 30%'],
     });
     expect(terms('shrine')).toEqual({
       cost: ['Materials ×0.5', 'Runes ×0.5'],

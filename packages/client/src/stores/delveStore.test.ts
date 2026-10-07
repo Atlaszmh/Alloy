@@ -208,8 +208,7 @@ describe('delveStore', () => {
     expect(s().takeStop({ kind: 'equip', uid: 'x4' }).ok).toBe(false);
   });
 
-  // Phase D: remove the .skip once B1 has merged (Phase A's engine refuses every boon take).
-  it.skip("takes the stop's boon: free, worn on the dive, once", () => {
+  it("takes the stop's boon: free, worn on the dive, once", () => {
     const s = () => useDelveStore.getState();
     s().startDive(1);
     const dive = { ...s().profile.dive!, phase: 'choosing' as const };
