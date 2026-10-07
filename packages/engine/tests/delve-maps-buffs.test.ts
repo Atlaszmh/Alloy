@@ -6,10 +6,10 @@ import { DEFAULT_CHAINS, arena, dummy, gear, registry, run } from './fixtures/ar
 
 // See the floor maps spec: "Shrine (sanctum room)" and its stats.
 
-const VIGOR: Buff = { shrine: 'vigor', effect: { damage: 0.2 } };
-const CLARITY: Buff = { shrine: 'clarity', effect: { manaRegen: 0.5 } };
-const RENEWAL: Buff = { shrine: 'renewal', effect: { lifeRegen: 0.01 } };
-const DEVOTION: Buff = { shrine: 'devotion', effect: { damage: 0.1, find: 50 } };
+const VIGOR: Buff = { boon: 'vigor', tier: 1, effect: { damage: 0.2 } };
+const CLARITY: Buff = { boon: 'clarity', tier: 1, effect: { manaRegen: 0.5 } };
+const RENEWAL: Buff = { boon: 'renewal', tier: 1, effect: { lifeRegen: 0.01 } };
+const DEVOTION: Buff = { boon: 'devotion', tier: 1, effect: { damage: 0.1, find: 50 } };
 const STATS = computeHeroStats({ weapon: gear('fire'), chest: gear('earth', 'chest') }, registry);
 
 /** The fixture's floor (depth 2, no foes), the hero wearing `diveBuffs`. */

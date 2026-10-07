@@ -205,7 +205,7 @@ describe('the generated map', () => {
   });
 
   it('gives each special room its interactable, with ids by depth and room, a shrine its blessing', () => {
-    const shrineIds = registry.getDelveData().shrines.map((s) => s.id);
+    const shrineIds = registry.shrineBoons().map((s) => s.id);
     for (const { map, depth } of ALL)
       for (const r of map.rooms) {
         const want = {

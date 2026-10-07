@@ -16,7 +16,6 @@ import {
   LayoutsDataSchema,
   QuestsDataSchema,
   RunesSchema,
-  ShrinesDataSchema,
 } from './schemas.js';
 import { TutorialDataSchema } from './tutorial-schema.js';
 import { SetPiecesDataSchema } from './setpieces-schema.js';
@@ -28,7 +27,6 @@ import rawRunes from './runes.json';
 import rawCrafting from './crafting.json';
 import rawQuests from './quests.json';
 import rawLayouts from './layouts.json';
-import rawShrines from './shrines.json';
 import rawTutorial from './tutorial.json';
 import rawSetPieces from './setpieces.json';
 import rawBoons from './boons.json';
@@ -49,11 +47,10 @@ export interface LoadedData {
 
 export function loadAndValidateData(): LoadedData {
   const balance = BalanceConfigSchema.parse(rawBalance) as unknown as BalanceConfig;
-  // layouts.json and shrines.json ride the Delve data (see the floor maps spec).
+  // layouts.json rides the Delve data (see the floor maps spec).
   const delve = {
     ...DelveDataSchema.parse(rawDelve),
     layouts: LayoutsDataSchema.parse(rawLayouts),
-    shrines: ShrinesDataSchema.parse(rawShrines),
   } as unknown as DelveData;
   const arpg: ArpgData = {
     ...(ArpgDataSchema.parse(rawArpg) as unknown as Omit<ArpgData, 'runes'>),

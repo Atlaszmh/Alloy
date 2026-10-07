@@ -32,7 +32,7 @@ const seals = (r: Room) => r.kind === 'den' || r.kind === 'boss';
  * A hand-built floor's map: its rows' walls, floor and doors (`0`–`9`, each
  * door its cells of one digit, its id the digit); its rooms, each holding the
  * interactable its cells place (`C`, `H`, `A`, `X`; its id `${depth}:${room}`,
- * a shrine's blessing the first of `shrines.json`) and its home field; each
+ * a shrine's blessing Vigor's) and its home field; each
  * door's rooms, those on whose wall it lies (one that seals first, then by
  * id; one alone twice); the start (`S`) and the exit gate (`X`) at their
  * cells' centres. `tutorialFloorProblems` has checked its geometry.
@@ -67,7 +67,7 @@ export function tutorialFloorMap(
     exit: { x: 0, y: 0 },
     open: false,
   };
-  const shrine = registry.getDelveData().shrines[0].id;
+  const shrine = registry.getBoon('vigor')!.id;
   def.rows.forEach((row, y) =>
     [...row].forEach((c, x) => {
       const at = { x: x + 0.5, y: y + 0.5 };

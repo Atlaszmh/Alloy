@@ -532,40 +532,6 @@ export const QuestsBalanceSchema = z.object({
 
 // --- Floor maps (see the floor maps spec) ---
 
-/** A shrine's blessing: at least one part, and nothing else. */
-const ShrineEffectSchema = z
-  .object({
-    damage: z.number().positive().optional(),
-    lifeRegen: z.number().positive().optional(),
-    manaRegen: z.number().positive().optional(),
-    find: z.number().positive().optional(),
-    potions: z.literal(true).optional(),
-  })
-  .strict()
-  .refine((e) => Object.keys(e).length > 0, 'a shrine does something');
-
-/** A blessing on the hero (`HeroEntity.floorBuffs`, `DiveState.diveBuffs`). */
-export const BuffSchema = z.object({ shrine: z.string().min(1), effect: ShrineEffectSchema });
-
-/** `shrines.json`: a potion refill is a floor shrine (it acts at once). */
-export const ShrinesDataSchema = z
-  .array(
-    z.object({
-      id: z.string().min(1),
-      name: z.string().min(1),
-      text: z.string().min(1),
-      effect: ShrineEffectSchema,
-      duration: z.enum(['floor', 'dive']),
-      weight: z.number().positive(),
-    }),
-  )
-  .min(1)
-  .refine(distinctIds, 'shrine ids differ')
-  .refine(
-    (ss) => ss.every((s) => s.duration === 'floor' || !s.effect.potions),
-    'a refill lasts the floor',
-  );
-
 /** A room template: its floor's size in cells. */
 const RoomTemplateSchema = z
   .object({
@@ -906,6 +872,15 @@ export const BoonEffectSchema = z
   })
   .strict()
   .refine((e) => Object.keys(e).length > 0, 'a boon does something');
+
+/** A boon on the hero (`HeroEntity.floorBuffs`, `diveBuffs`, `DiveState.diveBuffs`): its row, its tier, its effect. */
+export const BuffSchema = z
+  .object({
+    boon: z.string().min(1),
+    tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    effect: BoonEffectSchema,
+  })
+  .strict();
 
 const BoonTierSchema = z.object({ text: z.string().min(1), effect: BoonEffectSchema }).strict();
 

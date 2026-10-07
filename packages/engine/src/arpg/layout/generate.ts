@@ -88,7 +88,8 @@ export function planFloor(
   door: DoorDef | null,
 ): FloorPlan {
   const L = registry.getDelveBalance().layout;
-  const { layouts, shrines } = registry.getDelveData();
+  const { layouts } = registry.getDelveData();
+  const shrines = registry.shrineBoons();
   const rng = new SeededRNG(seed).fork('layout');
   const boss = isBossFloor(registry, depth);
   const C = L.coarseCell;
@@ -296,7 +297,7 @@ export function planFloor(
         ...centre(room.rect),
         used: false,
       };
-      if (kind === 'shrine') it.shrine = weightedPick(shrines, (s) => s.weight, rng).id;
+      if (kind === 'shrine') it.shrine = weightedPick(shrines, (s) => s.shrine!, rng).id;
       if (kind === 'gate') map.exit = { x: it.x, y: it.y };
       room.interactable = it;
     }

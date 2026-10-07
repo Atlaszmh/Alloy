@@ -183,7 +183,7 @@ describe('the alcove and the gate', () => {
 });
 
 describe('the shrine', () => {
-  const shrine = (id: string) => registry.getDelveData().shrines.find((s) => s.id === id)!;
+  const shrine = (id: string) => registry.getBoon(id)!;
   /** The hero beside a sanctum's shrine of `id`. */
   function praying(id: string) {
     const w = floorWorld(twoRooms('sanctum', { kind: 'shrine', shrine: id }));
@@ -202,7 +202,9 @@ describe('the shrine', () => {
     expect(w.hero.floorBuffs).toEqual([]);
     run(w, 3 * STEP);
     expect(w.channel).toBeNull();
-    expect(w.hero.floorBuffs).toEqual([{ shrine: 'vigor', effect: shrine('vigor').effect }]);
+    expect(w.hero.floorBuffs).toEqual([
+      { boon: 'vigor', tier: 1, effect: shrine('vigor').tiers[0].effect },
+    ]);
     expect(w.hero.stats.damageMult).toBeCloseTo(damage * 1.2, 9);
     expect(w.map.rooms[1].interactable!.used).toBe(true);
     expect(w.pending.used).toEqual(['2:1']);
@@ -232,10 +234,10 @@ describe('the shrine', () => {
     const w = praying('devotion');
     applyShrine(registry, w, shrine('devotion'));
     applyShrine(registry, w, shrine('clarity'));
-    const devotion = { shrine: 'devotion', effect: shrine('devotion').effect };
+    const devotion = { boon: 'devotion', tier: 1, effect: shrine('devotion').tiers[0].effect };
     expect(w.hero.diveBuffs).toEqual([devotion]);
     expect(w.pending.diveBuffs).toEqual([devotion]);
-    expect(w.hero.floorBuffs.map((b) => b.shrine)).toEqual(['clarity']);
+    expect(w.hero.floorBuffs.map((b) => b.boon)).toEqual(['clarity']);
     expect(w.hero.baseStats.damageMult).toBeCloseTo(w.hero.stats.damageMult, 9);
     expect(w.hero.manaRegen).toBeCloseTo(manaPool(w.hero.stats, registry).regen, 9);
     expect(w.hero.stats.manaRegenMult).toBeCloseTo(w.hero.baseStats.manaRegenMult * 1.5, 9);
@@ -249,6 +251,6 @@ describe('the shrine', () => {
     w.hero.potions = 0;
     applyShrine(registry, w, shrine('mercy'));
     expect(w.hero.potions).toBe(bal.dive.maxPotions);
-    expect(w.hero.floorBuffs.map((b) => b.shrine)).toEqual(['fortune']);
+    expect(w.hero.floorBuffs.map((b) => b.boon)).toEqual(['fortune']);
   });
 });

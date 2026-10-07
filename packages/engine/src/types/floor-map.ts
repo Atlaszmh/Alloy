@@ -1,5 +1,6 @@
 import type { DropKind, MonsterKind, Vec } from './arpg.js';
 import type { ManaType } from './mana.js';
+import type { BoonId } from './boon.js';
 
 // Delve floor maps (see the floor maps spec): the grid, its rooms and doors,
 // what can be used in them, the shrines' blessings, the data and the HUD's map.
@@ -87,9 +88,6 @@ export type DrawnRoomKind = (typeof DRAWN_ROOM_KINDS)[number];
 
 export type InteractableKind = 'chest' | 'shrine' | 'alcove' | 'gate';
 
-/** A shrine's id in `shrines.json`. */
-export type ShrineId = string;
-
 /** Something in a room the hero uses with `interact`. */
 export interface Interactable {
   /** `${depth}:${roomId}`: one use a dive (`DiveState.used`). */
@@ -98,8 +96,8 @@ export interface Interactable {
   x: number;
   y: number;
   used: boolean;
-  /** A shrine's blessing, drawn at generation. */
-  shrine?: ShrineId;
+  /** A shrine's blessing (its row in `boons.json`), drawn at generation. */
+  shrine?: BoonId;
 }
 
 export interface Room {
@@ -162,39 +160,10 @@ export interface FloorMap {
 /** Which map a floor gets: `'open'` (the default) or a generated one (dives; see `FloorOptions.layout`). */
 export type FloorLayout = 'open' | 'generated';
 
-// ── Shrines (shrines.json) ─────────────────────────────────────────────────
+// ── Shrines ────────────────────────────────────────────────────────────────
 
-/** What a shrine's blessing does; each part is optional. */
-export interface ShrineEffect {
-  /** Damage dealt × (1 + this). */
-  damage?: number;
-  /** Life regained a second, as a fraction of max life. */
-  lifeRegen?: number;
-  /** Mana regen × (1 + this). */
-  manaRegen?: number;
-  /** Find, in percentage points (`world.loot.find`). */
-  find?: number;
-  /** Refills the potions (at once: a floor shrine only). */
-  potions?: true;
-}
-
-export interface ShrineDef {
-  id: ShrineId;
-  name: string;
-  /** Player-facing: what it does, for the prompt. */
-  text: string;
-  effect: ShrineEffect;
-  /** How long it lasts: the floor, or the rest of the dive. */
-  duration: 'floor' | 'dive';
-  /** Its chance to be a sanctum's shrine, against the others'. */
-  weight: number;
-}
-
-/** A blessing on the hero: its shrine (for its name) and what it does. */
-export interface Buff {
-  shrine: ShrineId;
-  effect: ShrineEffect;
-}
+// A shrine's blessing is a boon row (`boons.json`; see the boons spec): `Buff` lives in boon.ts.
+export type { Buff } from './boon.js';
 
 // ── Layouts (layouts.json) ─────────────────────────────────────────────────
 

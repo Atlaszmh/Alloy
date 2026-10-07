@@ -15,7 +15,7 @@ vi.mock('../src/arpg/world.js', async (original) => {
 
 const registry = createDefaultRegistry();
 const json = (x: unknown) => JSON.parse(JSON.stringify(x));
-const DEVOTION: Buff = { shrine: 'devotion', effect: { damage: 0.1 } };
+const DEVOTION: Buff = { boon: 'devotion', tier: 1, effect: { damage: 0.1 } };
 const diving = () => startDive(registry, createDelveProfile(registry, 4, { primary: 'fire' }), 1);
 /** `p`'s dive having used two interactables and taken a blessing. */
 const blessed = (p: DelveProfile): DelveProfile => ({
@@ -41,7 +41,7 @@ describe('save v10', () => {
     expect(parseDelveProfile(registry, json({ ...p, version: 10 }))).toEqual({ reset: true });
     const { used: _u, ...noUsed } = p.dive!;
     expect(parseDelveProfile(registry, json({ ...p, dive: noUsed }))).toBeNull();
-    const bad = { ...p.dive!, diveBuffs: [{ shrine: 'devotion', effect: { haste: 1 } }] };
+    const bad = { ...p.dive!, diveBuffs: [{ boon: 'devotion', tier: 1, effect: { haste: 1 } }] };
     expect(parseDelveProfile(registry, json({ ...p, dive: bad }))).toBeNull();
   });
 });

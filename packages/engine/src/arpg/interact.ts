@@ -2,7 +2,8 @@ import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, MonsterEntity, MonsterKind } from '../types/arpg.js';
 import type { MaterialRef } from '../types/crafting.js';
-import type { Interactable, ShrineDef } from '../types/floor-map.js';
+import type { Interactable } from '../types/floor-map.js';
+import type { BoonDef, Buff } from '../types/boon.js';
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
 import { shardTiersOf } from '../loot/materials.js';
 import type { SimCtx } from './combat.js';
@@ -37,8 +38,9 @@ function interactableOf(world: ArpgWorld, id: string): Interactable | undefined 
   return world.map.rooms.find((r) => r.interactable?.id === id)?.interactable;
 }
 
-function shrineOf(registry: DataRegistry, it: Interactable): ShrineDef | undefined {
-  return registry.getDelveData().shrines.find((s) => s.id === it.shrine);
+/** A shrine's boon row (`boons.json`). */
+function shrineOf(registry: DataRegistry, it: Interactable): BoonDef | undefined {
+  return it.shrine === undefined ? undefined : registry.getBoon(it.shrine);
 }
 
 /** A boss of the floor still stands, or the guided start holds it (see the tutorial spec): its gate stays shut. */
@@ -110,7 +112,11 @@ export function interactTick(ctx: SimCtx): void {
   if (!it) return;
   const shrine = it.kind === 'shrine' ? shrineOf(registry, it) : undefined;
   const text =
-    it.kind === 'shrine' ? (shrine ? `${shrine.name}: ${shrine.text}` : 'Shrine') : NAMES[it.kind];
+    it.kind === 'shrine'
+      ? shrine
+        ? `${shrine.name}: ${shrine.tiers[0].text}`
+        : 'Shrine'
+      : NAMES[it.kind];
   events.push({ kind: 'interactPrompt', id: it.id, interactable: it.kind, text });
   if (!pressed) return;
   switch (it.kind) {
@@ -213,20 +219,21 @@ function openChest(ctx: SimCtx, it: Interactable): void {
 }
 
 /**
- * A shrine's blessing on the world's hero (`interactTick` records the use): a
- * potion refill fills the flasks; its Find goes on `world.loot.find`; the rest
- * is a blessing (none for a refill alone). A floor blessing goes on
+ * A shrine's blessing on the world's hero (`interactTick` records the use): its
+ * row's tier 1 (see the boons spec). A potion refill fills the flasks; its Find
+ * goes on `world.loot.find`; the rest is a blessing (none for a refill alone),
+ * a `Buff` of the row at tier 1. A floor blessing goes on
  * `floorBuffs`; a dive blessing on `diveBuffs` and `baseStats`, and into
  * `pending.diveBuffs` for the bank. The stats are `applyBuffs` over
  * `baseStats` and the pool resizes in place.
  */
-export function applyShrine(registry: DataRegistry, world: ArpgWorld, shrine: ShrineDef): void {
+export function applyShrine(registry: DataRegistry, world: ArpgWorld, shrine: BoonDef): void {
   const h = world.hero;
-  const { effect } = shrine;
+  const { effect } = shrine.tiers[0];
   if (effect.potions) h.potions = registry.getDelveBalance().dive.maxPotions;
   world.loot.find += effect.find ?? 0;
   if (Object.keys(effect).every((k) => k === 'potions')) return;
-  const buff = { shrine: shrine.id, effect };
+  const buff: Buff = { boon: shrine.id, tier: 1, effect };
   if (shrine.duration === 'dive') {
     h.diveBuffs.push(buff);
     world.pending.diveBuffs.push(buff);
