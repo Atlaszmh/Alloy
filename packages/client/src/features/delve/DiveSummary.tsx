@@ -4,6 +4,7 @@ import { RARITY_ORDER } from '@alloy/engine';
 import { Button, Price, reducedMotion } from './kit';
 import { ItemTile } from './ItemTile';
 import { RARITY_LABEL, RARITY_TEXT } from './format';
+import { boonsLine, wornBoons } from './boons-text';
 import { getDelveRegistry } from './registry';
 import { haulRows } from './materials/material-style';
 import { HaulList } from './materials/HaulList';
@@ -24,8 +25,8 @@ const glow = (rgb: string) =>
 /**
  * The dive's end, extracted, fallen or abandoned (an abandon settles the dive and leaves its
  * phase: it counts as a death): the depth and biome, what it cleared, killed and found, the best
- * find, the bounty claimed or lost, what it brought home (`dive.banked`) and what a death or an
- * abandon lost (`dive.lost`), then back to the Anvil or straight in again.
+ * find, the bounty claimed or lost, the boons it wore, what it brought home (`dive.banked`) and
+ * what a death or an abandon lost (`dive.lost`), then back to the Anvil or straight in again.
  */
 export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: DiveSummaryProps) {
   const extracted = dive.phase === 'extracted';
@@ -34,6 +35,7 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
   const registry = getDelveRegistry();
   const home = haulRows(registry, dive.banked);
   const lost = dive.lost ? haulRows(registry, dive.lost) : [];
+  const boons = wornBoons(registry, dive.diveBuffs);
 
   useEffect(() => {
     if (reducedMotion()) return;
@@ -121,6 +123,12 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
           </span>
         )}
       </div>
+
+      {boons.length > 0 && (
+        <p className="k-body-2 m-0 max-w-[560px] text-center" data-testid="dive-boons">
+          Boons: {boonsLine(boons)}
+        </p>
+      )}
 
       <div className="flex w-[560px] gap-4">
         <section
