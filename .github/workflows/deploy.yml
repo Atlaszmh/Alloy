@@ -25,8 +25,6 @@ jobs:
       - run: pnpm -F @alloy/engine build
       - run: pnpm -F @alloy/client test -- --testTimeout=30000
       - run: pnpm -F @alloy/client build
-        env:
-          ALLOY_BASE: /alloy/
 
       # Skipped until the FTP secrets are set in the repo
       - name: Deploy via FTP
