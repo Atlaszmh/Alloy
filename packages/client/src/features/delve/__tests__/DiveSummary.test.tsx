@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import {
   addMaterial,
   createDelveProfile,
@@ -96,5 +96,20 @@ describe('DiveSummary', () => {
     summary();
     expect(screen.getByTestId('dive-home')).toHaveTextContent('Brought homeNothing');
     expect(screen.queryByTestId('dive-lost')).toBeNull();
+  });
+
+  it("lists the boons the dive wore by name and count, and nothing when it wore none", () => {
+    summary();
+    expect(screen.queryByTestId('dive-boons')).toBeNull();
+    cleanup();
+    const row = (id: string) => getDelveRegistry().getBoons().find((b) => b.id === id)!;
+    summary({
+      phase: 'dead',
+      diveBuffs: [
+        { boon: 'vigor', tier: 1, effect: {} },
+        { boon: 'vigor', tier: 2, effect: {} },
+      ],
+    });
+    expect(screen.getByTestId('dive-boons')).toHaveTextContent(`Boons: ${row('vigor').name} ×2`);
   });
 });

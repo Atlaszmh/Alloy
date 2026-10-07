@@ -62,6 +62,7 @@ describe('the guided dive', () => {
     const stopped = completeFloor(script, p, floorOn(p, 'rats')).profile;
     expect(stopped.tutorial).toEqual(st('equip'));
     expect(stopped.dive!.stop).toEqual({
+      kind: 'powerups',
       offers: ['equip', 'upgrade'],
       taken: false,
       required: true,

@@ -631,9 +631,9 @@ describe('save v9: sockets and the pouch', () => {
     equipped: { ...p.equipped, weapon: { ...p.equipped.weapon!, rarity: 'rare' } },
   });
 
-  it('a new profile is version 12 with an empty pouch; a version 6 or 7 save resets', () => {
+  it('a new profile is version 13 with an empty pouch; a version 6 or 7 save resets', () => {
     const p = fresh();
-    expect(p).toMatchObject({ version: 12, runes: {} });
+    expect(p).toMatchObject({ version: 13, runes: {} });
     const { runes: _runes, ...v6 } = p;
     expect(parseDelveProfile(registry, json({ ...v6, version: 6 }))).toEqual({ reset: true });
     expect(parseDelveProfile(registry, json({ ...p, version: 7 }))).toEqual({ reset: true });
@@ -740,7 +740,7 @@ describe('save v9: sockets and the pouch', () => {
     const p = startDive(registry, fresh(), 1);
     expect(p.dive!.runesEarned).toBe(0);
     const { runesEarned: _r, ...dive } = p.dive!;
-    const stop = { offers: ['rune'], taken: false };
+    const stop = { kind: 'powerups' as const, offers: ['rune'], taken: false };
     const res = parseDelveProfile(registry, json({ ...p, dive: { ...dive, stop } }))!;
     expect(res.profile.dive).toMatchObject({ runesEarned: 0, stop });
   });

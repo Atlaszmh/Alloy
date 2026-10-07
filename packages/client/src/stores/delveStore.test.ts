@@ -75,9 +75,9 @@ describe('delveStore', () => {
   });
 
   it('resets a save of another version, and falls back to a new profile when the save is corrupt', () => {
-    localStorage.setItem(DELVE_SAVE_KEY, '{"version":11,"broken":true}');
-    expect(loadDelveProfile()).toEqual({ reset: true });
     localStorage.setItem(DELVE_SAVE_KEY, '{"version":12,"broken":true}');
+    expect(loadDelveProfile()).toEqual({ reset: true });
+    localStorage.setItem(DELVE_SAVE_KEY, '{"version":13,"broken":true}');
     expect(loadDelveProfile()).toBeNull();
     localStorage.setItem(DELVE_SAVE_KEY, 'not json');
     expect(loadDelveProfile()).toBeNull();
@@ -199,13 +199,29 @@ describe('delveStore', () => {
     const dive = { ...s().profile.dive!, phase: 'choosing' as const };
     s().setProfile({
       ...s().profile,
-      dive: { ...dive, stop: { offers: ['equip'], taken: false } },
+      dive: { ...dive, stop: { kind: 'powerups', offers: ['equip'], taken: false } },
     });
     expect(s().takeStop({ kind: 'equip', uid: 'x4' }).ok).toBe(true);
     expect(s().profile.equipped.helm?.uid).toBe('x4');
     expect(s().profile.dive!.stop!.taken).toBe(true);
     expect(s().newUids.x4).toBeUndefined();
     expect(s().takeStop({ kind: 'equip', uid: 'x4' }).ok).toBe(false);
+  });
+
+  it("takes the stop's boon: free, worn on the dive, once", () => {
+    const s = () => useDelveStore.getState();
+    s().startDive(1);
+    const dive = { ...s().profile.dive!, phase: 'choosing' as const };
+    const before = { ...s().profile };
+    s().setProfile({
+      ...s().profile,
+      dive: { ...dive, stop: { kind: 'boons', offers: [{ id: 'keen-edge', tier: 2 }], taken: false } },
+    });
+    expect(s().takeStop({ kind: 'boon', index: 0 }).ok).toBe(true);
+    expect(s().profile.dive!.diveBuffs.at(-1)).toMatchObject({ boon: 'keen-edge', tier: 2 });
+    expect(s().profile.dive!.stop!.taken).toBe(true);
+    expect(s().profile.scrap).toBe(before.scrap);
+    expect(s().takeStop({ kind: 'boon', index: 0 }).ok).toBe(false);
   });
 
   it('a reset takes a primary; without one the choice is still to make', () => {
@@ -224,9 +240,9 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
-    expect(fresh.getState().profile).toMatchObject({ version: 12, scrap: 50 }); // the kit's
+    expect(fresh.getState().profile).toMatchObject({ version: 13, scrap: 50 }); // the kit's
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
-      version: 12,
+      version: 13,
       scrap: 50,
     });
     // The written-back save loads as it is: no second notice.

@@ -3,6 +3,7 @@ import type { Rarity } from '@alloy/engine';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { RARITY_COLOR, RARITY_TEXT } from '../format';
 import { ItemIcon } from '../ItemIcon';
+import { BoonCard, type BoonCardProps } from '../stop/BoonCards';
 import '../delve.css';
 import { Bar, Button, Chip, Segmented, Stepper, Tabs } from './controls';
 import { GLYPH_ART } from './glyph-art';
@@ -18,6 +19,37 @@ const BASES = [
   ...['sword', 'dagger', 'axe', 'maul', 'staff', 'wand', 'bow'],
   ...['helm', 'cuirass', 'gauntlets', 'greaves', 'amulet', 'ring'],
 ];
+/** A boon card at each tier, in three families' colours. */
+const BOONS: Omit<BoonCardProps, 'onTake'>[] = [
+  {
+    id: 'keen-edge',
+    family: 'offense',
+    tier: 1,
+    name: 'Keen Edge',
+    text: '+10% damage',
+    count: 0,
+    cap: 3,
+  },
+  {
+    id: 'third-wind',
+    family: 'defense',
+    tier: 2,
+    name: 'Third Wind',
+    text: '+1 dodge charge, dodges recharge 15% faster',
+    count: 0,
+    cap: 1,
+  },
+  {
+    id: 'glass-cannon',
+    family: 'pact',
+    tier: 3,
+    name: 'Glass Cannon',
+    text: '+45% damage, −20% max life',
+    count: 1,
+    cap: 2,
+  },
+];
+
 const TABS = ['loadout', 'skills', 'forge', 'codex', 'quests'] as const;
 type Tab = (typeof TABS)[number];
 
@@ -271,6 +303,11 @@ export function KitGallery(): ReactElement {
             >
               <span>Hit 412 · Beat after 0.32 s</span>
             </TooltipCard>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 300px)', gap: 18 }}>
+              {BOONS.map((b) => (
+                <BoonCard key={b.tier} {...b} onTake={() => {}} />
+              ))}
+            </div>
           </Panel>
         </div>
       </Screen>

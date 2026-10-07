@@ -131,9 +131,9 @@ Numbers are the starting tune, not targets. Text is each tier's card line in the
 | Third Wind | defense | 1 | +1 dodge charge | +1, dodges recharge 15% faster | +1, perfect window +30% | `dodgeCharges`, `dodgeRecharge` (rare), `dodgeWindow` (epic) | |
 | Perfect Form | defense | 2 | perfect window +30% | +50% | +80% | `dodgeWindow` | |
 | Bulwark | defense | 2 | Defensive lasts +25% | +40% | +60% | `defendDuration` | |
-| Stone Skin | defense | 2 | barrier of 8% life each floor | 12% | 18% | `barrierOnFloor` | |
+| Stone Skin | defense | 2 | barrier of 15% life each floor | 22% | 30% | `barrierOnFloor` | |
 | Deep Breath | defense | 2 | regain 4% life a room cleared | 6% | 10% | `healOnClear` | |
-| Vampire's Tithe | defense | 2 | 1.5% lifesteal | 2.5% | 4% | `lifesteal` | |
+| Vampire's Tithe | defense | 2 | 2.5% lifesteal | 4% | 6% | `lifesteal` | |
 | Last Stand | defense | 1 | under 20%: 40% less damage for 2 s, once a floor | 50%, 3 s | 60%, 4 s | `lastStand` | |
 | Quickstep | tempo | 2 | beats and holds 8% faster | 12% | 18% | `tempo` | |
 | Swift Hands | tempo | 2 | ability cooldowns −8% | −12% | −18% | `knobs.quick.cooldown` 0.92 / 0.88 / 0.82 (no power cut, unlike the Quick rune) | |
@@ -280,6 +280,7 @@ The sim isn't the cost: a step is under 0.1 ms of its 33 ms tick, with or withou
 - **Engine:** `tests/delve-sim-perf.test.ts`, skipped unless `SIM_PERF` is set, as the two-build gate is. It runs the harness above on the worst case boons make: a build with Echo III, Split III and Multi-shot III on its Primary and blows, against a Hunted floor at depth 20. It prints µs a step and events a second. It asserts only that the worst step stays under 8 ms (a quarter of a tick); wall-clock means aren't asserted.
 - **Client:** a dev-only frame readout in the Training Grounds bar (`FrameChip`, dev builds only, beside the DPS Lab button): the 95th-percentile frame time over the last 5 s. The Training Grounds can stand the worst case today, with any rune at any tier and a pack of foes.
 - **The plan's last task is a manual check:** that build against 12 foes at 1920×1080, Effects at 100%, with and without the budget. The numbers go into this section and into CLAUDE.md. The target is a 95th-percentile frame at or under 16.7 ms on the dev machine. If it misses, profile before tuning: lower `HIT_FX_BUDGET` first, then the per-sound throttles. Never cut gameplay hits.
+- **Measured** (2026-10-07, v0.70.0): the engine gate (`SIM_PERF=1`, six seeds × 90 s at depth 20, Hunted and Echo worn at epic, an epic bow with Echo/Split/Multi-shot III on its Volley and blows) ran 81–130 µs a step, the worst step 4.7 ms (seed 1, the first run's warm-up; the other five at most 1.1 ms), 432–1446 hits of which 163–533 echoes, 11–44 events a second. The manual frame check ({{FRAME_DATE}}, the dev machine, {{FRAME_WINDOW}}, Effects 100%, 12 depth-20 foes, the same build in the Training Grounds): p95 {{FRAME_ON}} ms with HIT_FX_BUDGET 24, {{FRAME_OFF}} ms without.
 
 ## Out of scope
 

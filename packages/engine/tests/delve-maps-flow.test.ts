@@ -22,7 +22,7 @@ import { obj, quest, questRegistry, value } from './fixtures/quests.js';
 
 // The floor flow across banks and replays (see the floor maps spec's S1–S3 and "Anvil alcove").
 
-const shrine = (id: string) => registry.getDelveData().shrines.find((s) => s.id === id)!;
+const shrine = (id: string) => registry.getBoon(id)!;
 const ring = generateItem(
   registry,
   { uid: 'r1', ilvl: 2, rarity: 'magic', slot: 'ring', mana: 'fire' },
@@ -64,7 +64,7 @@ describe('a bank keeps what the floor used', () => {
     w.pending.used.push('1:1');
     applyShrine(registry, w, shrine('devotion'));
     const once = bankWorld(registry, p, w).profile;
-    const devotion = { shrine: 'devotion', effect: shrine('devotion').effect };
+    const devotion = { boon: 'devotion', tier: 1, effect: shrine('devotion').tiers[0].effect };
     expect([once.dive!.used, once.dive!.diveBuffs]).toEqual([['1:1'], [devotion]]);
     expect([w.pending.used, w.pending.diveBuffs]).toEqual([[], []]);
     const twice = bankWorld(registry, once, w).profile;
@@ -108,7 +108,7 @@ describe('a replayed floor (S1)', () => {
     run(w, bal.ai.shrineChannel + 0.1);
     const banked = bankWorld(registry, p, w).profile;
     const again = beginFloor(registry, banked);
-    expect(again.hero.diveBuffs.map((b) => b.shrine)).toEqual(['devotion']);
+    expect(again.hero.diveBuffs.map((b) => b.boon)).toEqual(['devotion']);
     expect(again.hero.stats.damageMult).toBeCloseTo(
       profileStats(registry, banked).damageMult * 1.1,
       9,
@@ -210,7 +210,7 @@ describe('the anvil alcove', () => {
     expect(res.profile.equipped.ring?.uid).toBe('r1');
     const real = profileStats(registry, res.profile);
     expect(w.hero.stats).toEqual(applyBuffs(applyBuffs(real, w.hero.diveBuffs), w.hero.floorBuffs));
-    expect(w.hero.floorBuffs.map((b) => b.shrine)).toEqual(['vigor']);
+    expect(w.hero.floorBuffs.map((b) => b.boon)).toEqual(['vigor']);
     expect(w.loot.find).toBeCloseTo(find + w.hero.stats.magicFind, 9);
   });
 

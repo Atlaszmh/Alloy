@@ -13,7 +13,7 @@ import {
   takeBestAlcove,
   worldTutorialEvents,
   type DataRegistry,
-  profileStats,
+  diveStats,
   type ArpgEvent,
   type ArpgWorld,
   type DelveProfile,
@@ -244,9 +244,14 @@ export function useArena(
   /** The tutorial retries of this depth: each one a new world. */
   const [attempt, setAttempt] = useState(0);
   const { equipped, pair } = profile;
+  // The live dive hero wears its dive's boons (`diveStats`; see the boons spec's 2a). Keyed on the
+  // boons worn, not the `diveBuffs` array, which every bank rebuilds.
+  const boonKey = profile.dive?.diveBuffs.map((b) => `${b.boon}:${b.tier}`).join() ?? '';
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair }),
-    [equipped, pair, registry],
+    () => diveStats(registry, { equipped, pair, dive: profile.dive }),
+    // diveStats reads only the dive's diveBuffs, and boonKey stands for them (the whole dive changes every bank).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [equipped, pair, boonKey, registry],
   );
   const chains = useMemo(() => heroChains(registry, equipped, pair), [equipped, pair, registry]);
   const loadout = useMemo(() => ({ stats, chains }), [stats, chains]);

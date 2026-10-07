@@ -27,7 +27,9 @@ export function guardLand(ctx: SimCtx, knobs: Knobs): void {
   const h = ctx.world.hero;
   const hp = h.stats.maxHp * knobs.guardOnLand;
   if (h.barrier && h.barrier.hp > hp) return;
-  h.barrier = { hp, max: hp, until: ctx.world.t + ctx.bal.runes.guardSeconds };
+  // A floor-long barrier (Stone Skin) stays floor-long under a larger Guard.
+  const until = h.barrier?.until === Infinity ? Infinity : ctx.world.t + ctx.bal.runes.guardSeconds;
+  h.barrier = { hp, max: hp, until };
 }
 
 /** The Surge while it is up, else null. */

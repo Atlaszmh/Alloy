@@ -5,7 +5,8 @@ import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
 import type { QuestEvent } from './quests.js';
-import type { Buff, FloorMap, InteractableKind } from './floor-map.js';
+import type { FloorMap, InteractableKind } from './floor-map.js';
+import type { BoonSum, Buff } from './boon.js';
 import type { WorldTutorial } from './tutorial.js';
 import type { TutorialScript } from './tutorial-floor.js';
 import type {
@@ -418,6 +419,11 @@ export interface HeroEntity {
   floorBuffs: Buff[];
   /** The dive's blessings: those it began the floor with, and any taken on it. */
   diveBuffs: Buff[];
+  /**
+   * `buffSum` of `diveBuffs` and `floorBuffs` (see the boons spec): the combined view every
+   * boon field's site reads; set when the hero is made and whenever a buff is added.
+   */
+  boon: BoonSum;
   /** The one mana pool: basic hits fill it, abilities spend it. */
   mana: number;
   manaMax: number;
@@ -465,6 +471,8 @@ export interface HeroEntity {
     conjureUntil: number;
     /** Charge spent at the press (refunded if a dodge cancels). */
     chargePaid: number;
+    /** A Free Cast's damage bonus, carried to the landing (0 or absent: none). */
+    free?: number;
   } | null;
   /**
    * A hold move charging while its button is held (see the moves and chains
@@ -523,6 +531,12 @@ export interface HeroEntity {
   dodgeCharges: number;
   /** When the next dodge charge arrives (0 = full). */
   dodgeRechargeAt: number;
+  /** Free Cast (a boon): an ability paid before this time is free (absent: none). */
+  freeCastUntil?: number;
+  /** Last Stand (a boon) has fired on this floor. */
+  lastStandUsed?: boolean;
+  /** Last Stand's damage cut runs until this time. */
+  lastStandUntil?: number;
   /**
    * The last dodge, kept after the dash ends so a perfect dodge can be judged
    * from its start. The hero is dashing while `t < until`.
@@ -612,6 +626,11 @@ export type ArpgEvent =
        */
       source: HitSource;
       slot?: number;
+      /**
+       * An echo's hit (`landBlow`'s `echo`, an ability's `replay`; see the boons spec's 8): the
+       * client gives it no hit-stop or kick. Its numbers are as any hit's.
+       */
+      echo?: true;
     }
   | {
       kind: 'heroHit';
@@ -670,6 +689,8 @@ export type ArpgEvent =
       element: ManaType;
       heft: number;
       infusion: ManaType | null;
+      /** An echo's slash (an ability's `replay`): the client gives it no hit-stop or kick. */
+      echo?: true;
     }
   | {
       kind: 'basic';

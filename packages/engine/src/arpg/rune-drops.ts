@@ -14,7 +14,9 @@ import { offFootprints } from './objects-base.js';
 export function dropRune(ctx: SimCtx, m: MonsterEntity): void {
   const { world, registry } = ctx;
   const rng = world.runeRng;
-  const ctxDrop = { depth: world.depth, kind: m.kind, runes: world.door?.mods.runes ?? 1 };
+  // Rune Sense (the boons spec's `runes`) multiplies beside the door's.
+  const runes = (world.door?.mods.runes ?? 1) * (world.hero.boon.runes ?? 1);
+  const ctxDrop = { depth: world.depth, kind: m.kind, runes };
   const rune = rollRuneDrop(registry, ctxDrop, rng);
   if (!rune) return;
   const angle = rng.next() * Math.PI * 2;

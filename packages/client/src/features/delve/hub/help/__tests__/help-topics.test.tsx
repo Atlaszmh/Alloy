@@ -96,4 +96,11 @@ describe('HelpPage', () => {
     expect(banking).toHaveTextContent(`the floor's haul and ${loss}% of what the dive banked`);
     expect(banking).not.toHaveTextContent('keep every item'); // the old rule
   });
+
+  it('says what a stop offers', () => {
+    render(<HelpPage topic="banking" />);
+    expect(screen.getByTestId('delve-howto')).toHaveTextContent(
+      'Each stop offers three boons. Take one: it lasts the dive, and some stack.',
+    );
+  });
 });

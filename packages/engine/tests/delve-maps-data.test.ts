@@ -1,13 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
-import {
-  AiBalanceSchema,
-  LayoutBalanceSchema,
-  LayoutsDataSchema,
-  ShrinesDataSchema,
-} from '../src/data/schemas.js';
+import { AiBalanceSchema, LayoutBalanceSchema, LayoutsDataSchema } from '../src/data/schemas.js';
 import layoutsData from '../src/data/layouts.json';
-import shrinesData from '../src/data/shrines.json';
 import { PROP_IDS } from '../src/types/floor-map.js';
 
 // See the floor maps spec: "Data and tuning".
@@ -47,35 +41,6 @@ describe('layouts.json', () => {
     expect(ok(LayoutsDataSchema, { ...layoutsData, arena: [] })).toBe(false);
     expect(
       ok(LayoutsDataSchema, { ...layoutsData, rooms: { crypts: layoutsData.rooms.default } }),
-    ).toBe(false);
-  });
-});
-
-describe('shrines.json', () => {
-  const shrines = registry.getDelveData().shrines;
-
-  it('rides the Delve data: floor and dive blessings, a potion refill among them', () => {
-    expect(shrines.some((s) => s.duration === 'floor')).toBe(true);
-    expect(shrines.some((s) => s.duration === 'dive')).toBe(true);
-    expect(shrines.some((s) => s.effect.potions)).toBe(true);
-  });
-
-  it('refuses repeated ids, an empty or unknown effect, and a refill for the dive', () => {
-    const shrine = {
-      id: 'a',
-      name: 'A',
-      text: 'A.',
-      effect: { damage: 0.1 },
-      duration: 'floor',
-      weight: 1,
-    };
-    expect(ok(ShrinesDataSchema, shrinesData)).toBe(true);
-    expect(ok(ShrinesDataSchema, [shrine, { ...shrine, id: 'b' }])).toBe(true);
-    expect(ok(ShrinesDataSchema, [shrine, shrine])).toBe(false);
-    expect(ok(ShrinesDataSchema, [{ ...shrine, effect: {} }])).toBe(false);
-    expect(ok(ShrinesDataSchema, [{ ...shrine, effect: { haste: 1 } }])).toBe(false);
-    expect(
-      ok(ShrinesDataSchema, [{ ...shrine, effect: { potions: true }, duration: 'dive' }]),
     ).toBe(false);
   });
 });

@@ -47,6 +47,7 @@ export const NEUTRAL: Knobs = Object.freeze({
   catalyst: 0,
   manaOnHit: 0,
   guardOnLand: 0,
+  stackTime: 0,
 });
 
 /**
@@ -54,7 +55,7 @@ export const NEUTRAL: Knobs = Object.freeze({
  * counts add (`pierce` true adds Infinity), flags OR, statuses union, a zone
  * takes the longer seconds and the larger tick power, `split` the larger count
  * with its power, `extraShots` adds counts and multiplies powers, `echo` the
- * largest, and each part of `quick` multiplies.
+ * largest, each part of `quick` multiplies, and `stackTime` adds.
  */
 export function mergeKnobs(...parts: KnobsData[]): Knobs {
   const k: Knobs = { ...NEUTRAL, applies: [], quick: { ...NEUTRAL.quick } };
@@ -98,6 +99,7 @@ export function mergeKnobs(...parts: KnobsData[]): Knobs {
     k.catalyst += p.catalyst ?? 0;
     k.manaOnHit += p.manaOnHit ?? 0;
     k.guardOnLand += p.guardOnLand ?? 0;
+    k.stackTime += p.stackTime ?? 0;
   }
   return k;
 }
@@ -139,10 +141,12 @@ export function resolveAbility(
   if (L.rimeheart && move.form === 'nova' && move.elements.includes('frost')) {
     legendary.push({ zone: { seconds: 3, tickPower: 0.15 } });
   }
+  // A dive's boons' knobs merge beside the legendaries' (see the boons spec's 2a).
   const own = [
     ...move.elements.map((e) => data.elementTraits[e].knobs),
     fusion?.knobs ?? {},
     ...legendary,
+    ...stats.boonKnobs,
   ];
   // Its runes merge last. A Pierce on a move that already passes every foe (an Earth Bolt)
   // would do nothing, so it's left out, trade-off and all: dormant, like a rune that doesn't fit.
@@ -274,9 +278,16 @@ export function baseCost(ab: ResolvedAbility): number {
   return ab.cost / (1 + ab.load);
 }
 
-/** The step bonus of the move at `index`: its power and size factors. */
-export function stepBonus(bal: DelveBalance, index: number): { power: number; size: number } {
-  const b = bal.chains.stepBonus * index;
+/**
+ * The step bonus of the move at `index`: its power and size factors. `extra`
+ * adds to `chains.stepBonus` (a boon's, Closer: the boons spec §2).
+ */
+export function stepBonus(
+  bal: DelveBalance,
+  index: number,
+  extra = 0,
+): { power: number; size: number } {
+  const b = (bal.chains.stepBonus + extra) * index;
   return { power: 1 + b, size: 1 + b / 2 };
 }
 

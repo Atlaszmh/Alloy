@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import {
   RARITY_ORDER,
+  canDrinkBetweenFloors,
   isBossDepth,
   type DiveState,
   type DoorMods,
@@ -125,6 +126,8 @@ export function doorTerms(mods: DoorMods): DoorTerms {
     if (v !== undefined && v !== 1) (v > 1 ? gain : cost).push(`${label} ×${v}`);
   if (mods.find) gain.push(`Find +${mods.find}%`);
   if (mods.shardTier) gain.push(`Tier up ${pct(mods.shardTier)}`);
+  // The next stop's boon cards a tier up at this chance (the boons spec, 4).
+  if (mods.boons) gain.push(`Rarer boons ${pct(mods.boons)}`);
   return { cost, gain };
 }
 
@@ -163,7 +166,7 @@ export function DoorPane({
   const tutorial = useDelveStore((s) => s.profile.tutorial);
   const extract = tutorialStop(tutorial)?.extract ?? true;
   const doors = dive.doorChoices.length > 0;
-  const thirsty = dive.potions > 0 && dive.heroHpFrac < 1;
+  const thirsty = canDrinkBetweenFloors(dive); // a potion left, life below full, no Famine worn
   return (
     <div className="flex min-h-0 items-stretch gap-5 [@media(max-height:809px)]:gap-3">
       <div

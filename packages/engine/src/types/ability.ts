@@ -151,6 +151,8 @@ export interface Knobs {
   manaOnHit: number;
   /** Fraction of max life shielded on landing, for `delve.runes.guardSeconds`. */
   guardOnLand: number;
+  /** Stack duration × (1 + this), where a hit's stacks are applied (a boon's; see the boons spec). */
+  stackTime: number;
 }
 
 /** Knobs as data sets them (elements, fusions, runes): partial, `pierce` true for all. */

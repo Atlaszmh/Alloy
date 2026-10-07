@@ -378,7 +378,7 @@ describe('the autopilot and runes', () => {
   it('at a stop, sockets the rune that gains most: second after equip, before an upgrade', () => {
     const p = atStop(
       { ...bolt(veteran(), [null]), runes: { echo: [0, 0, 1, 0, 0] }, scrap: 1000 },
-      { offers: ['rune', 'upgrade'], taken: false },
+      { kind: 'powerups', offers: ['rune', 'upgrade'], taken: false },
     );
     const after = takeBestStop(registry, p);
     expect(primaryRunes(after)).toEqual([III('echo')]);

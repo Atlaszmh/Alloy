@@ -3,15 +3,17 @@ import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
 import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
+import type { Buff } from '../types/boon.js';
 import type { Haul, SettleOutcome } from '../types/crafting.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gear.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, emptyPending, isBossFloor } from '../arpg/world.js';
-import { profileStats } from './pair.js';
+import { diveStats } from './pair.js';
 import { heroChains } from '../loot/moveset.js';
 import { rollStop } from './stops.js';
-import { pairElements } from './hero-stats.js';
+import { buffSum } from './boons.js';
+import { applyBuffs, pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 import { addToPouch } from '../loot/runes.js';
 import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
@@ -116,7 +118,7 @@ export function floorSeed(dive: DiveState): number {
 /** Build the arena for the dive's current depth: a generated floor, with what the dive used and its blessings. */
 export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgWorld {
   const dive = requireDive(profile, 'fighting');
-  const stats = profileStats(registry, profile);
+  const stats = diveStats(registry, profile);
   const mods = dive.door?.mods ?? {};
   return createFloorWorld(registry, {
     depth: dive.depth,
@@ -372,14 +374,23 @@ export function failFloor(
   return { ...banked, profile: settleDive(registry, dead, 'death') };
 }
 
+/** The dive's boons with every `skip` spent (set to 0; the entry and its other fields stay). */
+function spendSkip(buffs: Buff[]): Buff[] {
+  return buffs.map((b) => (b.effect.skip ? { ...b, effect: { ...b.effect, skip: 0 } } : b));
+}
+
 /** Take one of the offered doors into the next depth (a guided stop's required power-up taken first). */
 export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId: string): DelveProfile {
   const bal = registry.getDelveBalance();
   const dive = requireDive(profile, 'choosing');
-  if (dive.stop?.required && !dive.stop.taken) throw new Error('Take the power-up first');
+  if (dive.stop?.kind === 'powerups' && dive.stop.required && !dive.stop.taken) throw new Error('Take the power-up first');
   if (!dive.doorChoices.includes(doorId)) throw new Error(`Door not offered: ${doorId}`);
   const door = registry.getDoor(doorId);
-  const depth = dive.depth + 1 + (door.mods.skip ?? 0);
+  // Deeper Still (the boons spec's `skip`): the dive's boons add to the door's skip and are spent (each entry stays).
+  // The guided start's dives meet no boons stop (its stops offer power-ups), so they wear no Deeper Still.
+  const skip = buffSum(dive.diveBuffs).skip ?? 0;
+  const depth = dive.depth + 1 + (door.mods.skip ?? 0) + skip;
+  const diveBuffs = skip ? spendSkip(dive.diveBuffs) : dive.diveBuffs;
   const entered: DelveProfile = {
     ...profile,
     bestDepth: Math.max(profile.bestDepth, depth),
@@ -392,6 +403,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
       doorChoices: [],
       stop: null,
       dropsGiven: [],
+      diveBuffs,
       phase: 'fighting',
     },
   };
@@ -454,7 +466,8 @@ export function settleDive(registry: DataRegistry, profile: DelveProfile, outcom
   let kept = dive.banked;
   let lost: Haul | null = null;
   if (outcome !== 'extract') {
-    const loss = registry.getDelveBalance().crafting.deathLoss;
+    // Insurance (the boons spec's `deathLoss`): the dive's boons take points off the share, never below 0; they stay on the dive.
+    const loss = Math.max(0, registry.getDelveBalance().crafting.deathLoss - (buffSum(dive.diveBuffs).deathLoss ?? 0));
     const rng = new SeededRNG(profile.seed).fork(`death:${dive.seed}`);
     const share = mapCounts(dive.banked, (n) => stochasticRound(n * loss, rng));
     kept = addHaul(dive.banked, mapCounts(share, (n) => -n));
@@ -487,14 +500,24 @@ export function closeDive(registry: DataRegistry, profile: DelveProfile): DelveP
 }
 
 /** Drink a potion at the door screen (between floors). Null when nothing to heal. */
+/**
+ * Whether the stop's potion can be drunk: choosing, a potion left, life below full, and no
+ * Famine (`noPotions`) worn. The road offers it only then.
+ */
+export function canDrinkBetweenFloors(dive: DiveState): boolean {
+  return (
+    dive.phase === 'choosing' && dive.potions > 0 && dive.heroHpFrac < 1 && !buffSum(dive.diveBuffs).noPotions
+  );
+}
+
 export function drinkPotionBetweenFloors(registry: DataRegistry, profile: DelveProfile): DelveProfile | null {
   const dive = profile.dive;
-  if (!dive || dive.phase !== 'choosing' || dive.potions <= 0 || dive.heroHpFrac >= 1) return null;
+  if (!dive || !canDrinkBetweenFloors(dive)) return null;
   const heal = registry.getDelveBalance().dive.potionHeal;
   return { ...profile, dive: { ...dive, potions: dive.potions - 1, heroHpFrac: Math.min(1, dive.heroHpFrac + heal) } };
 }
 
-/** Life fraction the hero would enter the next floor with. */
+/** The max life the hero enters the next floor with (its life fractions' base): the floor hero's, its dive boons worn. */
 export function heroMaxHp(registry: DataRegistry, profile: DelveProfile): number {
-  return profileStats(registry, profile).maxHp;
+  return applyBuffs(diveStats(registry, profile), profile.dive?.diveBuffs ?? []).maxHp;
 }

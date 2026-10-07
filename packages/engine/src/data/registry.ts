@@ -17,6 +17,7 @@ import type { CraftingData } from '../types/crafting.js';
 import type { QuestsData } from '../types/quests.js';
 import type { TutorialData } from '../types/tutorial.js';
 import type { SetPiecesData } from '../types/floor-map.js';
+import type { BoonDef, BoonId } from '../types/boon.js';
 
 export class DataRegistry {
   constructor(private readonly data: LoadedData) {}
@@ -92,6 +93,21 @@ export class DataRegistry {
   /** `setpieces.json`: the props, hazards, set pieces and each biome's palette (see the room objects spec). */
   getSetPieces(): SetPiecesData {
     return this.data.setPieces;
+  }
+
+  /** `boons.json`: every boon row, the shrines among them, in file order (see the boons spec). */
+  getBoons(): BoonDef[] {
+    return this.data.boons;
+  }
+
+  /** The boon row `id`, or undefined (it never throws: a save may name a row since removed). */
+  getBoon(id: BoonId): BoonDef | undefined {
+    return this.data.boons.find((b) => b.id === id);
+  }
+
+  /** The rows a sanctum may draw (`shrine` > 0), in file order: the generator's draw. */
+  shrineBoons(): BoonDef[] {
+    return this.data.boons.filter((b) => (b.shrine ?? 0) > 0);
   }
 
   getDelveBalance(): DelveBalance {

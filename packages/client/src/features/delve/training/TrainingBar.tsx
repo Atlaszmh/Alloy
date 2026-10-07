@@ -3,6 +3,7 @@ import { useSandboxStore } from '@/stores/sandboxStore';
 import { Button, InputGlyph } from '@/features/delve/kit';
 import { noFocus } from '../arena/hud/SkillSlot';
 import { LabButton } from '../lab/dev-routes';
+import { FrameChip } from './FrameChip';
 import { MeterChip } from './MeterView';
 import type { MeterSummary } from './meter';
 
@@ -23,8 +24,8 @@ export function DepthLabel() {
 }
 
 /**
- * The Training Grounds' top bar (glass): "◂ Anvil", the depth and the meter, the DPS Lab (dev
- * builds), then Panel (`data-pad-journal`: the journal key and View press it) and Menu
+ * The Training Grounds' top bar (glass): "◂ Anvil", the depth and the meter, the frame readout
+ * and the DPS Lab (dev builds), then Panel (`data-pad-journal`: the journal key and View press it) and Menu
  * (`data-pad-menu`: Esc and the pad's Menu press it), each with its binding.
  */
 export function TrainingBar({
@@ -55,6 +56,7 @@ export function TrainingBar({
         <DepthLabel />
         <MeterChip meter={meter} onReset={onResetMeter} />
       </div>
+      <FrameChip />
       <LabButton />
       <span className="flex items-center gap-4 whitespace-nowrap text-[16px] text-[var(--k-text-2)]">
         <button

@@ -1,3 +1,4 @@
+import { boonsProblems } from './boons-check.js';
 import { loadAndValidateData } from './loader.js';
 import { questsDataProblems } from './quests-check.js';
 import { DataRegistry } from './registry.js';
@@ -17,5 +18,8 @@ export function createDefaultRegistry(): DataRegistry {
   // setpieces.json's references into the biomes, its props and its hazards (see the room objects spec).
   const pieces = setPiecesProblems(registry);
   if (pieces.length > 0) throw new Error(`setpieces.json: ${pieces.join('; ')}`);
+  // boons.json's rows (see the boons spec's load checks).
+  const boons = boonsProblems(registry);
+  if (boons.length > 0) throw new Error(`boons.json: ${boons.join('; ')}`);
   return registry;
 }

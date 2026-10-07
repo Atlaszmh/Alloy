@@ -524,7 +524,7 @@ interface DelveStore {
   addSlot: (skill: ChainSkill) => ProfileActionResult;
   /** Move the equipped weapon's moveset onto bag weapon `uid` and equip it, for scrap. */
   transfer: (uid: string) => ProfileActionResult;
-  /** Take the door screen's power-up. */
+  /** Take the stop's boon (`{ kind: 'boon', index }`) or a guided stop's power-up. */
   takeStop: (action: StopAction) => ProfileActionResult;
   setManualAttack: (on: boolean) => void;
   /** Dev builds: choose the pull rule, kept on this device. */

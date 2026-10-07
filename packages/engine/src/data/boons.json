@@ -1,0 +1,446 @@
+[
+  {
+    "id": "vigor",
+    "name": "Shrine of Vigor",
+    "family": "offense",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 3,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+20% damage for this floor", "effect": { "damage": 0.2 } },
+      { "text": "+20% damage for this floor", "effect": { "damage": 0.2 } },
+      { "text": "+20% damage for this floor", "effect": { "damage": 0.2 } }
+    ]
+  },
+  {
+    "id": "renewal",
+    "name": "Shrine of Renewal",
+    "family": "defense",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 3,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "Regain 1% of your life a second for this floor", "effect": { "lifeRegen": 0.01 } },
+      { "text": "Regain 1% of your life a second for this floor", "effect": { "lifeRegen": 0.01 } },
+      { "text": "Regain 1% of your life a second for this floor", "effect": { "lifeRegen": 0.01 } }
+    ]
+  },
+  {
+    "id": "clarity",
+    "name": "Shrine of Clarity",
+    "family": "tempo",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 3,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+50% mana regen for this floor", "effect": { "manaRegen": 0.5 } },
+      { "text": "+50% mana regen for this floor", "effect": { "manaRegen": 0.5 } },
+      { "text": "+50% mana regen for this floor", "effect": { "manaRegen": 0.5 } }
+    ]
+  },
+  {
+    "id": "fortune",
+    "name": "Shrine of Fortune",
+    "family": "fortune",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 2,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+50 Find for this floor", "effect": { "find": 50 } },
+      { "text": "+50 Find for this floor", "effect": { "find": 50 } },
+      { "text": "+50 Find for this floor", "effect": { "find": 50 } }
+    ]
+  },
+  {
+    "id": "mercy",
+    "name": "Shrine of Mercy",
+    "family": "fortune",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 2,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "Refill your potions", "effect": { "potions": true } },
+      { "text": "Refill your potions", "effect": { "potions": true } },
+      { "text": "Refill your potions", "effect": { "potions": true } }
+    ]
+  },
+  {
+    "id": "devotion",
+    "name": "Shrine of Devotion",
+    "family": "offense",
+    "duration": "dive",
+    "cap": 1,
+    "shrine": 1,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+10% damage for the rest of the dive", "effect": { "damage": 0.1 } },
+      { "text": "+10% damage for the rest of the dive", "effect": { "damage": 0.1 } },
+      { "text": "+10% damage for the rest of the dive", "effect": { "damage": 0.1 } }
+    ]
+  },
+  {
+    "id": "keen-edge", "name": "Keen Edge", "family": "offense", "duration": "dive", "cap": 3,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+10% damage", "effect": { "damage": 0.1 } },
+      { "text": "+15% damage", "effect": { "damage": 0.15 } },
+      { "text": "+25% damage", "effect": { "damage": 0.25 } }
+    ]
+  },
+  {
+    "id": "heavy-hand", "name": "Heavy Hand", "family": "offense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Heavy and hold attacks deal +20% damage", "effect": { "byKind": { "heavy": 0.2, "hold": 0.2 } } },
+      { "text": "Heavy and hold attacks deal +30% damage", "effect": { "byKind": { "heavy": 0.3, "hold": 0.3 } } },
+      { "text": "Heavy and hold attacks deal +45% damage", "effect": { "byKind": { "heavy": 0.45, "hold": 0.45 } } }
+    ]
+  },
+  {
+    "id": "opener", "name": "Opener", "family": "offense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "A chain's first move deals +25% damage", "effect": { "firstMove": 0.25 } },
+      { "text": "A chain's first move deals +40% damage", "effect": { "firstMove": 0.4 } },
+      { "text": "A chain's first move deals +60% damage", "effect": { "firstMove": 0.6 } }
+    ]
+  },
+  {
+    "id": "closer", "name": "Closer", "family": "offense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Each step of a chain lands harder: step bonus +0.05", "effect": { "stepBonus": 0.05 } },
+      { "text": "Each step of a chain lands harder: step bonus +0.08", "effect": { "stepBonus": 0.08 } },
+      { "text": "Each step of a chain lands harder: step bonus +0.12", "effect": { "stepBonus": 0.12 } }
+    ]
+  },
+  {
+    "id": "executioner", "name": "Executioner", "family": "offense", "duration": "dive", "cap": 1, "minDepth": 3,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+40% damage to foes under 25% life", "effect": { "lowLife": { "below": 0.25, "mult": 0.4 } } },
+      { "text": "+60% damage to foes under 25% life", "effect": { "lowLife": { "below": 0.25, "mult": 0.6 } } },
+      { "text": "+60% damage to foes under 35% life", "effect": { "lowLife": { "below": 0.35, "mult": 0.6 } } }
+    ]
+  },
+  {
+    "id": "pack-breaker", "name": "Pack Breaker", "family": "offense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+5% damage for each foe within 4, up to 4 foes", "effect": { "nearFoes": { "per": 0.05, "cap": 4, "radius": 4 } } },
+      { "text": "+8% damage for each foe within 4, up to 4 foes", "effect": { "nearFoes": { "per": 0.08, "cap": 4, "radius": 4 } } },
+      { "text": "+12% damage for each foe within 4, up to 4 foes", "effect": { "nearFoes": { "per": 0.12, "cap": 4, "radius": 4 } } }
+    ]
+  },
+  {
+    "id": "catalyst", "name": "Catalyst", "family": "element", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Reaction bonuses grow 25%", "effect": { "knobs": { "catalyst": 0.25 } } },
+      { "text": "Reaction bonuses grow 40%", "effect": { "knobs": { "catalyst": 0.4 } } },
+      { "text": "Reaction bonuses grow 60%", "effect": { "knobs": { "catalyst": 0.6 } } }
+    ]
+  },
+  {
+    "id": "saturate", "name": "Saturate", "family": "element", "duration": "dive", "cap": 1, "minDepth": 3,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+1 stack a hit", "effect": { "knobs": { "stacksBonus": 1 } } },
+      { "text": "+1 stack a hit, and stacks last 20% longer", "effect": { "knobs": { "stacksBonus": 1, "stackTime": 0.2 } } },
+      { "text": "+2 stacks a hit", "effect": { "knobs": { "stacksBonus": 2 } } }
+    ]
+  },
+  {
+    "id": "lingering-mark", "name": "Lingering Mark", "family": "element", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Elemental stacks last 30% longer", "effect": { "knobs": { "stackTime": 0.3 } } },
+      { "text": "Elemental stacks last 50% longer", "effect": { "knobs": { "stackTime": 0.5 } } },
+      { "text": "Elemental stacks last 80% longer", "effect": { "knobs": { "stackTime": 0.8 } } }
+    ]
+  },
+  {
+    "id": "pure-flame", "name": "Pure Flame", "family": "element", "duration": "dive", "cap": 3,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+4 attunement in your primary element", "effect": { "attune": { "role": "primary", "points": 4 } } },
+      { "text": "+6 attunement in your primary element", "effect": { "attune": { "role": "primary", "points": 6 } } },
+      { "text": "+10 attunement in your primary element", "effect": { "attune": { "role": "primary", "points": 10 } } }
+    ]
+  },
+  {
+    "id": "second-flame", "name": "Second Flame", "family": "element", "duration": "dive", "cap": 3, "minDepth": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+4 attunement in your secondary element", "effect": { "attune": { "role": "secondary", "points": 4 } } },
+      { "text": "+6 attunement in your secondary element", "effect": { "attune": { "role": "secondary", "points": 6 } } },
+      { "text": "+10 attunement in your secondary element", "effect": { "attune": { "role": "secondary", "points": 10 } } }
+    ]
+  },
+  {
+    "id": "third-wind", "name": "Third Wind", "family": "defense", "duration": "dive", "cap": 1,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+1 dodge charge", "effect": { "dodgeCharges": 1 } },
+      { "text": "+1 dodge charge, and dodges recharge 15% faster", "effect": { "dodgeCharges": 1, "dodgeRecharge": 0.15 } },
+      { "text": "+1 dodge charge, and a perfect dodge's window +30%", "effect": { "dodgeCharges": 1, "dodgeWindow": 0.3 } }
+    ]
+  },
+  {
+    "id": "perfect-form", "name": "Perfect Form", "family": "defense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "A perfect dodge's window +30%", "effect": { "dodgeWindow": 0.3 } },
+      { "text": "A perfect dodge's window +50%", "effect": { "dodgeWindow": 0.5 } },
+      { "text": "A perfect dodge's window +80%", "effect": { "dodgeWindow": 0.8 } }
+    ]
+  },
+  {
+    "id": "bulwark", "name": "Bulwark", "family": "defense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Your Defensive lasts 25% longer", "effect": { "defendDuration": 0.25 } },
+      { "text": "Your Defensive lasts 40% longer", "effect": { "defendDuration": 0.4 } },
+      { "text": "Your Defensive lasts 60% longer", "effect": { "defendDuration": 0.6 } }
+    ]
+  },
+  {
+    "id": "stone-skin", "name": "Stone Skin", "family": "defense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Start each floor behind a barrier of 15% of your life", "effect": { "barrierOnFloor": 0.15 } },
+      { "text": "Start each floor behind a barrier of 22% of your life", "effect": { "barrierOnFloor": 0.22 } },
+      { "text": "Start each floor behind a barrier of 30% of your life", "effect": { "barrierOnFloor": 0.3 } }
+    ]
+  },
+  {
+    "id": "deep-breath", "name": "Deep Breath", "family": "defense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Regain 4% of your life for each room you clear", "effect": { "healOnClear": 0.04 } },
+      { "text": "Regain 6% of your life for each room you clear", "effect": { "healOnClear": 0.06 } },
+      { "text": "Regain 10% of your life for each room you clear", "effect": { "healOnClear": 0.1 } }
+    ]
+  },
+  {
+    "id": "vampires-tithe", "name": "Vampire's Tithe", "family": "defense", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "2.5% lifesteal", "effect": { "lifesteal": 0.025 } },
+      { "text": "4% lifesteal", "effect": { "lifesteal": 0.04 } },
+      { "text": "6% lifesteal", "effect": { "lifesteal": 0.06 } }
+    ]
+  },
+  {
+    "id": "last-stand", "name": "Last Stand", "family": "defense", "duration": "dive", "cap": 1,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Once a floor, under 20% life: take 40% less damage for 2 s", "effect": { "lastStand": { "below": 0.2, "reduce": 0.4, "seconds": 2 } } },
+      { "text": "Once a floor, under 20% life: take 50% less damage for 3 s", "effect": { "lastStand": { "below": 0.2, "reduce": 0.5, "seconds": 3 } } },
+      { "text": "Once a floor, under 20% life: take 60% less damage for 4 s", "effect": { "lastStand": { "below": 0.2, "reduce": 0.6, "seconds": 4 } } }
+    ]
+  },
+  {
+    "id": "quickstep", "name": "Quickstep", "family": "tempo", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Beats and holds 8% faster", "effect": { "tempo": 0.08 } },
+      { "text": "Beats and holds 12% faster", "effect": { "tempo": 0.12 } },
+      { "text": "Beats and holds 18% faster", "effect": { "tempo": 0.18 } }
+    ]
+  },
+  {
+    "id": "swift-hands", "name": "Swift Hands", "family": "tempo", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Ability cooldowns −8%", "effect": { "knobs": { "quick": { "cooldown": 0.92 } } } },
+      { "text": "Ability cooldowns −12%", "effect": { "knobs": { "quick": { "cooldown": 0.88 } } } },
+      { "text": "Ability cooldowns −18%", "effect": { "knobs": { "quick": { "cooldown": 0.82 } } } }
+    ]
+  },
+  {
+    "id": "free-cast", "name": "Free Cast", "family": "tempo", "duration": "dive", "cap": 1, "minDepth": 3,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "An ability cast within 1.5 s of a dodge costs nothing", "effect": { "freeCast": { "seconds": 1.5, "damage": 0 } } },
+      { "text": "An ability cast within 1.5 s of a dodge costs nothing and deals +10% damage", "effect": { "freeCast": { "seconds": 1.5, "damage": 0.1 } } },
+      { "text": "An ability cast within 1.5 s of a dodge costs nothing and deals +25% damage", "effect": { "freeCast": { "seconds": 1.5, "damage": 0.25 } } }
+    ]
+  },
+  {
+    "id": "echo", "name": "Echo", "family": "tempo", "duration": "dive", "cap": 1, "minDepth": 5,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Attacks and abilities echo at 15% power at least", "effect": { "knobs": { "echo": 0.15 } } },
+      { "text": "Attacks and abilities echo at 25% power at least", "effect": { "knobs": { "echo": 0.25 } } },
+      { "text": "Attacks and abilities echo at 40% power at least", "effect": { "knobs": { "echo": 0.4 } } }
+    ]
+  },
+  {
+    "id": "overflow", "name": "Overflow", "family": "tempo", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+20% mana regen", "effect": { "manaRegen": 0.2 } },
+      { "text": "+35% mana regen", "effect": { "manaRegen": 0.35 } },
+      { "text": "+50% mana regen", "effect": { "manaRegen": 0.5 } }
+    ]
+  },
+  {
+    "id": "magpie", "name": "Magpie", "family": "fortune", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+25 Find", "effect": { "find": 25 } },
+      { "text": "+40 Find", "effect": { "find": 40 } },
+      { "text": "+60 Find", "effect": { "find": 60 } }
+    ]
+  },
+  {
+    "id": "wide-net", "name": "Wide Net", "family": "fortune", "duration": "dive", "cap": 1,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Pickups fly to you from 40% farther", "effect": { "magnet": 0.4 } },
+      { "text": "Pickups fly to you from 70% farther", "effect": { "magnet": 0.7 } },
+      { "text": "Pickups fly to you from twice as far", "effect": { "magnet": 1 } }
+    ]
+  },
+  {
+    "id": "prospector", "name": "Prospector", "family": "fortune", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+10% chance a bar drops as the next metal up", "effect": { "metalUp": 0.1 } },
+      { "text": "+15% chance a bar drops as the next metal up", "effect": { "metalUp": 0.15 } },
+      { "text": "+25% chance a bar drops as the next metal up", "effect": { "metalUp": 0.25 } }
+    ]
+  },
+  {
+    "id": "flux-nose", "name": "Flux Nose", "family": "fortune", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Flux drops ×1.3 as often", "effect": { "flux": 1.3 } },
+      { "text": "Flux drops ×1.5 as often", "effect": { "flux": 1.5 } },
+      { "text": "Flux drops ×1.8 as often", "effect": { "flux": 1.8 } }
+    ]
+  },
+  {
+    "id": "rune-sense", "name": "Rune Sense", "family": "fortune", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "Runes drop ×1.3 as often", "effect": { "runes": 1.3 } },
+      { "text": "Runes drop ×1.5 as often", "effect": { "runes": 1.5 } },
+      { "text": "Runes drop ×1.8 as often", "effect": { "runes": 1.8 } }
+    ]
+  },
+  {
+    "id": "scrapper", "name": "Scrapper", "family": "fortune", "duration": "dive", "cap": 2,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "+20% scrap from kills", "effect": { "scrap": 0.2 } },
+      { "text": "+35% scrap from kills", "effect": { "scrap": 0.35 } },
+      { "text": "+50% scrap from kills", "effect": { "scrap": 0.5 } }
+    ]
+  },
+  {
+    "id": "insurance", "name": "Insurance", "family": "fortune", "duration": "dive", "cap": 1,
+    "weight": { "common": 10, "rare": 6, "epic": 3 },
+    "tiers": [
+      { "text": "A death loses 10 points less of what the dive banked", "effect": { "deathLoss": 0.1 } },
+      { "text": "A death loses 15 points less of what the dive banked", "effect": { "deathLoss": 0.15 } },
+      { "text": "A death loses 20 points less of what the dive banked", "effect": { "deathLoss": 0.2 } }
+    ]
+  },
+  {
+    "id": "glass-cannon", "name": "Glass Cannon", "family": "pact", "duration": "dive", "cap": 2, "minDepth": 4,
+    "weight": { "common": 4, "rare": 3, "epic": 2 },
+    "tiers": [
+      { "text": "+25% damage, −20% max life", "effect": { "damage": 0.25, "maxLife": -0.2 } },
+      { "text": "+35% damage, −20% max life", "effect": { "damage": 0.35, "maxLife": -0.2 } },
+      { "text": "+45% damage, −20% max life", "effect": { "damage": 0.45, "maxLife": -0.2 } }
+    ]
+  },
+  {
+    "id": "blood-price", "name": "Blood Price", "family": "pact", "duration": "dive", "cap": 1, "minDepth": 6,
+    "weight": { "common": 4, "rare": 3, "epic": 2 },
+    "tiers": [
+      { "text": "Abilities cost life, not mana, and mana doesn't regenerate; +20% damage", "effect": { "bloodPrice": 0.5, "damage": 0.2 } },
+      { "text": "Abilities cost life, not mana, and mana doesn't regenerate; +30% damage", "effect": { "bloodPrice": 0.5, "damage": 0.3 } },
+      { "text": "Abilities cost life, not mana, and mana doesn't regenerate; +40% damage", "effect": { "bloodPrice": 0.5, "damage": 0.4 } }
+    ]
+  },
+  {
+    "id": "hunted", "name": "Hunted", "family": "pact", "duration": "dive", "cap": 1, "minDepth": 6,
+    "weight": { "common": 4, "rare": 3, "epic": 2 },
+    "tiers": [
+      { "text": "An elite leads every pack; elites drop gear ×1.5 as often; +30% scrap from kills", "effect": { "eliteChance": 1, "gear": 1.5, "scrap": 0.3 } },
+      { "text": "An elite leads every pack; elites drop gear ×1.8 as often; +40% scrap from kills", "effect": { "eliteChance": 1, "gear": 1.8, "scrap": 0.4 } },
+      { "text": "An elite leads every pack; elites drop gear ×2 as often; +60% scrap from kills", "effect": { "eliteChance": 1, "gear": 2, "scrap": 0.6 } }
+    ]
+  },
+  {
+    "id": "no-retreat", "name": "No Retreat", "family": "pact", "duration": "dive", "cap": 1, "minDepth": 4,
+    "weight": { "common": 4, "rare": 3, "epic": 2 },
+    "tiers": [
+      { "text": "One dodge charge, and every dodge is perfect", "effect": { "dodgeCharges": -1, "perfectAlways": true } },
+      { "text": "One dodge charge, and every dodge is perfect; +10% damage", "effect": { "dodgeCharges": -1, "perfectAlways": true, "damage": 0.1 } },
+      { "text": "One dodge charge, and every dodge is perfect; +20% damage", "effect": { "dodgeCharges": -1, "perfectAlways": true, "damage": 0.2 } }
+    ]
+  },
+  {
+    "id": "famine", "name": "Famine", "family": "pact", "duration": "dive", "cap": 1, "minDepth": 4,
+    "weight": { "common": 4, "rare": 3, "epic": 2 },
+    "tiers": [
+      { "text": "No potions on any floor; +15% damage and +30 Find", "effect": { "noPotions": true, "damage": 0.15, "find": 30 } },
+      { "text": "No potions on any floor; +20% damage and +40 Find", "effect": { "noPotions": true, "damage": 0.2, "find": 40 } },
+      { "text": "No potions on any floor; +25% damage and +60 Find", "effect": { "noPotions": true, "damage": 0.25, "find": 60 } }
+    ]
+  },
+  {
+    "id": "deeper-still", "name": "Deeper Still", "family": "pact", "duration": "dive", "cap": 1, "minDepth": 4,
+    "weight": { "common": 4, "rare": 3, "epic": 2 },
+    "tiers": [
+      { "text": "The next door goes 1 depth further; +20 Find", "effect": { "skip": 1, "find": 20 } },
+      { "text": "The next door goes 2 depths further; +30 Find", "effect": { "skip": 2, "find": 30 } },
+      { "text": "The next door goes 2 depths further; +50 Find", "effect": { "skip": 2, "find": 50 } }
+    ]
+  },
+  {
+    "id": "cartographer", "name": "Cartographer", "family": "floor", "duration": "dive", "cap": 1,
+    "weight": { "common": 6, "rare": 4, "epic": 2 },
+    "tiers": [
+      { "text": "Each floor starts with its exit's room revealed", "effect": { "exitRevealed": true } },
+      { "text": "Each floor starts with its exit's room revealed; +10 Find", "effect": { "exitRevealed": true, "find": 10 } },
+      { "text": "Each floor starts with its exit's room revealed; +20 Find", "effect": { "exitRevealed": true, "find": 20 } }
+    ]
+  },
+  {
+    "id": "sanctuary", "name": "Sanctuary", "family": "floor", "duration": "dive", "cap": 1,
+    "weight": { "common": 6, "rare": 4, "epic": 2 },
+    "tiers": [
+      { "text": "Shrine blessings last the dive", "effect": { "shrinesLastDive": true } },
+      { "text": "Shrine blessings last the dive; +10 Find", "effect": { "shrinesLastDive": true, "find": 10 } },
+      { "text": "Shrine blessings last the dive; +20 Find", "effect": { "shrinesLastDive": true, "find": 20 } }
+    ]
+  },
+  {
+    "id": "trailblazer", "name": "Trailblazer", "family": "floor", "duration": "dive", "cap": 1,
+    "weight": { "common": 6, "rare": 4, "epic": 2 },
+    "tiers": [
+      { "text": "Slow ground doesn't slow you", "effect": { "noSlow": true } },
+      { "text": "Slow ground doesn't slow you; pickups fly to you from 15% farther", "effect": { "noSlow": true, "magnet": 0.15 } },
+      { "text": "Slow ground doesn't slow you; pickups fly to you from 30% farther", "effect": { "noSlow": true, "magnet": 0.3 } }
+    ]
+  },
+  {
+    "id": "arsonist", "name": "Arsonist", "family": "floor", "duration": "dive", "cap": 1,
+    "weight": { "common": 6, "rare": 4, "epic": 2 },
+    "tiers": [
+      { "text": "Hazards recharge 50% faster and never hurt you", "effect": { "hazardsFriendly": 0.5 } },
+      { "text": "Hazards recharge 65% faster and never hurt you", "effect": { "hazardsFriendly": 0.65 } },
+      { "text": "Hazards recharge 80% faster and never hurt you", "effect": { "hazardsFriendly": 0.8 } }
+    ]
+  }
+]

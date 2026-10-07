@@ -236,6 +236,15 @@
       "propLife": 1, "propDrops": { "chance": 0.35, "material": 0.4 },
       "hazardDamage": 1.5, "hazardFoeMult": 4, "fuse": 0.6, "recharge": 15, "hazardOffElement": 0.2
     },
+    "boons": {
+      "offers": 3,
+      "tierWeights": [
+        { "fromDepth": 1, "weights": [80, 18, 2] },
+        { "fromDepth": 10, "weights": [65, 28, 7] },
+        { "fromDepth": 20, "weights": [50, 35, 15] },
+        { "fromDepth": 35, "weights": [40, 38, 22] }
+      ]
+    },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8 }
   }
 }

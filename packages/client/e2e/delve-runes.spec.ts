@@ -148,10 +148,11 @@ test.describe('Delve runes', () => {
     await expect(pips).toHaveAttribute('data-rune', 'quick');
   });
 
-  test("R03: the stop's fifth power-up sockets a pouch rune mid-dive", async ({ page }) => {
+  test("R03: a power-up stop's fifth kind sockets a pouch rune mid-dive", async ({ page }) => {
     const registry = createDefaultRegistry();
     // An open empty socket and a fitting pouch rune, and nothing else to take: no bag, scrap,
-    // Links or Mana Dust. Its first depth is cleared, so it waits at the door screen.
+    // Links or Mana Dust. Its first depth is cleared, so it waits at the door screen; an ordinary
+    // stop offers boons, so the stop is made a power-up one (as a guided stop is) on its own roll.
     let profile = heroWith(registry, [null], {
       runes: { quick: [0, 0, 1, 0, 0] },
       bag: [],
@@ -162,7 +163,7 @@ test.describe('Delve runes', () => {
     profile = startDive(registry, profile, 1);
     profile = completeFloor(registry, profile, beginFloor(registry, profile)).profile;
     expect(stopKinds(registry, profile)).toEqual(['rune']);
-    expect(profile.dive!.stop!.offers).toEqual(['rune']);
+    profile = { ...profile, dive: { ...profile.dive!, stop: { kind: 'powerups', offers: stopKinds(registry, profile), taken: false } } };
     await seed(page, profile);
     await page.goto('/delve');
     await departAndDelve(page);

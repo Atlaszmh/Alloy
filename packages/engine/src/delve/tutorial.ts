@@ -111,7 +111,9 @@ export function skipTutorial(profile: DelveProfile, world?: ArpgWorld | null): D
     dive: dive && {
       ...dive,
       tutorialEntry: null,
-      stop: dive.stop && { ...dive.stop, required: false },
+      stop:
+        dive.stop &&
+        (dive.stop.kind === 'powerups' ? { ...dive.stop, required: false } : dive.stop),
     },
   };
 }

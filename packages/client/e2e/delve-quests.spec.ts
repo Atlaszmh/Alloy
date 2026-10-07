@@ -104,9 +104,9 @@ test.describe('Delve quests', () => {
   test('Q03: on the pad, Quests lands on Claim all, and A claims every quest that waits', async ({
     page,
   }) => {
-    // Three dives of the autopilot leave quests waiting (seed 1: two main and a side quest).
+    // Three dives of the autopilot leave quests waiting (seed 4: two side quests).
     const registry = createDefaultRegistry();
-    const profile = economySim(registry, 1, 3).profile;
+    const profile = economySim(registry, 4, 3).profile;
     const waiting = questStates(registry, profile).filter((q) => q.status === 'complete');
     expect(waiting.length).toBeGreaterThanOrEqual(2);
     await seedSave(page, profile);
@@ -127,7 +127,7 @@ test.describe('Delve quests', () => {
   }) => {
     // The same save with every waiting quest but one (a quest, not a contract) claimed already.
     const registry = createDefaultRegistry();
-    let profile = economySim(registry, 1, 3).profile;
+    let profile = economySim(registry, 4, 3).profile;
     const waiting = () => questStates(registry, profile).filter((q) => q.status === 'complete');
     while (waiting().length > 1) {
       const w = waiting();

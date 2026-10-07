@@ -64,6 +64,7 @@ export {
   extractDive,
   closeDive,
   settleDive,
+  canDrinkBetweenFloors,
   drinkPotionBetweenFloors,
 } from './delve/dive.js';
 export type { BankResult, FloorResult } from './delve/dive.js';
@@ -108,10 +109,12 @@ export {
   takeAlcove,
 } from './delve/stops.js';
 export type { StopAction } from './delve/stops.js';
+export { buffSum, boonCount } from './delve/boons.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
   inPair,
   profileStats,
+  diveStats,
   fixChainsToPair,
   chooseStartingMana,
   bindSecondary,
@@ -173,7 +176,9 @@ export {
   holdCharge,
   inBeat,
   windupDir,
+  lifeCost,
 } from './arpg/abilities/cast.js';
+export { dodgeMax, dodgeRecharge } from './arpg/dodge.js';
 export {
   resolveAbility,
   resolveChain,

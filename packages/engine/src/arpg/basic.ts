@@ -10,7 +10,7 @@ import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
 import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
-import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
+import { boonPower, chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
 import { alive, muzzle, nearestMonster, SHOT, spawnProjectile } from './abilities/targeting.js';
 import { hitObject, objectsIn } from './objects.js';
 import { hitStructures } from './terrain.js';
@@ -247,7 +247,8 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
     dir,
   });
   if (landed) {
-    h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+    // Under Blood Price (a boon) the basics give no mana.
+    if (!h.boon.bloodPrice) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
     guardLand(ctx, blow.knobs);
   }
   // Echo: the blow again (a held blow at its stage), along its way, from where the hero stands then.
@@ -300,7 +301,8 @@ export function landBlow(
   const twin = o.twin ?? 0;
   const surge = surging(ctx);
   const element = blow.element;
-  const unit = h.stats.weaponDamage * h.stats.damageMult * blow.attunePower;
+  const unit =
+    h.stats.weaponDamage * h.stats.damageMult * blow.attunePower * boonPower(h.boon, kind, false);
   const base = unit * s.power * k.power * powerMult;
   // Every blow applies its element's stacks, by its kind (a Surge's statuses ride along).
   const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
@@ -310,7 +312,8 @@ export function landBlow(
   const stacks = bal.stacks.basicByKind[kind] + k.stacksBonus;
   // An Earth blow or an Earth Surge's statuses: its stagger adds Earth stacks.
   const rattles = element === 'earth' || !!surge?.elements.includes('earth');
-  const knobbed = knobHitOpts(k);
+  // An Echo's blow marks its hits (see the boons spec's 8).
+  const knobbed = { ...knobHitOpts(k), ...(o.echo ? { echo: true as const } : {}) };
 
   let landed = w.kind !== 'melee' && !!nearestMonster(ctx, h.x, h.y, w.range);
   if (w.kind === 'melee') {
@@ -491,6 +494,7 @@ export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntit
     applies: p.applies,
     rattles: p.rattles,
     ...knobHitOpts(k),
+    ...(p.replay ? { echo: true as const } : {}),
   };
   chainJumps(ctx, hit[0], p.damage, p.element!, k.chain, jump, new Set(hit.map((m) => m.id)));
   // Linger: a zone where it hit.
@@ -534,6 +538,7 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       stacks: p.stacks,
       noReact: p.noReact,
       ...(p.knobs ? knobHitOpts(p.knobs) : {}),
+      ...(p.replay ? { echo: true as const } : {}),
     });
   }
   if (!p.replay)

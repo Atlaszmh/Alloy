@@ -8,6 +8,7 @@ import {
   SeededRNG,
   upgradeCost,
   type Chains,
+  type PowerupStop,
   type StopKind,
 } from '@alloy/engine';
 import { StopPanel } from '../StopPanel';
@@ -35,10 +36,10 @@ function atStop(offers: StopKind[], over: Partial<ReturnType<typeof store>['prof
   const dive = store().profile.dive!;
   store().setProfile({
     ...store().profile,
-    dive: { ...dive, phase: 'choosing', stop: { offers, taken: false } },
+    dive: { ...dive, phase: 'choosing', stop: { kind: 'powerups', offers, taken: false } },
   });
   const Panel = () => {
-    const stop = useDelveStore((s) => s.profile.dive!.stop!);
+    const stop = useDelveStore((s) => s.profile.dive!.stop!) as PowerupStop;
     return (
       <div data-pad-scope>
         <StopPanel stop={stop} />
@@ -104,7 +105,12 @@ describe('StopPanel (the stop between depths)', () => {
     const profile = store().profile;
     const dry = vi.fn(() => ({ ok: false, profile, reason: 'Not at this alcove' }));
     const take = vi.fn(() => ({ ok: true, profile }));
-    render(<StopPanel stop={{ offers: ['equip', 'slot'], taken: false }} ops={{ dry, take }} />);
+    render(
+      <StopPanel
+        stop={{ kind: 'powerups', offers: ['equip', 'slot'], taken: false }}
+        ops={{ dry, take }}
+      />,
+    );
     fireEvent.click(screen.getByTestId('stop-slot'));
     expect(dry).toHaveBeenCalledWith(profile, expect.objectContaining({ kind: 'slot' }));
     expect(screen.getAllByText('Not at this alcove').length).toBeGreaterThan(0);

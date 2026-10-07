@@ -13,7 +13,7 @@ import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import { CONTRACT_TIERS } from '../types/quests.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves (version 12 only) — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 13 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
@@ -200,6 +200,7 @@ const DoorSchema = z.object({
     essence: z.number().optional(),
     shardTier: z.number().optional(),
     find: z.number().optional(),
+    boons: z.number().min(0).max(1).optional(),
   }),
 });
 
@@ -220,13 +221,26 @@ const DiveSchema = z.object({
   dustEarned: z.number().int().min(0).default(0),
   linksEarned: z.number().int().min(0).default(0),
   runesEarned: z.number().int().min(0).default(0),
-  // A stop between depths: its kinds are `STOP_KINDS` (delve/stops.ts).
+  // A stop between depths: its boons, or its power-ups, whose kinds are `STOP_KINDS` (delve/stops.ts).
   stop: z
-    .object({
-      offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade', 'rune'])),
-      taken: z.boolean(),
-      required: z.boolean().optional(),
-    })
+    .discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('boons'),
+        offers: z.array(
+          z.object({
+            id: z.string().min(1),
+            tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+          }),
+        ),
+        taken: z.boolean(),
+      }),
+      z.object({
+        kind: z.literal('powerups'),
+        offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade', 'rune'])),
+        taken: z.boolean(),
+        required: z.boolean().optional(),
+      }),
+    ])
     .nullable()
     .default(null),
   haul: HaulSchema,
@@ -284,7 +298,7 @@ const TutorialStateSchema = z.object({ step: z.string().min(1), count, misses: c
  * rebuild a different floor); older saves reset. Every field but the dive.
  */
 const ProfileSchema = z.object({
-  version: z.literal(12),
+  version: z.literal(13),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   beginFloor,
+  buffSum,
   computeHeroStats,
   createDelveProfile,
   createSandboxWorld,
@@ -222,13 +223,46 @@ describe('arena HUD snapshot: buffs and the map', () => {
     expect(snapshot(w, null).buffs.map((b) => b.id)).toEqual(['barrier']);
   });
 
-  it("lists the shrines' blessings after them, the dive's then the floor's, by their shrine's name", () => {
+  it("counts the worn boons in the dodge's charges and refill: Third Wind's third charge", () => {
     const w = sandbox();
-    w.hero.floorBuffs = [{ shrine: 'vigor', effect: { damage: 0.2 } }];
-    w.hero.diveBuffs = [{ shrine: 'devotion', effect: { damage: 0.1 } }];
+    const bal = registry.getDelveBalance();
+    w.hero.diveBuffs = [{ boon: 'third-wind', tier: 1, effect: { dodgeCharges: 1, dodgeRecharge: 0.5 } }];
+    w.hero.boon = buffSum(w.hero.diveBuffs);
+    w.hero.dodgeCharges = 2;
+    w.hero.dodgeRechargeAt = w.t + bal.dodge.recharge * 0.25; // a quarter of the eased recharge left
+    const hud = snapshot(w, null);
+    expect(hud.dodgeMax).toBe(bal.dodge.charges + 1);
+    expect(hud.dodgeMax).toBe(3);
+    expect(hud.dodgeRefill).toBeCloseTo(0.5); // (recharge × 0.25) ÷ (recharge × 0.5) left
+  });
+
+  it("lists the worn boons after them, one per boon, the dive's then the floor's, with count and lines", () => {
+    const w = sandbox();
+    const row = (id: string) => registry.getBoons().find((b) => b.id === id)!;
+    w.hero.diveBuffs = [
+      { boon: 'devotion', tier: 1, effect: { damage: 0.1 } },
+      { boon: 'devotion', tier: 1, effect: { damage: 0.1 } },
+    ];
+    w.hero.floorBuffs = [{ boon: 'vigor', tier: 1, effect: { damage: 0.2 } }];
     expect(snapshot(w, null).buffs).toEqual([
-      { id: 'shrine', shrine: 'devotion', name: 'Shrine of Devotion', dive: true },
-      { id: 'shrine', shrine: 'vigor', name: 'Shrine of Vigor', dive: false },
+      {
+        id: 'boon',
+        boon: 'devotion',
+        name: row('devotion').name,
+        family: row('devotion').family,
+        count: 2,
+        dive: true,
+        lines: [row('devotion').tiers[0].text, row('devotion').tiers[0].text],
+      },
+      {
+        id: 'boon',
+        boon: 'vigor',
+        name: row('vigor').name,
+        family: row('vigor').family,
+        count: 1,
+        dive: false,
+        lines: [row('vigor').tiers[0].text],
+      },
     ]);
   });
 

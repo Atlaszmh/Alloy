@@ -74,6 +74,10 @@ export interface HitOpts {
    * (default `stacks.tick`; see the elemental stacks spec).
    */
   stacks?: number;
+  /** An echo's hit: its `hit` event says so (see the boons spec's 8). */
+  echo?: true;
+  /** The stacks it applies last × (1 + this) (the `stackTime` knob; see the boons spec §3). */
+  stackTime?: number;
 }
 
 /** The status each element's hits apply: its stacks (Earth's `stagger` only from an Earth source). */
@@ -156,13 +160,18 @@ function applyStacks(
   n: number,
   ref: number,
   slot: number | undefined,
+  time = 0,
 ): void {
   const s = m.status;
   const t = ctx.world.t;
   const active = s.stacks[element] > 0;
   if (!active && n <= 0) return;
   s.stacks[element] = Math.min(stackCap(ctx, element), s.stacks[element] + Math.max(0, n));
-  s.stackUntil[element] = t + ctx.bal.stacks.duration[element];
+  // Never shorter: a plain hit leaves a longer (stackTime) timer as it is.
+  s.stackUntil[element] = Math.max(
+    s.stackUntil[element] ?? 0,
+    t + ctx.bal.stacks.duration[element] * (1 + time),
+  );
   if (element === 'fire') {
     if (!active) s.burnTickAt = t + 0.5;
     if (!active || ref >= s.burnRef) {
@@ -261,6 +270,7 @@ function addStatus(
   rattles: boolean | undefined,
   slot: number | undefined,
   n: number,
+  time = 0,
 ): void {
   const st = ctx.bal.status;
   const t = ctx.world.t;
@@ -271,12 +281,12 @@ function addStatus(
   // The element's stacks; a stagger's Earth stacks only from an Earth source (immunity doesn't refuse them).
   if (element && (status !== 'stagger' || rattles)) {
     const perStack = element === 'fire' ? st.burnDps : element === 'nature' ? st.poisonDps : 0;
-    applyStacks(ctx, m, element, n, hitAmount * perStack, slot);
+    applyStacks(ctx, m, element, n, hitAmount * perStack, slot, time);
   }
   switch (status) {
     case 'freeze':
       // Glacier: frost up to the threshold, so the hit crosses it.
-      applyStacks(ctx, m, 'frost', ctx.bal.stacks.freezeAt - s.stacks.frost, 0, slot);
+      applyStacks(ctx, m, 'frost', ctx.bal.stacks.freezeAt - s.stacks.frost, 0, slot, time);
       break;
     case 'stagger':
       if (t < s.staggerImmuneUntil) break;
@@ -452,9 +462,11 @@ function react(
     case 'obsidian': {
       // The larger barrier wins; a smaller one only extends it.
       const hp = Math.min(amount * r.obsidianSoak, h.stats.maxHp * r.obsidianCap);
-      if (!h.barrier || hp > h.barrier.hp)
-        h.barrier = { hp, max: hp, until: t + r.obsidianDuration };
-      else h.barrier.until = t + r.obsidianDuration;
+      // Never shorter: a floor-long barrier (Stone Skin) stays so, replaced or extended.
+      if (!h.barrier || hp > h.barrier.hp) {
+        const until = h.barrier?.until === Infinity ? Infinity : t + r.obsidianDuration;
+        h.barrier = { hp, max: hp, until };
+      } else h.barrier.until = Math.max(h.barrier.until, t + r.obsidianDuration);
       return amount;
     }
     case 'lightning_rod':
@@ -529,6 +541,31 @@ function givenAway(ctx: SimCtx, m: MonsterEntity): void {
   for (const o of pack) if (o.aggro && !o.goingHome) Object.assign(o, { search, goal: search.at });
 }
 
+/** Hit sources that aren't the hero's own hit (a status tick, a reaction, thorns, a hazard). */
+const NOT_HERO: ReadonlySet<HitSource> = new Set(['dot', 'reaction', 'thorns', 'hazard']);
+
+/**
+ * The boons' per-foe damage on the hero's own hits (the boons spec §2):
+ * `lowLife` on a foe under its threshold, `nearFoes` per awake foe within its
+ * radius of the hero, to its cap. 1 with neither.
+ */
+function boonFoeMult(ctx: SimCtx, m: MonsterEntity): number {
+  const h = ctx.world.hero;
+  const { lowLife, nearFoes } = h.boon;
+  let mult = 1;
+  if (lowLife && m.hp < lowLife.below * m.maxHp) mult *= 1 + lowLife.mult;
+  if (nearFoes) {
+    const r2 = nearFoes.radius * nearFoes.radius;
+    let n = 0;
+    for (const f of ctx.world.monsters) {
+      if (n >= nearFoes.cap) break;
+      if (!f.dead && f.aggro && (f.x - h.x) ** 2 + (f.y - h.y) ** 2 <= r2) n++;
+    }
+    mult *= 1 + nearFoes.per * n;
+  }
+  return mult;
+}
+
 export function hitMonster(
   ctx: SimCtx,
   m: MonsterEntity,
@@ -554,6 +591,7 @@ export function hitMonster(
     h.riposteUntil = 0;
   }
   if (crit) amount *= stats.critMultiplier;
+  if (!NOT_HERO.has(opts.source)) amount *= boonFoeMult(ctx, m);
 
   // A dummy resists as its own setting says (Neutral: nothing); its `element` is only its look.
   const resists = m.dummy ? m.dummy.element : m.element;
@@ -613,6 +651,7 @@ export function hitMonster(
     heft: opts.heft ?? 0,
     source: opts.source,
     slot: opts.slot,
+    ...(opts.echo ? { echo: true as const } : {}),
   });
 
   if (opts.source === 'basic' || opts.source === 'skill') {
@@ -625,8 +664,10 @@ export function hitMonster(
     // Drain: mana per foe hit while the cast's budget lasts (`drainFoes` foe-hits since its
     // skill last fired, and `drainLeft` mana; the basic attack's at index 3).
     const drain = opts.slot ?? 3;
-    if (opts.manaOnHit && h.drained[drain] < bal.runes.drainFoes && h.drainLeft[drain] > 0) {
-      const gain = Math.min(opts.manaOnHit, h.drainLeft[drain]);
+    // Under Blood Price (a boon) Drain gives no mana, as the basics give none.
+    const drains = !h.boon.bloodPrice && opts.manaOnHit;
+    if (drains && h.drained[drain] < bal.runes.drainFoes && h.drainLeft[drain] > 0) {
+      const gain = Math.min(drains, h.drainLeft[drain]);
       h.drained[drain]++;
       h.drainLeft[drain] -= gain;
       h.mana = Math.min(h.manaMax, h.mana + gain);
@@ -671,7 +712,8 @@ export function hitMonster(
   // hit saw (on entry, or right after the pairs came off: 3 → 0 → 3 crosses, 2 → 0 → 2 doesn't).
   const applies = opts.applies ?? [];
   const own = element ? BASIC_STATUS[element] : null;
-  const add = (s: StatusId) => addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k);
+  const add = (s: StatusId) =>
+    addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k, opts.stackTime);
   if (own && applies.includes(own)) add(own);
   if (element && pair) consumePairs(m, element, pair.partner, pair.n, pair.def.id);
   const frostLow = Math.min(frostBefore, stacks.frost);
@@ -854,7 +896,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
         {
           depth: world.depth,
           kind: m.kind,
-          gear: world.door?.mods.gear ?? 1,
+          // Hunted (a boon) multiplies it too.
+          gear: (world.door?.mods.gear ?? 1) * (world.hero.boon.gear ?? 1),
           ...(den && { gearBonus: bal.drops.den.gearBonus }),
           nextUid: loot.nextUid,
           biomeMana: world.element,
@@ -935,12 +978,20 @@ export function hurtHero(
   }
   let dmg = raw;
   if (!opts.unavoidable) dmg *= 1 - armorReduction(bal, h.stats.armor, world.depth);
+  // Last Stand (a boon): less damage while it runs.
+  if (world.t < (h.lastStandUntil ?? 0)) dmg *= 1 - (h.boon.lastStand?.reduce ?? 0);
   dmg = shieldHero(ctx, dmg, source, !!opts.melee);
   if (dmg <= 0) return;
   world.hurt = true;
   // Invulnerable (Training Grounds): the hit lands and reports its damage, but takes no life.
   const blocked = !!world.sandbox?.invulnerable;
   if (!blocked) h.hp -= dmg;
+  // Last Stand starts as life first falls under its threshold on a floor.
+  const stand = h.boon.lastStand;
+  if (stand && !h.lastStandUsed && h.hp > 0 && h.hp < stand.below * h.stats.maxHp) {
+    h.lastStandUsed = true;
+    h.lastStandUntil = world.t + stand.seconds;
+  }
   h.lastHitAt = world.t;
   ctx.events.push({
     kind: 'heroHit',

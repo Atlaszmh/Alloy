@@ -2,10 +2,12 @@ import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, MonsterEntity, MonsterKind } from '../types/arpg.js';
 import type { MaterialRef } from '../types/crafting.js';
-import type { Interactable, ShrineDef } from '../types/floor-map.js';
+import type { Interactable } from '../types/floor-map.js';
+import type { BoonDef, Buff } from '../types/boon.js';
 import { applyBuffs, manaPool } from '../delve/hero-stats.js';
+import { buffSum } from '../delve/boons.js';
 import { shardTiersOf } from '../loot/materials.js';
-import type { SimCtx } from './combat.js';
+import { healHero, type SimCtx } from './combat.js';
 import { dist } from './geometry.js';
 import { snapToWalkable } from './grid.js';
 import { offFootprints } from './objects-base.js';
@@ -37,8 +39,17 @@ function interactableOf(world: ArpgWorld, id: string): Interactable | undefined 
   return world.map.rooms.find((r) => r.interactable?.id === id)?.interactable;
 }
 
-function shrineOf(registry: DataRegistry, it: Interactable): ShrineDef | undefined {
-  return registry.getDelveData().shrines.find((s) => s.id === it.shrine);
+/** A shrine's boon row (`boons.json`). */
+/** A shrine's line; under Sanctuary a floor shrine's blessing lasts the dive, and its line says so. */
+function shrineLine(world: ArpgWorld, shrine: BoonDef): string {
+  const { text } = shrine.tiers[0];
+  return world.hero.boon.shrinesLastDive && shrine.duration === 'floor'
+    ? text.replace(/ for this floor$/, ' for the dive (Sanctuary)')
+    : text;
+}
+
+function shrineOf(registry: DataRegistry, it: Interactable): BoonDef | undefined {
+  return it.shrine === undefined ? undefined : registry.getBoon(it.shrine);
 }
 
 /** A boss of the floor still stands, or the guided start holds it (see the tutorial spec): its gate stays shut. */
@@ -110,7 +121,11 @@ export function interactTick(ctx: SimCtx): void {
   if (!it) return;
   const shrine = it.kind === 'shrine' ? shrineOf(registry, it) : undefined;
   const text =
-    it.kind === 'shrine' ? (shrine ? `${shrine.name}: ${shrine.text}` : 'Shrine') : NAMES[it.kind];
+    it.kind === 'shrine'
+      ? shrine
+        ? `${shrine.name}: ${shrineLine(world, shrine)}`
+        : 'Shrine'
+      : NAMES[it.kind];
   events.push({ kind: 'interactPrompt', id: it.id, interactable: it.kind, text });
   if (!pressed) return;
   switch (it.kind) {
@@ -137,7 +152,8 @@ export function interactTick(ctx: SimCtx): void {
 /**
  * A vault chest's haul (`drops.vault`): flux and shards by the floor's depth,
  * the door and Find, the shards `shardTierUp` tiers up, and an essence at
- * `essenceChance` × the door's `essence` × Lucky Charm's boost; never gear.
+ * `essenceChance` × the door's `essence` × Lucky Charm's boost; the hero's Prospector and
+ * Flux Nose apply as to a foe's drops; never gear.
  */
 export function rollVault(
   registry: DataRegistry,
@@ -159,6 +175,9 @@ export function rollVault(
       find: loot.find,
       legendaryBoost: loot.legendaryBoost,
       patterns: loot.patterns,
+      // Prospector and Flux Nose (the boons spec's `metalUp`, `flux`) reach a chest as a foe's drops.
+      metalUp: world.hero.boon.metalUp,
+      flux: world.hero.boon.flux,
     },
     rng,
   );
@@ -213,25 +232,29 @@ function openChest(ctx: SimCtx, it: Interactable): void {
 }
 
 /**
- * A shrine's blessing on the world's hero (`interactTick` records the use): a
- * potion refill fills the flasks; its Find goes on `world.loot.find`; the rest
- * is a blessing (none for a refill alone). A floor blessing goes on
- * `floorBuffs`; a dive blessing on `diveBuffs` and `baseStats`, and into
+ * A shrine's blessing on the world's hero (`interactTick` records the use): its
+ * row's tier 1 (see the boons spec). A potion refill fills the flasks; its Find
+ * goes on `world.loot.find`; the rest is a blessing (none for a refill alone),
+ * a `Buff` of the row at tier 1. A floor blessing goes on
+ * `floorBuffs`; under Sanctuary (`shrinesLastDive`) it goes where a dive blessing does; a dive blessing on `diveBuffs` and `baseStats`, and into
  * `pending.diveBuffs` for the bank. The stats are `applyBuffs` over
  * `baseStats` and the pool resizes in place.
  */
-export function applyShrine(registry: DataRegistry, world: ArpgWorld, shrine: ShrineDef): void {
+export function applyShrine(registry: DataRegistry, world: ArpgWorld, shrine: BoonDef): void {
   const h = world.hero;
-  const { effect } = shrine;
-  if (effect.potions) h.potions = registry.getDelveBalance().dive.maxPotions;
+  const { effect } = shrine.tiers[0];
+  // Famine (`noPotions`) means no potions at all: a Mercy shrine refills nothing while it is worn.
+  if (effect.potions && !h.boon.noPotions) h.potions = registry.getDelveBalance().dive.maxPotions;
   world.loot.find += effect.find ?? 0;
   if (Object.keys(effect).every((k) => k === 'potions')) return;
-  const buff = { shrine: shrine.id, effect };
-  if (shrine.duration === 'dive') {
+  const buff: Buff = { boon: shrine.id, tier: 1, effect };
+  // Sanctuary (the boons spec's `shrinesLastDive`): a floor shrine's blessing lasts the dive too.
+  if (shrine.duration === 'dive' || h.boon.shrinesLastDive) {
     h.diveBuffs.push(buff);
     world.pending.diveBuffs.push(buff);
     h.baseStats = applyBuffs(h.baseStats, [buff]);
   } else h.floorBuffs.push(buff);
+  h.boon = buffSum([...h.diveBuffs, ...h.floorBuffs]);
   h.stats = applyBuffs(h.baseStats, h.floorBuffs);
   const pool = manaPool(h.stats, registry);
   h.manaMax = pool.max;
@@ -247,6 +270,7 @@ export function exitFloor(world: ArpgWorld): void {
 /**
  * `killMonster`'s room hook: when a room's last foe dies, the room is cleared
  * (`roomCleared`) and its foes' drops are pulled to the hero (`ai.roomVacuum`).
+ * Deep Breath heals `healOnClear` of max life then.
  */
 export function onMonsterKilled(ctx: SimCtx, m: MonsterEntity): void {
   const { world, bal, events } = ctx;
@@ -254,6 +278,9 @@ export function onMonsterKilled(ctx: SimCtx, m: MonsterEntity): void {
   const room = world.map.rooms.find((r) => r.id === m.roomId);
   if (!room || room.cleared) return;
   room.cleared = true;
+  // Deep Breath (the boons spec's `healOnClear`): life back as a room clears.
+  const heal = world.hero.boon.healOnClear ?? 0;
+  if (heal > 0) healHero(ctx, world.hero.stats.maxHp * heal, 'kill');
   if (bal.ai.roomVacuum) for (const d of world.drops) if (d.roomId === m.roomId) d.vacuum = true;
   events.push({ kind: 'roomCleared', roomId: room.id });
 }

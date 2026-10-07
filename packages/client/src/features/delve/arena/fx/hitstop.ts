@@ -14,11 +14,14 @@ export const HITSTOP = {
   gapMs: 150,
 } as const;
 
-/** How long this frame's events freeze the display, in ms (0 = no freeze). */
+/**
+ * How long this frame's events freeze the display, in ms (0 = no freeze). An echo's hit never
+ * freezes: a heavy echo would read as a second, weaker impact, not a second hit (spec §8).
+ */
 export function hitstopMs(events: readonly ArpgEvent[]): number {
   let ms = 0;
   for (const e of events) {
-    if (e.kind === 'hit' && e.heft >= HITSTOP.minHeft)
+    if (e.kind === 'hit' && !e.echo && e.heft >= HITSTOP.minHeft)
       ms = Math.max(ms, HITSTOP.msPerHeft * e.heft + (e.crit ? HITSTOP.critMs : 0));
     else if (e.kind === 'death' && e.monsterKind !== 'normal') ms = Math.max(ms, HITSTOP.bigKillMs);
   }

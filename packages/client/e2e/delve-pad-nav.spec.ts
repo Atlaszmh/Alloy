@@ -49,6 +49,7 @@ const ALLOW: Record<string, [number, number]> = {
   'system-menu': [0, 0],
   settings: [0, 0],
   'stop-powerup': [0, 0],
+  'stop-boon': [0, 0],
   'stop-road': [0, 0],
   'pause-list': [0, 0],
 };
@@ -70,22 +71,26 @@ const CEILING: Record<string, number> = {
   // The strip's Realign, the Primary's three cards and Delve (the strip's tabs are LT/RT's, the
   // footer's Revert and Apply the mouse's; no slot to buy on the audit save).
   skills: 5,
-  // The move editor: Kind, Form, Elements, Position and Payment (no socket on its move; Back and
-  // Remove are B's and X's).
-  'skills-editor': 5,
+  // The move editor: Kind, Form, Elements, Position and Payment, and its move's one socket (the
+  // audit save's first Primary move holds a Guard rune since the boons; Back and Remove are B's and X's).
+  'skills-editor': 6,
   // The Primary's five forms (Back is B's).
   'skills-forms': 5,
   // The Apply sheet: its Back, Apply, Try in Training and Discard changes.
   'apply-sheet': 4,
-  // The 9 learned patterns and Delve; with a pattern open, its Metal and Element rows (a save with
-  // no flux sees one line for it, and none of its lines is a stop without a shard) and Forge.
-  forge: 10,
-  'forge-pattern': 13,
+  // The 13 learned patterns (all of them, three dives in since the boons) and Delve; with a
+  // pattern open, its Metal and Element rows (a save with no flux sees one line for it, and none
+  // of its lines is a stop without a shard) and Forge.
+  forge: 14,
+  'forge-pattern': 17,
   // The 19 gear rows, the one operation the worn weapon can take, and Delve (one stop a gear row).
   temper: 21,
-  // The audit's save: the shard bench's stepper and Buy, its Refines, and Delve.
-  materials: 5,
+  // The audit's save: the shard bench's stepper and Buy, its Refines (one more since the boons),
+  // and Delve.
+  materials: 6,
   'stop-powerup': 4,
+  // The finds line and the three boon cards.
+  'stop-boon': 4,
   'stop-road': 5,
   'pause-list': 8,
 };
@@ -542,7 +547,7 @@ test.describe('Delve pad navigation', () => {
     await tap(page, BUTTON.a);
     await expect(page).toHaveURL(/\/delve\/run$/);
   });
-  test('PN06: the stop by the pad: the cards, X to the road, B back; Menu opens the pause list on Resume, B resumes', async ({ page }) => {
+  test('PN06: the stop by the pad: the boon cards, X to the road, B back; Menu opens the pause list on Resume, B resumes', async ({ page }) => {
     test.setTimeout(120_000);
     await seed(page, true);
     await page.goto('/delve/run');
@@ -552,8 +557,13 @@ test.describe('Delve pad navigation', () => {
     await expect(stop.locator('main > div')).not.toHaveAttribute('inert', '');
     await tap(page, BUTTON.up); // the pad takes the input lock
     await stop.locator('[data-pad-first]').focus();
-    expect((await where(page)).id).toMatch(/^stop-(equip|slot|move|upgrade|rune)$/);
-    await check(page, 'stop-powerup');
+    expect((await where(page)).id).toBe('boon-card');
+    await check(page, 'stop-boon');
+    // Every card is a stop the D-pad reaches (check's audit), and right walks them in order.
+    for (let i = 1; i < 3; i++) {
+      await tap(page, BUTTON.right);
+      await expect(stop.getByTestId('boon-card').nth(i)).toBeFocused();
+    }
 
     await tap(page, BUTTON.x);
     await expect(stop.getByTestId('stop-road')).toBeVisible();
@@ -561,8 +571,8 @@ test.describe('Delve pad navigation', () => {
     await check(page, 'stop-road');
 
     await tap(page, BUTTON.b);
-    await expect(stop.getByTestId('stop-powerup')).toBeVisible();
-    expect((await where(page)).id).toMatch(/^stop-/);
+    await expect(stop.getByTestId('stop-boon')).toBeVisible();
+    expect((await where(page)).id).toBe('boon-card');
 
     await tap(page, BUTTON.menu);
     await expect(page.getByTestId('pause-screen')).toBeVisible();
@@ -577,7 +587,7 @@ test.describe('Delve pad navigation', () => {
     expect((await where(page)).id).toBe('pause-resume');
     await tap(page, BUTTON.b);
     await expect(page.getByTestId('pause-screen')).toHaveCount(0);
-    await expect(stop.getByTestId('stop-powerup')).toBeVisible();
+    await expect(stop.getByTestId('stop-boon')).toBeVisible();
   });
 
   test("PN07: the press budgets: equip an upgrade, salvage an item, forge an item and change a move's element and apply, each in six D-pad presses or fewer", async ({ page }) => {

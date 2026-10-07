@@ -485,6 +485,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           stacks: p.stacks,
           noReact: p.noReact,
           ...(p.knobs ? knobHitOpts(p.knobs) : {}),
+          ...(p.replay ? { echo: true as const } : {}),
         });
         // A basic shot's knobs act where it first hits.
         if (p.knobs && p.hitIds.length === 1) shotLands(ctx, p, [m]);
@@ -1005,11 +1006,13 @@ function dropsTick(ctx: SimCtx, dt: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const { magnetSpeed, vacuumSpeed, pickupDelay } = bal.drops;
+  // Wide Net (the boons spec's `magnet`): the reach × (1 + Σ).
+  const reach = bal.hero.magnetRadius * (1 + (h.boon.magnet ?? 0));
   for (const d of world.drops) {
     if (d.dead) continue;
     const gap = dist(h.x, h.y, d.x, d.y);
     // The magnet draws what it sees; the vacuum, anything. Both slide along walls.
-    const magnet = !walkedOver(d) && gap < bal.hero.magnetRadius && sees(world.map, d, h);
+    const magnet = !walkedOver(d) && gap < reach && sees(world.map, d, h);
     if (d.vacuum || magnet) {
       const dir = dirTo(d.x, d.y, h.x, h.y);
       const speed = d.vacuum ? vacuumSpeed : magnetSpeed;

@@ -4,6 +4,7 @@ import {
   type AbilitySlot,
   type Blow,
   type Chains,
+  type KnobsData,
   type MoveKind,
   type ResolvedAbility,
   type ResolvedChain,
@@ -114,6 +115,12 @@ export interface HeroStatsExtra {
   filterAttunement?: boolean;
   /** The hero's basic chain (see the moves and chains spec). */
   basic?: Blow[];
+  /**
+   * The dive's boons' knob partials (`diveStats`; default none, so the sandbox, the DPS Lab,
+   * Power and `profileStats` see none): merged into each blow after its runes, and kept on
+   * `HeroStats.boonKnobs` for the moves (see the boons spec's 2a).
+   */
+  boonKnobs?: KnobsData[];
 }
 
 /** Total attunement per mana type from equipped gear (plus any `extra`); filtered to the pair on request. */
@@ -180,18 +187,21 @@ export function computeHeroStats(
     extra.basic ??
     defaultBasic(registry, armed?.id ?? null, primary ?? weaponItem?.mana ?? 'fire', secondary);
   const perAttune = bal.pair.basicPowerPerAttune;
+  const boonKnobs = extra.boonKnobs ?? [];
   const blows = chain.map((b) => {
     const row = feel[b.kind];
     // Its runes: those that fit the weapon and act on its kind (a Pierce does nothing on a row
-    // that bursts). Without any, it keeps the shared NEUTRAL.
+    // that bursts), then the dive's boons' knobs (never in its `runes`). Without any, it keeps
+    // the shared NEUTRAL.
     const on = { weapon: armed?.id ?? null, kind: b.kind, explode: (row.explode ?? 0) > 0 };
     const socketed = runeKnobs(registry, b.runes, on);
+    const parts = [...socketed.knobs, ...boonKnobs];
     return {
       ...row,
       kind: b.kind,
       element: b.element,
       attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
-      knobs: socketed.knobs.length > 0 ? mergeKnobs(...socketed.knobs) : NEUTRAL,
+      knobs: parts.length > 0 ? mergeKnobs(...parts) : NEUTRAL,
       runes: socketed.active,
     };
   });
@@ -259,24 +269,40 @@ export function computeHeroStats(
     attunement,
     elementPower,
     legendaries,
+    boonKnobs,
   };
 }
 
 /**
- * `stats` under blessings (see the floor maps spec): each multiplies damage
- * and mana regen and adds life regen (Find and potions act on the world, not
- * here). No blessings: `stats` itself.
+ * `stats` under boons and blessings (the boons spec §2), one pass a list (the
+ * dive's, then the floor's): damage, mana regen, max life (its product floored
+ * at 0.3) and tempo (× (1 − x), its product floored at 0.5) multiply per entry;
+ * life regen and lifesteal add; Blood Price stops mana regen. Everything else a
+ * boon does acts in the sim, not here. No entries: `stats` itself.
  */
 export function applyBuffs(stats: HeroStats, buffs: readonly Buff[]): HeroStats {
   if (buffs.length === 0) return stats;
-  let { damageMult, manaRegenMult } = stats;
+  let { damageMult, manaRegenMult, lifesteal } = stats;
   let lifeRegen = stats.lifeRegen ?? 0;
+  let life = 1;
+  let tempo = 1;
   for (const { effect } of buffs) {
     damageMult *= 1 + (effect.damage ?? 0);
-    manaRegenMult *= 1 + (effect.manaRegen ?? 0);
+    manaRegenMult *= effect.bloodPrice ? 0 : 1 + (effect.manaRegen ?? 0);
     lifeRegen += effect.lifeRegen ?? 0;
+    lifesteal += effect.lifesteal ?? 0;
+    life *= 1 + (effect.maxLife ?? 0);
+    tempo *= 1 - (effect.tempo ?? 0);
   }
-  return { ...stats, damageMult, manaRegenMult, lifeRegen };
+  return {
+    ...stats,
+    damageMult,
+    manaRegenMult,
+    lifeRegen,
+    lifesteal,
+    maxHp: stats.maxHp * Math.max(0.3, life),
+    tempo: stats.tempo * Math.max(0.5, tempo),
+  };
 }
 
 // ── Mana ───────────────────────────────────────────────────────────────────
@@ -805,9 +831,20 @@ function pct(from: number, to: number): number {
   return (to - from) / from;
 }
 
-/** The extra that applies a profile's pair (its power and the two-element limit) and its basic chain. */
-export function pairExtra(pair?: ManaPair, basic?: Blow[]): HeroStatsExtra {
-  return { ...(pair ? { pair, filterAttunement: true } : {}), basic };
+/**
+ * The extra that applies a profile's pair (its power and the two-element limit) and its basic
+ * chain, and any attunement on top (a dive's boons': `diveStats`).
+ */
+export function pairExtra(
+  pair?: ManaPair,
+  basic?: Blow[],
+  attunement?: Partial<ManaMap>,
+): HeroStatsExtra {
+  return {
+    ...(pair ? { pair, filterAttunement: true } : {}),
+    basic,
+    ...(attunement ? { attunement } : {}),
+  };
 }
 
 /** No pair: before the choice, or a caller that counts every element. */

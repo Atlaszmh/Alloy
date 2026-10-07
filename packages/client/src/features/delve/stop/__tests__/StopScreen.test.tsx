@@ -6,8 +6,10 @@ import {
   generateItem,
   isBossDepth,
   SeededRNG,
+  type BoonOffer,
   type DiveState,
   type Haul,
+  type ProfileActionResult,
   type StopKind,
 } from '@alloy/engine';
 import { ARM_MS, StopScreen } from '../StopScreen';
@@ -17,7 +19,7 @@ import type { PadButton } from '@/features/gamepad/gamepad';
 import { getDelveRegistry } from '../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useUIStore } from '@/stores/uiStore';
-import { ONBOARDING } from '../../onboarding';
+import { BOON_HINT, ONBOARDING } from '../../onboarding';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -85,7 +87,7 @@ function atStop(
       phase: 'choosing',
       bounty: 26,
       doorChoices: ['winding', 'gilded'],
-      stop: offers ? { offers, taken: false } : null,
+      stop: offers ? { kind: 'powerups' as const, offers, taken: false } : null,
       ...over,
     },
   });
@@ -256,7 +258,7 @@ describe('StopScreen (between depths)', () => {
   });
 
   it("opens on step 2 when the stop offers nothing, or what it offered is taken (a reload's)", () => {
-    atStop(['equip'], { stop: { offers: ['equip'], taken: true } });
+    atStop(['equip'], { stop: { kind: 'powerups', offers: ['equip'], taken: true } });
     expect(screen.getByTestId('stop-road')).toBeInTheDocument();
     expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Skip power-up' })).toBeNull();
@@ -302,6 +304,13 @@ describe('StopScreen (between depths)', () => {
         dive: { ...store().profile.dive!, heroHpFrac: 0.4, potions: 0 },
       }),
     );
+    expect(screen.queryByTestId('door-potion')).toBeNull();
+  });
+
+  it('Famine worn: the road offers no potion', () => {
+    const famine = { boon: 'famine', tier: 1 as const, effect: { noPotions: true as const } };
+    atStop(null, { heroHpFrac: 0.4, potions: 2, diveBuffs: [famine] });
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
     expect(screen.queryByTestId('door-potion')).toBeNull();
   });
 
@@ -363,7 +372,7 @@ describe('StopScreen (between depths)', () => {
   });
 
   it('with the power-up taken, or none on offer, the first door is the first focus', () => {
-    atStop(['equip'], { stop: { offers: ['equip'], taken: true } });
+    atStop(['equip'], { stop: { kind: 'powerups', offers: ['equip'], taken: true } });
     const first = store().profile.dive!.doorChoices[0];
     expect(screen.getByTestId(`door-${first}`)).toHaveAttribute('data-pad-first');
   });
@@ -374,23 +383,34 @@ describe('StopScreen (between depths)', () => {
     expect(terms('winding')).toEqual({ cost: [], gain: [] });
     expect(terms('gilded')).toEqual({
       cost: ['Foes +25% life'],
-      gain: ['Flux ×1.5', 'Essences ×1.5', 'Find +75%'],
+      gain: ['Flux ×1.5', 'Essences ×1.5', 'Find +75%', 'Rarer boons 50%'],
     });
-    expect(terms('champions')).toEqual({ cost: ['An elite leads every pack'], gain: ['Bounty ×1.5'] });
+    expect(terms('champions')).toEqual({
+      cost: ['An elite leads every pack'],
+      gain: ['Bounty ×1.5', 'Rarer boons 30%'],
+    });
     expect(terms('shrine')).toEqual({
       cost: ['Materials ×0.5', 'Runes ×0.5'],
       gain: ['Heal to full', '+1 potion'],
     });
     expect(terms('plunge')).toEqual({ cost: ['2 depths deeper'], gain: ['Bounty ×2'] });
     // A minus sign, not a hyphen.
-    expect(terms('swarm')).toEqual({ cost: ['50% more foes'], gain: ['Foes −30% life', 'Materials ×1.3'] });
+    expect(terms('swarm')).toEqual({
+      cost: ['50% more foes'],
+      gain: ['Foes −30% life', 'Materials ×1.3'],
+    });
     expect(terms('cursed')).toEqual({ cost: ['Foes hit 40% harder'], gain: ['Tier up 35%'] });
+  });
+
+  it("words a door's boon bump as a gain: the next stop's cards a tier up at its chance", () => {
+    expect(doorTerms({ boons: 0.5 })).toEqual({ cost: [], gain: ['Rarer boons 50%'] });
+    expect(doorTerms({ boons: 0 })).toEqual({ cost: [], gain: [] });
   });
 
   it('with no power-up to offer, says so', () => {
     atStop(null);
     expect(screen.queryByTestId('stop')).toBeNull();
-    expect(screen.getByTestId('stop-none')).toHaveTextContent('No power-up at this stop.');
+    expect(screen.getByTestId('stop-none')).toHaveTextContent('Nothing on offer at this stop.');
     expect(screen.getByTestId('stop-road')).toBeInTheDocument();
   });
 
@@ -407,6 +427,85 @@ describe('StopScreen (between depths)', () => {
   });
 });
 
+describe('StopScreen (a boons stop)', () => {
+  const OFFERS: BoonOffer[] = [
+    { id: 'vigor', tier: 1 },
+    { id: 'renewal', tier: 2 },
+    { id: 'clarity', tier: 3 },
+  ];
+  const atBoons = (taken = false) =>
+    atStop(null, { stop: { kind: 'boons', offers: OFFERS, taken } });
+  const realTake = store().takeStop;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    store().resetProfile(1234, 'fire');
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    useDelveStore.setState({ takeStop: realTake });
+  });
+
+  it('opens on the boon cards (the first the first focus), never the power-ups, and Skip says boon', () => {
+    atBoons();
+    const step = screen.getByTestId('stop-boon');
+    expect(screen.getAllByTestId('boon-card')).toHaveLength(3);
+    expect(screen.getAllByTestId('boon-card')[0]).toHaveAttribute('data-pad-first');
+    expect(screen.getByTestId('door-choice').querySelectorAll('[data-pad-first]')).toHaveLength(1);
+    expect(step).toContainElement(screen.getAllByTestId('boon-card')[0]);
+    expect(screen.queryByTestId('stop-powerup')).toBeNull();
+    expect(screen.queryByTestId('stop-road')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Skip boon' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Skip power-up' })).toBeNull();
+  });
+
+  it('X (or S) skips to the road, the first road focused; B (or Boons) comes back to the cards', () => {
+    atBoons();
+    arm();
+    padPress('x');
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
+    expect(screen.getByTestId('stop-skipped')).toHaveTextContent('Boon skipped.');
+    expect(firstDoor()).toHaveFocus();
+    padPress('b');
+    expect(screen.getAllByTestId('boon-card')[0]).toHaveFocus();
+    press('KeyS');
+    fireEvent.click(screen.getByRole('button', { name: 'Boons' }));
+    expect(screen.getByTestId('stop-boon')).toBeInTheDocument();
+  });
+
+  it('a take moves to the road for good, the first road focused; the first visit says "Take a boon" until then', () => {
+    useUIStore.setState({ seen: [] });
+    atBoons();
+    arm();
+    expect(screen.getByTestId('onboarding-hint')).toHaveTextContent(BOON_HINT);
+    expect(document.querySelector('.k-prompt[data-pulse]')).toHaveTextContent('Take');
+    // B1's engine marks the stop taken; Phase A's refuses, so the store's take is stubbed.
+    useDelveStore.setState({
+      takeStop: (): ProfileActionResult => {
+        const d = store().profile.dive!;
+        store().setProfile({
+          ...store().profile,
+          dive: { ...d, stop: { ...d.stop!, taken: true } },
+        });
+        return { ok: true, profile: store().profile };
+      },
+    });
+    fireEvent.click(screen.getAllByTestId('boon-card')[0]);
+    expect(useUIStore.getState().seen).toContain('stop');
+    expect(screen.queryByTestId('onboarding-hint')).toBeNull();
+    expect(screen.getByTestId('stop-taken')).toHaveTextContent('Boon taken.');
+    expect(firstDoor()).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Boons' })).toBeNull();
+  });
+
+  it("a taken boons stop (a reload's) opens on the road", () => {
+    atBoons(true);
+    expect(screen.getByTestId('stop-road')).toBeInTheDocument();
+    expect(screen.getByTestId('stop-taken')).toHaveTextContent('Boon taken.');
+    expect(screen.queryByRole('button', { name: 'Skip boon' })).toBeNull();
+  });
+});
+
 describe("StopScreen (a guided start's stops)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -419,7 +518,9 @@ describe("StopScreen (a guided start's stops)", () => {
   });
 
   it('a required power-up holds step 1: Skip is off and says why, and the roads come once it is taken', () => {
-    atStop(['equip'], { stop: { offers: ['equip'], taken: false, required: true } });
+    atStop(['equip'], {
+      stop: { kind: 'powerups', offers: ['equip'], taken: false, required: true },
+    });
     arm();
     const skip = screen.getByRole('button', { name: 'Skip power-up' });
     expect(skip).toBeDisabled();

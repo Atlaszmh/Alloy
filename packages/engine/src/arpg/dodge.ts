@@ -1,4 +1,6 @@
 import type { Vec } from '../types/arpg.js';
+import type { BoonSum } from '../types/boon.js';
+import type { DelveBalance } from '../types/delve.js';
 import type { SimCtx } from './combat.js';
 import { clampLen, dirTo } from './geometry.js';
 import { moveCircle } from './grid.js';
@@ -10,6 +12,25 @@ import { cancelSwing, cancelWindup, dropHold } from './action.js';
  * a time. A monster attack that would have hit the hero early in the dodge is
  * a perfect dodge: the charge comes back and the next real hit is a riposte.
  */
+
+/** The hero's dodge charges: `dodge.charges` plus the boons' (the boons spec §2), at least 1. */
+export function dodgeMax(bal: DelveBalance, boon: BoonSum): number {
+  return Math.max(1, bal.dodge.charges + (boon.dodgeCharges ?? 0));
+}
+
+/** Seconds a dodge charge takes to come back: `dodge.recharge` × (1 − the boons'), at least half. */
+export function dodgeRecharge(bal: DelveBalance, boon: BoonSum): number {
+  return bal.dodge.recharge * Math.max(0.5, 1 - (boon.dodgeRecharge ?? 0));
+}
+
+/**
+ * How far into a dodge an attack still makes it perfect: `perfectWindow` × (1 +
+ * the boons'), never past the i-frames; with `perfectAlways`, the whole i-frames.
+ */
+function perfectWindow(bal: DelveBalance, boon: BoonSum): number {
+  const { perfectWindow: w, iframes } = bal.dodge;
+  return boon.perfectAlways ? iframes : Math.min(iframes, w * (1 + (boon.dodgeWindow ?? 0)));
+}
 
 export function isDashing(ctx: SimCtx): boolean {
   const d = ctx.world.hero.dodge;
@@ -42,7 +63,7 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
   cancelWindup(h, t);
   dropHold(world);
   h.dodgeCharges--;
-  if (h.dodgeRechargeAt === 0) h.dodgeRechargeAt = t + bal.dodge.recharge;
+  if (h.dodgeRechargeAt === 0) h.dodgeRechargeAt = t + dodgeRecharge(bal, h.boon);
   h.dodge = {
     dir,
     fromX: h.x,
@@ -52,6 +73,8 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
     perfect: false,
   };
   h.invulnUntil = Math.max(h.invulnUntil, t + bal.dodge.iframes);
+  // Free Cast (a boon): the next ability paid within its seconds is free.
+  if (h.boon.freeCast) h.freeCastUntil = t + h.boon.freeCast.seconds;
   h.facing = dir;
   ctx.events.push({ kind: 'dodge', fromX: h.x, fromY: h.y, dirX: dir.x, dirY: dir.y });
   return true;
@@ -68,9 +91,9 @@ export function dodgeTick(ctx: SimCtx, dt: number): void {
   const h = world.hero;
   const t = world.t;
   if (h.dodgeRechargeAt > 0 && t >= h.dodgeRechargeAt) {
-    h.dodgeCharges = Math.min(bal.dodge.charges, h.dodgeCharges + 1);
-    h.dodgeRechargeAt =
-      h.dodgeCharges < bal.dodge.charges ? h.dodgeRechargeAt + bal.dodge.recharge : 0;
+    const max = dodgeMax(bal, h.boon);
+    h.dodgeCharges = Math.min(max, h.dodgeCharges + 1);
+    h.dodgeRechargeAt = h.dodgeCharges < max ? h.dodgeRechargeAt + dodgeRecharge(bal, h.boon) : 0;
   }
   const d = h.dodge;
   if (!d || t - dt >= d.until) return;
@@ -89,14 +112,15 @@ export function dodgeTick(ctx: SimCtx, dt: number): void {
 /** Where the dodge began, while its perfect window is open and unused; else null. */
 export function perfectOrigin(ctx: SimCtx): Vec | null {
   const d = ctx.world.hero.dodge;
-  if (!d || d.perfect || ctx.world.t - d.start > ctx.bal.dodge.perfectWindow) return null;
+  if (!d || d.perfect || ctx.world.t - d.start > perfectWindow(ctx.bal, ctx.world.hero.boon))
+    return null;
   return { x: d.fromX, y: d.fromY };
 }
 
 /** One dodge charge back (a perfect dodge, Lightning Rod); full charges stop the recharge. */
 export function refundDodgeCharge(ctx: SimCtx): void {
   const h = ctx.world.hero;
-  const max = ctx.bal.dodge.charges;
+  const max = dodgeMax(ctx.bal, h.boon);
   h.dodgeCharges = Math.min(max, h.dodgeCharges + 1);
   if (h.dodgeCharges >= max) h.dodgeRechargeAt = 0;
 }

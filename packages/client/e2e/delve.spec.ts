@@ -132,7 +132,7 @@ test.describe('Delve loot loop', () => {
     await expect(sheet).toContainText('Equipped · your');
   });
 
-  test('D03: the stop asks for a power-up, then a road, and the road leads to the next depth', async ({
+  test('D03: the stop offers three boons, then a road; the boon taken shows in the HUD on the next depth', async ({
     page,
   }) => {
     await seedProfile(page);
@@ -145,19 +145,18 @@ test.describe('Delve loot loop', () => {
     await expect(door.getByTestId('risk-line')).toHaveText(
       /^Banked this dive · dying loses \d+% of it$/,
     );
-    // Step 1, when the stop offers a power-up: the first card expands in place; Esc presses the
-    // picker's Back and the focus returns to the card. Then Skip: the road.
-    const stop = door.getByTestId('stop');
-    if (await door.getByTestId('stop-powerup').isVisible()) {
-      await expect(door.getByTestId('door-list')).toHaveCount(0);
-      const card = stop.locator('[data-testid^="stop-"]').first();
-      await card.click();
-      const picker = stop.getByTestId('stop-picker');
-      await expect(picker).toBeVisible();
-      await page.keyboard.press('Escape');
-      await expect(picker).toBeHidden();
-      await expect(card).toBeFocused();
-    }
+    // Step 1 at an ordinary stop is the boons (spec §6): three cards, no power-ups, no road yet.
+    const boons = door.getByTestId('stop-boon');
+    await expect(boons).toBeVisible();
+    await expect(door.getByTestId('stop-powerup')).toHaveCount(0);
+    await expect(door.getByTestId('door-list')).toHaveCount(0);
+    const cards = boons.locator('[data-testid="boon-card"]');
+    await expect(cards).toHaveCount(3);
+    const card = cards.first();
+    const id = (await card.getAttribute('data-boon'))!;
+    await card.click();
+    // Taken: the road (toRoad below then has nothing to skip).
+    await expect(door.getByTestId('stop-road')).toBeVisible();
     await toRoad(page);
     // At 1280×720 every road sits in one row on screen, the row unscrolled.
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -176,6 +175,10 @@ test.describe('Delve loot loop', () => {
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
     await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
+    // Worn on the next depth: its tile in the buff row, one stack (no count shown).
+    const tile = page.locator(`[data-buff="boon"][data-boon="${id}"]`);
+    await expect(tile).toBeVisible();
+    await expect(tile.locator('[data-count]')).toHaveCount(0);
   });
 
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {

@@ -67,14 +67,7 @@ export function fogTick(ctx: SimCtx): void {
   }
 
   const room = roomAt(map, h.x, h.y);
-  const entered = !!room && !room.revealed;
-  if (room && entered) {
-    room.revealed = true;
-    const { x, y, w: rw, h: rh } = room.rect;
-    for (let j = Math.max(0, y - 1); j <= Math.min(map.height - 1, y + rh); j++)
-      for (let i = Math.max(0, x - 1); i <= Math.min(w - 1, x + rw); i++)
-        fog[j * w + i] = Math.max(fog[j * w + i], 1);
-  }
+  const entered = !!room && revealRoom(world, room);
   if (entered || changed) world.fogVersion++;
 
   const exit = roomAt(map, map.exit.x, map.exit.y);
@@ -82,6 +75,30 @@ export function fogTick(ctx: SimCtx): void {
     world.exitHinted = true;
     events.push({ kind: 'exitHint', x: map.exit.x, y: map.exit.y });
   }
+}
+
+/** Reveal `room` whole (its floor and the walls round it seen); false when it already was. */
+function revealRoom(world: ArpgWorld, room: Room): boolean {
+  if (room.revealed) return false;
+  room.revealed = true;
+  const { map, fog } = world;
+  const w = map.width;
+  const { x, y, w: rw, h: rh } = room.rect;
+  for (let j = Math.max(0, y - 1); j <= Math.min(map.height - 1, y + rh); j++)
+    for (let i = Math.max(0, x - 1); i <= Math.min(w - 1, x + rw); i++)
+      fog[j * w + i] = Math.max(fog[j * w + i], 1);
+  return true;
+}
+
+/**
+ * Cartographer (the boons spec's `exitRevealed`): the exit's room revealed as
+ * the floor starts, as entering it would. A no-op on the open room.
+ */
+export function revealExit(world: ArpgWorld): void {
+  const { map } = world;
+  if (map.open) return;
+  const room = roomAt(map, map.exit.x, map.exit.y);
+  if (room && revealRoom(world, room)) world.fogVersion++;
 }
 
 const ICONS: Record<InteractableKind, HudIcon> = {

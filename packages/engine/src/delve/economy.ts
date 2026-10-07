@@ -1,4 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
+import type { BoonFamily } from '../types/boon.js';
 import type { Haul } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { Rarity } from '../types/gear.js';
@@ -14,8 +15,10 @@ export interface EconomyDive {
   quests: Haul;
   /** What the Anvil spent between this dive and the next: forging, refining, buying, Links, runes, honing, upgrades. */
   spent: Haul;
-  /** What the stops spent from the stockpile during the dive (beyond what the dive had banked). */
+  /** What the guided stops spent from the stockpile during the dive (beyond what the dive had banked); an ordinary stop's boon is free. */
   stops: Haul;
+  /** The boons the stops gave this dive, by family (every family, 0 where none). */
+  boons: Record<BoonFamily, number>;
   /** What a death or an abandon lost: the floor's haul and the death share (null: nothing). */
   lost: Haul | null;
   /** Items forged on the Anvil visit after it, by rarity (every rarity, 0 where none). */
