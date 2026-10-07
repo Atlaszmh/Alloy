@@ -29,7 +29,7 @@ import {
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { manaLine, manaRing } from './fx/mana-pixels';
-import { ManaFx, finisherRing } from './fx/mana-fx';
+import { ManaFx, finisherRing, hitFxPicks } from './fx/mana-fx';
 import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
@@ -450,7 +450,10 @@ export class ArenaRenderer {
   handleEvents(events: ArpgEvent[]): void {
     const w = this.world;
     if (!w) return;
-    this.pixelFloor?.handleEvents(events);
+    // The frame's hit moments (HIT_FX_BUDGET): real hits first, echoes from what is left. A hit
+    // left out floats its number and nothing else, here or on the pixel floor.
+    const fxHits = hitFxPicks(events);
+    this.pixelFloor?.handleEvents(events.filter((e) => e.kind !== 'hit' || fxHits.has(e)));
     let numbers = 0;
     for (const e of events) {
       switch (e.kind) {
@@ -458,7 +461,10 @@ export class ArenaRenderer {
           // Out of sight, a hit shows nothing (its number would give the foe away).
           if (!inSight(w, e.x, e.y)) break;
           const color = elemColor(e.element);
-          this.fx.burst(e.x, e.y, color, e.crit ? 7 : 3, e.crit ? 5 : 3);
+          const moment = fxHits.has(e);
+          // An echo's hit never shakes the camera (spec §8), as it never freezes it.
+          const shakes = moment && !e.echo;
+          if (moment) this.fx.burst(e.x, e.y, color, e.crit ? 7 : 3, e.crit ? 5 : 3);
           if (e.reaction) {
             this.floatText(
               e.x,
@@ -468,8 +474,8 @@ export class ArenaRenderer {
               26,
               { pop: true, life: 1.1, rise: 1 },
             );
-            this.fx.ring(e.x, e.y, 2.2, REACTION_HEX[e.reaction], false, 0.4);
-            this.addShake(0.12);
+            if (moment) this.fx.ring(e.x, e.y, 2.2, REACTION_HEX[e.reaction], false, 0.4);
+            if (shakes) this.addShake(0.12);
           }
           if (numbers++ < 14 && e.amount >= 1) {
             const str = `${formatShort(e.amount)}${e.crit ? '!' : ''}`;
@@ -482,7 +488,7 @@ export class ArenaRenderer {
               { pop: e.crit },
             );
           }
-          if (e.crit) this.addShake(0.05);
+          if (e.crit && shakes) this.addShake(0.05);
           break;
         }
         case 'heroHit':
@@ -568,7 +574,8 @@ export class ArenaRenderer {
             MANA_HEX[e.element],
             { heft: e.heft, finisher: e.arc >= 360, infusion: e.infusion },
           );
-          if (e.arc >= 360) this.addShake(0.12);
+          // An echo's Strike swings again, but doesn't shake the camera (spec §8).
+          if (e.arc >= 360 && !e.echo) this.addShake(0.12);
           break;
         case 'buff':
           this.fx.ring(w.hero.x, w.hero.y, 1.6, MANA_HEX[e.element], true, 0.4);

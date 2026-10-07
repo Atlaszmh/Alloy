@@ -43,7 +43,7 @@ import { attachKeyboard, createArenaInput } from '../arena/input';
 import { RARITY_TEXT } from '../format';
 import { DUST_COLOR, METAL_COLOR, PATTERN_COLOR } from '../materials/material-style';
 import { runeHex } from '../arena/fx/runes';
-import type { ManaFx } from '../arena/fx/mana-fx';
+import { HIT_FX_BUDGET, type ManaFx } from '../arena/fx/mana-fx';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
 import { useUIStore } from '@/stores/uiStore';
@@ -341,6 +341,81 @@ describe('patterns on the floor', () => {
     expect(
       pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'pattern', amount: 1, pattern: 'maul' }),
     ).toBe(blue);
+  });
+});
+
+describe('hits under load', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const hit = (id: number, echo: boolean, crit = false): ArpgEvent =>
+    ({
+      kind: 'hit',
+      id,
+      x: 13,
+      y: 18,
+      amount: 5,
+      crit,
+      element: null,
+      heft: 1,
+      source: 'basic',
+      ...(echo ? { echo: true } : {}),
+    }) as ArpgEvent;
+
+  it('draw HIT_FX_BUDGET moments a frame, real hits first; the pixel floor gets only those', () => {
+    const { r } = stage();
+    const w = floor();
+    show(r, w);
+    const view = r as unknown as {
+      fx: ManaFx;
+      pixelFloor: { handleEvents: (e: readonly ArpgEvent[]) => void };
+      floats: unknown[];
+    };
+    const burst = vi.spyOn(view.fx, 'burst');
+    const sent = vi.spyOn(view.pixelFloor, 'handleEvents');
+    const echoes = Array.from({ length: 20 }, (_, i) => hit(100 + i, true));
+    const real = Array.from({ length: 20 }, (_, i) => hit(i, false));
+    r.handleEvents([...echoes, ...real]);
+    expect(burst).toHaveBeenCalledTimes(HIT_FX_BUDGET);
+    const floorHits = sent.mock.calls[0][0].filter((e) => e.kind === 'hit');
+    expect(floorHits).toHaveLength(HIT_FX_BUDGET);
+    expect(floorHits.filter((e) => e.kind === 'hit' && !e.echo)).toHaveLength(20);
+    // Every hit over the budget still floats its number (the frame's 14).
+    expect(view.floats).toHaveLength(14);
+  });
+
+  afterEach(() => useUIStore.getState().setFx('shake', 1));
+
+  it("an echo's crit doesn't shake the screen; a real one does", () => {
+    useUIStore.getState().setFx('shake', 1);
+    const { r } = stage();
+    show(r, floor());
+    const view = r as unknown as { shake: number };
+    r.handleEvents([hit(1, true, true)]);
+    expect(view.shake).toBe(0);
+    r.handleEvents([hit(2, false, true)]);
+    expect(view.shake).toBeGreaterThan(0);
+  });
+
+  it("an echo's 360° slash doesn't shake the screen; a real one does", () => {
+    useUIStore.getState().setFx('shake', 1);
+    const { r } = stage();
+    show(r, floor());
+    const view = r as unknown as { shake: number };
+    const slash = {
+      kind: 'slash',
+      x: 13,
+      y: 18,
+      dir: { x: 1, y: 0 },
+      range: 2,
+      arc: 360,
+      element: 'fire',
+      heft: 1,
+      infusion: null,
+    } as const;
+    r.handleEvents([{ ...slash, echo: true }]);
+    expect(view.shake).toBe(0);
+    r.handleEvents([slash]);
+    expect(view.shake).toBeGreaterThan(0);
   });
 });
 
