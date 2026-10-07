@@ -6,9 +6,11 @@ import type { CraftingData } from '../types/crafting.js';
 import type { QuestsData } from '../types/quests.js';
 import type { TutorialData } from '../types/tutorial.js';
 import type { SetPiecesData } from '../types/floor-map.js';
+import type { BoonDef } from '../types/boon.js';
 import {
   BalanceConfigSchema,
   ArpgDataSchema,
+  BoonsDataSchema,
   CraftingDataSchema,
   DelveDataSchema,
   LayoutsDataSchema,
@@ -29,6 +31,7 @@ import rawLayouts from './layouts.json';
 import rawShrines from './shrines.json';
 import rawTutorial from './tutorial.json';
 import rawSetPieces from './setpieces.json';
+import rawBoons from './boons.json';
 
 export interface LoadedData {
   balance: BalanceConfig;
@@ -40,6 +43,8 @@ export interface LoadedData {
   tutorial: TutorialData;
   /** `setpieces.json`: the props, hazards, set pieces and palettes (see the room objects spec). */
   setPieces: SetPiecesData;
+  /** `boons.json`: the boons and the shrines' blessings (see the boons spec). */
+  boons: BoonDef[];
 }
 
 export function loadAndValidateData(): LoadedData {
@@ -58,6 +63,7 @@ export function loadAndValidateData(): LoadedData {
   const quests = QuestsDataSchema.parse(rawQuests) as QuestsData;
   const tutorial = TutorialDataSchema.parse(rawTutorial) as TutorialData;
   const setPieces = SetPiecesDataSchema.parse(rawSetPieces) as SetPiecesData;
+  const boons = BoonsDataSchema.parse(rawBoons) as BoonDef[];
 
-  return { balance, delve, arpg, crafting, quests, tutorial, setPieces };
+  return { balance, delve, arpg, crafting, quests, tutorial, setPieces, boons };
 }

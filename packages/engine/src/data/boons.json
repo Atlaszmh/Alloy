@@ -1,0 +1,86 @@
+[
+  {
+    "id": "vigor",
+    "name": "Shrine of Vigor",
+    "family": "offense",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 3,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+20% damage for this floor", "effect": { "damage": 0.2 } },
+      { "text": "+20% damage for this floor", "effect": { "damage": 0.2 } },
+      { "text": "+20% damage for this floor", "effect": { "damage": 0.2 } }
+    ]
+  },
+  {
+    "id": "renewal",
+    "name": "Shrine of Renewal",
+    "family": "defense",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 3,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "Regain 1% of your life a second for this floor", "effect": { "lifeRegen": 0.01 } },
+      { "text": "Regain 1% of your life a second for this floor", "effect": { "lifeRegen": 0.01 } },
+      { "text": "Regain 1% of your life a second for this floor", "effect": { "lifeRegen": 0.01 } }
+    ]
+  },
+  {
+    "id": "clarity",
+    "name": "Shrine of Clarity",
+    "family": "tempo",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 3,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+50% mana regen for this floor", "effect": { "manaRegen": 0.5 } },
+      { "text": "+50% mana regen for this floor", "effect": { "manaRegen": 0.5 } },
+      { "text": "+50% mana regen for this floor", "effect": { "manaRegen": 0.5 } }
+    ]
+  },
+  {
+    "id": "fortune",
+    "name": "Shrine of Fortune",
+    "family": "fortune",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 2,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+50 Find for this floor", "effect": { "find": 50 } },
+      { "text": "+50 Find for this floor", "effect": { "find": 50 } },
+      { "text": "+50 Find for this floor", "effect": { "find": 50 } }
+    ]
+  },
+  {
+    "id": "mercy",
+    "name": "Shrine of Mercy",
+    "family": "fortune",
+    "duration": "floor",
+    "cap": 1,
+    "shrine": 2,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "Refill your potions", "effect": { "potions": true } },
+      { "text": "Refill your potions", "effect": { "potions": true } },
+      { "text": "Refill your potions", "effect": { "potions": true } }
+    ]
+  },
+  {
+    "id": "devotion",
+    "name": "Shrine of Devotion",
+    "family": "offense",
+    "duration": "dive",
+    "cap": 1,
+    "shrine": 1,
+    "weight": { "common": 0, "rare": 0, "epic": 0 },
+    "tiers": [
+      { "text": "+10% damage for the rest of the dive", "effect": { "damage": 0.1 } },
+      { "text": "+10% damage for the rest of the dive", "effect": { "damage": 0.1 } },
+      { "text": "+10% damage for the rest of the dive", "effect": { "damage": 0.1 } }
+    ]
+  }
+]

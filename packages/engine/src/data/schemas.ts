@@ -4,6 +4,7 @@ import { CHAIN_SKILLS, MAX_CHAIN, type MoveKind } from '../types/ability.js';
 import { RARITY_ORDER } from '../types/gear.js';
 import { MAX_SOCKETS, RUNE_FAMILIES, RUNE_TIERS } from '../types/rune.js';
 import { AFFIX_FAMILIES, FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
+import { BOON_FAMILIES } from '../types/boon.js';
 import {
   OBJECTIVE_RULES,
   OBJECTIVE_TYPES,
@@ -824,6 +825,138 @@ const RuneDefSchema = z
 export const RunesSchema = z
   .array(RuneDefSchema)
   .refine((rs) => new Set(rs.map((r) => r.id)).size === rs.length, 'rune ids must differ');
+
+// --- Boons (see the boons spec) ---
+
+const fraction = z.number().gt(0).max(1);
+
+/**
+ * What a boon or shrine does (`BoonEffect`): at least one field, and nothing else. Units: a bonus
+ * is the added fraction (`damage: 0.25` is +25%; `maxLife` may be negative, above −1); a drop
+ * multiplier (`flux`, `runes`, `gear`) is the raw factor (1.3); `find` is Find points;
+ * `dodgeCharges` and `skip` are counts (`dodgeCharges` may be negative); `tempo` and
+ * `dodgeRecharge` are cuts below 1.
+ */
+export const BoonEffectSchema = z
+  .object({
+    damage: z.number().positive().optional(),
+    manaRegen: z.number().positive().optional(),
+    lifeRegen: z.number().positive().optional(),
+    maxLife: z.number().gt(-1).optional(),
+    tempo: z.number().gt(0).lt(1).optional(),
+    lifesteal: z.number().positive().optional(),
+    bloodPrice: z.number().positive().optional(),
+    attune: z
+      .object({ role: z.enum(['primary', 'secondary']), points: z.number().int().positive() })
+      .strict()
+      .optional(),
+    knobs: KnobsSchema.optional(),
+    byKind: z
+      .object({
+        light: z.number().positive(),
+        medium: z.number().positive(),
+        heavy: z.number().positive(),
+        hold: z.number().positive(),
+      })
+      .partial()
+      .strict()
+      .optional(),
+    firstMove: z.number().positive().optional(),
+    stepBonus: z.number().positive().optional(),
+    lowLife: z.object({ below: fraction, mult: z.number().positive() }).strict().optional(),
+    nearFoes: z
+      .object({
+        per: z.number().positive(),
+        cap: z.number().int().positive(),
+        radius: z.number().positive(),
+      })
+      .strict()
+      .optional(),
+    dodgeCharges: z.number().int().optional(),
+    dodgeWindow: z.number().positive().optional(),
+    dodgeRecharge: z.number().gt(0).lt(1).optional(),
+    perfectAlways: z.literal(true).optional(),
+    freeCast: z
+      .object({ seconds: z.number().positive(), damage: z.number().min(0) })
+      .strict()
+      .optional(),
+    defendDuration: z.number().positive().optional(),
+    barrierOnFloor: fraction.optional(),
+    healOnClear: fraction.optional(),
+    lastStand: z
+      .object({ below: fraction, reduce: fraction, seconds: z.number().positive() })
+      .strict()
+      .optional(),
+    find: z.number().positive().optional(),
+    magnet: z.number().positive().optional(),
+    metalUp: fraction.optional(),
+    flux: z.number().positive().optional(),
+    runes: z.number().positive().optional(),
+    gear: z.number().positive().optional(),
+    scrap: z.number().positive().optional(),
+    deathLoss: fraction.optional(),
+    potions: z.literal(true).optional(),
+    noPotions: z.literal(true).optional(),
+    eliteChance: fraction.optional(),
+    skip: z.number().int().positive().optional(),
+    exitRevealed: z.literal(true).optional(),
+    shrinesLastDive: z.literal(true).optional(),
+    noSlow: z.literal(true).optional(),
+    hazardsFriendly: fraction.optional(),
+  })
+  .strict()
+  .refine((e) => Object.keys(e).length > 0, 'a boon does something');
+
+const BoonTierSchema = z.object({ text: z.string().min(1), effect: BoonEffectSchema }).strict();
+
+/** One row of `boons.json` (`BoonDef`). */
+export const BoonDefSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    family: z.enum(BOON_FAMILIES),
+    duration: z.enum(['dive', 'floor']),
+    cap: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    minDepth: z.number().int().min(1).optional(),
+    shrine: z.number().positive().optional(),
+    weight: z
+      .object({ common: z.number().min(0), rare: z.number().min(0), epic: z.number().min(0) })
+      .strict(),
+    tiers: z.tuple([BoonTierSchema, BoonTierSchema, BoonTierSchema]),
+  })
+  .strict();
+
+/** `boons.json`: the rows, ids distinct; a potion refill lasts the floor (it acts at once). */
+export const BoonsDataSchema = z
+  .array(BoonDefSchema)
+  .min(1)
+  .refine(distinctIds, 'boon ids differ')
+  .refine(
+    (bs) => bs.every((b) => b.duration === 'floor' || b.tiers.every((t) => !t.effect.potions)),
+    'a refill lasts the floor',
+  );
+
+/** `balance.json → delve.boons`: a stop's cards and its tier weights by depth band, ascending from depth 1. */
+export const BoonsBalanceSchema = z
+  .object({
+    offers: z.number().int().min(1),
+    tierWeights: z
+      .array(
+        z
+          .object({
+            fromDepth: z.number().int().min(1),
+            weights: z.tuple([z.number().min(0), z.number().min(0), z.number().min(0)]),
+          })
+          .strict(),
+      )
+      .min(1)
+      .refine(
+        (bs) =>
+          bs[0].fromDepth === 1 && bs.every((b, i) => i === 0 || b.fromDepth > bs[i - 1].fromDepth),
+        'the bands ascend from depth 1',
+      ),
+  })
+  .strict();
 
 export const ArpgDataSchema = z.object({
   mana: perMana(z.object({ name: z.string(), icon: z.string(), color: z.string() })),
