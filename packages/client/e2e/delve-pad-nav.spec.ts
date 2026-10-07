@@ -71,21 +71,23 @@ const CEILING: Record<string, number> = {
   // The strip's Realign, the Primary's three cards and Delve (the strip's tabs are LT/RT's, the
   // footer's Revert and Apply the mouse's; no slot to buy on the audit save).
   skills: 5,
-  // The move editor: Kind, Form, Elements, Position and Payment (no socket on its move; Back and
-  // Remove are B's and X's).
-  'skills-editor': 5,
+  // The move editor: Kind, Form, Elements, Position and Payment, and its move's one socket (the
+  // audit save's first Primary move holds a Guard rune since the boons; Back and Remove are B's and X's).
+  'skills-editor': 6,
   // The Primary's five forms (Back is B's).
   'skills-forms': 5,
   // The Apply sheet: its Back, Apply, Try in Training and Discard changes.
   'apply-sheet': 4,
-  // The 9 learned patterns and Delve; with a pattern open, its Metal and Element rows (a save with
-  // no flux sees one line for it, and none of its lines is a stop without a shard) and Forge.
-  forge: 10,
-  'forge-pattern': 13,
+  // The 13 learned patterns (all of them, three dives in since the boons) and Delve; with a
+  // pattern open, its Metal and Element rows (a save with no flux sees one line for it, and none
+  // of its lines is a stop without a shard) and Forge.
+  forge: 14,
+  'forge-pattern': 17,
   // The 19 gear rows, the one operation the worn weapon can take, and Delve (one stop a gear row).
   temper: 21,
-  // The audit's save: the shard bench's stepper and Buy, its Refines, and Delve.
-  materials: 5,
+  // The audit's save: the shard bench's stepper and Buy, its Refines (one more since the boons),
+  // and Delve.
+  materials: 6,
   'stop-powerup': 4,
   // The finds line and the three boon cards.
   'stop-boon': 4,
