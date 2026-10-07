@@ -492,6 +492,7 @@ export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntit
     applies: p.applies,
     rattles: p.rattles,
     ...knobHitOpts(k),
+    ...(p.replay ? { echo: true as const } : {}),
   };
   chainJumps(ctx, hit[0], p.damage, p.element!, k.chain, jump, new Set(hit.map((m) => m.id)));
   // Linger: a zone where it hit.

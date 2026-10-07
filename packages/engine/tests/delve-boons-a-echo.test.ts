@@ -53,4 +53,25 @@ describe("an echo's hit events", () => {
     expect(slashes[0].echo).toBeUndefined();
     expect(slashes[1].echo).toBe(true);
   });
+
+  it("an echoed basic shot's Chain jump: marked, as its direct hit is", () => {
+    const wand = { weapon: gear('fire', 'weapon', 'wand') };
+    const w = arena([dummy(13, 32), dummy(14.5, 32)], { equipped: wand });
+    const CHAIN_III = { id: 'chain', tier: 3 as const };
+    const basic: Blow[] = [{ kind: 'light', element: 'fire', runes: [ECHO_III, CHAIN_III] }];
+    w.hero.stats = computeHeroStats(wand, registry, { basic });
+    const cast = firstBlow(w);
+    w.hero.nextAttackAt = 1e9;
+    const events = [...cast, ...run(w, 3)];
+    const fx = events.findIndex((e) => e.kind === 'runeFx' && e.effect === 'echo');
+    const jump = events.findIndex((e, i) => i > fx && e.kind === 'chain');
+    // The cast's own hit and jump, before the echo: unmarked.
+    const own = hits(events.slice(0, fx), 'basic');
+    expect(own).toHaveLength(2);
+    expect(own.every((e) => e.echo === undefined)).toBe(true);
+    // The echo's direct hit and the jump it chains: both marked.
+    const echoed = hits(events.slice(fx, jump), 'basic');
+    expect(echoed).toHaveLength(2);
+    expect(echoed.map((e) => e.echo)).toEqual([true, true]);
+  });
 });
