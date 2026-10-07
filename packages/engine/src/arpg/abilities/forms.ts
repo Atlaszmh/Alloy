@@ -207,6 +207,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
         element: ab.element,
         heft,
         infusion: ab.elements[1] ?? null,
+        ...(ab.replay ? { echo: true as const } : {}),
       });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);

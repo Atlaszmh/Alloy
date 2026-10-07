@@ -618,6 +618,11 @@ export type ArpgEvent =
        */
       source: HitSource;
       slot?: number;
+      /**
+       * An echo's hit (`landBlow`'s `echo`, an ability's `replay`; see the boons spec's 8): the
+       * client gives it no hit-stop or kick. Its numbers are as any hit's.
+       */
+      echo?: true;
     }
   | {
       kind: 'heroHit';
@@ -676,6 +681,8 @@ export type ArpgEvent =
       element: ManaType;
       heft: number;
       infusion: ManaType | null;
+      /** An echo's slash (an ability's `replay`): the client gives it no hit-stop or kick. */
+      echo?: true;
     }
   | {
       kind: 'basic';

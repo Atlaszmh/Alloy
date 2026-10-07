@@ -310,7 +310,8 @@ export function landBlow(
   const stacks = bal.stacks.basicByKind[kind] + k.stacksBonus;
   // An Earth blow or an Earth Surge's statuses: its stagger adds Earth stacks.
   const rattles = element === 'earth' || !!surge?.elements.includes('earth');
-  const knobbed = knobHitOpts(k);
+  // An Echo's blow marks its hits (see the boons spec's 8).
+  const knobbed = { ...knobHitOpts(k), ...(o.echo ? { echo: true as const } : {}) };
 
   let landed = w.kind !== 'melee' && !!nearestMonster(ctx, h.x, h.y, w.range);
   if (w.kind === 'melee') {
@@ -534,6 +535,7 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       stacks: p.stacks,
       noReact: p.noReact,
       ...(p.knobs ? knobHitOpts(p.knobs) : {}),
+      ...(p.replay ? { echo: true as const } : {}),
     });
   }
   if (!p.replay)

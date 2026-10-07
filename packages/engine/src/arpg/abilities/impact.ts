@@ -60,6 +60,7 @@ export function hitOpts(
     // Either element counts: an ability applies both elements' statuses.
     rattles: ab.elements.includes('earth'),
     stacks: direct ? ab.stacks : undefined,
+    ...(ab.replay ? { echo: true as const } : {}),
   };
 }
 

@@ -485,6 +485,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           stacks: p.stacks,
           noReact: p.noReact,
           ...(p.knobs ? knobHitOpts(p.knobs) : {}),
+          ...(p.replay ? { echo: true as const } : {}),
         });
         // A basic shot's knobs act where it first hits.
         if (p.knobs && p.hitIds.length === 1) shotLands(ctx, p, [m]);

@@ -74,6 +74,8 @@ export interface HitOpts {
    * (default `stacks.tick`; see the elemental stacks spec).
    */
   stacks?: number;
+  /** An echo's hit: its `hit` event says so (see the boons spec's 8). */
+  echo?: true;
 }
 
 /** The status each element's hits apply: its stacks (Earth's `stagger` only from an Earth source). */
@@ -613,6 +615,7 @@ export function hitMonster(
     heft: opts.heft ?? 0,
     source: opts.source,
     slot: opts.slot,
+    ...(opts.echo ? { echo: true as const } : {}),
   });
 
   if (opts.source === 'basic' || opts.source === 'skill') {
