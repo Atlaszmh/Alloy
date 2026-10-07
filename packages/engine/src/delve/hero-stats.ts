@@ -274,20 +274,35 @@ export function computeHeroStats(
 }
 
 /**
- * `stats` under blessings (see the floor maps spec): each multiplies damage
- * and mana regen and adds life regen (Find and potions act on the world, not
- * here). No blessings: `stats` itself.
+ * `stats` under boons and blessings (the boons spec §2), one pass a list (the
+ * dive's, then the floor's): damage, mana regen, max life (its product floored
+ * at 0.3) and tempo (× (1 − x), its product floored at 0.5) multiply per entry;
+ * life regen and lifesteal add; Blood Price stops mana regen. Everything else a
+ * boon does acts in the sim, not here. No entries: `stats` itself.
  */
 export function applyBuffs(stats: HeroStats, buffs: readonly Buff[]): HeroStats {
   if (buffs.length === 0) return stats;
-  let { damageMult, manaRegenMult } = stats;
+  let { damageMult, manaRegenMult, lifesteal } = stats;
   let lifeRegen = stats.lifeRegen ?? 0;
+  let life = 1;
+  let tempo = 1;
   for (const { effect } of buffs) {
     damageMult *= 1 + (effect.damage ?? 0);
-    manaRegenMult *= 1 + (effect.manaRegen ?? 0);
+    manaRegenMult *= effect.bloodPrice ? 0 : 1 + (effect.manaRegen ?? 0);
     lifeRegen += effect.lifeRegen ?? 0;
+    lifesteal += effect.lifesteal ?? 0;
+    life *= 1 + (effect.maxLife ?? 0);
+    tempo *= 1 - (effect.tempo ?? 0);
   }
-  return { ...stats, damageMult, manaRegenMult, lifeRegen };
+  return {
+    ...stats,
+    damageMult,
+    manaRegenMult,
+    lifeRegen,
+    lifesteal,
+    maxHp: stats.maxHp * Math.max(0.3, life),
+    tempo: stats.tempo * Math.max(0.5, tempo),
+  };
 }
 
 // ── Mana ───────────────────────────────────────────────────────────────────

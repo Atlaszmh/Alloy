@@ -115,7 +115,8 @@ For the integrator, applied at merge:
 9. **`stackTime`** reaches every hit through `knobHitOpts` (abilities, blows, shots). A spread, `applyStatus` and the riposte's stagger carry none.
 10. **Accepted edges:** `boonFoeMult` applies to every `basic`/`skill`-source hit, a blow's zone ticks included. Free Cast's bonus rides the cast move only; a Defensive's later hits (the Ward's burst, Armor's riposte) read `defendingAbility`, the chain's own move, and don't carry it. A's "refresh `h.boon` wherever a buff is added" isn't B2's concern: B2 adds no buff.
 11. **Drain under Blood Price:** `manaOnHit` gives no mana either, gated with the basics' (Task 7).
-12. **Tests** live in one new file, `delve-boons-combat.test.ts`, a `describe` a site, rather than spread over the sites' files: B3 and A edit several of those, and one file keeps the merges clean.
+12. **Blood Price, Last Stand and the floors:** Blood Price's life cost goes straight off `hp` in `pay`, so it never starts Last Stand (only `hurtHero` does) and emits no `pay` event (its mana is 0, and it has no charge); `applyBuffs`'s floors (max life 0.3, tempo 0.5) apply per list, so a dive's and a floor's list each floor on their own.
+13. **Tests** live in one new file, `delve-boons-combat.test.ts`, a `describe` a site, rather than spread over the sites' files: B3 and A edit several of those, and one file keeps the merges clean.
 
 ## Conventions
 

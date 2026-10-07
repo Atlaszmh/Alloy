@@ -12,9 +12,24 @@ import { aimPoint, DIRECTIONAL, nearestMonster } from './targeting.js';
 
 const DEFENSIVE = 1;
 
-/** Can the hero pay for it? Infinite mana (Training Grounds) ignores cost, even one dearer than the whole pool. */
+/**
+ * Can the hero pay for it? Infinite mana (Training Grounds) ignores cost, even
+ * one dearer than the whole pool, as does a Free Cast's window after a dodge.
+ * Under Blood Price the cost is life, refused when it would leave under 1.
+ */
 export function canAfford(world: ArpgWorld, ab: ResolvedAbility): boolean {
-  return !!world.sandbox?.infiniteMana || world.hero.mana >= ab.cost;
+  const h = world.hero;
+  if (world.sandbox?.infiniteMana || world.t < (h.freeCastUntil ?? 0)) return true;
+  return h.boon.bloodPrice ? h.hp - lifeCost(h, ab.cost) >= 1 : h.mana >= ab.cost;
+}
+
+/**
+ * Blood Price's life for a mana cost (the boons spec §2): `cost / manaMax × p ×
+ * maxHp`; 0 without it, and for a charge move (its cost is 0).
+ */
+export function lifeCost(h: HeroEntity, cost: number): number {
+  const p = h.boon.bloodPrice ?? 0;
+  return p > 0 && h.manaMax > 0 ? (cost / h.manaMax) * p * h.stats.maxHp : 0;
 }
 
 /** Whether the slot's beat still runs at `t` (its next move waits for its end). */
@@ -116,11 +131,14 @@ function fire(
   step: number,
   stage: number,
   aimed: boolean,
+  bonus = 0,
 ): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
   // Only a slot with a chain winds up or holds.
-  const ab = chainMove(h.chains[slot]!, step, stage);
+  const move = chainMove(h.chains[slot]!, step, stage);
+  // A Free Cast's bonus rides the move's power, so every hit of this cast (its echo too) has it.
+  const ab = bonus > 0 ? { ...move, power: move.power * (1 + bonus) } : move;
   // Drain's and Linger's budgets are the cast's: they count from before the move's hits land.
   // Drain's is a share of its cost before its runes' load, so Drain can't pay back their price.
   h.drained[slot] = 0;
@@ -149,7 +167,7 @@ function fire(
   });
   if (ab.motion < 0) {
     const d = dirTo(h.x, h.y, res.tx, res.ty);
-    const size = stepBonus(bal, ab.index).size;
+    const size = stepBonus(bal, ab.index, h.boon.stepBonus).size;
     if (d.x !== 0 || d.y !== 0)
       startPush(ctx, 'step', { x: -d.x, y: -d.y }, -ab.motion * size, bal.feel.recoilSeconds);
   }
@@ -170,20 +188,28 @@ function fire(
 }
 
 /**
- * Pay for move `step`: its mana, its own cooldown (from `from`), its charge from
- * the slot's meter. A `pay` event says what it really cost: infinite mana's
- * mana and no cooldowns' charge come straight back, so they're free.
+ * Pay for move `step`: its mana (under Blood Price, its life: `lifeCost`), its
+ * own cooldown (from `from`), its charge from the slot's meter. A Free Cast's
+ * window, while it runs, waives the mana (or the life) and
+ * closes. A `pay` event says what it really cost: infinite mana's mana and no
+ * cooldowns' charge come straight back, so they're free. Returns a Free Cast's
+ * damage bonus (0 for any other payment).
  */
-function pay(ctx: SimCtx, slot: number, step: number, ab: ResolvedAbility, from: number): void {
+function pay(ctx: SimCtx, slot: number, step: number, ab: ResolvedAbility, from: number): number {
   const h = ctx.world.hero;
   const sandbox = ctx.world.sandbox;
-  h.mana -= ab.cost;
+  const free = ctx.world.t < (h.freeCastUntil ?? 0);
+  const blood = !free && !!h.boon.bloodPrice;
+  if (free) h.freeCastUntil = 0;
+  else if (blood) h.hp -= lifeCost(h, ab.cost);
+  else h.mana -= ab.cost;
   // No cooldowns (Training Grounds): no cooldown, and so no charge lockout.
   if (!sandbox?.noCooldowns) h.cooldowns[slot][step] = from + ab.cooldown;
   if (ab.payment === 'charge') h.charge[slot] = Math.max(0, h.charge[slot] - ab.chargeNeed);
-  const mana = sandbox?.infiniteMana ? 0 : ab.cost;
+  const mana = sandbox?.infiniteMana || free || blood ? 0 : ab.cost;
   const charge = ab.payment === 'charge' && !sandbox?.noCooldowns ? ab.chargeNeed : 0;
   if (mana > 0 || charge > 0) ctx.events.push({ kind: 'pay', slot, mana, charge });
+  return free ? (h.boon.freeCast?.damage ?? 0) : 0;
 }
 
 /**
@@ -220,7 +246,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   cancelSwing(ctx);
   h.recoverUntil = t;
   const chargePaid = chain.payment === 'charge' ? ab.chargeNeed : 0;
-  pay(ctx, slot, step, ab, t + ab.channel);
+  const free = pay(ctx, slot, step, ab, t + ab.channel);
   const dir = dirTo(h.x, h.y, at.x, at.y);
   if (dir.x !== 0 || dir.y !== 0) h.facing = dir;
   h.windup = {
@@ -234,11 +260,15 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     stage: 0,
     conjureUntil: t + ab.conjure,
     chargePaid,
+    free,
   };
   if (ab.motion > 0 && (dir.x !== 0 || dir.y !== 0)) {
     const stop = nearestMonster(ctx, at.x, at.y, 1.5);
     // Never past the aim point, where the form would re-aim from and turn round.
-    const reach = Math.min(ab.motion * stepBonus(bal, ab.index).size, dist(h.x, h.y, at.x, at.y));
+    const reach = Math.min(
+      ab.motion * stepBonus(bal, ab.index, h.boon.stepBonus).size,
+      dist(h.x, h.y, at.x, at.y),
+    );
     startPush(ctx, 'stepIn', dir, reach, ab.conjure, stop?.id ?? null);
   }
   ctx.events.push({ kind: 'windup', slot, until: h.windup.until, heft: stepHeft(ab) });
@@ -304,11 +334,11 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   const from = at === hold.aim ? hold.from : { x: h.x, y: h.y };
   const held = t - hold.start;
   const left = Math.max(0, ab.castTime - held);
-  pay(ctx, hold.slot, hold.step, ab, t + left);
+  const free = pay(ctx, hold.slot, hold.step, ab, t + left);
   if (left < 1e-9) {
     const along = alongAim(h, { slot: hold.slot, step: hold.step, stage: s, from, at });
-    if (!fire(ctx, hold.slot, aim && (along ?? aim), hold.step, s, aim !== null))
-      fire(ctx, hold.slot, along ?? at, hold.step, s, aim !== null);
+    if (!fire(ctx, hold.slot, aim && (along ?? aim), hold.step, s, aim !== null, free))
+      fire(ctx, hold.slot, along ?? at, hold.step, s, aim !== null, free);
     return;
   }
   h.windup = {
@@ -323,6 +353,7 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
     stage: s,
     conjureUntil: t + Math.max(0, ab.conjure - held),
     chargePaid: chain.payment === 'charge' ? ab.chargeNeed : 0,
+    free,
   };
   ctx.events.push({ kind: 'windup', slot: hold.slot, until: h.windup.until, heft: stepHeft(ab) });
 }
@@ -416,11 +447,11 @@ export function castTick(ctx: SimCtx): void {
   const h = ctx.world.hero;
   const w = h.windup;
   if (!w || ctx.world.t < w.until - 1e-9) return;
-  const { slot, aim, at, step, stage } = w;
+  const { slot, aim, at, step, stage, free = 0 } = w;
   h.windup = null;
   // A step-in finishes before the blow lands, so it hits from where the step took the hero.
   finishPushes(ctx, 'stepIn');
   const along = alongAim(h, w);
-  if (!fire(ctx, slot, aim && (along ?? aim), step, stage, aim !== null))
-    fire(ctx, slot, along ?? at, step, stage, aim !== null);
+  if (!fire(ctx, slot, aim && (along ?? aim), step, stage, aim !== null, free))
+    fire(ctx, slot, along ?? at, step, stage, aim !== null, free);
 }

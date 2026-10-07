@@ -471,6 +471,8 @@ export interface HeroEntity {
     conjureUntil: number;
     /** Charge spent at the press (refunded if a dodge cancels). */
     chargePaid: number;
+    /** A Free Cast's damage bonus, carried to the landing (0 or absent: none). */
+    free?: number;
   } | null;
   /**
    * A hold move charging while its button is held (see the moves and chains
@@ -529,6 +531,12 @@ export interface HeroEntity {
   dodgeCharges: number;
   /** When the next dodge charge arrives (0 = full). */
   dodgeRechargeAt: number;
+  /** Free Cast (a boon): an ability paid before this time is free (absent: none). */
+  freeCastUntil?: number;
+  /** Last Stand (a boon) has fired on this floor. */
+  lastStandUsed?: boolean;
+  /** Last Stand's damage cut runs until this time. */
+  lastStandUntil?: number;
   /**
    * The last dodge, kept after the dash ends so a perfect dodge can be judged
    * from its start. The hero is dashing while `t < until`.

@@ -30,14 +30,16 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
   const t = world.t;
   const p = aimPoint(ctx, ab, aim);
   if (!p) return { ok: false, tx: h.x, ty: h.y };
-  const { power, size } = stepBonus(ctx.bal, ab.index);
+  const { power, size } = stepBonus(ctx.bal, ab.index, h.boon.stepBonus);
   const hit = abilityHit(ctx, ab) * power;
   const heft = stepHeft(ab);
   let dir = dirTo(h.x, h.y, p.x, p.y);
   if (dir.x === 0 && dir.y === 0) dir = { ...h.facing };
   const done = (tx: number, ty: number): FormResult => ({ ok: true, tx, ty });
-  // A Defensive move replaces the one up: its Ward (without a burst), Surge or Blink trail.
-  const buff = (form: 'ward' | 'armor' | 'surge' | 'blink', until: number) => {
+  // A Defensive move replaces the one up: its Ward (without a burst), Surge or Blink trail,
+  // for `seconds` × (1 + the boons' `defendDuration`).
+  const buff = (form: 'ward' | 'armor' | 'surge' | 'blink', seconds: number) => {
+    const until = t + seconds * (1 + (h.boon.defendDuration ?? 0));
     h.ward = null;
     h.defend = { form, until, move: ab.index, stage: ab.stage };
     ctx.events.push({ kind: 'buff', form, element: ab.element, until });
@@ -224,16 +226,16 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
     }
 
     case 'ward':
-      buff('ward', t + ab.duration);
+      buff('ward', ab.duration);
       h.ward = { hp: h.stats.maxHp * ab.effect, max: h.stats.maxHp * ab.effect };
       return done(h.x, h.y);
 
     case 'armor':
-      buff('armor', t + ab.duration);
+      buff('armor', ab.duration);
       return done(h.x, h.y);
 
     case 'surge':
-      buff('surge', t + ab.duration);
+      buff('surge', ab.duration);
       return done(h.x, h.y);
 
     case 'blink': {
@@ -268,7 +270,7 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
         )
           hitMonster(ctx, m, hit, ab.element, opts);
       }
-      buff('blink', t + ctx.bal.abilities.defend.blinkSeconds);
+      buff('blink', ctx.bal.abilities.defend.blinkSeconds);
       return done(h.x, h.y);
     }
 

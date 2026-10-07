@@ -1,11 +1,13 @@
 import {
   ABILITY_SLOTS,
   type Knobs,
+  type MoveKind,
   type ResolvedAbility,
   type SplitKnob,
   type ZoneKnob,
 } from '../../types/ability.js';
 import type { MonsterEntity, StatusId, Vec } from '../../types/arpg.js';
+import type { BoonSum } from '../../types/boon.js';
 import type { ManaType } from '../../types/mana.js';
 import { hasMastery } from '../../delve/hero-stats.js';
 import { hitMonster, type HitOpts, type SimCtx } from '../combat.js';
@@ -25,10 +27,22 @@ export function slotIndex(ab: ResolvedAbility): number {
   return ABILITY_SLOTS.indexOf(ab.slot);
 }
 
-/** One hit of an ability before per-foe modifiers: weapon damage × the ability's power. */
+/**
+ * The boons' damage on a move or a blow (the boons spec §2): `byKind` by its
+ * kind, and `firstMove` on a chain's first move. 1 with no boon.
+ */
+export function boonPower(boon: BoonSum, kind: MoveKind, first: boolean): number {
+  return (1 + (boon.byKind?.[kind] ?? 0)) * (first ? 1 + (boon.firstMove ?? 0) : 1);
+}
+
+/**
+ * One hit of an ability before per-foe modifiers: weapon damage × the
+ * ability's power × the boons' (`boonPower`).
+ */
 export function abilityHit(ctx: SimCtx, ab: ResolvedAbility): number {
-  const s = ctx.world.hero.stats;
-  return s.weaponDamage * s.damageMult * ab.power;
+  const h = ctx.world.hero;
+  const s = h.stats;
+  return s.weaponDamage * s.damageMult * ab.power * boonPower(h.boon, ab.kind, ab.index === 0);
 }
 
 /**
@@ -207,9 +221,19 @@ export interface ImpactOpts {
   through?: boolean;
 }
 
-/** The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes spec). */
-export function knobHitOpts(k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit'> {
-  return { leech: k.lifesteal, catalyst: k.catalyst, manaOnHit: k.manaOnHit };
+/**
+ * The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes
+ * spec), and the boons' stack time.
+ */
+export function knobHitOpts(
+  k: Knobs,
+): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit' | 'stackTime'> {
+  return {
+    leech: k.lifesteal,
+    catalyst: k.catalyst,
+    manaOnHit: k.manaOnHit,
+    stackTime: k.stackTime,
+  };
 }
 
 /**
