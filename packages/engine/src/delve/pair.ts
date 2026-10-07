@@ -4,7 +4,8 @@ import { defaultMoveset, extraSlots, heroChains, movesetOf, weaponParts } from '
 import { ABILITY_SLOTS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, HeroStats, ManaPair } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem, type HeroStatKey, type StatRoll } from '../types/gear.js';
-import type { ManaType } from '../types/mana.js';
+import type { ManaMap, ManaType } from '../types/mana.js';
+import { buffSum } from './boons.js';
 import { isDiveActive } from './dive.js';
 import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
 import { findItem, replaceItem, withMoveset, type ProfileActionResult } from './profile.js';
@@ -43,6 +44,32 @@ export function profileStats(
 ): HeroStats {
   const basic = heroChains(registry, profile.equipped, profile.pair).basic;
   return computeHeroStats(profile.equipped, registry, pairExtra(profile.pair, basic));
+}
+
+/**
+ * The hero's stats in a dive's fight (see the boons spec's 2a): `profileStats` plus its dive
+ * boons' attunement (each role resolved against the pair; a secondary while none is bound goes to
+ * the primary; none before the choice) and their knob partials (`HeroStatsExtra.boonKnobs`).
+ * `beginFloor` and the mid-floor refreshes wear it; everything valued at the Anvil (the roll
+ * floor, Power, `compareItem`, the overtake) keeps `profileStats`, which never sees a boon.
+ */
+export function diveStats(
+  registry: DataRegistry,
+  profile: Pick<DelveProfile, 'equipped' | 'pair' | 'dive'>,
+): HeroStats {
+  const basic = heroChains(registry, profile.equipped, profile.pair).basic;
+  const sum = buffSum(profile.dive?.diveBuffs ?? []);
+  const { primary, secondary } = profile.pair;
+  const attunement: Partial<ManaMap> = {};
+  const add = (m: ManaType | null, points: number) => {
+    if (m && points) attunement[m] = (attunement[m] ?? 0) + points;
+  };
+  add(primary, sum.attune.primary);
+  add(secondary ?? primary, sum.attune.secondary);
+  return computeHeroStats(profile.equipped, registry, {
+    ...pairExtra(profile.pair, basic, attunement),
+    boonKnobs: sum.knobs,
+  });
 }
 
 /** Mana Dust from salvaging `item`: its rarity's share when its mana is outside the pair (none before the choice). */

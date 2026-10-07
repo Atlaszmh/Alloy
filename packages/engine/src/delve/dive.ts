@@ -8,7 +8,7 @@ import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gear.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, emptyPending, isBossFloor } from '../arpg/world.js';
-import { profileStats } from './pair.js';
+import { diveStats, profileStats } from './pair.js';
 import { heroChains } from '../loot/moveset.js';
 import { rollStop } from './stops.js';
 import { pairElements } from './hero-stats.js';
@@ -116,7 +116,7 @@ export function floorSeed(dive: DiveState): number {
 /** Build the arena for the dive's current depth: a generated floor, with what the dive used and its blessings. */
 export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgWorld {
   const dive = requireDive(profile, 'fighting');
-  const stats = profileStats(registry, profile);
+  const stats = diveStats(registry, profile);
   const mods = dive.door?.mods ?? {};
   return createFloorWorld(registry, {
     depth: dive.depth,

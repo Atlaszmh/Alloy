@@ -17,7 +17,7 @@ import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
 import { runeTargetOf, socketRune } from './runes.js';
 import { bankWorld } from './dive.js';
 import { openedAlcove } from '../arpg/interact.js';
-import { profileStats } from './pair.js';
+import { diveStats } from './pair.js';
 import { applyTutorialEvents, tutorialStep } from './tutorial.js';
 
 /**
@@ -323,8 +323,8 @@ function alcovesOf(world: ArpgWorld): Interactable[] {
  * `banked` (as at a stop), then the floor's haul, then the stockpile. A refusal
  * leaves the profile and the world as they were (the alcove open, nothing
  * banked); an op taken marks the alcove used (`DiveState.used` and the
- * world's) and refreshes the hero (`refreshWorldHero` with the new gear and
- * chains, its blessings kept; a changed Find moves `world.loot.find`).
+ * world's) and refreshes the hero (`refreshWorldHero` with the new gear's
+ * `diveStats` and chains, its blessings kept; a changed Find moves `world.loot.find`).
  */
 export function takeAlcove(
   registry: DataRegistry,
@@ -364,7 +364,7 @@ export function takeAlcove(
   refreshWorldHero(
     registry,
     world,
-    profileStats(registry, next),
+    diveStats(registry, next),
     heroChains(registry, next.equipped, next.pair),
   );
   world.loot.find += h.stats.magicFind - find;

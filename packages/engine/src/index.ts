@@ -113,6 +113,7 @@ export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js
 export {
   inPair,
   profileStats,
+  diveStats,
   fixChainsToPair,
   chooseStartingMana,
   bindSecondary,

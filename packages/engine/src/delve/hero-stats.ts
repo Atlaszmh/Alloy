@@ -816,9 +816,20 @@ function pct(from: number, to: number): number {
   return (to - from) / from;
 }
 
-/** The extra that applies a profile's pair (its power and the two-element limit) and its basic chain. */
-export function pairExtra(pair?: ManaPair, basic?: Blow[]): HeroStatsExtra {
-  return { ...(pair ? { pair, filterAttunement: true } : {}), basic };
+/**
+ * The extra that applies a profile's pair (its power and the two-element limit) and its basic
+ * chain, and any attunement on top (a dive's boons': `diveStats`).
+ */
+export function pairExtra(
+  pair?: ManaPair,
+  basic?: Blow[],
+  attunement?: Partial<ManaMap>,
+): HeroStatsExtra {
+  return {
+    ...(pair ? { pair, filterAttunement: true } : {}),
+    basic,
+    ...(attunement ? { attunement } : {}),
+  };
 }
 
 /** No pair: before the choice, or a caller that counts every element. */
