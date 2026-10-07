@@ -73,6 +73,8 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
     perfect: false,
   };
   h.invulnUntil = Math.max(h.invulnUntil, t + bal.dodge.iframes);
+  // Free Cast (a boon): the next ability paid within its seconds is free.
+  if (h.boon.freeCast) h.freeCastUntil = t + h.boon.freeCast.seconds;
   h.facing = dir;
   ctx.events.push({ kind: 'dodge', fromX: h.x, fromY: h.y, dirX: dir.x, dirY: dir.y });
   return true;

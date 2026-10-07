@@ -18,6 +18,7 @@ import {
   press,
   registry,
   run,
+  STEP,
 } from './fixtures/arena.js';
 
 // The boons spec §2: each combat field at its one site. Without the boon, nothing moves.
@@ -221,5 +222,41 @@ describe('the dodge (dodge.ts)', () => {
       return events.some((e) => e.kind === 'perfectDodge');
     };
     expect([perfect(false), perfect(true)]).toEqual([false, true]);
+  });
+});
+
+describe('Free Cast (cast.ts)', () => {
+  const caster = (damage: number) => {
+    const w = noCrit(
+      wear(arena([dummy(13, 30)], { noBasic: true }), { freeCast: { seconds: 1.5, damage } }),
+    );
+    w.hero.manaRegen = 0;
+    return w;
+  };
+  /** Mana a press spends after `wait` seconds (from a dodge, or not). */
+  const spent = (dodged: boolean, wait: number) => {
+    const w = caster(0);
+    if (dodged) dodge(w, { x: 1, y: 0 });
+    run(w, wait);
+    const mana = w.hero.mana;
+    press(w, 0);
+    return mana - w.hero.mana;
+  };
+
+  it('the first ability within its seconds of a dodge is free; later, or without one, it pays', () => {
+    const soon = bal.dodge.duration + STEP;
+    expect(spent(true, soon)).toBe(0);
+    expect(spent(false, soon)).toBeGreaterThan(0);
+    expect(spent(true, 1.6)).toBeGreaterThan(0);
+  });
+
+  it("its hits carry the boon's damage", () => {
+    const hit = (damage: number) => {
+      const w = caster(damage);
+      dodge(w, { x: 1, y: 0 });
+      run(w, bal.dodge.duration + STEP);
+      return firstHit([...press(w, 0), ...run(w, 1)], 'skill');
+    };
+    expect(hit(0.25)).toBeCloseTo(hit(0) * 1.25, 6);
   });
 });
