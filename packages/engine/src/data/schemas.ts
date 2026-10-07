@@ -866,7 +866,7 @@ export const BoonEffectSchema = z
     potions: z.literal(true).optional(),
     noPotions: z.literal(true).optional(),
     eliteChance: fraction.optional(),
-    skip: z.number().int().positive().optional(),
+    skip: z.number().int().min(0).optional(), // 0 once `chooseDoor` spends it (`spendSkip`)
     exitRevealed: z.literal(true).optional(),
     shrinesLastDive: z.literal(true).optional(),
     noSlow: z.literal(true).optional(),

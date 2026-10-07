@@ -15,7 +15,7 @@ import { createFloorWorld, type FloorOptions } from '../src/arpg/world.js';
 import { buffSum } from '../src/delve/boons.js';
 import { beginFloor, chooseDoor, heroMaxHp, settleDive, startDive } from '../src/delve/dive.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
-import { createDelveProfile } from '../src/delve/profile.js';
+import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import { emptyHaul, metalAt } from '../src/loot/materials.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgWorld, Drop, HazardEntity } from '../src/types/arpg.js';
@@ -266,6 +266,18 @@ describe('dive.ts', () => {
     expect(Math.abs(some.banked.scrap - 1000 * (1 - (loss - 0.1)))).toBeLessThanOrEqual(1);
     const none = settle([buff({ deathLoss: 0.25 }), buff({ deathLoss: 0.25 })]);
     expect([none.banked.scrap, none.lost!.scrap, none.diveBuffs.length]).toEqual([1000, 0, 2]);
+  });
+
+  it('a spent Deeper Still still saves: the profile after its door parses', () => {
+    const p = startDive(registry, createDelveProfile(registry, 5), 1);
+    const deeper = buff({ skip: 1 }, 'deeper-still');
+    const entered = chooseDoor(
+      registry,
+      { ...p, dive: { ...p.dive!, diveBuffs: [deeper], phase: 'choosing', doorChoices: ['winding'] } },
+      'winding',
+    );
+    const parsed = parseDelveProfile(registry, JSON.parse(JSON.stringify(entered)));
+    expect(parsed && 'profile' in parsed && parsed.profile.dive!.diveBuffs[0].effect.skip).toBe(0);
   });
 
   it('Deeper Still: the next door goes Σ skip further; the skip is spent, the entry stays', () => {

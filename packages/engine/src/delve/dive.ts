@@ -3,6 +3,7 @@ import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
 import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
+import type { Buff } from '../types/boon.js';
 import type { Haul, SettleOutcome } from '../types/crafting.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gear.js';
@@ -373,6 +374,11 @@ export function failFloor(
   return { ...banked, profile: settleDive(registry, dead, 'death') };
 }
 
+/** The dive's boons with every `skip` spent (set to 0; the entry and its other fields stay). */
+function spendSkip(buffs: Buff[]): Buff[] {
+  return buffs.map((b) => (b.effect.skip ? { ...b, effect: { ...b.effect, skip: 0 } } : b));
+}
+
 /** Take one of the offered doors into the next depth (a guided stop's required power-up taken first). */
 export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId: string): DelveProfile {
   const bal = registry.getDelveBalance();
@@ -381,9 +387,10 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
   if (!dive.doorChoices.includes(doorId)) throw new Error(`Door not offered: ${doorId}`);
   const door = registry.getDoor(doorId);
   // Deeper Still (the boons spec's `skip`): the dive's boons add to the door's skip and are spent (each entry stays).
+  // Guided stops never offer boons, so a guided door never skips a depth.
   const skip = buffSum(dive.diveBuffs).skip ?? 0;
   const depth = dive.depth + 1 + (door.mods.skip ?? 0) + skip;
-  const diveBuffs = skip ? dive.diveBuffs.map((b) => (b.effect.skip ? { ...b, effect: { ...b.effect, skip: 0 } } : b)) : dive.diveBuffs;
+  const diveBuffs = skip ? spendSkip(dive.diveBuffs) : dive.diveBuffs;
   const entered: DelveProfile = {
     ...profile,
     bestDepth: Math.max(profile.bestDepth, depth),
