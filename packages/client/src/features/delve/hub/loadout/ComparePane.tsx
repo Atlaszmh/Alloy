@@ -1,7 +1,6 @@
 import { useMemo, type ReactElement } from 'react';
 import {
-  carriedSkills,
-  movesetTransfer,
+  moveAllPreview,
   profileStats,
   salvageYield,
   unsocketMode,
@@ -9,7 +8,7 @@ import {
   type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
-import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
+import { partsText, pullText, useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -23,7 +22,6 @@ import { ItemStatLines } from '../../items/ItemStatLines';
 import { LegendaryBox } from '../../items/LegendaryBox';
 import { MovesetView } from '../../items/MovesetView';
 import { deltaMark } from '../../ItemTile';
-import { SKILL_NAME } from '../../chains/chain-text';
 import { SLOT_LABEL, UPGRADE_EPSILON, formatDelta, manaStyle } from '../../format';
 import type { HubLink } from '../types';
 import { shardName } from '../forge/materials-text';
@@ -69,42 +67,37 @@ export function transferOnto(item: GearItem): boolean {
   const res = useDelveStore.getState().transfer(item.uid);
   if (!res.ok) {
     playSound('combineFail');
-    showToast(res.reason ?? 'Cannot transfer');
+    showToast(res.reason ?? 'Cannot move');
     return false;
   }
   playSound('combineMerge');
   vibrate('success');
   const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
   const moved = partsText(getDelveRegistry(), res.runes, res.destroyed);
-  showToast(`Your moveset moved onto ${item.name}${links}${moved ? ` · ${moved}` : ''}`);
+  showToast(`Your constructs moved onto ${item.name}${links}${moved ? ` · ${moved}` : ''}`);
   return true;
 }
 
 /**
- * What a transfer of your moveset onto `item` leaves: the chains it can't carry (their extra
- * slots come back as Links) and the runes with no socket there, by the pull rule. The compare
- * pane's Transfer and the pad's take sheet both show it.
+ * What Move all onto `item` leaves (the constructs spec §3.3, `moveAllPreview`): the constructs
+ * that go to the bag (yours past its slots, and its own on the chains replaced) and those that
+ * sit dormant there (its class can't express their form). The compare pane's Move all and the
+ * pad's take sheet both show it.
  */
 export function TransferNotes({ worn, item }: { worn: GearItem; item: GearItem }): ReactElement {
   const registry = getDelveRegistry();
-  const unsocket = useDelveStore((s) => s.unsocket);
-  const pull = unsocketMode(registry, unsocket);
-  const transfer = movesetTransfer(registry, worn, item);
-  const leaves = carriedSkills(registry, worn).filter(
-    (s) => !carriedSkills(registry, item).includes(s),
-  );
+  const { toBag, dormant } = moveAllPreview(registry, worn, item);
+  const n = (k: number, what: string) => `${k} ${what}${k === 1 ? '' : 's'}`;
   return (
     <>
-      {leaves.length > 0 && (
+      {toBag.length > 0 && (
         <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-leaves">
-          Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
+          {n(toBag.length, 'construct')} to your bag
         </span>
       )}
-      {transfer.runes.length > 0 && (
-        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-runes">
-          {pull === 'destroy'
-            ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
-            : `${runeNames(registry, transfer.runes)} back to your pouch`}
+      {dormant.length > 0 && (
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-dormant">
+          {n(dormant.length, 'construct')} dormant there: a {item.name} can't express {dormant.length === 1 ? 'its' : 'their'} form
         </span>
       )}
     </>
@@ -159,7 +152,7 @@ export function ComparePane({
     );
 
   const inBag = where === 'bag';
-  const transfer = worn && asIs ? movesetTransfer(registry, worn, item) : null;
+  const transfer = worn && asIs ? moveAllPreview(registry, worn, item) : null;
   // Equip takes a weapon as it is; Transfer is marked by its value as a home.
   const equipCmp = asIs ?? cmp;
   const isUpgrade = !!equipCmp && equipCmp.powerPct > UPGRADE_EPSILON;
@@ -231,9 +224,7 @@ export function ComparePane({
                   <PowerDelta cmp={asIs} />
                 </div>
                 <span className="k-label">
-                  With your moveset · <Price scrap={transfer.scrap} /> to move it
-                  {transfer.sockets > 0 &&
-                    `, its ${transfer.sockets} socket${transfer.sockets === 1 ? '' : 's'} included`}
+                  With your constructs moved here
                 </span>
                 <div data-testid="compare-home">
                   <PowerDelta cmp={cmp} />
@@ -278,13 +269,7 @@ export function ComparePane({
               data-tutorial="loadout.transfer"
               testId="transfer-button"
             >
-              {homeUpgrade ? '▲ ' : ''}Transfer my moveset here · <Price scrap={transfer.scrap} />
-              {transfer.links > 0 && (
-                <>
-                  {' · '}
-                  <Price links={transfer.links} signed />
-                </>
-              )}
+              {homeUpgrade ? '▲ ' : ''}Move all my constructs here
             </Button>
             {worn && <TransferNotes worn={worn} item={item} />}
           </div>

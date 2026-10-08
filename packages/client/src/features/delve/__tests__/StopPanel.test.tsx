@@ -149,29 +149,30 @@ describe('StopPanel (the stop between depths)', () => {
   });
 
   it("adds a slot to a chain at its price; one it can't pay for is off", () => {
-    atStop(['slot'], { links: 1, scrap: 20 });
+    atStop(['slot'], { links: 2, scrap: 40 });
     fireEvent.click(screen.getByTestId('stop-slot'));
+    // The uncommon sword's 3rd Primary slot: 2 Links and 40 scrap (its ceiling).
     expect(screen.getByTestId('stop-slot-primary')).toHaveTextContent(
-      'Primary 1/5 · + a slot · 1 Link · 20 scrap',
+      'Primary 2/5 · + a slot · 2 Links · 40 scrap',
     );
     const basic = screen.getByTestId('stop-slot-basic');
-    expect(basic).toBeDisabled(); // its 4th slot: 3 Links
-    // It says why, in the engine's words.
-    const why = document.getElementById(basic.getAttribute('aria-describedby')!);
-    expect(why).toHaveTextContent('Not enough Links');
+    expect(basic).toBeDisabled(); // at its ceiling of 3: nothing to buy, no price, no reason
+    expect(basic).not.toHaveAttribute('aria-describedby');
     expect(screen.getByTestId('stop-slot-primary')).not.toHaveAttribute('aria-describedby');
-    expect(screen.queryByTestId('stop-slot-defensive')).toBeNull(); // not carried
+    // An uncommon sword starts with a Defensive slot: its 2nd is on offer too.
+    expect(screen.getByTestId('stop-slot-defensive')).toHaveTextContent('Defensive 1/5');
     fireEvent.click(screen.getByTestId('stop-slot-primary'));
-    expect(chains().primary.moves).toHaveLength(2);
+    expect(chains().primary.moves).toHaveLength(3);
     expect(store().profile).toMatchObject({ links: 0, scrap: 0 });
+    expect(store().profile.equipped.weapon!.moveset!.bought).toEqual({ primary: 1 });
   });
 
   it('adjusts one move: a later change replaces an earlier one, at its price', () => {
     const p = store().profile;
-    // A two-slot Primary holding one move: a free builder would offer to add one.
+    // A three-slot Primary holding two moves: a free builder would offer to add one.
     const sword = p.equipped.weapon!;
     const moveset = movesetOf(registry, sword);
-    const weapon = { ...sword, moveset: { ...moveset, slots: { ...moveset.slots, primary: 2 } } };
+    const weapon = { ...sword, moveset: { ...moveset, slots: { ...moveset.slots, primary: 3 } } };
     atStop(['move'], {
       manaDust: 20,
       stats: { ...p.stats, dives: 1 },
@@ -181,12 +182,12 @@ describe('StopPanel (the stop between depths)', () => {
     expect(screen.getByTestId('stop-move-take')).toBeDisabled();
     expect(screen.queryByTestId('move-add')).toBeNull();
     expect(screen.queryByTestId('attune-fire')).toBeNull(); // no attunement bars either
-    // A blow of the basic chain, then the Primary's Bolt: only the Bolt's change is taken.
+    // A blow of the basic chain, then the Primary's first Strike: only the Strike's change is taken.
     fireEvent.click(screen.getByTestId('chain-skill-basic'));
     fireEvent.click(screen.getByTestId('kind-heavy'));
     fireEvent.click(screen.getByTestId('chain-skill-primary'));
     fireEvent.click(screen.getByTestId('form-lance'));
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('medium Fire Lance');
     expect(screen.getByTestId('stop-move-take')).toHaveTextContent(
       "Change Primary's move 1 · 5 Mana Dust",
     );
@@ -246,7 +247,7 @@ describe('StopPanel (the stop between depths)', () => {
     expect(store().profile.scrap).toBe(0);
   });
 
-  /** At a stop offering a rune: the sword's Bolt has one open, empty socket. */
+  /** At a stop offering a rune: the sword's first Strike has one open, empty socket. */
   function atRuneStop() {
     const p = store().profile;
     const sword = p.equipped.weapon!;
@@ -263,7 +264,7 @@ describe('StopPanel (the stop between depths)', () => {
     });
     fireEvent.click(screen.getByTestId('stop-rune'));
     const move = screen.getByTestId('stop-rune-move-primary-0');
-    expect(move).toHaveTextContent('Primary · light Fire Bolt');
+    expect(move).toHaveTextContent('Primary · medium Fire Strike');
     fireEvent.click(within(move).getByRole('button', { name: 'Socket 1: empty' }));
     return within(screen.getByTestId('rune-picker'));
   }
@@ -272,11 +273,11 @@ describe('StopPanel (the stop between depths)', () => {
     const picker = atRuneStop();
     // Inline, inside the stop's picker: no sheet over the screen.
     expect(screen.getByTestId('stop-picker')).toContainElement(screen.getByTestId('rune-picker'));
-    // Widen doesn't fit a Bolt.
-    expect(picker.queryByRole('button', { name: /^Widen/ })).toBeNull();
-    fireEvent.click(picker.getByRole('button', { name: 'Split I ×1' }));
-    expect(chains().primary.moves[0].runes).toEqual([{ id: 'split', tier: 1 }]);
-    expect(pouchCount(store().profile.runes, { id: 'split', tier: 1 })).toBe(0);
+    // Split doesn't fit a Strike.
+    expect(picker.queryByRole('button', { name: /^Split/ })).toBeNull();
+    fireEvent.click(picker.getByRole('button', { name: 'Widen I ×1' }));
+    expect(chains().primary.moves[0].runes).toEqual([{ id: 'widen', tier: 1 }]);
+    expect(pouchCount(store().profile.runes, { id: 'widen', tier: 1 })).toBe(0);
     expect(store().profile.dive!.stop!.taken).toBe(true);
     expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
     expect(screen.getByText('Socket a rune: done')).toBeInTheDocument();
@@ -286,8 +287,8 @@ describe('StopPanel (the stop between depths)', () => {
   it("prices a rune in the saved chain's payment, eased by the move's attunement", () => {
     pricedRegistry();
     const picker = atRuneStop();
-    // Split I's 0.27, eased 6% by the starting sword's and chest's 2 Fire.
-    expect(picker.getByTestId('rune-pick-split')).toHaveTextContent('+25% cost');
+    // Widen I's 0.12, eased 6% by the starting sword's and chest's 2 Fire.
+    expect(picker.getByTestId('rune-pick-widen')).toHaveTextContent('+11% cost');
   });
 
   it("Escape closes the rune picker, not the stop's", () => {

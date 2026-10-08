@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
-import { setChain } from '../src/delve/moveset.js';
+import { OPEN_SKILL_TEXT, setChain } from '../src/delve/moveset.js';
 import { createDelveProfile, parseDelveProfile, unequipSlot } from '../src/delve/profile.js';
 import { startDive } from '../src/delve/dive.js';
 import { defaultMoveset } from '../src/loot/moveset.js';
@@ -10,17 +10,25 @@ import { armed } from './fixtures/carries.js';
 
 const registry = createDefaultRegistry();
 const json = (x: unknown) => JSON.parse(JSON.stringify(x));
+/** `x` without its constructs' uids (the shape a default moveset has before it is minted). */
+const bare = (x: unknown) =>
+  JSON.parse(
+    JSON.stringify(x, (k, v) =>
+      k === 'uid' && typeof v === 'string' && v.startsWith('c') ? undefined : v,
+    ),
+  );
 
-describe('chains on the weapon (save v6)', () => {
-  it("a new profile's common sword carries its base moveset in the weapon's element: the basic chain", () => {
+describe('chains on the weapon', () => {
+  it("a new profile's common sword holds its slot table's defaults in the weapon's element: the basic chain and a two-slot Primary, minted", () => {
     const p = createDelveProfile(registry, 1);
-    expect(p.version).toBe(13);
+    expect(p.version).toBe(14);
     const sword = p.equipped.weapon!;
-    expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'fire'));
-    expect(sword.moveset!.slots).toEqual({ basic: 3 });
+    expect(bare(sword.moveset)).toEqual(defaultMoveset(registry, sword, 'fire'));
+    expect(sword.moveset!.slots).toEqual({ basic: 3, primary: 2 });
+    expect(sword.moveset!.chains.primary!.moves.every((m) => /^c\d+$/.test(m.uid!))).toBe(true);
   });
 
-  it('setChain takes a valid chain for a skill the weapon carries, and it round-trips', () => {
+  it('setChain takes a valid chain for a skill the weapon has slots for, and it round-trips', () => {
     const chain: Chain = {
       moves: [
         { kind: 'light', form: 'burst', elements: ['fire', 'nature'] },
@@ -29,17 +37,17 @@ describe('chains on the weapon (save v6)', () => {
       payment: 'cast',
     };
     const roomy = withChains(armed(registry, createDelveProfile(registry, 1)), { primary: chain });
-    let p = setChain(registry, roomy, 'primary', chain).profile;
+    let p = setChain(registry, roomy, 'primary', chainsOf(roomy).primary!).profile;
     p = setChain(registry, p, 'basic', [{ kind: 'heavy', element: 'nature' }]).profile;
-    expect(chainsOf(p).primary).toEqual(chain);
-    expect(chainsOf(p).basic).toEqual([{ kind: 'heavy', element: 'nature' }]);
-    expect(p.equipped.weapon!.moveset!.slots).toEqual({ basic: 3, primary: 2 });
+    expect(bare(chainsOf(p).primary)).toEqual(chain);
+    expect(bare(chainsOf(p).basic)).toEqual([{ kind: 'heavy', element: 'nature' }]);
+    expect(p.equipped.weapon!.moveset!.slots).toEqual({ basic: 3, primary: 2, defensive: 1 });
     expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p });
   });
 
-  it('setChain refuses no moves, more than the slots, an unknown kind, a form from another slot, bad elements or payment', () => {
+  it('setChain refuses more than the slots, no blow, an unknown kind, a form from another slot or class, bad elements or payment', () => {
     const fresh = armed(registry, createDelveProfile(registry, 1));
-    const move: Move = { kind: 'medium', form: 'bolt', elements: ['fire'] };
+    const move: Move = { kind: 'medium', form: 'lance', elements: ['fire'] };
     const ok: Chain = { moves: [move], payment: 'mana' };
     const p = withChains(fresh, {
       basic: Array(5).fill({ kind: 'light', element: 'fire' }),
@@ -47,11 +55,12 @@ describe('chains on the weapon (save v6)', () => {
     });
     const set = (chain: Chain, profile = p) => setChain(registry, profile, 'primary', chain).reason;
     expect(set(ok)).toBeUndefined();
-    expect(set({ ...ok, moves: [] })).toBe('A chain holds 1 to 5 moves');
-    expect(set({ ...ok, moves: Array(6).fill(move) })).toBe('A chain holds 1 to 5 moves');
-    expect(set({ ...ok, moves: [move, move] }, fresh)).toBe('A chain holds 1 to 1 moves');
+    expect(set({ ...ok, moves: [] })).toBeUndefined(); // an empty ability chain plays as none
+    expect(set({ ...ok, moves: Array(6).fill(move) })).toBe('A chain holds 0 to 5 moves');
+    expect(set({ ...ok, moves: [move, move, move] }, fresh)).toBe('A chain holds 0 to 2 moves');
     expect(set({ ...ok, moves: [{ ...move, kind: 'huge' as never }] })).toBe('Bad kind huge');
     expect(set({ ...ok, moves: [{ ...move, form: 'nova' }] })).toBe('Nova is not a primary form');
+    expect(set({ ...ok, moves: [{ ...move, form: 'bolt' }] })).toBe("A sword can't express Bolt");
     for (const elements of [[], ['fire', 'fire'], ['fire', 'frost', 'storm']] as const)
       expect(set({ ...ok, moves: [{ ...move, elements: [...elements] }] })).toBe(
         'Pick one or two different elements',
@@ -63,10 +72,8 @@ describe('chains on the weapon (save v6)', () => {
     expect(
       setChain(registry, p, 'basic', [{ kind: 'light', element: 'gold' as never }]).reason,
     ).toBe('Unknown element');
-    const ward: Chain = { moves: [{ ...move, form: 'ward' }], payment: 'mana' };
-    expect(setChain(registry, p, 'defensive', ward).reason).toBe(
-      'Carried by rare weapons and better',
-    );
+    const nova: Chain = { moves: [{ ...move, form: 'nova' }], payment: 'charge' };
+    expect(setChain(registry, p, 'ultimate', nova).reason).toBe(OPEN_SKILL_TEXT);
     expect(set(ok, unequipSlot(registry, p, 'weapon'))).toBe('Equip a weapon to build your moves');
   });
 

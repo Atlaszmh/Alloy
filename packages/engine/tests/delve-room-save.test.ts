@@ -9,9 +9,9 @@ import { registry } from './fixtures/arena.js';
 const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 
 describe('save v12', () => {
-  it('a new save is version 13 and round-trips, mid-dive too', () => {
+  it('a new save is version 14 and round-trips, mid-dive too', () => {
     const p = createDelveProfile(registry, 4, { primary: 'fire' });
-    expect(p.version).toBe(13);
+    expect(p.version).toBe(14);
     expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p });
     const diving = startDive(registry, p, 1);
     expect(parseDelveProfile(registry, json(diving))).toEqual({ profile: diving });

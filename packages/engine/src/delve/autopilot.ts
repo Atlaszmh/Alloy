@@ -43,13 +43,21 @@ import {
   salvageItems,
   upgradeGear,
 } from './profile.js';
-import { awaken, buyShard, forge, hone, refine } from './crafting.js';
-import { addSlot, movesOf, setChain, setChains, transferMoveset, withMove } from './moveset.js';
+import { buyShard, forge, hone, openSkill, refine } from './crafting.js';
+import { addSlot, movesOf, setChain, setChains, withMove } from './moveset.js';
 import { fuseRunes, openSocket } from './runes.js';
-import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
+import { pouchCount, runeFits, socketsOf } from '../loot/runes.js';
+import { MAX_SOCKETS } from '../types/rune.js';
 import { alcoveOffers, takeAlcove, takeStop, type StopAction } from './stops.js';
 import { claimQuest, questStates } from './quests.js';
-import { MAX_CHAIN, MOVE_KINDS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
+import {
+  ABILITY_SLOTS,
+  MAX_CHAIN,
+  MOVE_KINDS,
+  type Blow,
+  type ChainSkill,
+  type Move,
+} from '../types/ability.js';
 import { RUNE_TIERS, type RuneRef, type RuneTarget, type RuneTier } from '../types/rune.js';
 import type { EconomyDive } from './economy.js';
 import {
@@ -321,14 +329,13 @@ function cheapestUpgrade(
 }
 
 /**
- * Move the moveset onto the bag weapon that makes the best home (valued with
- * it moved: `compareItem`'s default), when that raises Power and it can pay.
+ * Wear the bag weapon that raises Power most as it is (its own constructs;
+ * `equipBest` leaves weapons alone). D1 rewires to moveAll (B2's op): until
+ * then the old weapon's bought slots and runes stay on it in the bag.
  */
 function transferBest(registry: DataRegistry, p: DelveProfile): DelveProfile {
-  const uid = bestGain(registry, p, 'home', (item) => item.slot === 'weapon');
-  if (!uid) return p;
-  const res = transferMoveset(registry, p, uid);
-  return res.ok ? res.profile : p;
+  const uid = bestGain(registry, p, 'asIs', (item) => item.slot === 'weapon');
+  return uid ? equipItem(registry, p, uid) : p;
 }
 
 /**
@@ -451,7 +458,7 @@ function bestRune(
  * cap, while it can pay.
  */
 function openSockets(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  const cap = socketCap(registry, profile.equipped.weapon?.rarity ?? null);
+  const cap = profile.equipped.weapon ? MAX_SOCKETS : 0;
   let p = profile;
   for (;;) {
     const power = profilePower(registry, p);
@@ -636,12 +643,15 @@ function takeGuidedStop(registry: DataRegistry, profile: DelveProfile): DelvePro
   return best?.profile ?? profile;
 }
 
-/** Awaken the rare weapon it wields when it can pay and Power rises (see the tutorial spec's Awaken). */
-function awakenWeapon(registry: DataRegistry, p: DelveProfile): DelveProfile {
-  const weapon = p.equipped.weapon;
-  const res = weapon && awaken(registry, p, weapon.uid);
-  if (!res?.ok) return p;
-  return profilePower(registry, res.profile) > profilePower(registry, p) ? res.profile : p;
+/** Open a skill on the weapon it wields (the constructs spec §3.2, Awaken generalised): each ability slot in order, when it can pay and Power rises. */
+function awakenWeapon(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  for (const skill of ABILITY_SLOTS) {
+    const weapon = p.equipped.weapon;
+    const res = weapon && openSkill(registry, p, weapon.uid, skill);
+    if (res?.ok && profilePower(registry, res.profile) > profilePower(registry, p)) p = res.profile;
+  }
+  return p;
 }
 
 /**
@@ -886,7 +896,7 @@ function honeGear(registry: DataRegistry, profile: DelveProfile): DelveProfile {
 
 /** The stockpile as a haul: materials, scrap, Mana Dust, Links and runes. */
 function stockOf(p: DelveProfile): Haul {
-  return { ...p.materials, scrap: p.scrap, dust: p.manaDust, links: p.links, runes: p.runes };
+  return { ...p.materials, scrap: p.scrap, dust: p.manaDust, links: p.links, runes: p.runes, constructs: [] };
 }
 
 /** `h` with every count passed through `f`. */
@@ -904,6 +914,7 @@ function mapHaul(h: Haul, f: (n: number) => number): Haul {
     dust: f(h.dust),
     links: f(h.links),
     runes: tiers(h.runes),
+    constructs: [],
   };
 }
 
@@ -1023,9 +1034,10 @@ function lessonOp(
       const from = metals[metals.findIndex((m) => m.id === f.metal) - 1];
       return from ? refine(registry, p, { kind: 'metal', metal: from.id }).profile : p;
     }
-    case 'transfer': {
+    case 'moveAll': {
+      // D1 rewires to moveAll (B2's op): the step is skipped meanwhile.
       const uid = bestGain(registry, p, 'home', (i) => weapons.includes(i)) ?? weapons[0]?.uid;
-      return uid ? transferMoveset(registry, p, uid).profile : p;
+      return uid ? p : p;
     }
     case 'hone': {
       const worn = GEAR_SLOTS.flatMap((s) => p.equipped[s] ?? []).filter((i) => i.affixes.length);

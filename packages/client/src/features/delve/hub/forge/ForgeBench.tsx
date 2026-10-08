@@ -253,10 +253,11 @@ export function ForgeBench({
         ...shards.map((s) => ({ kind: 'shard' as const, ...s })),
       ]
     : [];
+  // Each skill's slots against its ceiling (the constructs spec §3.1), the skills it starts with.
   const extras = preview?.weapon
-    ? Object.entries(preview.weapon.slots)
-        .filter(([, n]) => n > 0)
-        .map(([s, n]) => `${SKILL_NAME[s as keyof typeof SKILL_NAME]} +${n}`)
+    ? (Object.entries(preview.weapon.slots) as [keyof typeof SKILL_NAME, [number, number]][])
+        .filter(([, [n]]) => n > 0)
+        .map(([s, [n, ceiling]]) => `${SKILL_NAME[s]} ${n}/${ceiling}`)
     : [];
   // The guided start's trail: the Lines are done once one holds a shard, or at once when no
   // shard held fits the item, or it rolls no lines (the forge needs none), so the marker goes on
@@ -540,8 +541,7 @@ export function ForgeBench({
               )}
               {preview.weapon && (
                 <p className="k-note" data-testid="forge-weapon">
-                  Carries {preview.weapon.carries.map((s) => SKILL_NAME[s]).join(', ')}
-                  {extras.length > 0 && ` · extra slots: ${extras.join(', ')}`}
+                  {preview.weapon.class === 'melee' ? 'Melee' : 'Ranged'} · slots: {extras.join(', ')}
                   {preview.weapon.sockets > 0 &&
                     ` · ${preview.weapon.sockets} open socket${preview.weapon.sockets === 1 ? '' : 's'}`}
                 </p>

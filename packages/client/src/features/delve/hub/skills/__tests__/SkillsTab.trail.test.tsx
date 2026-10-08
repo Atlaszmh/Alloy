@@ -65,7 +65,8 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     expect(screen.getByTestId('chain-skill-primary')).toHaveAttribute('data-tutorial', 'skills.primary');
     expect(marker()).toEqual(['skills.addSlot', 'add-slot']);
     fireEvent.click(screen.getByTestId('add-slot'));
-    expect(screen.getByTestId('add-slot')).toHaveAttribute('data-tutorial-done', 'true');
+    // At its ceiling (an uncommon sword's Primary stops at 3), Add slot is gone: the trail passes it.
+    expect(screen.queryByTestId('add-slot')).toBeNull();
 
     // The new last move: its card, then its editor's Elements row.
     expect(marker()).toEqual(['skills.card:last', 'move-2']);

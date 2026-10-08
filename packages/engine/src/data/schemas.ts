@@ -100,6 +100,11 @@ function perKind<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ light: schema, medium: schema, heavy: schema, hold: schema });
 }
 
+/** A skill's slots on a weapon rarity: `[start, ceiling]`, the ceiling at least the start (the constructs spec §3.2). */
+const SlotRangeSchema = z
+  .tuple([z.number().int().min(0).max(MAX_CHAIN), z.number().int().min(0).max(MAX_CHAIN)])
+  .refine(([start, ceiling]) => ceiling >= start, 'a ceiling is at least its start');
+
 function perRarity<T extends z.ZodTypeAny>(schema: T) {
   return z.object({
     common: schema,
@@ -186,6 +191,31 @@ export const DelveDataSchema = z.object({
         defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN).optional(),
         tempo: z.number().positive().optional(),
         sway: z.enum(['alternate', 'orbit']).optional(),
+        // Weapons only (every weapon has both): its class and its cast style (the constructs spec §2.1, §4.1).
+        class: z.enum(['melee', 'ranged']).optional(),
+        style: z
+          .object({
+            name: z.string().min(1),
+            // The trait as the player reads it ("Shots pierce one foe"): the item header's line.
+            text: z.string().min(1),
+            numbers: z
+              .object({
+                windup: z.number().positive(),
+                cooldown: z.number().positive(),
+                power: z.number().positive(),
+                range: z.number().positive(),
+                radius: z.number().positive(),
+                speed: z.number().positive(),
+                duration: z.number().positive(),
+              })
+              .strict(),
+            motion: z.enum(['none', 'dart', 'step', 'wade', 'plant', 'sway', 'orbit', 'back']),
+            // `KnobsSchema` is declared below: lazy, so the file keeps its order.
+            trait: z.lazy(() => KnobsSchema),
+            look: z.enum(['blade', 'crescent', 'hatchet', 'stone', 'orb', 'spark', 'arrow']),
+          })
+          .strict()
+          .optional(),
         weight: z.number().positive(),
         implicits: z.array(
           z.object({
@@ -205,6 +235,13 @@ export const DelveDataSchema = z.object({
             path: [i, 'tempo'],
             message: `${b.id}: ${b.slot === 'weapon' ? 'a weapon base needs a tempo' : 'only a weapon base has a tempo'}`,
           });
+        for (const key of ['class', 'style'] as const)
+          if ((b.slot === 'weapon') !== (b[key] !== undefined))
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, key],
+              message: `${b.id}: ${b.slot === 'weapon' ? `a weapon base needs a ${key}` : `only a weapon base has a ${key}`}`,
+            });
       }),
     ),
   affixes: z
@@ -757,6 +794,12 @@ export const KnobsSchema = z
     manaOnHit: z.number().min(0),
     guardOnLand: z.number().min(0),
     stackTime: z.number().min(0),
+    // The constructs spec: Detonate's blast power (§2.3), and the cast styles' traits (§4.2).
+    detonate: z.number().min(0),
+    critBonus: z.number().min(0).max(1),
+    cleave: z.number().min(0),
+    homing: z.number().min(0),
+    stepBonus: z.number().min(0),
   })
   .partial()
   .strict();
@@ -969,15 +1012,31 @@ export const ArpgDataSchema = z.object({
           'lance',
           'burst',
           'strike',
+          'whirl',
           'ward',
           'armor',
           'surge',
           'blink',
+          'repel',
           'nova',
           'barrage',
           'maelstrom',
+          'onslaught',
         ]),
         slot: z.enum(['primary', 'defensive', 'ultimate']),
+        // The weapon class that expresses it, or both (the constructs spec §2.1).
+        class: z.enum(['melee', 'ranged', 'both']),
+        // A shared form's melee version: what differs when a melee weapon casts it (B1 fills the rows).
+        melee: z
+          .object({
+            range: z.number().positive().optional(),
+            radius: z.number().positive().optional(),
+            motion: z.number().optional(),
+            speed: z.number().positive().optional(),
+            text: z.string().optional(),
+          })
+          .strict()
+          .optional(),
         name: z.string(),
         icon: z.string(),
         text: z.string(),
@@ -995,7 +1054,7 @@ export const ArpgDataSchema = z.object({
         countByKind: perKind(z.number().int().positive()).optional(),
       }),
     )
-    .length(12),
+    .length(15),
   elementTraits: perMana(z.object({ knobs: KnobsSchema, text: z.string(), defensive: z.string() })),
   fusions: z
     .array(
@@ -1036,9 +1095,7 @@ const StartDepthsSchema = z
 export const CraftingBalanceSchema = z.object({
   forgeScrap: perRarity(z.number().min(0)),
   offPairDust: z.number().int().min(0),
-  weaponExtras: perRarity(
-    z.object({ slots: z.number().int().min(0), sockets: z.number().int().min(0) }),
-  ),
+  weaponExtras: perRarity(z.object({ slots: z.number().int().min(0) })),
   honeScrap: z.number().min(0),
   honeGrowth: z.number().min(1),
   imprintScrap: perRarity(z.number().min(0)),
@@ -1059,11 +1116,6 @@ export const CraftingBalanceSchema = z.object({
   salvageExtraShard: z.number().min(0).max(1),
   shardBench: z.object({ scrap: z.number().min(0), dust: z.number().min(0) }),
   deathLoss: z.number().min(0).max(1),
-  awaken: z.object({
-    epicFlux: z.number().int().min(0),
-    links: z.number().int().min(0),
-    scrap: z.number().min(0),
-  }),
 });
 
 /** `balance.json → delve.drops` (see the crafting spec). */
@@ -1364,21 +1416,27 @@ const DelveBalanceSchema = z.object({
     .refine((c) => c.holdStages[0] < c.holdStages[1], 'holdStages must rise')
     .refine((c) => c.holdMax >= c.holdTime, 'holdMax must be at least holdTime'),
   movesets: z.object({
-    // Every weapon swings a basic chain; each skill once.
-    carries: perRarity(
-      z
-        .array(z.enum(['basic', 'primary', 'defensive', 'ultimate']))
-        .refine((s) => s.includes('basic'), 'every weapon carries basic')
-        .refine((s) => new Set(s).size === s.length, 'each skill once'),
+    // Each rarity's slots by skill, `[start, ceiling]` (the constructs spec §3.2): the Basic's
+    // start 0 means the weapon's string; a ceiling never below its start nor the rarity below's,
+    // and the legendary's all 5.
+    slots: perRarity(
+      z.object({
+        basic: SlotRangeSchema,
+        primary: SlotRangeSchema,
+        defensive: SlotRangeSchema,
+        ultimate: SlotRangeSchema,
+      }),
     )
       .refine(
-        (c) =>
-          RARITY_ORDER.slice(1).every((r, i) => c[RARITY_ORDER[i]].every((s) => c[r].includes(s))),
-        'a rarity carries every chain the rarity below it does',
+        (s) =>
+          RARITY_ORDER.slice(1).every((r, i) =>
+            CHAIN_SKILLS.every((k) => s[r][k][1] >= s[RARITY_ORDER[i]][k][1]),
+          ),
+        'a ceiling never falls with rarity',
       )
       .refine(
-        (c) => CHAIN_SKILLS.every((s) => c.legendary.includes(s)),
-        'the legendary carries all four chains',
+        (s) => CHAIN_SKILLS.every((k) => s.legendary[k][1] === MAX_CHAIN),
+        `the legendary's ceilings are all ${MAX_CHAIN}`,
       ),
     extraSlots: perRarity(
       z
@@ -1388,12 +1446,30 @@ const DelveBalanceSchema = z.object({
     // By the new slot's position: the 2nd slot's price first, the last slot's last.
     slotLinks: z.array(z.number().int().min(0)).length(MAX_CHAIN - 1),
     slotScrap: z.array(z.number().int().min(0)).length(MAX_CHAIN - 1),
+    // Open a skill (a skill's first slot), by the weapon's rarity: flux by grade, Links and scrap.
+    openSkill: perRarity(
+      z.object({
+        flux: z
+          .object({
+            uncommon: z.number().int().min(0),
+            magic: z.number().int().min(0),
+            rare: z.number().int().min(0),
+            epic: z.number().int().min(0),
+          })
+          .partial()
+          .strict(),
+        links: z.number().int().min(0),
+        scrap: z.number().min(0),
+      }),
+    ),
     editDust: z.number().int().min(0),
     elementDust: z.number().int().min(0),
-    transferScrap: z.number().int().min(0),
+    // Mana Dust salvaging a construct gives (the constructs spec §3.3 gives none: 0 as shipped).
+    salvageDust: z.number().int().min(0),
   }),
   runes: z.object({
-    socketCap: perRarity(z.number().int().min(0).max(MAX_SOCKETS)),
+    // Chance a weapon drop's open socket holds a rune, by rarity (the constructs spec §3.5).
+    runeChance: perRarity(z.number().min(0).max(1)),
     // By the sockets the move already has: the first socket's price first.
     // At least 1: a removed move gives back a flat Link per socket.
     socketLinks: z.array(z.number().int().min(1)).length(MAX_SOCKETS),

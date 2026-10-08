@@ -1,7 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { AbilityPayment, Blow, FormId, KnobsData, Move } from '../types/ability.js';
 import type { HeroStats } from '../types/delve.js';
-import type { Rarity } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import {
   MAX_SOCKETS,
@@ -189,11 +188,6 @@ export function loadText(registry: DataRegistry, load: number, payment?: Ability
   return `${pct(load)} cost`;
 }
 
-/** Most sockets a move may open on a weapon of `rarity` (unarmed, null: 0). */
-export function socketCap(registry: DataRegistry, rarity: Rarity | null): number {
-  return rarity ? registry.getDelveBalance().runes.socketCap[rarity] : 0;
-}
-
 /** The price of a move's next socket when it has `open`; null at `MAX_SOCKETS`. */
 export function socketPrice(
   registry: DataRegistry,
@@ -238,4 +232,4 @@ export function socketsOf(m: Move | Blow): (RuneRef | null)[] {
 }
 
 export { rollRuneDrop, runeTierAt } from './drops.js';
-export { rollSockets, weaponParts } from './moveset.js';
+export { rollSocketedRunes, rollSockets, weaponParts } from './moveset.js';

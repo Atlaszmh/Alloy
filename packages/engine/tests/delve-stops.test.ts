@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { takeBestStop } from '../src/delve/autopilot.js';
 import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
-import { addSlot } from '../src/delve/moveset.js';
+import { OPEN_SKILL_TEXT, addSlot } from '../src/delve/moveset.js';
 import {
   createDelveProfile,
   equipItem,
@@ -110,14 +110,14 @@ describe('the stop after a cleared depth', () => {
     });
     const broke = { ...p, links: 0, scrap: 0 };
     expect(stopKinds(registry, broke)).not.toContain('slot');
-    expect(stopKinds(registry, banking(1, 20, broke))).toContain('slot');
-    // The slot's Link and 20 scrap: the banked Link and 15 scrap, then 5 of the stockpile's.
-    const res = takeStop(registry, banking(1, 15, { ...p, links: 2, scrap: 100 }), {
+    expect(stopKinds(registry, banking(2, 40, broke))).toContain('slot');
+    // The 3rd Primary slot's 2 Links and 40 scrap: the banked 2 Links and 15 scrap, then 25 of the stockpile's.
+    const res = takeStop(registry, banking(2, 15, { ...p, links: 2, scrap: 100 }), {
       kind: 'slot',
       skill: 'primary',
     });
     expect(res.ok).toBe(true);
-    expect(res.profile).toMatchObject({ links: 2, scrap: 95 });
+    expect(res.profile).toMatchObject({ links: 2, scrap: 75 });
     expect(res.profile.dive!.banked).toMatchObject({ links: 0, scrap: 0 });
     expect(res.profile.dive!.stop!.taken).toBe(true);
   });
@@ -169,8 +169,9 @@ describe('takeStop', () => {
   it('adds a slot, adjusts one move, or upgrades an item, each at its normal price', () => {
     const p = { ...atStop(hero(), ALL), links: 5, scrap: 1000, manaDust: 50 };
     const slot = takeStop(registry, p, { kind: 'slot', skill: 'primary' });
-    expect(slot.profile).toMatchObject({ links: 4, scrap: 980 });
-    expect(slot.profile.equipped.weapon!.moveset!.slots.primary).toBe(2);
+    expect(slot.profile).toMatchObject({ links: 3, scrap: 960 });
+    expect(slot.profile.equipped.weapon!.moveset!.slots.primary).toBe(3);
+    expect(slot.profile.equipped.weapon!.moveset!.bought).toEqual({ primary: 1 });
     const bolt = chainsOf(p).primary!.moves[0];
     const move = takeStop(registry, p, {
       kind: 'move',
@@ -243,11 +244,11 @@ describe('takeStop', () => {
       expect(at(0, bad as never)).toBe('Change the move');
     const nothing = takeStop(registry, moved, {
       kind: 'move',
-      skill: 'defensive',
+      skill: 'ultimate',
       index: 0,
-      move: { kind: 'medium', form: 'ward', elements: ['fire'] },
+      move: { kind: 'medium', form: 'nova', elements: ['fire'] },
     });
-    expect(nothing.reason).toBe('Carried by rare weapons and better');
+    expect(nothing.reason).toBe(OPEN_SKILL_TEXT);
     expect(takeStop(registry, moved, { kind: 'equip', uid: 'nope' }).reason).toBe(
       'Item not in bag: nope',
     );
@@ -379,13 +380,13 @@ describe('the autopilot at a stop', () => {
 
   it('else adds an affordable slot, the Primary first; else skips', () => {
     const p = { ...atStop(hero(), stopOf('slot', 'move')), links: 5, scrap: 1000 };
-    expect(takeBestStop(registry, p).equipped.weapon!.moveset!.slots.primary).toBe(2);
+    expect(takeBestStop(registry, p).equipped.weapon!.moveset!.slots.primary).toBe(3);
     const both = { ...atStop(hero(), stopOf('slot', 'upgrade')), links: 5, scrap: 1000 };
     const upgraded = takeBestStop(registry, both); // an upgrade before a slot
     const { weapon, chest } = upgraded.equipped;
     expect(weapon!.upgrade + chest!.upgrade).toBe(1);
     expect(upgraded).toMatchObject({ links: 5 });
-    expect(weapon!.moveset!.slots.primary).toBe(1);
+    expect(weapon!.moveset!.slots.primary).toBe(2);
     const broke = { ...atStop(hero(), stopOf('move', 'upgrade')), scrap: 0 };
     expect(takeBestStop(registry, broke)).toBe(broke);
   });

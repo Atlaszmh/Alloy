@@ -508,7 +508,7 @@
       "objective": "Transfer your moveset",
       "highlight": "loadout.transfer",
       "trail": ["loadout.bag:weapon.rare", "loadout.transfer"],
-      "trigger": { "type": "transfer", "filter": { "rarity": "rare" }, "count": 1 }
+      "trigger": { "type": "moveAll", "filter": { "rarity": "rare" }, "count": 1 }
     },
     {
       "id": "l2-hone",

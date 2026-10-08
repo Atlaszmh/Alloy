@@ -351,10 +351,10 @@ describe('the aim marker of a key or button held to aim', () => {
   const aiming = { slot: 0, since: 0, at: { x: 1, y: 1 } };
 
   it("none for a skill the weapon doesn't carry", () => {
-    // An uncommon sword: no Defensive.
+    // An uncommon sword: no Ultimate.
     const hero = armed(createDelveProfile(registry, 99));
     const w = beginFloor(registry, startDive(registry, hero, 1));
-    expect(aimView(w, { ...aiming, slot: 1 }, point, 1000)).toBeNull();
+    expect(aimView(w, { ...aiming, slot: 2 }, point, 1000)).toBeNull();
     expect(aimView(w, aiming, point, 1000)).toMatchObject({ marker: 'line' });
   });
 
@@ -589,11 +589,11 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
   });
 
   it("the pad's button of a skill the weapon doesn't carry casts nothing", () => {
-    // An uncommon sword: no Defensive.
+    // An uncommon sword: no Ultimate.
     const hero = armed(createDelveProfile(registry, 99));
     const w = beginFloor(registry, startDive(registry, hero, 1));
     const input = createArenaInput();
-    expect(frameInput(registry, w, input, pad({ cast: [1] }), padMemory(), opts).cast).toBeNull();
+    expect(frameInput(registry, w, input, pad({ cast: [2] }), padMemory(), opts).cast).toBeNull();
     expect(frameInput(registry, w, input, pad({ cast: [0] }), padMemory(), opts).cast).toEqual({
       slot: 0,
       aim: null,

@@ -1,12 +1,12 @@
 import type { DataRegistry } from '../../src/data/registry.js';
 import { defaultMoveset } from '../../src/loot/moveset.js';
+import { mintMoveset } from '../../src/delve/profile.js';
 import type { DelveProfile } from '../../src/types/delve.js';
 import type { GearItem, Rarity } from '../../src/types/gear.js';
 
 /**
- * A new save's common sword carries the basic chain alone (see the tutorial
- * spec's carries): a test of the Primary arms the hero first, as its first
- * forge would.
+ * A test's weapon of another rarity: its slot table's defaults (the constructs
+ * spec §3.2), its constructs minted uids when it goes on a profile (`armed`).
  */
 
 /** Weapon `w` made `rarity` (uncommon by default), holding that rarity's base moveset in its mana. */
@@ -25,5 +25,6 @@ export function armed(
   rarity: Rarity = 'uncommon',
 ): DelveProfile {
   const weapon = armedWeapon(registry, p.equipped.weapon!, rarity);
-  return { ...p, equipped: { ...p.equipped, weapon } };
+  const [moveset, q] = mintMoveset(p, weapon.moveset!);
+  return { ...q, equipped: { ...p.equipped, weapon: { ...weapon, moveset } } };
 }

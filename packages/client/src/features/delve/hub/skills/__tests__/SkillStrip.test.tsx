@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
-import { carriedByText, defaultMoveset, type ChainSkill } from '@alloy/engine';
+import { OPEN_SKILL_TEXT, defaultMoveset, type ChainSkill } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
@@ -28,7 +28,10 @@ function roomy() {
   const slots = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
   store().setProfile({
     ...p,
-    equipped: { ...p.equipped, weapon: { ...weapon, moveset: { chains: moveset.chains, slots } } },
+    equipped: {
+      ...p.equipped,
+      weapon: { ...weapon, moveset: { chains: moveset.chains, slots, bought: {} } },
+    },
   });
 }
 
@@ -60,15 +63,15 @@ describe('the skill strip', () => {
     expect(tab('basic').textContent).toMatch(/^Basic\s*3 of 5 · free$/);
   });
 
-  it('an uncarried skill is a dimmed tab whose line says what carries it; it can still be chosen', () => {
-    renderSkills(); // the new save's common sword: the Basic alone
-    for (const s of ['primary', 'defensive', 'ultimate'] as const) {
-      const line = within(tab(s)).getByText(carriedByText(registry, s));
+  it('a skill with no slot is a dimmed tab whose line says where it opens; it can still be chosen', () => {
+    renderSkills(); // the new save's common sword: its Basic and a two-slot Primary
+    for (const s of ['defensive', 'ultimate'] as const) {
+      const line = within(tab(s)).getByText(OPEN_SKILL_TEXT);
       expect(line).toHaveAttribute('data-absent');
       expect(tab(s)).toBeEnabled();
       fireEvent.click(tab(s));
       expect(tab(s)).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(carriedByText(registry, s));
+      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(OPEN_SKILL_TEXT);
     }
   });
 

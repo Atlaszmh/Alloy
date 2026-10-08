@@ -7,7 +7,7 @@ import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
 import { beginFloor, startDive } from '../src/delve/dive.js';
-import { addSlot, transferMoveset } from '../src/delve/moveset.js';
+import { addSlot } from '../src/delve/moveset.js';
 import { addLootToBag, createDelveProfile, equipItem } from '../src/delve/profile.js';
 import { startTutorial, tutorialSkippable, tutorialText } from '../src/delve/tutorial.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
@@ -34,8 +34,9 @@ describe('auto-salvage waits for the tutorial', () => {
       { uid: 'gB', ilvl: 1, rarity: 'uncommon', baseId: 'sword', mana: 'fire' },
       new SeededRNG(1),
     );
-    expect(addLootToBag(registry, startTutorial(registry, p), [blade]).kept).toEqual([blade]);
-    expect(addLootToBag(registry, p, [blade]).salvaged).toEqual([blade]);
+    // Banked, the blade's constructs take their uids: the item is the same but for those.
+    expect(addLootToBag(registry, startTutorial(registry, p), [blade]).kept.map((i) => i.uid)).toEqual(['gB']);
+    expect(addLootToBag(registry, p, [blade]).salvaged.map((i) => i.uid)).toEqual(['gB']);
   });
 });
 
@@ -89,10 +90,10 @@ const atStep = (step: string, p = fresh()): DelveProfile => ({
 });
 
 describe('impossible Anvil steps offer "Skip this step"', () => {
-  it('the Skills step with a weapon that carries no Primary, or none at all', () => {
+  it('the Skills step unarmed, but not with a sword whose Primary can grow to the lesson (the common one starts with two slots)', () => {
     const p = { ...atStep('l1-skills'), runes: { quick: [1, 0, 0, 0, 0] } };
     expect(p.equipped.weapon!.rarity).toBe('common');
-    expect(tutorialSkippable(registry, p, p.tutorial!)).toBe(true);
+    expect(tutorialSkippable(registry, p, p.tutorial!)).toBe(false);
     const unarmed = { ...p, equipped: { ...p.equipped, weapon: null } };
     expect(tutorialSkippable(registry, unarmed, p.tutorial!)).toBe(true);
     const armed = { ...p, equipped: { ...p.equipped, weapon: blade([['fire'], ['fire']]) } };
@@ -107,25 +108,24 @@ describe('impossible Anvil steps offer "Skip this step"', () => {
   });
 });
 
-describe('the Transfer step', () => {
-  const rare = () => {
+describe('the Move all step', () => {
+  const rare = (primary?: number) => {
     const item = generateItem(
       registry,
       { uid: 'gRare', ilvl: 5, rarity: 'rare', baseId: 'sword', mana: 'fire' },
       new SeededRNG(1),
     );
-    return { ...item, moveset: defaultMoveset(registry, item, 'fire') };
+    return { ...item, moveset: defaultMoveset(registry, item, 'fire', primary ? { primary } : {}) };
   };
-  it('a plain Equip of the rare leaves it current; a Transfer completes it', () => {
+  it('a plain Equip of the rare leaves it current; the rare worn holding more than its start completes it (B2 fills Move all; D1 rewires)', () => {
     const p = {
       ...atStep('l2-transfer'),
       equipped: { ...fresh().equipped, weapon: blade([['fire'], ['fire'], ['frost']]) },
       bag: [rare()],
     };
     expect(equipItem(registry, p, 'gRare').tutorial!.step).toBe('l2-transfer');
-    const moved = transferMoveset(registry, p, 'gRare');
-    expect(moved.ok).toBe(true);
-    expect(moved.profile.tutorial!.step).not.toBe('l2-transfer');
+    const moved = equipItem(registry, { ...p, bag: [rare(4)] }, 'gRare');
+    expect(moved.tutorial!.step).not.toBe('l2-transfer');
   });
 });
 

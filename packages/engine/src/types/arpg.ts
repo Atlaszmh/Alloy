@@ -12,6 +12,7 @@ import type { TutorialScript } from './tutorial-floor.js';
 import type {
   AbilityCast,
   AbilitySlot,
+  FormClass,
   FormId,
   Knobs,
   KnobsData,
@@ -55,6 +56,10 @@ export type ReactionId =
 export interface FormDef {
   id: FormId;
   slot: AbilitySlot;
+  /** The weapon class that expresses it, or both (the constructs spec §2.1). */
+  class: FormClass;
+  /** A shared form's melee version (spec §2.2): what differs when a melee weapon casts it. B1 fills the rows. */
+  melee?: { range?: number; radius?: number; motion?: number; speed?: number; text?: string };
   name: string;
   icon: string;
   text: string;
@@ -79,6 +84,33 @@ export interface FormDef {
   countByKind?: Record<MoveKind, number>;
   /** Units the hero moves when casting: positive steps in over the conjure, negative recoils after the release. */
   motion?: number;
+}
+
+/** A cast style's numbers: factors on the form's base (1 = unchanged). */
+export interface StyleNumbers {
+  windup: number;
+  cooldown: number;
+  power: number;
+  range: number;
+  radius: number;
+  speed: number;
+  duration: number;
+}
+/** How a cast style moves the hero as it casts (the weapon flow's pushes; B1 wires them). */
+export type StyleMotion = 'none' | 'dart' | 'step' | 'wade' | 'plant' | 'sway' | 'orbit' | 'back';
+/** A cast style's motif, client-only: drawn on its casts' shots and impacts (the constructs spec §4.2). */
+export type StyleLook = 'blade' | 'crescent' | 'hatchet' | 'stone' | 'orb' | 'spark' | 'arrow';
+
+/** A weapon's cast style (the constructs spec §4): how it expresses every ability form. */
+export interface CastStyle {
+  name: string;
+  /** The trait as the player reads it ("Shots pierce one foe"): the item header's line. */
+  text: string;
+  numbers: StyleNumbers;
+  motion: StyleMotion;
+  /** Merged first, like a built-in rune that costs nothing. */
+  trait: KnobsData;
+  look: StyleLook;
 }
 
 /** What an element adds to any ability built with it. */
@@ -633,6 +665,7 @@ export type ArpgEvent =
        * client gives it no hit-stop or kick. Its numbers are as any hit's.
        */
       echo?: true;
+      look?: StyleLook;
     }
   | {
       kind: 'heroHit';
@@ -659,6 +692,11 @@ export type ArpgEvent =
       tx: number;
       ty: number;
       heft: number;
+      /**
+       * The casting weapon's style look (the constructs spec §4.2), drawn as its motif; absent
+       * unarmed. The same on `hit`, `beam`, `slash`, `explode` and `dash` (B1 sets those).
+       */
+      look?: StyleLook;
     }
   | { kind: 'windup'; slot: number; until: number; heft: number }
   /** A hold reached a new stage (1, then 2): an ability slot's, or the basic attack's (null). */
@@ -680,6 +718,7 @@ export type ArpgEvent =
        * `slash`, `explode` and `dash`.
        */
       infusion: ManaType | null;
+      look?: StyleLook;
     }
   | {
       kind: 'slash';
@@ -693,6 +732,7 @@ export type ArpgEvent =
       infusion: ManaType | null;
       /** An echo's slash (an ability's `replay`): the client gives it no hit-stop or kick. */
       echo?: true;
+      look?: StyleLook;
     }
   | {
       kind: 'basic';
@@ -716,6 +756,7 @@ export type ArpgEvent =
       radius: number;
       element: ManaType | null;
       infusion: ManaType | null;
+      look?: StyleLook;
     }
   | {
       kind: 'reaction';
@@ -748,6 +789,7 @@ export type ArpgEvent =
       toX: number;
       toY: number;
       infusion: ManaType | null;
+      look?: StyleLook;
     }
   | { kind: 'noMana'; slot: number }
   /** A skill paid: the mana and charge it really cost (none for the sandbox's free toggles). */

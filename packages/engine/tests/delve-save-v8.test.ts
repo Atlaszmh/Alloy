@@ -13,7 +13,7 @@ const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 describe('save v8', () => {
   it('starts with the starter kit: three patterns, 5 Rusty bars, 5 uncommon flux and 50 scrap', () => {
     const p = createDelveProfile(registry, 7, { primary: 'fire' });
-    expect(p.version).toBe(13);
+    expect(p.version).toBe(14);
     expect(p.patterns).toEqual(['sword', 'cuirass', 'dagger']);
     expect(p.materials.metals).toMatchObject({ rusty: 5, iron: 0 });
     expect(p.materials.flux).toEqual({ uncommon: 5, magic: 0, rare: 0, epic: 0 });
@@ -52,7 +52,7 @@ describe('save v8', () => {
     expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p });
   });
 
-  it('resets a save of any other version; a version 13 save that does not fit is refused', () => {
+  it('resets a save of any other version; a version 14 save that does not fit is refused', () => {
     const p = createDelveProfile(registry, 7, { primary: 'fire' });
     for (const version of [2, 6, 7, 8, 9, 10, undefined])
       expect(parseDelveProfile(registry, json({ ...p, version }))).toEqual({ reset: true });

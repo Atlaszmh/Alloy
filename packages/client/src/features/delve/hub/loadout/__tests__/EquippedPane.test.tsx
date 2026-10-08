@@ -99,10 +99,11 @@ describe('the equipped pane', () => {
     const props = open();
     const box = screen.getByTestId('loadout-moveset');
     expect(box).toHaveTextContent(`Moveset · ${store().profile.equipped.weapon!.name}`);
-    // The common sword carries Basic and Primary.
+    // The uncommon sword: its Basic, a two-slot Primary and a Defensive; no Ultimate.
     expect(screen.getByTestId('loadout-moveset-basic')).toHaveTextContent('Basic 3/5');
-    expect(screen.getByTestId('loadout-moveset-primary')).toHaveTextContent('Primary 1/5');
-    expect(screen.getByTestId('loadout-moveset-defensive')).toHaveTextContent('Defensive —');
+    expect(screen.getByTestId('loadout-moveset-primary')).toHaveTextContent('Primary 2/5');
+    expect(screen.getByTestId('loadout-moveset-defensive')).toHaveTextContent('Defensive 1/5');
+    expect(screen.getByTestId('loadout-moveset-ultimate')).toHaveTextContent('Ultimate —');
     fireEvent.click(within(box).getByRole('button', { name: 'Skills ›' }));
     expect(props.go).toHaveBeenCalledWith({ tab: 'skills' });
   });

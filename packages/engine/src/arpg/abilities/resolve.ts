@@ -12,9 +12,11 @@ import {
   type MoveKind,
   type ResolvedAbility,
   type ResolvedChain,
+  type WeaponClass,
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
-import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
+import type { CastStyle, FormDef } from '../../types/arpg.js';
+import { defaultForm, weaponClass, weaponString } from '../../loot/moveset.js';
 import { extraShotPower, loadEase, runeFits, runeKnobs, runeLoad } from '../../loot/runes.js';
 import type { RuneRef } from '../../types/rune.js';
 import type {
@@ -48,6 +50,11 @@ export const NEUTRAL: Knobs = Object.freeze({
   manaOnHit: 0,
   guardOnLand: 0,
   stackTime: 0,
+  detonate: 0,
+  critBonus: 0,
+  cleave: 0,
+  homing: 0,
+  stepBonus: 0,
 });
 
 /**
@@ -55,7 +62,8 @@ export const NEUTRAL: Knobs = Object.freeze({
  * counts add (`pierce` true adds Infinity), flags OR, statuses union, a zone
  * takes the longer seconds and the larger tick power, `split` the larger count
  * with its power, `extraShots` adds counts and multiplies powers, `echo` the
- * largest, each part of `quick` multiplies, and `stackTime` adds.
+ * largest, each part of `quick` multiplies, and `stackTime`, `detonate`, `critBonus`, `cleave`
+ * and `homing` add.
  */
 export function mergeKnobs(...parts: KnobsData[]): Knobs {
   const k: Knobs = { ...NEUTRAL, applies: [], quick: { ...NEUTRAL.quick } };
@@ -100,8 +108,42 @@ export function mergeKnobs(...parts: KnobsData[]): Knobs {
     k.manaOnHit += p.manaOnHit ?? 0;
     k.guardOnLand += p.guardOnLand ?? 0;
     k.stackTime += p.stackTime ?? 0;
+    k.detonate += p.detonate ?? 0;
+    k.critBonus += p.critBonus ?? 0;
+    k.cleave += p.cleave ?? 0;
+    k.homing += p.homing ?? 0;
+    k.stepBonus += p.stepBonus ?? 0;
   }
   return k;
+}
+
+/**
+ * A form as a weapon's cast style expresses it (the constructs spec §4.2): a
+ * melee weapon takes the form's `melee` overrides first, then the style's
+ * numbers scale the wind-up (B1 wires it), cooldown (B1), power, range, radius,
+ * speed and duration. With every factor 1 and no `melee` block (or no style:
+ * unarmed) the form comes back as it is.
+ */
+export function applyStyle(
+  form: FormDef,
+  cls: WeaponClass | null,
+  style: CastStyle | null,
+): FormDef {
+  const base = cls === 'melee' && form.melee ? { ...form, ...formOverrides(form.melee) } : form;
+  if (!style) return base;
+  const n = style.numbers;
+  const scaled = { ...base, power: base.power * n.power };
+  if (base.range !== undefined) scaled.range = base.range * n.range;
+  if (base.radius !== undefined) scaled.radius = base.radius * n.radius;
+  if (base.speed !== undefined) scaled.speed = base.speed * n.speed;
+  if (base.duration !== undefined) scaled.duration = base.duration * n.duration;
+  return scaled;
+}
+
+/** A `melee` block's numbers, its text left out (the text is the client's). */
+function formOverrides(melee: NonNullable<FormDef['melee']>): Partial<FormDef> {
+  const { text: _text, ...numbers } = melee;
+  return numbers;
 }
 
 /** The weight a move resolves at: its kind's (`chains.kindWeight`), a hold's by its stage. */
@@ -126,7 +168,10 @@ export function resolveAbility(
   const data = registry.getArpgData();
   const bal = registry.getDelveBalance();
   const ab = bal.abilities;
-  const form = registry.getForm(move.form);
+  // The form as the weapon's cast style expresses it: the form's base, the melee block, the
+  // style's numbers (the constructs spec §4.2). In Phase A every style is inert.
+  const style = stats.weapon.style ?? null;
+  const form = applyStyle(registry.getForm(move.form), stats.weapon.class ?? null, style);
   if (form.slot !== slot) throw new Error(`${form.name} is not a ${slot} form`);
   const [element, second] = move.elements;
   const fusion =
@@ -141,8 +186,10 @@ export function resolveAbility(
   if (L.rimeheart && move.form === 'nova' && move.elements.includes('frost')) {
     legendary.push({ zone: { seconds: 3, tickPower: 0.15 } });
   }
-  // A dive's boons' knobs merge beside the legendaries' (see the boons spec's 2a).
+  // The style's trait merges first, like a built-in rune that costs nothing; a dive's boons'
+  // knobs merge beside the legendaries' (see the boons spec's 2a).
   const own = [
+    style?.trait ?? {},
     ...move.elements.map((e) => data.elementTraits[e].knobs),
     fusion?.knobs ?? {},
     ...legendary,
@@ -199,6 +246,7 @@ export function resolveAbility(
     index: 0,
     last: false,
     form,
+    look: style?.look ?? null,
     name: `${fusion ? fusion.name : data.mana[element].name} ${form.name}`,
     icon: form.icon,
     element,
@@ -457,17 +505,19 @@ export function followBasic(
 }
 
 /**
- * A new (or reset) hero's chains, all of `element`: each slot's default form's
- * whole default chain with its payment (`DEFAULT_FORMS`: a Bolt, a Ward and a
- * charged Nova), and the weapon's default basic chain.
+ * A new (or reset) hero's chains, all of `element`: each slot's class default
+ * form's whole default chain with its payment (`defaultForm`: a Strike on a
+ * melee weapon or a Bolt, a Ward and a charged Nova), and the weapon's default
+ * basic chain.
  */
 export function defaultChains(
   registry: DataRegistry,
   element: ManaType,
   weaponBaseId: string | null,
 ): Chains {
+  const cls = weaponClass(registry, weaponBaseId);
   const chain = (slot: AbilitySlot): Chain => {
-    const { form, payment } = DEFAULT_FORMS[slot];
+    const { form, payment } = defaultForm(registry, slot, cls);
     const moves = registry.getForm(form).defaultChain.map((kind) => ({
       kind,
       form,

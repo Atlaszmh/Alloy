@@ -12,8 +12,15 @@ import {
 } from '../loot/forge.js';
 import { implicitValue, scrapLevelFactor } from '../loot/item-generator.js';
 import { materialCount, refineCost, refinedRef, withMaterial } from '../loot/materials.js';
-import { baseSlots, defaultChain, movesetOf } from '../loot/moveset.js';
-import type { AwakenPrice, ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
+import { ceilingOf, defaultForm, movesetOf, plainConstruct, weaponClass } from '../loot/moveset.js';
+import {
+  FLUX_GRADES,
+  type FluxGrade,
+  type ForgeRequest,
+  type MaterialRef,
+  type ShardRef,
+} from '../types/crafting.js';
+import type { AbilitySlot, Move } from '../types/ability.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { GearItem, HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from './dive.js';
@@ -23,7 +30,9 @@ import { applyTutorialEvents } from './tutorial.js';
 import {
   findItem,
   forgeRng,
+  mintMoveset,
   recordFinds,
+  mintUid,
   referenceDepth,
   replaceItem,
   type ProfileActionResult,
@@ -49,13 +58,17 @@ export function forge(
 ): ProfileActionResult {
   const preview = previewForge(registry, profile, req);
   if (preview.refused) return refuse(profile, preview.refused.reason);
-  const item = forgeItem(registry, profile, req, forgeRng(profile));
+  const rolled = forgeItem(registry, profile, req, forgeRng(profile));
   const materials = forgeInputs(req).reduce(
     (m, ref) => withMaterial(m, ref, -1),
     profile.materials,
   );
+  // The item takes `g<nextUid>`; its constructs their `c<n>` uids (the constructs spec §3.1).
+  const [item, minted] = rolled.moveset
+    ? (([moveset, p]) => [{ ...rolled, moveset }, p] as const)(mintMoveset(profile, rolled.moveset))
+    : ([rolled, profile] as const);
   const paid: DelveProfile = {
-    ...profile,
+    ...minted,
     materials,
     scrap: profile.scrap - preview.price.scrap,
     manaDust: profile.manaDust - preview.price.dust,
@@ -205,56 +218,80 @@ export function refine(
   return { ok: true, profile: done };
 }
 
+/** What Open a skill costs on `item` (the constructs spec §3.2): `movesets.openSkill[rarity]`, its scrap × `scrapLevelFactor(ilvl)`. */
+export function openSkillPrice(
+  registry: DataRegistry,
+  item: GearItem,
+): { flux: Partial<Record<FluxGrade, number>>; links: number; scrap: number } {
+  const price = registry.getDelveBalance().movesets.openSkill[item.rarity];
+  return {
+    flux: { ...price.flux },
+    links: price.links,
+    scrap: Math.round(price.scrap * scrapLevelFactor(registry, item.ilvl)),
+  };
+}
+
 /**
- * Awaken rare weapon `uid` (see the tutorial spec's Awaken): it carries the
- * Ultimate too (`GearItem.awakened`; its moveset gains the Ultimate's base
- * chain in the pair's primary), once, for `awakenPrice`. Refused mid-dive, on
- * anything but a rare weapon, on an awakened one, and unpaid. Pure: the Temper
- * bench reads its refusal from a dry run.
+ * Open a skill on weapon `uid`, worn or in the bag (the constructs spec §3.2,
+ * Awaken generalised): a skill at 0 slots whose ceiling is at least 1 gains
+ * its first slot, bought, holding a plain construct in the pair's primary (the
+ * weapon's mana before the choice) at the skill's default payment, for
+ * `openSkillPrice` (flux by grade, Links and scrap). Refused mid-dive, on an
+ * unknown item, on anything but a weapon, on a skill with slots already, at a
+ * ceiling of 0, and unpaid. Pure: the Temper bench reads its refusal from a dry
+ * run. Emits the tutorial's `openSkill` event.
  */
-export function awaken(
+export function openSkill(
   registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
+  skill: AbilitySlot,
 ): ProfileActionResult {
   if (isDiveActive(profile)) return refuse(profile, FORGE_LOCKED);
   const found = findItem(profile, uid);
   if (!found) return refuse(profile, 'Item not found');
   const { item } = found;
-  if (item.slot !== 'weapon' || item.rarity !== 'rare')
-    return refuse(profile, 'Only a rare weapon awakens');
-  if (item.awakened) return refuse(profile, 'Already awakened');
-  const price = awakenPrice(registry, item);
-  const epic: MaterialRef = { kind: 'flux', grade: 'epic' };
-  if (materialCount(profile.materials, epic) < price.epicFlux)
-    return refuse(profile, 'Not enough epic flux');
+  if (item.slot !== 'weapon') return refuse(profile, 'Only a weapon opens a skill');
+  const moveset = movesetOf(registry, item);
+  if (moveset.slots[skill]) return refuse(profile, 'This skill is open already');
+  if (ceilingOf(registry, item, skill) < 1)
+    return refuse(profile, `A ${item.rarity} weapon can't open its ${skill}`);
+  const price = openSkillPrice(registry, item);
+  for (const grade of FLUX_GRADES) {
+    const need = price.flux[grade] ?? 0;
+    if (need > 0 && materialCount(profile.materials, { kind: 'flux', grade }) < need)
+      return refuse(profile, `Not enough ${grade} flux`);
+  }
   if (profile.links < price.links) return refuse(profile, 'Not enough Links');
   if (profile.scrap < price.scrap) return refuse(profile, 'Not enough scrap');
-  const { chains, slots } = movesetOf(registry, item);
-  const base = baseSlots(registry, item.baseId, 'ultimate');
   const element = profile.pair.primary ?? item.mana;
-  const ultimate = defaultChain(registry, 'ultimate', item.baseId, element, base);
-  const awakened: GearItem = {
+  const [cuid, minted] = mintUid(profile);
+  const move = { ...plainConstruct(registry, item, skill, 0, element), uid: cuid } as Move;
+  const { payment } = defaultForm(registry, skill, weaponClass(registry, item.baseId));
+  const opened: GearItem = {
     ...item,
-    awakened: true,
-    moveset: { chains: { ...chains, ultimate }, slots: { ...slots, ultimate: base } },
+    moveset: {
+      chains: { ...moveset.chains, [skill]: { moves: [move], payment } },
+      slots: { ...moveset.slots, [skill]: 1 },
+      bought: { ...moveset.bought, [skill]: 1 },
+    },
+  };
+  let materials = profile.materials;
+  for (const grade of FLUX_GRADES) {
+    const need = price.flux[grade] ?? 0;
+    if (need > 0) materials = withMaterial(materials, { kind: 'flux', grade }, -need);
+  }
+  const paid: DelveProfile = {
+    ...replaceItem(minted, opened),
+    materials,
+    links: profile.links - price.links,
+    scrap: profile.scrap - price.scrap,
   };
   return {
     ok: true,
-    item: awakened,
-    profile: {
-      ...replaceItem(profile, awakened),
-      materials: withMaterial(profile.materials, epic, -price.epicFlux),
-      links: profile.links - price.links,
-      scrap: profile.scrap - price.scrap,
-    },
+    item: opened,
+    profile: applyTutorialEvents(registry, paid, [{ type: 'openSkill', skill }]),
   };
-}
-
-/** What awakening `item` costs: `crafting.awaken`, its scrap × `scrapLevelFactor(ilvl)`. */
-export function awakenPrice(registry: DataRegistry, item: GearItem): AwakenPrice {
-  const price = registry.getDelveBalance().crafting.awaken;
-  return { ...price, scrap: Math.round(price.scrap * scrapLevelFactor(registry, item.ilvl)) };
 }
 
 /** Buy a tier I shard of `stat` at the shard bench (`crafting.shardBench`). */

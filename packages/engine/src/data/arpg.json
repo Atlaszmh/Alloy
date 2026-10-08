@@ -10,68 +10,84 @@
   "weakness": { "fire": "frost", "frost": "fire", "storm": "earth", "earth": "storm", "shadow": "storm", "nature": "fire" },
   "forms": [
     {
-      "id": "bolt", "slot": "primary", "name": "Bolt", "icon": "☄️",
+      "id": "bolt", "slot": "primary", "class": "ranged", "name": "Bolt", "icon": "☄️",
       "power": 1.45, "range": 9, "radius": 0.9, "speed": 13, "motion": -0.15,
       "defaultChain": ["light", "medium", "medium", "heavy"],
       "text": "A bolt that bursts on the first foe it hits. Each later move of a chain hits harder and bursts wider."
     },
     {
-      "id": "volley", "slot": "primary", "name": "Volley", "icon": "🎯",
+      "id": "volley", "slot": "primary", "class": "ranged", "name": "Volley", "icon": "🎯",
       "power": 0.6, "range": 9, "radius": 0.35, "speed": 11, "count": 3, "motion": -0.1,
       "defaultChain": ["medium", "medium", "medium"], "countByKind": { "light": 3, "medium": 3, "heavy": 5, "hold": 5 },
       "text": "Homing darts that seek out different foes: three, or five from a heavy move or a hold charged past its first stage."
     },
     {
-      "id": "lance", "slot": "primary", "name": "Lance", "icon": "🗡️",
+      "id": "lance", "slot": "primary", "class": "both", "name": "Lance", "icon": "🗡️",
       "power": 1.55, "range": 7.5, "radius": 0.55, "motion": -0.3,
       "defaultChain": ["medium", "medium", "heavy"],
       "text": "An instant line that hits every foe along it. Each later move of a chain reaches further and hits harder."
     },
     {
-      "id": "burst", "slot": "primary", "name": "Burst", "icon": "💥",
+      "id": "burst", "slot": "primary", "class": "both", "name": "Burst", "icon": "💥",
       "power": 1.7, "range": 8, "radius": 1.6, "motion": 0.2, "speed": 30,
       "defaultChain": ["medium", "medium", "heavy"],
       "text": "An explosion where you aim. Each later move of a chain is bigger."
     },
     {
-      "id": "strike", "slot": "primary", "name": "Strike", "icon": "⚔️",
+      "id": "strike", "slot": "primary", "class": "melee", "name": "Strike", "icon": "⚔️",
       "power": 1.4, "range": 2.4, "radius": 2.4, "arc": 150, "motion": 0.5,
       "defaultChain": ["medium", "medium", "heavy", "heavy"],
       "text": "An element-infused sweep in front of you. The last move of a chain slams everything around you."
     },
     {
-      "id": "ward", "slot": "defensive", "name": "Ward", "icon": "🛡️",
+      "id": "whirl", "slot": "primary", "class": "melee", "name": "Whirl", "icon": "🌀",
+      "power": 1.1, "radius": 2.4, "duration": 1.5, "tick": 0.5,
+      "defaultChain": ["medium", "medium", "heavy"],
+      "text": "A spin that hits everything around you for 1.5 s while you keep moving."
+    },
+    {
+      "id": "ward", "slot": "defensive", "class": "both", "name": "Ward", "icon": "🛡️",
       "power": 1.35, "effect": 0.25, "duration": 6, "radius": 2.6, "defaultChain": ["medium"],
       "text": "A bubble that absorbs 25% of your max life for 6 s, then bursts with its element."
     },
     {
-      "id": "armor", "slot": "defensive", "name": "Armor", "icon": "🦺",
+      "id": "repel", "slot": "defensive", "class": "ranged", "name": "Repel", "icon": "💢",
+      "power": 0.6, "effect": 0.5, "radius": 3, "defaultChain": ["medium"],
+      "text": "A pulse that knocks nearby foes back and slows them."
+    },
+    {
+      "id": "armor", "slot": "defensive", "class": "melee", "name": "Armor", "icon": "🦺",
       "power": 0.65, "effect": 0.35, "duration": 8, "defaultChain": ["medium"],
       "text": "Take 35% less damage for 8 s. Melee attackers take element damage and its status."
     },
     {
-      "id": "surge", "slot": "defensive", "name": "Surge", "icon": "⚡",
+      "id": "surge", "slot": "defensive", "class": "both", "name": "Surge", "icon": "⚡",
       "power": 0, "effect": 0.3, "duration": 6, "defaultChain": ["medium"],
       "text": "For 6 s: +30% attack speed, +20% move speed, and basic hits also apply the element's stacks."
     },
     {
-      "id": "blink", "slot": "defensive", "name": "Blink", "icon": "💨",
+      "id": "blink", "slot": "defensive", "class": "both", "name": "Blink", "icon": "💨",
       "power": 0.9, "effect": 0.4, "range": 5, "radius": 0.9, "defaultChain": ["medium"],
       "text": "Dash 5 units, untouchable for a moment, leaving a trail that hits foes."
     },
     {
-      "id": "nova", "slot": "ultimate", "name": "Nova", "icon": "✴️",
+      "id": "nova", "slot": "ultimate", "class": "both", "name": "Nova", "icon": "✴️",
       "power": 3.4, "radius": 5, "defaultChain": ["medium"],
       "text": "A huge blast all around you."
     },
     {
-      "id": "barrage", "slot": "ultimate", "name": "Barrage", "icon": "🌠",
+      "id": "onslaught", "slot": "ultimate", "class": "melee", "name": "Onslaught", "icon": "⚡",
+      "power": 1.2, "range": 6, "radius": 3, "count": 5, "duration": 1.2, "defaultChain": ["medium"],
+      "text": "Dart between foes in the target area, striking several times; untouchable while darting, then 30% less damage taken for 2 s."
+    },
+    {
+      "id": "barrage", "slot": "ultimate", "class": "ranged", "name": "Barrage", "icon": "🌠",
       "power": 1.55, "range": 9, "radius": 1.5, "count": 7, "duration": 1.2, "motion": 0.15,
       "defaultChain": ["medium"],
       "text": "Seven impacts rain over the target area."
     },
     {
-      "id": "maelstrom", "slot": "ultimate", "name": "Maelstrom", "icon": "🌪️",
+      "id": "maelstrom", "slot": "ultimate", "class": "both", "name": "Maelstrom", "icon": "🌪️",
       "power": 0.5, "range": 9, "radius": 3.5, "duration": 6, "tick": 0.5, "motion": 0.2,
       "defaultChain": ["medium"],
       "text": "A lingering storm at the target that hits everything inside for 6 s."

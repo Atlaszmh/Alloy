@@ -127,19 +127,21 @@ export interface GearItem {
   /** Number of hones performed — drives escalating hone cost (see the crafting spec). */
   hones: number;
   locked: boolean;
-  /** Weapons: the chains the weapon carries and their slots (see the weapon movesets spec). */
+  /** Weapons: the chains the weapon holds and their slots (see the constructs spec). */
   moveset?: Moveset;
-  /** A rare weapon awakened to carry the Ultimate too (see the tutorial spec's Awaken). */
-  awakened?: boolean;
 }
 
 /**
- * A weapon's moveset: a chain for each skill its rarity carries, each holding
- * 1 to `slots[skill]` moves; a skill it doesn't carry has neither.
+ * A weapon's moveset (the constructs spec §3.1–3.2): a chain for each skill
+ * with slots, each holding 0 to `slots[skill]` constructs (the Basic at least
+ * 1); `slots` the slots it has, `bought` how many of each were bought with
+ * Links or Open a skill (free extra slots are not), which a salvage refunds.
+ * `chains[skill]` exists exactly when `slots[skill] > 0`.
  */
 export interface Moveset {
   chains: Partial<Chains>;
   slots: Partial<Record<ChainSkill, number>>;
+  bought: Partial<Record<ChainSkill, number>>;
 }
 
 export type EquippedGear = Partial<Record<GearSlot, GearItem>>;
