@@ -25,11 +25,11 @@ describe('TakeSheet', () => {
     store().setProfile({ ...store().profile, bag: [rareSword('w1')] });
   });
 
-  it('offers Equip as it is and Transfer with their Power and the price; Transfer carries the guided-start target', () => {
+  it('offers Equip as it is and Move all with their Power, free; Move all carries the guided-start target', () => {
     render(<TakeSheet uid="w1" onClose={vi.fn()} />);
     expect(screen.getByTestId('take-equip')).toHaveTextContent(/Equip as it is · [+−±]\d/);
     expect(screen.getByTestId('take-transfer')).toHaveTextContent(
-      /Transfer my moveset here · .*scrap/,
+      /^Move all my constructs here · [+−±]\d.* Power$/,
     );
     expect(screen.getByTestId('take-transfer')).toHaveAttribute(
       'data-tutorial',
@@ -37,16 +37,13 @@ describe('TakeSheet', () => {
     );
   });
 
-  it('Transfer moves your moveset onto it and wears it; each closes the sheet', () => {
+  it("Move all is the engine's op (B2 fills it): until then it refuses, and the sheet stays open", () => {
     const onClose = vi.fn();
     const before = store().profile.equipped.weapon!;
     render(<TakeSheet uid="w1" onClose={onClose} />);
     fireEvent.click(screen.getByTestId('take-transfer'));
-    expect(store().profile.equipped.weapon?.uid).toBe('w1');
-    expect(store().profile.equipped.weapon?.moveset?.chains.primary).toEqual(
-      before.moveset!.chains.primary,
-    );
-    expect(onClose).toHaveBeenCalled();
+    expect(store().profile.equipped.weapon?.uid).toBe(before.uid);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('Equip wears it as it is, its moveset its own', () => {

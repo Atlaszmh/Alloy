@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   defaultMoveset,
+  mintMoveset,
   generateItem,
   heroChains,
   SeededRNG,
@@ -30,7 +31,7 @@ import {
   selectDraftApply,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
-import { armed } from '@/features/delve/__tests__/armed';
+import { armed, lancePrimary, wearing } from '@/features/delve/__tests__/armed';
 
 const registry = getDelveRegistry();
 /** The hero's chains, as its equipped weapon carries them. */
@@ -77,7 +78,7 @@ describe('delveStore', () => {
   it('resets a save of another version, and falls back to a new profile when the save is corrupt', () => {
     localStorage.setItem(DELVE_SAVE_KEY, '{"version":12,"broken":true}');
     expect(loadDelveProfile()).toEqual({ reset: true });
-    localStorage.setItem(DELVE_SAVE_KEY, '{"version":13,"broken":true}');
+    localStorage.setItem(DELVE_SAVE_KEY, '{"version":14,"broken":true}');
     expect(loadDelveProfile()).toBeNull();
     localStorage.setItem(DELVE_SAVE_KEY, 'not json');
     expect(loadDelveProfile()).toBeNull();
@@ -118,12 +119,12 @@ describe('delveStore', () => {
       patterns: [],
       essences: [],
     });
-    // A weapon gives a Link for each slot past its base.
+    // A weapon gives a Link for each slot bought on it.
     const sword = useDelveStore.getState().profile.equipped.weapon!;
     const roomy = {
       ...sword,
       uid: 'x3',
-      moveset: defaultMoveset(registry, sword, 'fire', { primary: 3 }),
+      moveset: { ...defaultMoveset(registry, sword, 'fire', { primary: 3 }), bought: { primary: 2 } },
     };
     s.setProfile({ ...useDelveStore.getState().profile, bag: [roomy] });
     expect(useDelveStore.getState().salvage(['x3']).links).toBe(2);
@@ -156,7 +157,9 @@ describe('delveStore', () => {
     };
     const basic = [{ kind: 'hold' as const, element: 'fire' as const }];
     expect(useDelveStore.getState().setChains({ primary: chain, basic }).ok).toBe(true);
-    expect(chains().primary).toEqual(chain);
+    // The new constructs are minted uids (the constructs spec §3.1).
+    expect(chains().primary).toMatchObject(chain);
+    expect(chains().primary.moves[0].uid).toMatch(/^c\d+$/);
     expect(loadDelveProfile()).toMatchObject({
       profile: { equipped: { weapon: { moveset: { chains: { primary: chain, basic } } } } },
     });
@@ -168,20 +171,23 @@ describe('delveStore', () => {
       primary: { moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }], payment: 'mana' },
     });
     expect(res).toMatchObject({ ok: false, reason: 'Nova is not a primary form' });
-    expect(chains().primary.moves[0].form).toBe('bolt');
+    expect(chains().primary.moves[0].form).toBe('strike');
     expect(chains().basic).toHaveLength(3);
   });
 
   it('adds a slot for Links and scrap', () => {
     const s = () => useDelveStore.getState();
     expect(s().addSlot('primary')).toMatchObject({ ok: false, reason: 'Not enough Links' });
-    s().setProfile({ ...s().profile, links: 1, scrap: 20 });
+    // The Primary's 3rd slot: 2 Links and 40 scrap, bought (the constructs spec §3.2).
+    s().setProfile({ ...s().profile, links: 2, scrap: 40 });
     expect(s().addSlot('primary').ok).toBe(true);
     expect(s().profile).toMatchObject({ links: 0, scrap: 0 });
-    expect(chains().primary.moves).toHaveLength(2);
-    expect(s().addSlot('defensive')).toMatchObject({
+    expect(chains().primary.moves).toHaveLength(3);
+    expect(s().profile.equipped.weapon!.moveset!.bought).toEqual({ primary: 1 });
+    // An uncommon sword's Ultimate starts at 0: it opens on the Temper bench, not here.
+    expect(s().addSlot('ultimate')).toMatchObject({
       ok: false,
-      reason: 'Carried by rare weapons and better',
+      reason: 'Open this skill on the Temper bench',
     });
   });
 
@@ -240,9 +246,9 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
-    expect(fresh.getState().profile).toMatchObject({ version: 13, scrap: 50 }); // the kit's
+    expect(fresh.getState().profile).toMatchObject({ version: 14, scrap: 50 }); // the kit's
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
-      version: 13,
+      version: 14,
       scrap: 50,
     });
     // The written-back save loads as it is: no second notice.
@@ -261,9 +267,9 @@ describe('delveStore', () => {
     expect('fuse' in s).toBe(false);
   });
 
-  it("wraps the guided start's ops and Awaken (the tutorial's B1 and B3 fill them)", () => {
+  it("wraps the guided start's ops and Open a skill", () => {
     const s = useDelveStore.getState();
-    for (const op of [s.awaken, s.startTutorial, s.skipTutorial, s.retryTutorialDepth])
+    for (const op of [s.openSkill, s.startTutorial, s.skipTutorial, s.retryTutorialDepth])
       expect(op).toBeTypeOf('function');
     // No tutorial running: its events leave the save as it is.
     const before = s.profile;
@@ -365,7 +371,8 @@ describe('delveStore', () => {
     // The weapon's every chain says so once, the basic one too.
     expect(s().takeNotices()).toEqual([
       "Your basic attack's 1st, 2nd and 3rd blows used Fire, which isn't in your pair; they now use Frost",
-      "Your Bolt's 1st move used Fire, which isn't in your pair; it now uses Frost",
+      "Your Strike's 1st and 2nd moves used Fire, which isn't in your pair; they now use Frost",
+      "Your Ward's 1st move used Fire, which isn't in your pair; it now uses Frost",
     ]);
   });
 
@@ -424,6 +431,8 @@ describe('delveStore', () => {
 });
 
 const split = { id: 'split', tier: 1 } as const;
+/** A rune that fits a Lance (Split never does): the draft tests' socketed rune. */
+const multi = { id: 'multishot', tier: 1 } as const;
 const s = () => useDelveStore.getState();
 
 /** A fresh store module, as on a page load: the override it reads back. */
@@ -444,20 +453,21 @@ describe('delveStore: runes in the draft', () => {
   });
 
   /**
-   * The starting sword (common: one socket a move) with a two-Bolt Primary, each Bolt's sockets
-   * as given (none open when missing), and the profile's `over`.
+   * The armed sword with a two-Lance Primary (a light and a medium: a sword expresses a Lance),
+   * each Lance's sockets as given (none open when missing), its constructs minted, and the
+   * profile's `over`.
    */
   function bolts(runes: ((RuneRef | null)[] | undefined)[], over: Partial<DelveProfile> = {}) {
     const p = s().profile;
     const sword = p.equipped.weapon!;
     const moveset = defaultMoveset(registry, sword, 'fire', { primary: 2 });
-    const primary = moveset.chains.primary!;
+    const primary = lancePrimary(2);
     const moves = primary.moves.map((m, i) => (runes[i] ? { ...m, runes: runes[i] } : m));
     const weapon = {
       ...sword,
       moveset: { ...moveset, chains: { ...moveset.chains, primary: { ...primary, moves } } },
     };
-    s().setProfile({ ...p, ...over, equipped: { ...p.equipped, weapon } });
+    s().setProfile(wearing({ ...p, ...over }, weapon));
   }
   const view = () => draftApply(registry, s().profile, s().chainDraft, s().unsocket);
 
@@ -480,40 +490,40 @@ describe('delveStore: runes in the draft', () => {
   });
 
   it('socketing a pouch rune is free: Apply takes it from the pouch', () => {
-    bolts([[null]], { runes: { split: [1, 0, 0, 0, 0] } });
+    bolts([[null]], { runes: { multishot: [1, 0, 0, 0, 0] } });
     const primary = chains().primary;
     const [first, second] = primary.moves;
-    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [split] }, second] });
-    expect(s().chainDraft?.origins).toEqual({ primary: [0, 1] });
+    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [multi] }, second] });
     expect(view().price).toMatchObject({ dust: 0, links: 0, scrap: 0, refundLinks: 0 });
-    expect(pouchCount(view().pouch, split)).toBe(0); // what the picker has left to offer
+    expect(pouchCount(view().pouch, multi)).toBe(0); // what the picker has left to offer
     expect(applyLabel(registry, view().price)).toBe('Apply');
     expect(s().applyDraft().ok).toBe(true);
-    expect(chains().primary.moves[0].runes).toEqual([split]);
-    expect(pouchCount(s().profile.runes, split)).toBe(0);
+    expect(chains().primary.moves[0].runes).toEqual([multi]);
+    expect(pouchCount(s().profile.runes, multi)).toBe(0);
   });
 
-  it("composes the builder's maps into origins; moved and moved back, nothing is left", () => {
-    bolts([[split], [null]]);
+  it('the moves carry their uids through the draft (no origins); moved and moved back, nothing is left', () => {
+    bolts([[multi], [null]]);
     const primary = chains().primary;
     const [a, b] = primary.moves;
     s().editDraft('primary', { ...primary, moves: [b, a] }, [1, 0]); // ▸ on the first
-    expect(s().chainDraft?.origins).toEqual({ primary: [1, 0] });
-    const added = { kind: 'light' as const, form: 'bolt' as const, elements: ['fire' as const] };
+    expect(s().chainDraft?.chains.primary?.moves.map((m) => m.uid)).toEqual([b.uid, a.uid]);
+    expect(view().price).toMatchObject({ dust: 0 }); // a reorder is free
+    const added = { kind: 'light' as const, form: 'lance' as const, elements: ['fire' as const] };
     s().editDraft('primary', { ...primary, moves: [b, a, added] }, [0, 1, null]); // +
-    expect(s().chainDraft?.origins).toEqual({ primary: [1, 0, null] });
+    expect(s().chainDraft?.chains.primary?.moves.map((m) => m.uid)).toEqual([b.uid, a.uid, undefined]);
     s().editDraft('primary', { ...primary, moves: [b, a] }, [0, 1]); // × on the new one
     s().editDraft('primary', { ...primary, moves: [a, b] }, [1, 0]); // ◂ back
     expect(s().chainDraft?.chains).toEqual({});
-    expect(s().chainDraft?.origins).toEqual({});
   });
 
-  it('a removed move refunds its socket as a Link, netted in the label; its rune goes by the rule', () => {
-    bolts([[split], [null]]);
+  it('a removed move refunds its sockets as Links, netted in the label; its rune goes by the rule (destroy, the dev override)', () => {
+    bolts([[multi], [null]]);
+    s().setUnsocket('destroy');
     const primary = chains().primary;
-    s().editDraft('primary', { ...primary, moves: [primary.moves[1]] }, [1]); // × on the Split Bolt
-    expect(view().price).toMatchObject({ links: 0, refundLinks: 1, destroys: [split] });
-    expect(applyLabel(registry, view().price)).toBe('Apply · +1 Link · destroys Split I');
+    s().editDraft('primary', { ...primary, moves: [primary.moves[1]] }, [1]); // × on the Multi-shot Lance
+    expect(view().price).toMatchObject({ links: 0, refundLinks: 1, destroys: [multi] });
+    expect(applyLabel(registry, view().price)).toBe('Apply · +1 Link · destroys Multi-shot I');
     expect(s().applyDraft().ok).toBe(true);
     expect(chains().primary.moves).toEqual([primary.moves[1]]);
     expect(s().profile.links).toBe(1);
@@ -536,7 +546,7 @@ describe('delveStore: runes in the draft', () => {
     bolts([[null]], { runes: {} });
     const primary = chains().primary;
     const [first, second] = primary.moves;
-    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [split] }, second] });
+    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [multi] }, second] });
     expect(view()).toMatchObject({ price: null, refused: 'Not enough runes in your pouch' });
     expect(view().pouch).toEqual({});
   });
@@ -555,18 +565,18 @@ describe('delveStore: runes in the draft', () => {
   });
 
   it('the dev override sets the pull rule: paying, a pull costs scrap and the rune comes back', () => {
-    bolts([[split]], { scrap: 100 });
+    bolts([[multi]], { scrap: 100 });
     s().setUnsocket('pay');
     expect(localStorage.getItem(UNSOCKET_KEY)).toBe('pay');
     const primary = chains().primary;
     const [first, second] = primary.moves;
     s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [null] }, second] });
-    expect(view().price).toMatchObject({ scrap: 15, destroys: [], returns: [split] });
+    expect(view().price).toMatchObject({ scrap: 15, destroys: [], returns: [multi] });
     expect(applyLabel(registry, view().price)).toBe('Apply · 15 scrap');
-    expect(pouchCount(view().pouch, split)).toBe(1); // free to socket elsewhere in this Apply
+    expect(pouchCount(view().pouch, multi)).toBe(1); // free to socket elsewhere in this Apply
     expect(s().applyDraft().ok).toBe(true);
     expect(s().profile.scrap).toBe(85);
-    expect(pouchCount(s().profile.runes, split)).toBe(1);
+    expect(pouchCount(s().profile.runes, multi)).toBe(1);
   });
 
   it('reads the override back on this device, in dev builds only', async () => {
@@ -595,20 +605,24 @@ describe('delveStore: runes outside the draft', () => {
     useDelveStore.setState({ unsocket: null });
   });
 
-  /** The starting sword, its one Bolt's sockets `runes` (under `uid` when given: a bag copy). */
-  function swordWith(runes: (RuneRef | null)[], uid?: string): GearItem {
+  /**
+   * The armed sword, its first Strike's sockets `runes` (under `uid` when given: a bag copy), its
+   * constructs minted from `from` (save v14 requires their uids; two copies take different runs).
+   */
+  function swordWith(runes: (RuneRef | null)[], uid?: string, from = 500): GearItem {
     const sword = s().profile.equipped.weapon!;
-    const moveset = defaultMoveset(registry, sword, 'fire');
-    const primary = moveset.chains.primary!;
+    const base = defaultMoveset(registry, sword, 'fire');
+    const primary = base.chains.primary!;
     const moves = [{ ...primary.moves[0], runes }];
-    const chains = { ...moveset.chains, primary: { ...primary, moves } };
-    return { ...sword, uid: uid ?? sword.uid, moveset: { ...moveset, chains } };
+    const chains = { ...base.chains, primary: { ...primary, moves } };
+    const [moveset] = mintMoveset({ ...s().profile, nextConstructUid: from }, { ...base, chains });
+    return { ...sword, uid: uid ?? sword.uid, moveset };
   }
 
-  it('a load-time trim takes a socket past the cap off: a Link, its rune by the rule, no notice', async () => {
+  it('a load-time trim empties a repeated rune: back to the pouch by the rule, no Link, no notice', async () => {
     const p = s().profile;
-    // Two sockets on a common sword (one a move): the second goes, and its Quick with it.
-    const weapon = swordWith([split, quick]);
+    // Quick twice on a move: the second goes back to the pouch (the pull rule, pay as shipped).
+    const weapon = swordWith([quick, quick]);
     localStorage.setItem(
       DELVE_SAVE_KEY,
       JSON.stringify({ ...p, equipped: { ...p.equipped, weapon } }),
@@ -619,14 +633,19 @@ describe('delveStore: runes outside the draft', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([]);
-    expect(fresh.getState().profile.links).toBe(p.links + 1);
+    expect(fresh.getState().profile.links).toBe(p.links);
+    expect(pouchCount(fresh.getState().profile.runes, quick)).toBe(1);
   });
 
-  it('salvage gives a socket back as a Link; its rune follows the pull rule', () => {
-    s().setProfile({ ...s().profile, bag: [swordWith([split], 'x5'), swordWith([split], 'x6')] });
-    expect(s().salvage(['x5'])).toMatchObject({ links: 1, runes: [], destroyed: [split] });
-    s().setUnsocket('pay');
-    expect(s().salvage(['x6'])).toMatchObject({ links: 1, runes: [split], destroyed: [] });
+  it("salvage gives no Link for a socket (they belong to the construct); its rune follows the pull rule, 'pay' as shipped", () => {
+    s().setProfile({
+      ...s().profile,
+      bag: [swordWith([split], 'x5'), swordWith([split], 'x6', 600)],
+    });
+    expect(s().salvage(['x5'])).toMatchObject({ links: 0, runes: [split], destroyed: [] });
+    expect(pouchCount(s().profile.runes, split)).toBe(1);
+    s().setUnsocket('destroy');
+    expect(s().salvage(['x6'])).toMatchObject({ links: 0, runes: [], destroyed: [split] });
     expect(pouchCount(s().profile.runes, split)).toBe(1);
   });
 

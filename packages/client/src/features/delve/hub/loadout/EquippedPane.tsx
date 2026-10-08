@@ -1,7 +1,6 @@
 import { useMemo, type ReactElement } from 'react';
 import {
   CHAIN_SKILLS,
-  carriedSkills,
   estimateCombat,
   heroChains,
   manaPool,
@@ -74,7 +73,8 @@ export function EquippedPane({
   const weapon = equipped.weapon;
   const cap = registry.getDelveBalance().chains.cap;
   const slots = weapon ? movesetOf(registry, weapon).slots : null;
-  const carried = weapon ? carriedSkills(registry, weapon) : [];
+  // A skill with a slot has a chain (the constructs spec §3.1).
+  const carried = slots ? CHAIN_SKILLS.filter((s) => (slots[s] ?? 0) > 0) : [];
 
   const rows: [string, string, boolean?][] = [
     ['Damage', formatNumber(dps)],

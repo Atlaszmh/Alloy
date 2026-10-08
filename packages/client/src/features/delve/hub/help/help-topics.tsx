@@ -1,4 +1,4 @@
-import { CHAIN_SKILLS, carriedByText, carriedFrom, carriedSkills } from '@alloy/engine';
+import { ABILITY_SLOTS, RARITY_ORDER, type ChainSkill, type Rarity } from '@alloy/engine';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import type { KeyAction } from '@/features/controls/controls';
@@ -36,10 +36,14 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
     if (pad ? !button : !key) return null;
     return <InputGlyph size="sm" binding={{ key: key ?? undefined, pad: button ?? undefined }} />;
   };
-  // What every weapon carries; the rest come with its rarity.
-  const always = carriedSkills(registry, { rarity: 'common' });
-  // The rarity (its flux grade) the Primary comes with: a Jump in save's first forge.
-  const firstFlux = carriedFrom(registry, 'primary');
+  // The least rarity whose weapons start with a slot of a skill (the slot table).
+  const slots = registry.getDelveBalance().movesets.slots;
+  const startsFrom = (s: ChainSkill): Rarity | null =>
+    RARITY_ORDER.find((r) => slots[r][s][0] > 0) ?? null;
+  const startsText = (s: ChainSkill) => {
+    const from = startsFrom(s);
+    return from === 'common' ? 'every weapon' : from ? `${from} weapons and better` : 'none';
+  };
   const loss = pct(registry.getDelveBalance().crafting.deathLoss);
   return (
     <div
@@ -77,21 +81,23 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
       {topic === 'weapons' && (
         <div data-testid="howto-carries">
           <p>
-            Your weapon carries your skills. Every weapon carries your{' '}
-            {always.map((s) => SKILL_NAME[s]).join(' and ')}; better ones carry more:
+            Your weapon holds your skills in slots: every weapon your Basic chain, and its rarity
+            sets how many slots each skill starts with and can grow to:
           </p>
           <ul className="flex flex-col gap-1 pl-4">
-            {CHAIN_SKILLS.filter((s) => !always.includes(s)).map((s) => (
+            {ABILITY_SLOTS.map((s) => (
               <li key={s} data-testid={`howto-carry-${s}`}>
-                {s !== 'basic' && g(s)} <b className="text-[var(--k-text)]">{SKILL_NAME[s]}</b>:{' '}
-                {carriedByText(registry, s).toLowerCase()}
+                {g(s)} <b className="text-[var(--k-text)]">{SKILL_NAME[s]}</b>: {startsText(s)}
               </li>
             ))}
           </ul>
-          <p>Awaken a rare weapon on the Forge's Temper bench and it carries the Ultimate too.</p>
           <p>
-            Forge your first weapon from your starting kit on the Forge tab: with {firstFlux} flux
-            it carries your Primary {g('primary')}.
+            A skill your weapon has no slot for opens on the Forge's Temper bench, for flux, Links
+            and scrap.
+          </p>
+          <p>
+            Forge your first weapon from your starting kit on the Forge tab: with{' '}
+            {startsFrom('defensive')} flux it holds a Defensive {g('defensive')} too.
           </p>
         </div>
       )}

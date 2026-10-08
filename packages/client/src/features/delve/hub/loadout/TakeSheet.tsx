@@ -1,10 +1,9 @@
 import type { ReactElement } from 'react';
-import { findItem, movesetTransfer, type DelveProfile, type ManaType } from '@alloy/engine';
+import { findItem, type DelveProfile, type ManaType } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
-import { Button, Dialog, Price } from '../../kit';
-import { getDelveRegistry } from '../../registry';
+import { Button, Dialog } from '../../kit';
 import { useItemComparison } from '../../items/useItemComparison';
 import { UPGRADE_EPSILON, formatDelta } from '../../format';
 import { TransferNotes, transferOnto } from './ComparePane';
@@ -30,9 +29,9 @@ export function canTake(
 
 /**
  * The pad's take sheet (the pad-first spec, 4, rule 1: a priced action gets a sheet): A on a bag
- * weapon that can take your moveset asks how to take it. Equip as it is, or Transfer my moveset
- * here (the engine's price, and what a transfer leaves); each with its Power change, the better
- * one focused first. The mouse has both in the compare pane.
+ * weapon that can take your constructs asks how to take it. Equip as it is, or Move all my
+ * constructs here (free; what it leaves, `TransferNotes`); each with its Power change, the
+ * better one focused first. The mouse has both in the compare pane.
  */
 export function TakeSheet({
   uid,
@@ -41,10 +40,8 @@ export function TakeSheet({
   uid: string;
   onClose: () => void;
 }): ReactElement | null {
-  const registry = getDelveRegistry();
   const { item, worn, cmp, asIs } = useItemComparison(uid);
   if (!item || !worn || !cmp || !asIs) return null;
-  const transfer = movesetTransfer(registry, worn, item);
   const homeFirst = cmp.powerPct > asIs.powerPct && cmp.powerPct > UPGRADE_EPSILON;
 
   const equip = () => {
@@ -76,14 +73,7 @@ export function TakeSheet({
           data-tutorial="loadout.transfer"
           testId="take-transfer"
         >
-          Transfer my moveset here · <Price scrap={transfer.scrap} />
-          {transfer.links > 0 && (
-            <>
-              {' · '}
-              <Price links={transfer.links} signed />
-            </>
-          )}{' '}
-          · {formatDelta(cmp.powerPct)} Power
+          Move all my constructs here · {formatDelta(cmp.powerPct)} Power
         </Button>
         <TransferNotes worn={worn} item={item} />
       </div>

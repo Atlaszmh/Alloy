@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { addMaterial, emptyHaul, generateItem, SeededRNG } from '@alloy/engine';
+import { defaultMoveset, addMaterial, emptyHaul, generateItem, SeededRNG } from '@alloy/engine';
 import { FoundLog } from '../FoundLog';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
-import { armed } from '../../../__tests__/armed';
+import { armed, wearing } from '../../../__tests__/armed';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -128,18 +128,33 @@ describe('FoundLog: what this floor found', () => {
   });
 
   /**
-   * Slots bought on the worn (uncommon) sword make an uncommon dagger better
-   * only with that moveset moved onto it: a potential upgrade.
+   * Constructs built up on the worn (uncommon) sword make a forged-up dagger whose own Primary
+   * is one light Strike (and room for every construct) better only with them moved onto it: a
+   * potential upgrade.
    */
-  it('counts a weapon better only as a home for your moveset apart, as a potential upgrade', () => {
-    store().setProfile({ ...armed(store().profile), links: 99, scrap: 9999 });
-    for (const skill of ['basic', 'basic', 'primary', 'primary', 'primary'] as const)
-      expect(store().addSlot(skill).ok).toBe(true);
-    const dagger = generateItem(
+  it('counts a weapon better only as a home for your constructs apart, as a potential upgrade', () => {
+    const a = armed(store().profile);
+    const sword = a.equipped.weapon!;
+    const mine = {
+      ...sword,
+      moveset: {
+        ...defaultMoveset(registry, sword, 'fire', { primary: 5, defensive: 2 }),
+        bought: { primary: 2, defensive: 1 },
+      },
+    };
+    store().setProfile({ ...wearing(a, mine), links: 99, scrap: 9999 });
+    const rolled = generateItem(
       registry,
-      { uid: 'w2', ilvl: 3, rarity: 'uncommon', slot: 'weapon', mana: 'fire' },
+      { uid: 'w2', ilvl: 3, rarity: 'uncommon', slot: 'weapon', baseId: 'dagger', mana: 'fire' },
       new SeededRNG(3),
     );
+    const weak = defaultMoveset(registry, rolled, 'fire', { primary: 2 });
+    weak.chains.primary!.moves = [{ kind: 'light', form: 'strike', elements: ['fire'] }];
+    const dagger = {
+      ...rolled,
+      upgrade: 1,
+      moveset: { ...weak, slots: { ...weak.slots, basic: 4, primary: 5, defensive: 2 } },
+    };
     store().setProfile({ ...store().profile, bag: [...store().profile.bag, dagger] });
     store().startDive(1);
     store().pushDiveDrops(['h1', 'w1', 'w2']);

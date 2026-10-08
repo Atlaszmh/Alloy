@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, screen, fireEvent, within } from '@testing-library/react';
 import {
-  carriedByText,
+  OPEN_SKILL_TEXT,
   defaultMoveset,
   heroChains,
   pouchCount,
@@ -15,7 +15,7 @@ import {
 } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
-import { armed } from '../../../__tests__/armed';
+import { armed, lancePrimary, wearing } from '../../../__tests__/armed';
 import { edit, pickForm, renderSkills, stepTo, valuesOf } from './harness';
 
 const mockNavigate = vi.fn();
@@ -46,9 +46,9 @@ const closeSheet = () =>
 const priceLine = () => screen.getByTestId('chain-price');
 
 /**
- * The starting sword made epic (it carries all four skills), every chain at
- * `slots` slots, holding its default moves (the Primary 4, the basic chain the
- * sword's 3, the others 1), or `chains` over them.
+ * The starting sword made epic (every skill open), every chain at `slots` slots, holding its
+ * default moves (the basic chain the sword's 3, the others 1) but the Primary four Lances
+ * (`lancePrimary`), or `chains` over them; its constructs minted.
  */
 function roomy(slots = 5, over: Partial<Chains> = {}) {
   const p = store().profile;
@@ -61,13 +61,8 @@ function roomy(slots = 5, over: Partial<Chains> = {}) {
     defensive: slots,
     ultimate: slots,
   };
-  store().setProfile({
-    ...p,
-    equipped: {
-      ...p.equipped,
-      weapon: { ...weapon, moveset: { chains: { ...moveset.chains, ...over }, slots: all } },
-    },
-  });
+  const chains = { ...moveset.chains, primary: lancePrimary(), ...over };
+  store().setProfile(wearing(p, { ...weapon, moveset: { chains, slots: all, bought: {} } }));
 }
 
 describe('SkillsTab', () => {
@@ -88,7 +83,7 @@ describe('SkillsTab', () => {
     ]);
     expect(screen.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
-      'light Fire Bolt · medium Fire Bolt · medium Fire Bolt · heavy Fire Bolt',
+      'light Fire Lance · medium Fire Lance · medium Fire Lance · heavy Fire Lance',
     );
     expect(screen.getAllByTestId(/^move-\d$/)).toHaveLength(4);
     fireEvent.click(screen.getByTestId('chain-skill-basic'));
@@ -100,17 +95,15 @@ describe('SkillsTab', () => {
     expect(screen.queryByText('Quick and cheap.')).toBeNull(); // nor a cost
   });
 
-  it("a new hero's common sword carries Basic alone; the others show locked, saying what carries them", () => {
+  it("a new hero's common sword holds its Basic and a two-slot Primary; the others show locked, saying where they open", () => {
     store().resetProfile(1234, 'fire'); // the common sword, as a new save has it
     renderSkills();
     expect(screen.getByTestId('mana-pair')).toHaveTextContent('Fire · 2');
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
-    for (const [skill, text] of [
-      ['primary', 'Carried by uncommon weapons and better'],
-      ['defensive', 'Carried by rare weapons and better'],
-      ['ultimate', 'Carried by epic weapons and better, or an awakened rare'],
-    ]) {
-      // The tab's own line says what carries it.
+    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('2 of 2');
+    for (const skill of ['defensive', 'ultimate'] as const) {
+      const text = OPEN_SKILL_TEXT;
+      // The tab's own line says where it opens (the Temper bench).
       expect(screen.getByTestId(`chain-skill-${skill}`)).toHaveTextContent(text);
       fireEvent.click(screen.getByTestId(`chain-skill-${skill}`));
       expect(screen.getByTestId('abilities-summary')).toHaveTextContent(text);
@@ -125,7 +118,7 @@ describe('SkillsTab', () => {
     renderSkills();
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
     for (const s of ['primary', 'defensive'] as const)
-      expect(screen.getByTestId(`chain-skill-${s}`)).toHaveTextContent(carriedByText(registry, s));
+      expect(screen.getByTestId(`chain-skill-${s}`)).toHaveTextContent(OPEN_SKILL_TEXT);
   });
 
   it('edits a draft: Apply commits it, free before the first dive, and Revert drops it', () => {
@@ -133,17 +126,17 @@ describe('SkillsTab', () => {
     renderSkills();
     expect(priceLine()).toHaveTextContent('No changes');
     edit(0);
-    pickForm('lance');
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
-    expect(chains().primary.moves[0].form).toBe('bolt'); // not yet
+    pickForm('burst');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Burst');
+    expect(chains().primary.moves[0].form).toBe('lance'); // not yet
     expect(priceLine()).toHaveTextContent('free until your first dive');
     fireEvent.click(screen.getByTestId('chain-revert'));
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Bolt');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
     expect(priceLine()).toHaveTextContent('No changes');
-    pickForm('lance');
+    pickForm('burst');
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply'); // free: no price
     apply();
-    expect(chains().primary.moves[0].form).toBe('lance');
+    expect(chains().primary.moves[0].form).toBe('burst');
     expect(priceLine()).toHaveTextContent('No changes');
     expect(store().profile.manaDust).toBe(0);
   });
@@ -152,10 +145,10 @@ describe('SkillsTab', () => {
     roomy();
     const { unmount } = renderSkills();
     edit(0);
-    pickForm('lance');
+    pickForm('burst');
     unmount();
     renderSkills();
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Burst');
     expect(priceLine()).toHaveTextContent('1 unapplied change');
     expect(store().startDive(1)).toBe(false);
     expect(priceLine()).toHaveTextContent('1 unapplied change');
@@ -164,14 +157,14 @@ describe('SkillsTab', () => {
       store().startDive(1);
     });
     expect(priceLine()).toHaveTextContent('No changes');
-    expect(chains().primary.moves[0].form).toBe('bolt');
+    expect(chains().primary.moves[0].form).toBe('lance');
   });
 
   it('Apply is off while the engine would refuse the draft, and says why; the draft stays', () => {
     roomy();
     renderSkills();
     // A storm move the pair (Fire alone) doesn't hold: the engine refuses it.
-    const storm: Move = { kind: 'medium', form: 'bolt', elements: ['storm'] };
+    const storm: Move = { kind: 'medium', form: 'lance', elements: ['storm'] };
     act(() => store().editDraft('primary', { moves: [storm], payment: 'mana' }));
     // The footer says why for the mouse; its Apply opens the sheet, whose Apply is off.
     expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Pick from your two elements');
@@ -189,11 +182,11 @@ describe('SkillsTab', () => {
     );
     expect(screen.queryByTestId('chain-apply-why')).toBeNull();
     apply();
-    expect(chains().primary.moves).toEqual([{ ...storm, elements: ['fire'] }]);
+    expect(chains().primary.moves).toMatchObject([{ ...storm, elements: ['fire'] }]);
   });
 
   it('Add slot waits while its chain has a change pending; an edit undone by hand leaves none', () => {
-    store().setProfile({ ...store().profile, links: 1, scrap: 25 });
+    store().setProfile({ ...store().profile, links: 2, scrap: 45 });
     renderSkills();
     edit(0);
     pickForm('lance');
@@ -201,23 +194,24 @@ describe('SkillsTab', () => {
     expect(screen.getByTestId('add-slot-why')).toHaveTextContent(
       'Apply or revert this chain first',
     );
-    pickForm('bolt'); // back as it was
+    pickForm('strike'); // back as it was
     expect(priceLine()).toHaveTextContent('No changes');
     expect(store().chainDraft?.chains.primary).toBeUndefined();
     fireEvent.click(screen.getByTestId('add-slot'));
-    expect(screen.getByTestId('chain-slots')).toHaveTextContent('2 of 2 slots');
+    expect(screen.getByTestId('chain-slots')).toHaveTextContent('3 of 3 slots');
     expect(priceLine()).toHaveTextContent('No changes');
-    // A chain's edit made on fewer slots goes when a slot is added to it (the store's rule).
-    const primary = chains().primary;
+    // A chain's edit made on fewer slots goes when a slot is added to it (the store's rule): the
+    // Defensive, whose second slot an uncommon sword can still buy.
+    const defensive = chains().defensive;
     act(() => {
       store().setProfile({ ...store().profile, links: 2, scrap: 40 });
-      store().editDraft('primary', {
-        ...primary,
-        moves: [{ ...primary.moves[0], form: 'lance' }, primary.moves[1]],
+      store().editDraft('defensive', {
+        ...defensive,
+        moves: [{ ...defensive.moves[0], form: 'armor' }],
       });
-      expect(store().addSlot('primary').ok).toBe(true);
+      expect(store().addSlot('defensive').ok).toBe(true);
     });
-    expect(store().chainDraft?.chains.primary).toBeUndefined();
+    expect(store().chainDraft?.chains.defensive).toBeUndefined();
   });
 
   it('equipping another weapon, or a realign, drops the draft', () => {
@@ -227,7 +221,7 @@ describe('SkillsTab', () => {
     store().setProfile({ ...p, bag: [{ ...sword, uid: 'spare' }] });
     renderSkills();
     edit(0);
-    pickForm('lance');
+    pickForm('burst');
     act(() => store().equip('spare'));
     expect(priceLine()).toHaveTextContent('No changes');
     act(() => store().equip(sword.uid));
@@ -238,13 +232,13 @@ describe('SkillsTab', () => {
       store().setProfile({ ...store().profile, manaDust: 500, scrap: 500 });
     });
     edit(0);
-    pickForm('lance');
+    pickForm('burst');
     expect(priceLine()).toHaveTextContent('1 unapplied change');
     act(() => {
       expect(store().realign({ primary: 'frost' }).ok).toBe(true);
     });
     expect(priceLine()).toHaveTextContent('No changes');
-    expect(chains().primary.moves[0]).toMatchObject({ form: 'bolt', elements: ['frost'] });
+    expect(chains().primary.moves[0]).toMatchObject({ form: 'lance', elements: ['frost'] });
   });
 
   it('after the first dive the draft shows its price in Mana Dust, and Apply pays it', () => {
@@ -253,7 +247,7 @@ describe('SkillsTab', () => {
     store().setProfile({ ...p, stats: { ...p.stats, dives: 1 }, manaDust: 4 });
     renderSkills();
     edit(0);
-    pickForm('lance'); // a changed form: editDust
+    pickForm('burst'); // a changed form: editDust
     expect(priceLine()).toHaveTextContent('1 unapplied change · 5 Mana Dust');
     expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Not enough Mana Dust');
     openSheet();
@@ -265,7 +259,7 @@ describe('SkillsTab', () => {
     // Still one move changed: its kind and form together cost editDust once.
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply · 5 Mana Dust');
     apply();
-    expect(chains().primary.moves[0]).toEqual({ kind: 'heavy', form: 'lance', elements: ['fire'] });
+    expect(chains().primary.moves[0]).toMatchObject({ kind: 'heavy', form: 'burst', elements: ['fire'] });
     expect(store().profile.manaDust).toBe(15);
   });
 
@@ -277,14 +271,14 @@ describe('SkillsTab', () => {
     pickForm('burst');
     stepTo('move-elements', 'Fire + Nature');
     apply();
-    expect(chains().primary.moves[1]).toEqual({
+    expect(chains().primary.moves[1]).toMatchObject({
       kind: 'medium',
       form: 'burst',
       elements: ['fire', 'nature'],
     });
     expect(screen.getByTestId('ability-readout')).toHaveTextContent('medium Wildfire Burst');
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
-      'light Fire Bolt · medium Wildfire Burst',
+      'light Fire Lance · medium Wildfire Burst',
     );
     expect(screen.getByTestId('element-effect')).toHaveTextContent('Wildfire');
     stepTo('move-elements', 'Nature + Fire'); // the swap is a set of its own
@@ -317,7 +311,7 @@ describe('SkillsTab', () => {
     roomy();
     const num = (id: string) => screen.getByTestId(`num-${id}`);
     const { unmount } = renderSkills();
-    // The Primary's first move, a light Bolt, on the starting sword (tempo 1).
+    // The Primary's first move, a light Lance, on the starting sword (tempo 1).
     expect(num('beat')).toHaveTextContent(/^0\.25s$/);
     edit(0);
     stepTo('move-kind', 'Hold');
@@ -341,12 +335,12 @@ describe('SkillsTab', () => {
   });
 
   it('adds, reorders and removes moves within the slots, never below one', () => {
-    const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
+    const bolt: Move = { kind: 'light', form: 'lance', elements: ['fire'] };
     roomy(5, { primary: { moves: [bolt], payment: 'mana' } });
     renderSkills();
     edit(0);
     expect(screen.getByTestId('move-remove')).toBeDisabled();
-    expect(screen.getByTestId('move-remove')).toHaveAccessibleName('Remove light Fire Bolt');
+    expect(screen.getByTestId('move-remove')).toHaveAccessibleName('Remove light Fire Lance');
     fireEvent.click(screen.getByTestId('move-editor-back'));
     fireEvent.click(screen.getByTestId('move-add'));
     expect(document.activeElement).toBe(screen.getByTestId('move-1')); // the new card
@@ -368,7 +362,7 @@ describe('SkillsTab', () => {
   });
 
   it('Position moves a card; the selection follows it', () => {
-    const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
+    const bolt = (kind: MoveKind): Move => ({ kind, form: 'lance', elements: ['fire'] });
     roomy(5, {
       primary: { moves: [bolt('light'), bolt('medium'), bolt('heavy')], payment: 'mana' },
     });
@@ -379,14 +373,14 @@ describe('SkillsTab', () => {
     expect(screen.getByTestId('move-position')).toHaveAttribute('aria-valuemax', '2');
     stepTo('move-position', 'Position 2 of 3');
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
-      'medium Fire Bolt · light Fire Bolt · heavy Fire Bolt',
+      'medium Fire Lance · light Fire Lance · heavy Fire Lance',
     );
     expect(screen.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('ability-readout')).toHaveTextContent('light Fire Bolt');
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent('light Fire Lance');
   });
 
   it('two steps of Position move a card two places, the selection with it and the focus kept', () => {
-    const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
+    const bolt = (kind: MoveKind): Move => ({ kind, form: 'lance', elements: ['fire'] });
     roomy(5, {
       primary: { moves: [bolt('light'), bolt('medium'), bolt('heavy')], payment: 'mana' },
     });
@@ -405,31 +399,32 @@ describe('SkillsTab', () => {
 
   it("shows each chain's slots, and Add slot's price in Links and scrap", () => {
     renderSkills();
-    expect(screen.queryByTestId('move-add')).toBeNull(); // the Primary's one slot is used
-    expect(screen.getByTestId('chain-slots')).toHaveTextContent('1 of 1 slots');
-    expect(screen.getByTestId('add-slot')).toHaveTextContent('+ Slot1 Link · 20 scrap');
+    expect(screen.queryByTestId('move-add')).toBeNull(); // the Primary's two slots are used
+    expect(screen.getByTestId('chain-slots')).toHaveTextContent('2 of 2 slots');
+    expect(screen.getByTestId('add-slot')).toHaveTextContent('+ Slot2 Links · 40 scrap');
     expect(screen.getByTestId('add-slot')).toBeDisabled(); // no Links yet
     expect(screen.getByTestId('add-slot-why')).toHaveTextContent('Not enough Links');
     expect(screen.getByTestId('add-slot')).toHaveAttribute(
       'aria-describedby',
       screen.getByTestId('add-slot-why').id,
     );
-    act(() => store().setProfile({ ...store().profile, links: 1, scrap: 0 }));
+    act(() => store().setProfile({ ...store().profile, links: 2, scrap: 0 }));
     expect(screen.getByTestId('add-slot-why')).toHaveTextContent('Not enough scrap');
-    act(() => store().setProfile({ ...store().profile, links: 1, scrap: 25 }));
+    act(() => store().setProfile({ ...store().profile, links: 2, scrap: 45 }));
     fireEvent.click(screen.getByTestId('add-slot'));
     expect(store().profile).toMatchObject({ links: 0, scrap: 5 });
-    expect(screen.getByTestId('chain-slots')).toHaveTextContent('2 of 2 slots');
-    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('2 of 2');
-    expect(screen.getByTestId('add-slot')).toHaveTextContent('2 Links · 40 scrap');
-    // The sword's basic chain starts at its string's 3 slots: its 4th costs 3 Links.
+    expect(screen.getByTestId('chain-slots')).toHaveTextContent('3 of 3 slots');
+    expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('3 of 3');
+    // An uncommon sword's Primary stops at 3 (the slot table's ceiling): nothing more to buy.
+    expect(screen.queryByTestId('add-slot')).toBeNull();
+    // Its basic chain starts at its string's 3 slots, its ceiling too.
     fireEvent.click(screen.getByTestId('chain-skill-basic'));
     expect(screen.getByTestId('chain-slots')).toHaveTextContent('3 of 3 slots');
-    expect(screen.getByTestId('add-slot')).toHaveTextContent('3 Links · 60 scrap');
+    expect(screen.queryByTestId('add-slot')).toBeNull();
   });
 
   it('offers + Slot beside + Move while the chain is under five slots, and none at five', () => {
-    const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
+    const bolt: Move = { kind: 'light', form: 'lance', elements: ['fire'] };
     roomy(3, { primary: { moves: [bolt], payment: 'mana' } });
     renderSkills();
     expect(screen.getByTestId('move-add')).toBeInTheDocument();
@@ -440,7 +435,7 @@ describe('SkillsTab', () => {
   });
 
   it("a refused Add slot or Apply says the engine's reason on the lane's message line", () => {
-    store().setProfile({ ...store().profile, links: 1, scrap: 25 });
+    store().setProfile({ ...store().profile, links: 2, scrap: 45 });
     renderSkills();
     const refuse = (reason: string) => ({ ok: false, profile: store().profile, reason });
     vi.spyOn(store(), 'addSlot').mockReturnValueOnce(refuse('Not now'));
@@ -456,12 +451,12 @@ describe('SkillsTab', () => {
   });
 
   it('marks a move outside the pair off-pair, and never offers its element to another', () => {
-    const storm: Move = { kind: 'medium', form: 'bolt', elements: ['storm'] };
-    const fire: Move = { kind: 'medium', form: 'bolt', elements: ['fire'] };
+    const storm: Move = { kind: 'medium', form: 'lance', elements: ['storm'] };
+    const fire: Move = { kind: 'medium', form: 'lance', elements: ['fire'] };
     roomy(5, { primary: { moves: [storm, fire], payment: 'mana' } });
     renderSkills();
     expect(screen.getAllByTestId('card-off-pair')).toHaveLength(1);
-    expect(screen.getByTestId('move-0')).toHaveAccessibleName('medium Storm Bolt, off-pair');
+    expect(screen.getByTestId('move-0')).toHaveAccessibleName('medium Storm Lance, off-pair');
     edit(0);
     expect(screen.getByTestId('move-elements')).toHaveAttribute(
       'aria-valuetext',
@@ -502,7 +497,7 @@ describe('SkillsTab', () => {
     stepTo('move-elements', 'Storm');
     apply();
     expect(chains().defensive.moves[0].form).toBe('armor');
-    expect(chains().basic[2]).toEqual({ kind: 'heavy', element: 'storm' });
+    expect(chains().basic[2]).toMatchObject({ kind: 'heavy', element: 'storm' });
   });
 
   it('warns when a mana cost is bigger than the pool', () => {
@@ -546,7 +541,7 @@ describe('SkillsTab', () => {
     expect(screen.getByTestId('move-2')).toBeEnabled();
     fireEvent.click(screen.getByTestId('move-2'));
     expect(screen.getByTestId('move-2')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('ability-readout')).toHaveTextContent('medium Fire Bolt');
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent('medium Fire Lance');
     expect(screen.queryByTestId('move-editor')).toBeNull();
     expect(screen.getByTestId('move-add')).toBeDisabled();
   });
@@ -568,7 +563,8 @@ describe('SkillsTab', () => {
   });
 });
 
-const split = { id: 'split', tier: 1 } as const;
+const widen = { id: 'widen', tier: 1 } as const;
+const quick = { id: 'quick', tier: 1 } as const;
 
 describe('SkillsTab: sockets and runes', () => {
   beforeEach(() => {
@@ -579,8 +575,8 @@ describe('SkillsTab: sockets and runes', () => {
   });
 
   /**
-   * The starting sword (common: one socket a move): its Primary Bolt's sockets `bolt` (none
-   * open when null), its blows' sockets `blows`, and the pouch `pouch`.
+   * The armed sword (uncommon): each of its Primary Strikes' sockets `bolt` (none open when
+   * null), its blows' sockets `blows`, and the pouch `pouch`; its constructs minted.
    */
   function socketed(
     bolt: (RuneRef | null)[] | null,
@@ -596,11 +592,9 @@ describe('SkillsTab: sockets and runes', () => {
       basic: moveset.chains.basic!.map((b, i) => (blows[i] ? { ...b, runes: blows[i] } : b)),
       primary: { ...primary, moves: primary.moves.map((m) => (bolt ? { ...m, runes: bolt } : m)) },
     };
-    store().setProfile({
-      ...p,
-      runes: pouch,
-      equipped: { ...p.equipped, weapon: { ...sword, moveset: { ...moveset, chains } } },
-    });
+    store().setProfile(
+      wearing({ ...p, runes: pouch }, { ...sword, moveset: { ...moveset, chains } }),
+    );
   }
   /** Tap socket `n` (1-based, by its name) under card `i`. */
   const tapSocket = (i: number, name: string) =>
@@ -610,7 +604,7 @@ describe('SkillsTab: sockets and runes', () => {
   it('+ socket opens one on the chosen move at its price; Apply pays the Links and scrap', () => {
     store().setProfile({ ...store().profile, links: 1, scrap: 20 });
     renderSkills();
-    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets · 0 of 1');
+    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets · 0 of 3');
     edit(0);
     const open = screen.getByTestId('socket-open');
     expect(open).toHaveTextContent('Open a socket');
@@ -618,7 +612,7 @@ describe('SkillsTab: sockets and runes', () => {
     expect(open).toHaveTextContent('20 scrap');
     fireEvent.click(open);
     expect(screen.getAllByTestId(/^inspect-socket-/)).toHaveLength(1);
-    expect(screen.queryByTestId('socket-open')).toBeNull(); // a common weapon's cap
+    expect(screen.getByTestId('socket-open')).toBeInTheDocument(); // two more to MAX_SOCKETS
     expect(priceLine()).toHaveTextContent('1 unapplied change · 1 Link · 20 scrap');
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply · 1 Link · 20 scrap');
     apply();
@@ -630,7 +624,7 @@ describe('SkillsTab: sockets and runes', () => {
     socketed([null]);
     renderSkills();
     const primary = chains().primary;
-    const moves = primary.moves.map((m) => ({ ...m, runes: [{ id: 'split', tier: 1 as const }] }));
+    const moves = primary.moves.map((m) => ({ ...m, runes: [{ id: 'chain', tier: 1 as const }] }));
     act(() => store().editDraft('primary', { ...primary, moves }));
     const price = screen.getByTestId('chain-price');
     expect(price).toHaveTextContent('Not enough runes in your pouch');
@@ -660,33 +654,34 @@ describe('SkillsTab: sockets and runes', () => {
     renderSkills();
     tapSocket(0, 'Socket 1: empty');
     expect(picker().getByRole('button', { name: 'Quick III ×2' })).toBeInTheDocument();
-    // Widen fits a Burst, a Strike or a Ward, never a Bolt.
-    expect(picker().queryByRole('button', { name: /^Widen/ })).toBeNull();
-    fireEvent.click(picker().getByRole('button', { name: 'Split I ×1' }));
+    // Split fits a Bolt, a Volley or a Barrage, never a Strike.
+    expect(picker().queryByRole('button', { name: /^Split/ })).toBeNull();
+    fireEvent.click(picker().getByRole('button', { name: 'Widen I ×1' }));
     expect(screen.queryByTestId('rune-picker')).toBeNull();
     expect(
-      within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: Split I' }),
+      within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: Widen I' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply'); // socketing is free
     apply();
-    expect(chains().primary.moves[0].runes).toEqual([split]);
-    expect(pouchCount(store().profile.runes, split)).toBe(0);
+    expect(chains().primary.moves[0].runes).toEqual([widen]);
+    expect(pouchCount(store().profile.runes, widen)).toBe(0);
   });
 
-  it('a filled socket offers Pull: destroyed by the rule, or for scrap and back to the pouch', () => {
-    socketed([split]);
+  it('a filled socket offers Pull: destroyed under that rule, or for scrap and back to the pouch (as shipped)', () => {
+    socketed([widen]);
+    act(() => store().setUnsocket('destroy'));
     renderSkills();
-    tapSocket(0, 'Socket 1: Split I');
+    tapSocket(0, 'Socket 1: Widen I');
     expect(picker().getByTestId('rune-pull')).toHaveTextContent('Pull · destroys it');
     fireEvent.click(picker().getByTestId('rune-pull'));
-    expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply · destroys Split I');
-    expect(priceLine()).toHaveTextContent('1 unapplied change · destroys Split I');
+    expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply · destroys Widen I');
+    expect(priceLine()).toHaveTextContent('1 unapplied change · destroys Widen I');
     fireEvent.click(screen.getByTestId('chain-revert'));
     act(() => {
       store().setUnsocket('pay');
       store().setProfile({ ...store().profile, scrap: 15 });
     });
-    tapSocket(0, 'Socket 1: Split I');
+    tapSocket(0, 'Socket 1: Widen I');
     expect(picker().getByTestId('rune-pull')).toHaveTextContent(
       'Pull · 15 scrap, back to your pouch',
     );
@@ -695,7 +690,7 @@ describe('SkillsTab: sockets and runes', () => {
     apply();
     expect(chains().primary.moves[0].runes).toEqual([null]);
     expect(store().profile.scrap).toBe(0);
-    expect(pouchCount(store().profile.runes, split)).toBe(1);
+    expect(pouchCount(store().profile.runes, widen)).toBe(1);
   });
 
   it('a rune that does nothing on its move is dimmed, with why: Linger on a light blow', () => {
@@ -716,27 +711,27 @@ describe('SkillsTab: sockets and runes', () => {
   });
 
   it("a form a socketed rune doesn't fit is off; the kind stays free", () => {
-    socketed([split]);
+    socketed([widen]);
     renderSkills();
     edit(0);
     fireEvent.click(screen.getByTestId('move-form'));
-    expect(screen.getByTestId('form-volley')).toBeEnabled();
-    for (const f of ['lance', 'burst', 'strike'])
+    expect(screen.getByTestId('form-burst')).toBeEnabled();
+    for (const f of ['lance', 'bolt', 'volley'])
       expect(screen.getByTestId(`form-${f}`), f).toBeDisabled();
     // Each off form says why beside itself.
-    expect(screen.getByTestId('form-burst')).toHaveTextContent("Split doesn't fit a Burst");
+    expect(screen.getByTestId('form-lance')).toHaveTextContent("Widen doesn't fit a Lance");
     fireEvent.click(screen.getByTestId('form-picker-back'));
     stepTo('move-kind', 'Heavy');
     apply();
-    expect(chains().primary.moves[0]).toMatchObject({ kind: 'heavy', runes: [split] });
+    expect(chains().primary.moves[0]).toMatchObject({ kind: 'heavy', runes: [widen] });
   });
 
   it('a reorder carries the runes with their move', () => {
-    const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
+    const bolt: Move = { kind: 'light', form: 'lance', elements: ['fire'] };
     roomy(5, {
       primary: {
         moves: [
-          { ...bolt, runes: [split] },
+          { ...bolt, runes: [quick] },
           { ...bolt, kind: 'heavy' },
         ],
         payment: 'mana',
@@ -747,19 +742,19 @@ describe('SkillsTab: sockets and runes', () => {
     stepTo('move-position', 'Position 2 of 2');
     apply();
     expect(chains().primary.moves.map((m) => m.kind)).toEqual(['heavy', 'light']);
-    expect(chains().primary.moves[1].runes).toEqual([split]);
+    expect(chains().primary.moves[1].runes).toEqual([quick]);
     expect(socketsOf(chains().primary.moves[0])).toEqual([]);
   });
 
   it("the editor's socket rows open the rune grid under the rows, as a scope", () => {
-    socketed([null], { split: [1, 0, 0, 0, 0] });
+    socketed([null], { widen: [1, 0, 0, 0, 0] });
     renderSkills();
     const readout = within(screen.getByTestId('ability-readout'));
-    expect(readout.getByTestId('socket-count')).toHaveTextContent('Sockets · 1 of 1');
+    expect(readout.getByTestId('socket-count')).toHaveTextContent('Sockets · 1 of 3');
     edit(0);
     fireEvent.click(readout.getByTestId('inspect-socket-0'));
     expect(readout.getByTestId('rune-picker')).toHaveAttribute('data-pad-scope');
-    expect(readout.getByTestId('rune-pick-split').parentElement!.className).toMatch(/grid-cols-2/);
+    expect(readout.getByTestId('rune-pick-widen').parentElement!.className).toMatch(/grid-cols-2/);
     fireEvent.click(readout.getByTestId('rune-picker-close'));
     expect(readout.queryByTestId('rune-picker')).toBeNull();
     expect(readout.getByTestId('inspect-socket-0')).toBeInTheDocument();

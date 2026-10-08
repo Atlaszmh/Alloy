@@ -1,12 +1,11 @@
 import { useMemo, type ReactElement } from 'react';
 import {
   CHAIN_SKILLS,
-  carriedByText,
-  carriedSkills,
+  MAX_SOCKETS,
+  OPEN_SKILL_TEXT,
   movesetOf,
   profileStats,
   resolveChain,
-  socketCap,
   type AbilitySlot,
   type Blow,
   type GearItem,
@@ -27,7 +26,7 @@ export function MovesetView({ item }: { item: GearItem }): ReactElement {
   const stats = useMemo(() => profileStats(registry, profile), [registry, profile]);
   const { chains, slots } = movesetOf(registry, item);
   const cap = registry.getDelveBalance().chains.cap;
-  const carried = carriedSkills(registry, item);
+  const carried = CHAIN_SKILLS.filter((s) => (slots[s] ?? 0) > 0);
   return (
     <div
       className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-[16px]"
@@ -39,7 +38,7 @@ export function MovesetView({ item }: { item: GearItem }): ReactElement {
         if (!carried.includes(s) || !chain)
           return (
             <div key={s} className="text-stone-500" data-testid={`moveset-${s}`}>
-              {SKILL_NAME[s]}: {carriedByText(registry, s).toLowerCase()}
+              {SKILL_NAME[s]}: {OPEN_SKILL_TEXT.toLowerCase()}
             </div>
           );
         const names = Array.isArray(chain)
@@ -54,7 +53,7 @@ export function MovesetView({ item }: { item: GearItem }): ReactElement {
           </div>
         );
       })}
-      <ItemSockets chains={chains} cap={socketCap(registry, item.rarity)} />
+      <ItemSockets chains={chains} cap={MAX_SOCKETS} />
     </div>
   );
 }

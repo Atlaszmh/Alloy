@@ -18,7 +18,11 @@ describe('draftLines', () => {
       basic: saved.basic.map((b, i) => (i === 0 ? { ...b, kind: 'medium' as const } : b)),
     });
     expect(lines.map((l) => l.skill)).toEqual(['basic', 'primary']);
-    expect(lines[1]).toMatchObject({ before: 'light Fire Bolt', after: 'heavy Fire Bolt', notes: [] });
+    expect(lines[1]).toMatchObject({
+      before: 'medium Fire Strike · medium Fire Strike',
+      after: 'heavy Fire Strike',
+      notes: [],
+    });
     expect(lines[0].after).toMatch(/^medium Fire blow/);
   });
 

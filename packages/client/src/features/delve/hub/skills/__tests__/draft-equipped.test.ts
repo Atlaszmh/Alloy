@@ -19,7 +19,7 @@ describe('draftEquipped', () => {
     expect(equipped.weapon!.uid).toBe(p.equipped.weapon!.uid);
     expect(equipped.chest).toBe(p.equipped.chest);
     // The save's own weapon is untouched.
-    expect(heroChains(registry, p.equipped, p.pair).primary!.moves[0].form).toBe('bolt');
+    expect(heroChains(registry, p.equipped, p.pair).primary!.moves[0].form).toBe('strike');
   });
 
   it('unarmed, the gear is as worn', () => {

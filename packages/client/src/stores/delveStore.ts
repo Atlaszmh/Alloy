@@ -15,7 +15,6 @@ import {
   imprint as engineImprint,
   refine as engineRefine,
   buyShard as engineBuyShard,
-  awaken as engineAwaken,
   startTutorial as engineStartTutorial,
   skipTutorial as engineSkipTutorial,
   applyTutorialEvents,
@@ -30,8 +29,8 @@ import {
   setChains as engineSetChains,
   addSlot as engineAddSlot,
   draftPrice,
-  movesOf,
-  transferMoveset,
+  moveAll as engineMoveAll,
+  openSkill as engineOpenSkill,
   takeStop as engineTakeStop,
   bindSecondary as engineBindSecondary,
   chooseStartingMana,
@@ -44,8 +43,8 @@ import {
   sameChain,
   type ArpgWorld,
   type ChainFix,
-  type ChainOrigins,
   type Chains,
+  type AbilitySlot,
   type ChainSkill,
   type DataRegistry,
   type DelveProfile,
@@ -220,15 +219,6 @@ export interface ChainDraft {
   uid: string;
   pair: ManaPair;
   chains: Partial<Chains>;
-  /** For each chain in `chains`, the saved move each of its moves came from (null: a new one). */
-  origins: ChainOrigins;
-}
-
-/** `origins` for the skills `chains` holds. */
-function originsFor(origins: ChainOrigins, chains: Partial<Chains>): ChainOrigins {
-  return Object.fromEntries(
-    CHAIN_SKILLS.filter((s) => chains[s] && origins[s]).map((s) => [s, origins[s]]),
-  );
 }
 
 /**
@@ -253,9 +243,9 @@ export function draftChanges(
   );
 }
 
-/** Apply's options: the draft's origins and the pull rule (the dev override, else the balance's). */
-function applyOpts(draft: ChainDraft | null, unsocket: UnsocketMode | null): SetChainsOptions {
-  return { origins: draft?.origins ?? {}, unsocket: unsocket ?? undefined };
+/** Apply's options: the pull rule (the dev override, else the balance's). The price is by uid: no origins. */
+function applyOpts(_draft: ChainDraft | null, unsocket: UnsocketMode | null): SetChainsOptions {
+  return { unsocket: unsocket ?? undefined };
 }
 
 /** What Apply would do with the draft: the Anvil's builder and its Delve button both show it. */
@@ -483,8 +473,8 @@ interface DelveStore {
   refine: (what: MaterialRef) => ProfileActionResult;
   /** Buy a tier I shard at the shard bench. */
   buyShard: (stat: HeroStatKey) => ProfileActionResult;
-  /** Awaken rare weapon `uid`: it carries the Ultimate too (see the tutorial spec). */
-  awaken: (uid: string) => ProfileActionResult;
+  /** Open a skill on weapon `uid` (the constructs spec §3.2, Awaken's heir): its first slot, bought, for flux, Links and scrap. */
+  openSkill: (uid: string, skill: AbilitySlot) => ProfileActionResult;
   /** A new save's Guided start: the script's first step (see the tutorial spec). */
   startTutorial: () => void;
   /** Drop the rails (the confirm is the caller's), and a floor's in progress (`world`). */
@@ -512,9 +502,9 @@ interface DelveStore {
   /** Set the equipped weapon's changed chains, for Mana Dust: all or nothing. */
   setChains: (chains: Partial<Chains>) => ProfileActionResult;
   /**
-   * Put a chain into the builder's draft (a chain back as it was leaves it). `map`: for each of
-   * its moves, the index in the chain the builder showed (null: a new move); missing, each move
-   * stays where it was.
+   * Put a chain into the builder's draft (a chain back as it was leaves it). `map` (the builder's
+   * record of where each move came from) is taken and ignored: the moves carry their uids, and
+   * Apply prices by them (C1 drops it).
    */
   editDraft: <S extends ChainSkill>(skill: S, chain: Chains[S], map?: (number | null)[]) => void;
   /** Pay for the draft's changes and set them (`setChains`); a refusal keeps the draft. */
@@ -522,7 +512,7 @@ interface DelveStore {
   revertDraft: () => void;
   /** Add a slot to a chain of the equipped weapon, for Links and scrap (dropping its draft). */
   addSlot: (skill: ChainSkill) => ProfileActionResult;
-  /** Move the equipped weapon's moveset onto bag weapon `uid` and equip it, for scrap. */
+  /** Move all (the constructs spec §3.3): the worn weapon's constructs onto bag weapon `uid`, equipped. B2 fills the engine's op; until then it refuses. */
   transfer: (uid: string) => ProfileActionResult;
   /** Take the stop's boon (`{ kind: 'boon', index }`) or a guided stop's power-up. */
   takeStop: (action: StopAction) => ProfileActionResult;
@@ -741,7 +731,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     buyShard: (stat) => applyResult(engineBuyShard(registry(), get().profile, stat)),
 
-    awaken: (uid) => applyResult(engineAwaken(registry(), get().profile, uid)),
+    openSkill: (uid, skill) => applyResult(engineOpenSkill(registry(), get().profile, uid, skill)),
 
     startTutorial: () => commit(engineStartTutorial(registry(), get().profile)),
 
@@ -828,31 +818,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     setChains: (chains) => applyResult(engineSetChains(registry(), get().profile, chains)),
 
-    editDraft: (skill, chain, map) => {
+    editDraft: (skill, chain) => {
       const { profile, chainDraft } = get();
       const weapon = profile.equipped.weapon;
       if (!weapon) return;
       const changes = draftChanges(registry(), profile, chainDraft);
-      // The builder's map is over the chain it showed (the draft's, else the saved one):
-      // composed with the draft's own origins, it gives each move's index in the saved chain.
-      const shown = changes[skill] ?? heroChains(registry(), profile.equipped, profile.pair)[skill];
-      const from: (number | null)[] =
-        (changes[skill] ? chainDraft?.origins[skill] : undefined) ??
-        movesOf(shown).map((_, i) => i);
-      const handed = map ?? movesOf(chain).map((_, j) => j);
-      const origins = {
-        ...originsFor(chainDraft?.origins ?? {}, changes),
-        [skill]: handed.map((k) => (k === null ? null : (from[k] ?? null))),
-      };
       // Only what differs from the weapon is kept: an edit undone by hand leaves nothing.
-      const next = {
-        uid: weapon.uid,
-        pair: profile.pair,
-        chains: { ...changes, [skill]: chain },
-        origins,
-      };
-      const chains = draftChanges(registry(), profile, next);
-      set({ chainDraft: { ...next, chains, origins: originsFor(origins, chains) } });
+      const next = { uid: weapon.uid, pair: profile.pair, chains: { ...changes, [skill]: chain } };
+      set({ chainDraft: { ...next, chains: draftChanges(registry(), profile, next) } });
     },
 
     applyDraft: () => {
@@ -875,13 +848,13 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       const draft = get().chainDraft;
       if (res.ok && draft?.chains[skill]) {
         const { [skill]: _gone, ...chains } = draft.chains;
-        set({ chainDraft: { ...draft, chains, origins: originsFor(draft.origins, chains) } });
+        set({ chainDraft: { ...draft, chains } });
       }
       return res;
     },
 
     transfer: (uid) => {
-      const res = applyResult(transferMoveset(registry(), get().profile, uid, pull()));
+      const res = applyResult(engineMoveAll(registry(), get().profile, uid));
       if (res.ok) {
         set({ newUids: withoutUids(get().newUids, [uid]) });
         useUIStore.getState().markSeen('loadout');
