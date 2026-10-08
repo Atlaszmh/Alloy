@@ -100,6 +100,11 @@ function perKind<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ light: schema, medium: schema, heavy: schema, hold: schema });
 }
 
+/** A skill's slots on a weapon rarity: `[start, ceiling]`, the ceiling at least the start (the constructs spec §3.2). */
+const SlotRangeSchema = z
+  .tuple([z.number().int().min(0).max(MAX_CHAIN), z.number().int().min(0).max(MAX_CHAIN)])
+  .refine(([start, ceiling]) => ceiling >= start, 'a ceiling is at least its start');
+
 function perRarity<T extends z.ZodTypeAny>(schema: T) {
   return z.object({
     common: schema,
@@ -1431,6 +1436,28 @@ const DelveBalanceSchema = z.object({
         (c) => CHAIN_SKILLS.every((s) => c.legendary.includes(s)),
         'the legendary carries all four chains',
       ),
+    // Each rarity's slots by skill, `[start, ceiling]` (the constructs spec §3.2): the Basic's
+    // start 0 means the weapon's string; a ceiling never below its start nor the rarity below's,
+    // and the legendary's all 5.
+    slots: perRarity(
+      z.object({
+        basic: SlotRangeSchema,
+        primary: SlotRangeSchema,
+        defensive: SlotRangeSchema,
+        ultimate: SlotRangeSchema,
+      }),
+    )
+      .refine(
+        (s) =>
+          RARITY_ORDER.slice(1).every((r, i) =>
+            CHAIN_SKILLS.every((k) => s[r][k][1] >= s[RARITY_ORDER[i]][k][1]),
+          ),
+        'a ceiling never falls with rarity',
+      )
+      .refine(
+        (s) => CHAIN_SKILLS.every((k) => s.legendary[k][1] === MAX_CHAIN),
+        `the legendary's ceilings are all ${MAX_CHAIN}`,
+      ),
     extraSlots: perRarity(
       z
         .tuple([z.number().int().min(0), z.number().int().min(0)])
@@ -1439,12 +1466,32 @@ const DelveBalanceSchema = z.object({
     // By the new slot's position: the 2nd slot's price first, the last slot's last.
     slotLinks: z.array(z.number().int().min(0)).length(MAX_CHAIN - 1),
     slotScrap: z.array(z.number().int().min(0)).length(MAX_CHAIN - 1),
+    // Open a skill (a skill's first slot), by the weapon's rarity: flux by grade, Links and scrap.
+    openSkill: perRarity(
+      z.object({
+        flux: z
+          .object({
+            uncommon: z.number().int().min(0),
+            magic: z.number().int().min(0),
+            rare: z.number().int().min(0),
+            epic: z.number().int().min(0),
+          })
+          .partial()
+          .strict(),
+        links: z.number().int().min(0),
+        scrap: z.number().min(0),
+      }),
+    ),
     editDust: z.number().int().min(0),
     elementDust: z.number().int().min(0),
     transferScrap: z.number().int().min(0),
+    // Mana Dust salvaging a construct gives (the constructs spec §3.3 gives none: 0 as shipped).
+    salvageDust: z.number().int().min(0),
   }),
   runes: z.object({
     socketCap: perRarity(z.number().int().min(0).max(MAX_SOCKETS)),
+    // Chance a weapon drop's open socket holds a rune, by rarity (the constructs spec §3.5).
+    runeChance: perRarity(z.number().min(0).max(1)),
     // By the sockets the move already has: the first socket's price first.
     // At least 1: a removed move gives back a flat Link per socket.
     socketLinks: z.array(z.number().int().min(1)).length(MAX_SOCKETS),

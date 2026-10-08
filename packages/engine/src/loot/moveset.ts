@@ -7,9 +7,11 @@ import {
   type Blow,
   type Chains,
   type ChainSkill,
+  type Construct,
   type FormId,
   type Move,
   type MoveKind,
+  type WeaponClass,
 } from '../types/ability.js';
 import type { ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, Moveset, Rarity } from '../types/gear.js';
@@ -40,6 +42,143 @@ export const DEFAULT_FORMS: Record<AbilitySlot, { form: FormId; payment: Ability
   defensive: { form: 'ward', payment: 'mana' },
   ultimate: { form: 'nova', payment: 'charge' },
 };
+
+/**
+ * A slot's default form and payment by weapon class (the constructs spec §2.4):
+ * the Primary's Strike on a melee weapon, Bolt otherwise (unarmed too); the
+ * Defensive's Ward and the Ultimate's charged Nova for both.
+ */
+export function defaultForm(
+  registry: DataRegistry,
+  slot: AbilitySlot,
+  cls: WeaponClass | null,
+): { form: FormId; payment: AbilityPayment } {
+  if (slot === 'primary' && cls === 'melee') return { form: 'strike', payment: 'mana' };
+  const { form, payment } = DEFAULT_FORMS[slot];
+  if (!registry.getArpgData().forms.some((f) => f.id === form)) throw new Error(`No form ${form}`);
+  return { form, payment };
+}
+
+/** A weapon base's class (the constructs spec §2.1); unarmed null. */
+export function weaponClass(registry: DataRegistry, baseId: string | null): WeaponClass | null {
+  return baseId ? (registry.getGearBase(baseId).class ?? null) : null;
+}
+
+/** Whether a weapon of `baseId` can express `form`: a shared form, or one of its class; unarmed none. */
+export function formAllowed(registry: DataRegistry, baseId: string | null, form: FormId): boolean {
+  const cls = weaponClass(registry, baseId);
+  if (!cls) return false;
+  const own = registry.getForm(form).class;
+  return own === 'both' || own === cls;
+}
+
+/**
+ * A skill's slots on `owner`, `[start, ceiling]` by its rarity
+ * (`movesets.slots`; the constructs spec §3.2): the Basic's start its weapon's
+ * string (a string longer than the ceiling keeps its length); unarmed the
+ * Basic at its string and every other skill `[0, 0]`.
+ */
+export function slotRange(
+  registry: DataRegistry,
+  owner: MovesetOwner,
+  skill: ChainSkill,
+): [start: number, ceiling: number] {
+  const string = weaponString(registry, owner.baseId).length;
+  if (!owner.rarity) return skill === 'basic' ? [string, string] : [0, 0];
+  const [start, ceiling] = registry.getDelveBalance().movesets.slots[owner.rarity][skill];
+  if (skill !== 'basic') return [start, ceiling];
+  return [string, Math.max(string, ceiling)];
+}
+
+/** The most slots `owner`'s `skill` can hold (`slotRange`'s ceiling). */
+export function ceilingOf(registry: DataRegistry, owner: MovesetOwner, skill: ChainSkill): number {
+  return slotRange(registry, owner, skill)[1];
+}
+
+/**
+ * A plain construct for slot `index` of `owner`'s `skill` (the constructs spec
+ * §3.5): the skill's default kind at its index (the class default form's
+ * chain, or the weapon's string; medium past its end), the class default form,
+ * in `element`; no sockets, no uid (the caller mints one when it enters the
+ * profile).
+ */
+export function plainConstruct(
+  registry: DataRegistry,
+  owner: MovesetOwner,
+  skill: ChainSkill,
+  index: number,
+  element: ManaType,
+): Construct {
+  if (skill === 'basic') return { kind: defaultKind(registry, 'basic', owner.baseId, index), element };
+  const { form } = defaultForm(registry, skill, weaponClass(registry, owner.baseId));
+  const kind = registry.getForm(form).defaultChain[index] ?? 'medium';
+  return { kind, form, elements: [element] };
+}
+
+/** The skill a construct belongs to: a blow the Basic, a move its form's slot. */
+export function constructSkill(registry: DataRegistry, c: Construct): ChainSkill {
+  return 'form' in c ? registry.getForm(c.form).slot : 'basic';
+}
+
+/** Whether a construct is plain: no open socket and no rune (the constructs spec §3.3's auto-salvage). */
+export function isPlain(c: Construct): boolean {
+  return socketsOf(c).length === 0;
+}
+
+/**
+ * The uids of `weapon`'s constructs its class can't express (the constructs
+ * spec §3.1's dormancy): the moves whose form isn't the class's or shared. A
+ * blow is never dormant (a rune that doesn't fit the weapon's blows is dormant
+ * on its own, in `runeKnobs`). A construct without a uid can't be named: none.
+ */
+export function dormantUids(registry: DataRegistry, weapon: GearItem): Set<string> {
+  const out = new Set<string>();
+  const { chains } = movesetOf(registry, weapon);
+  for (const skill of CHAIN_SKILLS)
+    for (const m of chainMoves(chains[skill]))
+      if ('form' in m && m.uid && !formAllowed(registry, weapon.baseId, m.form)) out.add(m.uid);
+  return out;
+}
+
+/**
+ * `moveset` with each skill's slots raised to its start on `owner` and its
+ * empty slots below the start plain-filled in `element` (the constructs spec
+ * §3.2's Upgrade, §3.3's Move all): a chain the moveset lacks is made at its
+ * skill's default payment; slots and constructs past the start stay as they
+ * are. Nothing is minted: the caller gives the new constructs their uids.
+ */
+export function fillSlots(
+  registry: DataRegistry,
+  owner: MovesetOwner,
+  moveset: Moveset,
+  element: ManaType,
+): Moveset {
+  const chains = { ...moveset.chains };
+  const slots = { ...moveset.slots };
+  for (const skill of CHAIN_SKILLS) {
+    const [start] = slotRange(registry, owner, skill);
+    const have = slots[skill] ?? 0;
+    if (start === 0 && !chains[skill]) continue;
+    const chain = chains[skill] ?? emptyChain(registry, owner, skill);
+    const moves = chainMoves(chain);
+    if (have >= start && moves.length >= start) continue;
+    const added = Array.from({ length: Math.max(0, start - moves.length) }, (_, i) =>
+      plainConstruct(registry, owner, skill, moves.length + i, element),
+    );
+    (chains as Record<ChainSkill, unknown>)[skill] = Array.isArray(chain)
+      ? [...chain, ...(added as Blow[])]
+      : { ...chain, moves: [...chain.moves, ...(added as Move[])] };
+    slots[skill] = Math.max(have, start);
+  }
+  return { ...moveset, chains, slots };
+}
+
+/** An empty chain for `skill`: no blows, or no moves at the skill's default payment. */
+function emptyChain(registry: DataRegistry, owner: MovesetOwner, skill: ChainSkill): Chains[ChainSkill] {
+  if (skill === 'basic') return [];
+  const { payment } = defaultForm(registry, skill, weaponClass(registry, owner.baseId));
+  return { moves: [], payment };
+}
 
 /**
  * The skills `item` carries, by its rarity (`movesets.carries`), and the
