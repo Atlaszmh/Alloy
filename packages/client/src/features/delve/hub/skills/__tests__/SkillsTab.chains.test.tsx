@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, screen, fireEvent, within } from '@testing-library/react';
 import {
-  OPEN_SKILL_TEXT,
   defaultMoveset,
   heroChains,
   pouchCount,
@@ -95,15 +94,17 @@ describe('SkillsTab', () => {
     expect(screen.queryByText('Quick and cheap.')).toBeNull(); // nor a cost
   });
 
-  it("a new hero's common sword holds its Basic and a two-slot Primary; the others show locked, saying where they open", () => {
+  it("a new save's common sword holds two Primary constructs; the skills it has no slot for say so", () => {
     store().resetProfile(1234, 'fire'); // the common sword, as a new save has it
     renderSkills();
     expect(screen.getByTestId('mana-pair')).toHaveTextContent('Fire · 2');
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
     expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('2 of 2');
-    for (const skill of ['defensive', 'ultimate'] as const) {
-      const text = OPEN_SKILL_TEXT;
-      // The tab's own line says where it opens (the Temper bench).
+    for (const [skill, text] of [
+      ['defensive', "No Defensive slot yet: Open a skill on the Forge's Temper bench"],
+      ['ultimate', 'No Ultimate slot on a common weapon'],
+    ] as const) {
+      // The tab's own line says why.
       expect(screen.getByTestId(`chain-skill-${skill}`)).toHaveTextContent(text);
       fireEvent.click(screen.getByTestId(`chain-skill-${skill}`));
       expect(screen.getByTestId('abilities-summary')).toHaveTextContent(text);
@@ -113,12 +114,14 @@ describe('SkillsTab', () => {
     }
   });
 
-  it('unarmed, the default chains show at their base slots: the basic chain alone', () => {
+  it("unarmed, the default chains show at the bare hands' slots: the basic chain alone", () => {
     store().unequip('weapon');
     renderSkills();
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
     for (const s of ['primary', 'defensive'] as const)
-      expect(screen.getByTestId(`chain-skill-${s}`)).toHaveTextContent(OPEN_SKILL_TEXT);
+      expect(screen.getByTestId(`chain-skill-${s}`)).toHaveTextContent(
+        'Equip a weapon to build your moves.',
+      );
   });
 
   it('edits a draft: Apply commits it, free before the first dive, and Revert drops it', () => {

@@ -2,7 +2,19 @@ import { useState, type ReactNode } from 'react';
 import { act, fireEvent, render, screen, type RenderResult } from '@testing-library/react';
 import { expect } from 'vitest';
 import { MemoryRouter } from 'react-router';
+import {
+  CHAIN_SKILLS,
+  ceilingOf,
+  defaultMoveset,
+  movesetOf,
+  type Chain,
+  type Chains,
+  type ChainSkill,
+  type DelveProfile,
+  type MoveKind,
+} from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { getDelveRegistry } from '../../../registry';
 import { Footer, usePrompts, type Prompt } from '@/features/delve/kit';
 import { useChainEditor, type ChainEditorProps } from '../../../chains/useChainEditor';
 import type { HubLink, HubMode } from '../../types';
@@ -59,7 +71,9 @@ export function Panes(props: ChainEditorProps) {
   const anvil: AnvilChains = {
     editor: props,
     weapon: null,
+    saved: props.chains,
     changed: {},
+    bag: props.bag ? [...props.bag] : [],
     slotOffer: () => ({ price: null, why: null }),
     buySlot: () => {},
   };
@@ -114,4 +128,64 @@ export function valuesOf(testId: string): string[] {
 export function pickForm(id: string): void {
   fireEvent.click(screen.getByTestId('move-form'));
   fireEvent.click(screen.getByTestId(`form-${id}`));
+}
+
+/**
+ * `p` with every construct on its worn weapon given a uid where it has none (`t<n>`), as a save
+ * holds them: Apply's uid diff and the bag need them (`armed` and `defaultMoveset` mint none).
+ */
+export function stamped(p: DelveProfile): DelveProfile {
+  let n = 0;
+  const weapon = p.equipped.weapon;
+  if (!weapon) return p;
+  const moveset = movesetOf(getDelveRegistry(), weapon);
+  const stamp = <T extends { uid?: string }>(c: T): T => ({ ...c, uid: c.uid ?? `t${++n}` });
+  const chains = Object.fromEntries(
+    Object.entries(moveset.chains).map(([k, c]) => [
+      k,
+      Array.isArray(c) ? c.map(stamp) : { ...c, moves: c.moves.map(stamp) },
+    ]),
+  );
+  return {
+    ...p,
+    equipped: { ...p.equipped, weapon: { ...weapon, moveset: { ...moveset, chains } } },
+  };
+}
+
+/** A Strike chain of `kinds`, each move with a uid (`p<n>`), in Fire, paid with mana. */
+export function strikes(kinds: readonly MoveKind[]): Chain {
+  return {
+    moves: kinds.map((kind, i) => ({ uid: `p${i + 1}`, kind, form: 'strike', elements: ['fire'] })),
+    payment: 'mana',
+  };
+}
+
+/**
+ * The store's worn sword made epic (every skill has slots), each chain at its ceiling (or
+ * `slots`), the Primary four Strikes (light, medium, medium, heavy) with uids `p1`–`p4`, the rest
+ * the epic's defaults, `over` on top; every construct with a uid.
+ */
+export function roomy(
+  over: Partial<Chains> = {},
+  slots: Partial<Record<ChainSkill, number>> = {},
+): void {
+  const registry = getDelveRegistry();
+  const store = useDelveStore.getState();
+  const p = store.profile;
+  const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
+  const base = defaultMoveset(registry, weapon, 'fire');
+  const all = Object.fromEntries(
+    CHAIN_SKILLS.map((s) => [s, slots[s] ?? ceilingOf(registry, weapon, s)]),
+  ) as Record<ChainSkill, number>;
+  const chains = {
+    ...base.chains,
+    primary: strikes(['light', 'medium', 'medium', 'heavy']),
+    ...over,
+  };
+  store.setProfile(
+    stamped({
+      ...p,
+      equipped: { ...p.equipped, weapon: { ...weapon, moveset: { ...base, chains, slots: all } } },
+    }),
+  );
 }

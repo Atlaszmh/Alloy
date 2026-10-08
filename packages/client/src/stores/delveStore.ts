@@ -347,7 +347,7 @@ const NOT_YET = 'Not yet';
  * run on every draft). A draft that moves the bag waits for B2.
  */
 // ponytail: delete the fallback (keep the engineApplyDraft call) once B2's applyDraft is merged.
-function applyNow(
+export function applyNow(
   registry: DataRegistry,
   profile: DelveProfile,
   draft: ConstructDraft,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
-import { OPEN_SKILL_TEXT, defaultMoveset, type ChainSkill } from '@alloy/engine';
+import { defaultMoveset, type ChainSkill } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
@@ -63,15 +63,18 @@ describe('the skill strip', () => {
     expect(tab('basic').textContent).toMatch(/^Basic\s*3 of 5 · free$/);
   });
 
-  it('a skill with no slot is a dimmed tab whose line says where it opens; it can still be chosen', () => {
-    renderSkills(); // the new save's common sword: its Basic and a two-slot Primary
-    for (const s of ['defensive', 'ultimate'] as const) {
-      const line = within(tab(s)).getByText(OPEN_SKILL_TEXT);
+  it('a skill the weapon has no slot for is a dimmed tab whose line says why; it can still be chosen', () => {
+    renderSkills(); // the new save's common sword: no Defensive or Ultimate slot
+    for (const [s, text] of [
+      ['defensive', "No Defensive slot yet: Open a skill on the Forge's Temper bench"],
+      ['ultimate', 'No Ultimate slot on a common weapon'],
+    ] as const) {
+      const line = within(tab(s)).getByText(text);
       expect(line).toHaveAttribute('data-absent');
       expect(tab(s)).toBeEnabled();
       fireEvent.click(tab(s));
       expect(tab(s)).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(OPEN_SKILL_TEXT);
+      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(text);
     }
   });
 
