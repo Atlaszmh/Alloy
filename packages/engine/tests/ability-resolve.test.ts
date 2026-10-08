@@ -229,6 +229,10 @@ describe('mergeKnobs', () => {
       manaOnHit: 0,
       guardOnLand: 0,
       stackTime: 0,
+      detonate: 0,
+      critBonus: 0,
+      cleave: 0,
+      homing: 0,
     });
   });
 });

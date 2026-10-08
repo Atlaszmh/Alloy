@@ -208,6 +208,8 @@ export function computeHeroStats(
   const weapon: HeroWeapon = armed?.attack
     ? {
         baseId: armed.id,
+        class: armed.class ?? null,
+        style: armed.style ?? null,
         kind: armed.attack.kind,
         range: armed.attack.range,
         arc: armed.attack.arc ?? 90,
@@ -219,6 +221,8 @@ export function computeHeroStats(
       }
     : {
         baseId: null,
+        class: null,
+        style: null,
         kind: 'melee',
         range: 1.4,
         arc: 90,

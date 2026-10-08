@@ -663,6 +663,7 @@ export type ArpgEvent =
        * client gives it no hit-stop or kick. Its numbers are as any hit's.
        */
       echo?: true;
+      look?: StyleLook;
     }
   | {
       kind: 'heroHit';
@@ -689,6 +690,11 @@ export type ArpgEvent =
       tx: number;
       ty: number;
       heft: number;
+      /**
+       * The casting weapon's style look (the constructs spec §4.2), drawn as its motif; absent
+       * unarmed. The same on `hit`, `beam`, `slash`, `explode` and `dash` (B1 sets those).
+       */
+      look?: StyleLook;
     }
   | { kind: 'windup'; slot: number; until: number; heft: number }
   /** A hold reached a new stage (1, then 2): an ability slot's, or the basic attack's (null). */
@@ -710,6 +716,7 @@ export type ArpgEvent =
        * `slash`, `explode` and `dash`.
        */
       infusion: ManaType | null;
+      look?: StyleLook;
     }
   | {
       kind: 'slash';
@@ -723,6 +730,7 @@ export type ArpgEvent =
       infusion: ManaType | null;
       /** An echo's slash (an ability's `replay`): the client gives it no hit-stop or kick. */
       echo?: true;
+      look?: StyleLook;
     }
   | {
       kind: 'basic';
@@ -746,6 +754,7 @@ export type ArpgEvent =
       radius: number;
       element: ManaType | null;
       infusion: ManaType | null;
+      look?: StyleLook;
     }
   | {
       kind: 'reaction';
@@ -778,6 +787,7 @@ export type ArpgEvent =
       toX: number;
       toY: number;
       infusion: ManaType | null;
+      look?: StyleLook;
     }
   | { kind: 'noMana'; slot: number }
   /** A skill paid: the mana and charge it really cost (none for the sandbox's free toggles). */

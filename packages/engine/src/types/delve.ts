@@ -710,6 +710,9 @@ export interface HeroBlow extends ComboStepDef {
 
 export interface HeroWeapon {
   baseId: string | null;
+  /** Its class and cast style (the constructs spec §2.1, §4); unarmed neither. */
+  class: WeaponClass | null;
+  style: CastStyle | null;
   kind: 'melee' | 'bolt';
   range: number;
   arc: number;
