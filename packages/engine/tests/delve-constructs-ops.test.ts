@@ -267,3 +267,125 @@ describe('the settle (dive.ts)', () => {
     expect(lost.filter(isPlain).length).toBeGreaterThan(2);
   });
 });
+
+describe('applyDraft (constructs.ts)', () => {
+  const { editDust, elementDust } = bal.movesets;
+
+  it('the save as it stands applies for nothing and changes nothing but the Apply events', () => {
+    const p = hero();
+    const res = applyDraft(registry, p, asIs(p));
+    expect(res.ok).toBe(true);
+    expect([res.profile.manaDust, res.profile.links, res.profile.scrap]).toEqual([500, 20, 2000]);
+    expect(worn(res.profile)).toEqual(worn(p));
+    expect(res.profile.constructs).toEqual([]);
+    expect(draftRefusal(registry, p, asIs(p))).toBeNull();
+  });
+
+  it('unsocketing is free: the construct goes to the bag as it was, the chain closes up', () => {
+    const p = hero();
+    const [a, b] = primary(p);
+    const res = applyDraft(registry, p, {
+      chains: { primary: { moves: [b], payment: 'mana' } },
+      bag: [a],
+    });
+    expect(res.ok).toBe(true);
+    expect(uids(primary(res.profile))).toEqual([b.uid]);
+    expect(res.profile.constructs).toEqual([a]);
+    expect(res.profile.manaDust).toBe(500);
+    expect(res.profile.nextConstructUid).toBe(p.nextConstructUid);
+  });
+
+  it('placing from the bag is free, a reorder free; both together still free', () => {
+    const p = hero();
+    const [a, b] = primary(p);
+    const out = applyDraft(registry, p, { chains: { primary: { moves: [b], payment: 'mana' } }, bag: [a] }).profile;
+    const back = applyDraft(registry, out, { chains: { primary: { moves: [a, b], payment: 'mana' } }, bag: [] });
+    expect(back.ok).toBe(true);
+    expect(uids(primary(back.profile))).toEqual([a.uid, b.uid]);
+    expect(back.profile.constructs).toEqual([]);
+    expect(back.profile.manaDust).toBe(500);
+    const swapped = applyDraft(registry, p, { chains: { primary: { moves: [b, a], payment: 'mana' } }, bag: [] });
+    expect(uids(primary(swapped.profile))).toEqual([b.uid, a.uid]);
+    expect(swapped.profile.manaDust).toBe(500);
+  });
+
+  it('a placed construct keeps its runes; its edits in the same Apply are priced as a kept construct', () => {
+    let p = hero();
+    p = openSocket(registry, p, 'primary', 0).profile;
+    p = socketRune(registry, p, 'primary', 0, 0, { id: 'quick', tier: 1 }).profile;
+    const [a, b] = primary(p);
+    const out = applyDraft(registry, p, { chains: { primary: { moves: [b], payment: 'mana' } }, bag: [a] }).profile;
+    expect(socketsOf(out.constructs[0])).toEqual([{ id: 'quick', tier: 1 }]);
+    const heavy = { ...a, kind: 'heavy' as const };
+    const back = applyDraft(registry, out, { chains: { primary: { moves: [b, heavy], payment: 'mana' } }, bag: [] });
+    expect(back.ok).toBe(true);
+    expect(primary(back.profile)[1]).toEqual(heavy);
+    expect(back.profile.manaDust).toBe(out.manaDust - editDust);
+    expect(back.profile.runes).toEqual(out.runes);
+  });
+
+  it("a new construct (no uid) is minted and priced; a changed element set elementDust; the bag's are unchanged", () => {
+    const p = hero();
+    const [a, b] = primary(p);
+    const fresh: Move = { kind: 'light', form: 'strike', elements: ['fire'] };
+    const res = applyDraft(registry, p, {
+      chains: { primary: { moves: [a, b, fresh], payment: 'mana' } },
+      bag: [],
+    });
+    expect(res.ok).toBe(false); // the common sword's Primary has 2 slots
+    const roomy = addSlot(registry, p, 'primary').profile;
+    const made = applyDraft(registry, roomy, {
+      chains: { primary: { moves: [a, b, fresh], payment: 'mana' } },
+      bag: [],
+    });
+    expect(made.ok).toBe(true);
+    expect(primary(made.profile)[2]).toEqual({ ...fresh, uid: `c${roomy.nextConstructUid}` });
+    expect(made.profile.manaDust).toBe(roomy.manaDust - editDust);
+    const bound = bindSecondary(registry, made.profile, 'frost').profile;
+    const frost = applyDraft(registry, bound, {
+      chains: { primary: { moves: [{ ...a, elements: ['frost'] }, b, primary(bound)[2]], payment: 'mana' } },
+      bag: [],
+    });
+    expect(frost.profile.manaDust).toBe(bound.manaDust - elementDust);
+  });
+
+  it('refuses a uid in two places, an unknown uid, a construct of another skill, and a class the weapon cannot express', () => {
+    const p = hero();
+    const [a, b] = primary(p);
+    const blow = basic(p)[0];
+    expect(draftRefusal(registry, p, { chains: { primary: { moves: [a, b], payment: 'mana' } }, bag: [a] })).toBe('A construct is in one place');
+    expect(draftRefusal(registry, p, { chains: { primary: { moves: [a, { ...b, uid: 'c999' }], payment: 'mana' } }, bag: [] })).toBe('Unknown construct c999');
+    expect(draftRefusal(registry, p, { chains: { primary: { moves: [a, b], payment: 'mana' } }, bag: [{ kind: 'light', element: 'fire' }] })).toBe('Nothing new is made in the bag');
+    const bagged = { ...p, constructs: [{ uid: 'cb', kind: 'medium', form: 'bolt', elements: ['fire'] } as Move, { ...blow, uid: 'cw' }] };
+    expect(draftRefusal(registry, bagged, { chains: { primary: { moves: [a, { ...blow, uid: 'cw' } as unknown as Move], payment: 'mana' } }, bag: [b, bagged.constructs[0]] })).toBe('Not a primary construct');
+    expect(draftRefusal(registry, bagged, { chains: { primary: { moves: [a, bagged.constructs[0]], payment: 'mana' } }, bag: [b, bagged.constructs[1]] })).toBe("A sword can't express Bolt");
+  });
+
+  it('a dropped construct must be plain; under autoSalvagePlain a displaced plain one is deleted at Apply, a socketed one kept', () => {
+    let p = hero();
+    const [a, b] = primary(p);
+    const dropped = applyDraft(registry, p, { chains: { primary: { moves: [b], payment: 'mana' } }, bag: [] });
+    expect(dropped.ok).toBe(true);
+    expect(dropped.profile.constructs).toEqual([]);
+    p = openSocket(registry, p, 'primary', 0).profile;
+    const socketed = primary(p)[0];
+    expect(socketed.uid).toBe(a.uid);
+    expect(draftRefusal(registry, p, { chains: { primary: { moves: [b], payment: 'mana' } }, bag: [] })).toBe('Every construct is kept: unsocket it to the bag');
+    const auto = { ...p, autoSalvagePlain: true };
+    const out = applyDraft(registry, auto, { chains: { primary: { moves: [], payment: 'mana' } }, bag: [socketed, b] });
+    expect(out.ok).toBe(true);
+    expect(out.profile.constructs).toEqual([socketed]);
+    expect(primary(out.profile)).toEqual([]);
+    // Already in the bag, a plain construct stays through an Apply that doesn't touch it.
+    const again = applyDraft(registry, { ...out.profile, constructs: [socketed, b] }, asIs({ ...out.profile, constructs: [socketed, b] }));
+    expect(again.profile.constructs).toEqual([socketed, b]);
+  });
+
+  it('a chain the draft leaves out is unchanged; a bag entry still sitting in it is a uid in two places; the Basic keeps one blow', () => {
+    const p = hero();
+    const [a] = primary(p);
+    expect(draftRefusal(registry, p, { chains: {}, bag: [a] })).toBe('A construct is in one place');
+    expect(draftRefusal(registry, p, { chains: { basic: [] }, bag: basic(p) })).toBe('A chain holds 1 to 3 moves');
+    expect(applyDraft(registry, startDive(registry, p, 1), asIs(p)).reason).toBe('Chains can only change between dives');
+  });
+});
