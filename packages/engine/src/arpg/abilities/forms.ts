@@ -3,7 +3,7 @@ import type { Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
 import { angleBetween, dirTo, dist, distToSegment } from '../geometry.js';
 import { clipSight, moveCircle, perceives, sees, snapToWalkable } from '../grid.js';
-import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
+import { abilityHit, chainFrom, detonate, hitOpts, impact, leaveZone, lookOf } from './impact.js';
 import { stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, alive, muzzle, SHOT, spawnProjectile } from './targeting.js';
 import { hitObject, objectsIn, objectsOnBeam } from '../objects.js';
@@ -147,10 +147,12 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           width,
           element: ab.element,
           infusion: ab.elements[1] ?? null,
+          ...lookOf(ab),
         });
         for (const m of hits) {
           struck.add(m.id);
           hitMonster(ctx, m, hit, ab.element, opts);
+          detonate(ctx, ab, m, hit);
         }
         // An Echo's beam sets nothing off (see the room objects spec).
         if (!ab.replay)
@@ -215,10 +217,14 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
         element: ab.element,
         heft,
         infusion: ab.elements[1] ?? null,
+        ...lookOf(ab),
         ...(ab.replay ? { echo: true as const } : {}),
       });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
-      for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
+      for (const m of hits) {
+        hitMonster(ctx, m, hit, ab.element, opts);
+        detonate(ctx, ab, m, hit);
+      }
       if (!ab.replay) {
         for (const obj of objectsIn(world, h, reach, dir, arc)) hitObject(ctx, obj, 'hero');
         // A heavy or hold Strike wears crumbling cover in its arc, as a heavy blow does.

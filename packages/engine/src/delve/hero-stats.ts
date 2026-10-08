@@ -405,7 +405,9 @@ function reach(k: KnobSet, targets: number, bal: DelveBalance): number {
   for (let i = 1; i <= k.chain; i++) jumps += Math.pow(bal.abilities.chainPower, i);
   const zone = k.zone ? (k.zone.seconds / 0.5) * k.zone.tickPower * targets : 0;
   const shards = k.split ? EXTRA_SHOT * k.split.count * k.split.power : 0;
-  return targets + pierced + jumps + zone + shards;
+  // Detonate: each foe struck blasts round itself, finding a foe half the time.
+  const blasts = EXTRA_SHOT * k.detonate * targets;
+  return targets + pierced + jumps + zone + shards + blasts;
 }
 
 /** What scales a whole use: Echo's repeat, Volatile's reactions and Saturate's stacks (1 without). */
