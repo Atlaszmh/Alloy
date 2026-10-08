@@ -448,6 +448,8 @@ function mapCounts(haul: Haul, f: (n: number) => number): Haul {
     dust: f(haul.dust),
     links: f(haul.links),
     runes: tiers(haul.runes),
+    // Its constructs are no counts: the haul's are lost with it, the banked ones kept (B2 rolls each).
+    constructs: [],
   };
 }
 

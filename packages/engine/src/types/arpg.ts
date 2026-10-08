@@ -104,6 +104,8 @@ export type StyleLook = 'blade' | 'crescent' | 'hatchet' | 'stone' | 'orb' | 'sp
 /** A weapon's cast style (the constructs spec §4): how it expresses every ability form. */
 export interface CastStyle {
   name: string;
+  /** The trait as the player reads it ("Shots pierce one foe"): the item header's line. */
+  text: string;
   numbers: StyleNumbers;
   motion: StyleMotion;
   /** Merged first, like a built-in rune that costs nothing. */

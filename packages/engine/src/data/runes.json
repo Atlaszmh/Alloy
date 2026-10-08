@@ -1,5 +1,22 @@
 [
   {
+    "id": "detonate",
+    "name": "Detonate",
+    "icon": "🧨",
+    "family": "shape",
+    "fits": { "forms": ["strike", "whirl", "volley", "lance", "onslaught"], "weapons": [] },
+    "tiers": [
+      { "detonate": 0.25, "power": 0.9 },
+      { "detonate": 0.3, "power": 0.9 },
+      { "detonate": 0.35, "power": 0.9 },
+      { "detonate": 0.4, "power": 0.9 },
+      { "detonate": 0.45, "power": 0.9 }
+    ],
+    "load": [0.3, 0.35, 0.4, 0.45, 0.5],
+    "effect": "Each foe hit sets off a blast of {detonate:%} power around it",
+    "tradeoff": "{power:±%} power"
+  },
+  {
     "id": "split",
     "name": "Split",
     "icon": "✳️",

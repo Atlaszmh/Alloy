@@ -28,7 +28,14 @@ describe('the pouch and the haul', () => {
       shards: {},
       essences: {},
     });
-    expect(emptyHaul()).toEqual({ ...emptyMaterials(), scrap: 0, dust: 0, links: 0, runes: {} });
+    expect(emptyHaul()).toEqual({
+      ...emptyMaterials(),
+      scrap: 0,
+      dust: 0,
+      links: 0,
+      runes: {},
+      constructs: [],
+    });
     // Fresh each time: no shared records.
     const a = emptyHaul();
     a.metals.iron = 3;

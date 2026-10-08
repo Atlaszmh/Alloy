@@ -6,26 +6,27 @@ import { generateItem } from '../src/loot/item-generator.js';
 import { emptyMaterials } from '../src/loot/materials.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
 import {
-  baseSlots,
-  carriedFrom,
-  carriedSkills,
   defaultChain,
   defaultMoveset,
-  extraSlots,
   heroChains,
+  moveAllPreview,
+  slotRange,
+  weaponParts,
 } from '../src/loot/moveset.js';
 import { GearItemSchema } from '../src/delve/profile-schema.js';
 import { betweenDives } from '../src/delve/autopilot.js';
 import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
 import {
+  OPEN_SKILL_TEXT,
   addSlot,
   movesetEditPrice,
   movesOf,
+  sameChain,
   setChain,
   setChains,
   slotPrice,
-  transferMoveset,
 } from '../src/delve/moveset.js';
+import { moveAll } from '../src/delve/constructs.js';
 import { bindSecondary, chooseStartingMana, reattuneItem } from '../src/delve/pair.js';
 import {
   addLootToBag,
@@ -60,6 +61,8 @@ import {
   type Blow,
   type Chain,
   type Chains,
+  type ChainSkill,
+  type Construct,
   type Move,
 } from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
@@ -80,10 +83,12 @@ import {
   registry,
   run,
   withChains,
+  withUids,
 } from './fixtures/arena.js';
 import { armed } from './fixtures/carries.js';
 
-// See the weapon movesets spec.
+// See the weapon movesets spec, as the constructs spec §3 rewrites it: the weapon is a frame
+// with slots by rarity, holding constructs with uids.
 
 const weapon = (rarity: Rarity, seed: number, baseId?: string): GearItem =>
   generateItem(
@@ -92,15 +97,19 @@ const weapon = (rarity: Rarity, seed: number, baseId?: string): GearItem =>
     new SeededRNG(seed),
   );
 
+/** A chain's constructs without their uids. */
+const bare = <C extends Chains[ChainSkill] | undefined>(c: C): C =>
+  JSON.parse(
+    JSON.stringify(c, (k, v) =>
+      k === 'uid' && typeof v === 'string' && v.startsWith('c') ? undefined : v,
+    ),
+  );
+
 describe('data: movesets', () => {
-  it('loads the chains each rarity carries, the extra slots and the prices', () => {
+  it('loads the slot table, the extra slots, Open a skill and the prices', () => {
     const m = bal.movesets;
-    expect(m.carries.common).toEqual(['basic']);
-    expect(m.carries.uncommon).toEqual(['basic', 'primary']);
-    expect(m.carries.magic).toEqual(['basic', 'primary']);
-    expect(m.carries.rare).toEqual(['basic', 'primary', 'defensive']);
-    expect(m.carries.epic).toEqual(['basic', 'primary', 'defensive', 'ultimate']);
-    expect(m.carries.legendary).toEqual(['basic', 'primary', 'defensive', 'ultimate']);
+    expect(m.slots.common).toEqual({ basic: [0, 3], primary: [2, 3], defensive: [0, 1], ultimate: [0, 0] });
+    expect(m.slots.legendary).toEqual({ basic: [0, 5], primary: [4, 5], defensive: [3, 5], ultimate: [2, 5] });
     expect(m.extraSlots).toEqual({
       common: [0, 0],
       uncommon: [0, 0],
@@ -111,84 +120,84 @@ describe('data: movesets', () => {
     });
     expect(m.slotLinks).toEqual([1, 2, 3, 4]);
     expect(m.slotScrap).toEqual([20, 40, 60, 80]);
-    expect([m.editDust, m.elementDust, m.transferScrap]).toEqual([5, 15, 30]);
-    expect(bal.chains.cap).toEqual({ basic: 5, primary: 5, defensive: 5, ultimate: 5 });
+    expect([m.editDust, m.elementDust, m.salvageDust]).toEqual([5, 15, 0]);
+    expect(m.openSkill.common).toEqual({ flux: { uncommon: 2 }, links: 1, scrap: 40 });
+    expect(m).not.toHaveProperty('carries');
+    expect(m).not.toHaveProperty('transferScrap');
   });
 
-  it('refuses a rarity that carries no basic chain or less than the rarity below, a legendary short of all four, or extra slots that fall', () => {
+  it('refuses extra slots that fall, and a slot row short of a skill', () => {
     const withMovesets = (movesets: object) => ({
       ...balanceData,
       delve: { ...balanceData.delve, movesets: { ...balanceData.delve.movesets, ...movesets } },
     });
-    const carries = { ...balanceData.delve.movesets.carries, common: ['primary'] };
-    expect(BalanceConfigSchema.safeParse(withMovesets({ carries })).success).toBe(false);
-    const shrinks = { ...balanceData.delve.movesets.carries, rare: ['basic'] };
-    expect(BalanceConfigSchema.safeParse(withMovesets({ carries: shrinks })).success).toBe(false);
-    const noUltimate = Object.fromEntries(
-      Object.entries(balanceData.delve.movesets.carries).map(([r, s]) => [
-        r,
-        s.filter((skill) => skill !== 'ultimate'),
-      ]),
-    );
-    expect(BalanceConfigSchema.safeParse(withMovesets({ carries: noUltimate })).success).toBe(
-      false,
-    );
     const extraSlots = { ...balanceData.delve.movesets.extraSlots, rare: [2, 1] };
     expect(BalanceConfigSchema.safeParse(withMovesets({ extraSlots })).success).toBe(false);
-    expect(BalanceConfigSchema.safeParse(balanceData).success).toBe(true);
+    const { ultimate: _u, ...short } = balanceData.delve.movesets.slots.rare;
+    const slots = { ...balanceData.delve.movesets.slots, rare: short };
+    expect(BalanceConfigSchema.safeParse(withMovesets({ slots })).success).toBe(false);
   });
 });
 
-describe('base slots and carried chains', () => {
-  it("gives the basic chain its weapon's string length (unarmed, the hero's), every other chain 1", () => {
-    expect(baseSlots(registry, 'sword', 'basic')).toBe(3);
-    expect(baseSlots(registry, 'maul', 'basic')).toBe(2);
-    expect(baseSlots(registry, 'dagger', 'basic')).toBe(4);
-    expect(baseSlots(registry, null, 'basic')).toBe(3);
+describe('slot ranges', () => {
+  it("gives the basic chain its weapon's string as its start (unarmed, the hero's), the rest the table's", () => {
+    expect(slotRange(registry, { baseId: 'sword', rarity: 'common' }, 'basic')).toEqual([3, 3]);
+    expect(slotRange(registry, { baseId: 'maul', rarity: 'epic' }, 'basic')).toEqual([2, 5]);
+    expect(slotRange(registry, { baseId: 'dagger', rarity: 'common' }, 'basic')).toEqual([4, 4]);
+    expect(slotRange(registry, { baseId: null, rarity: null }, 'basic')).toEqual([3, 3]);
     for (const skill of ['primary', 'defensive', 'ultimate'] as const) {
-      expect(baseSlots(registry, 'sword', skill)).toBe(1);
-      expect(baseSlots(registry, null, skill)).toBe(1);
+      expect(slotRange(registry, { baseId: 'sword', rarity: 'rare' }, skill)).toEqual(
+        bal.movesets.slots.rare[skill],
+      );
+      expect(slotRange(registry, { baseId: null, rarity: null }, skill)).toEqual([0, 0]);
     }
-  });
-
-  it('carries chains by rarity; unarmed carries the basic chain alone', () => {
-    for (const r of RARITY_ORDER)
-      expect(carriedSkills(registry, { rarity: r })).toEqual(bal.movesets.carries[r]);
-    expect(carriedSkills(registry, null)).toEqual(['basic']);
-    expect(carriedFrom(registry, 'basic')).toBeNull();
-    expect(carriedFrom(registry, 'primary')).toBe('uncommon');
-    expect(carriedFrom(registry, 'defensive')).toBe('rare');
-    expect(carriedFrom(registry, 'ultimate')).toBe('epic');
   });
 });
 
 describe('default moves', () => {
-  it("fills a moveset at its base slots: the weapon's string, and each slot's default form's first move", () => {
+  it("fills a moveset at its starts: the weapon's string, and each skill's class default form", () => {
     const m = defaultMoveset(registry, { baseId: 'sword', rarity: 'uncommon' }, 'frost');
-    expect(m.slots).toEqual({ basic: 3, primary: 1 });
+    expect(m.slots).toEqual({ basic: 3, primary: 2, defensive: 1 });
+    expect(m.bought).toEqual({});
     expect(m.chains).toEqual({
       basic: [
         { kind: 'light', element: 'frost' },
         { kind: 'light', element: 'frost' },
         { kind: 'heavy', element: 'frost' },
       ],
-      primary: { moves: [{ kind: 'light', form: 'bolt', elements: ['frost'] }], payment: 'mana' },
+      primary: {
+        moves: [
+          { kind: 'medium', form: 'strike', elements: ['frost'] },
+          { kind: 'medium', form: 'strike', elements: ['frost'] },
+        ],
+        payment: 'mana',
+      },
+      defensive: { moves: [{ kind: 'medium', form: 'ward', elements: ['frost'] }], payment: 'mana' },
     });
-    const epic = defaultMoveset(registry, { baseId: 'maul', rarity: 'epic' }, 'fire');
-    expect(epic.slots).toEqual({ basic: 2, primary: 1, defensive: 1, ultimate: 1 });
-    expect(epic.chains.defensive).toEqual({
-      moves: [{ kind: 'medium', form: 'ward', elements: ['fire'] }],
-      payment: 'mana',
-    });
+    const epic = defaultMoveset(registry, { baseId: 'bow', rarity: 'epic' }, 'fire');
+    expect(epic.slots).toEqual({ basic: 3, primary: 4, defensive: 2, ultimate: 1 });
+    expect(epic.chains.primary!.moves.map((x) => [x.kind, x.form])).toEqual([
+      ['light', 'bolt'],
+      ['medium', 'bolt'],
+      ['medium', 'bolt'],
+      ['heavy', 'bolt'],
+    ]);
     expect(epic.chains.ultimate).toEqual({
       moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }],
       payment: 'charge',
     });
   });
 
-  it('plays the default chain in order, then medium past its end', () => {
+  it("plays the class default form's chain in order, then medium past its end", () => {
     const kinds = (c: Chain) => c.moves.map((m) => m.kind);
     expect(kinds(defaultChain(registry, 'primary', 'sword', 'fire', 5))).toEqual([
+      'medium',
+      'medium',
+      'heavy',
+      'heavy',
+      'medium',
+    ]);
+    expect(kinds(defaultChain(registry, 'primary', 'bow', 'fire', 5))).toEqual([
       'light',
       'medium',
       'medium',
@@ -218,56 +227,55 @@ describe('default moves', () => {
 });
 
 describe('drops: extra slots by rarity', () => {
-  const EXTRA: Record<Rarity, [number, number]> = {
-    common: [0, 0],
-    uncommon: [0, 0],
-    magic: [0, 1],
-    rare: [1, 2],
-    epic: [2, 3],
-    legendary: [3, 4],
-  };
+  /** A drop's slots past its starts, over the skills it has. */
+  const extra = (w: GearItem) =>
+    CHAIN_SKILLS.reduce(
+      (n, s) => n + Math.max(0, (w.moveset!.slots[s] ?? 0) - slotRange(registry, w, s)[0]),
+      0,
+    );
 
-  it("rolls the rarity's extra slots over the chains it carries, every slot a default move in its mana", () => {
+  it("rolls the rarity's extra slots over the skills it starts with, never a skill at 0, every slot a plain construct in its mana, none bought", () => {
     for (const rarity of RARITY_ORDER) {
       const seen = new Set<number>();
+      const starts = Object.keys(defaultMoveset(registry, { baseId: 'sword', rarity }, 'storm').chains);
       for (let seed = 1; seed <= 60; seed++) {
-        const w = weapon(rarity, seed);
+        const w = weapon(rarity, seed, 'sword');
         const m = w.moveset!;
-        expect(Object.keys(m.chains).sort()).toEqual([...bal.movesets.carries[rarity]].sort());
-        expect(Object.keys(m.slots).sort()).toEqual([...bal.movesets.carries[rarity]].sort());
-        const extra = extraSlots(registry, w);
-        seen.add(extra);
+        expect(Object.keys(m.chains).sort()).toEqual([...starts].sort());
+        expect(m.bought).toEqual({});
+        seen.add(extra(w));
+        for (const s of CHAIN_SKILLS)
+          if (m.slots[s]) expect(m.slots[s]).toBeLessThanOrEqual(slotRange(registry, w, s)[1]);
         expect(unsocketed(m)).toEqual(defaultMoveset(registry, w, 'storm', m.slots));
-        for (const skill of CHAIN_SKILLS) expect(m.slots[skill] ?? 0).toBeLessThanOrEqual(5);
       }
-      expect(Math.min(...seen)).toBe(EXTRA[rarity][0]);
-      expect(Math.max(...seen)).toBe(EXTRA[rarity][1]);
+      const [least, most] = bal.movesets.extraSlots[rarity];
+      expect(Math.min(...seen)).toBe(least);
+      expect(Math.max(...seen)).toBe(most);
     }
   });
 
-  it('spreads extra slots over every chain a weapon carries', () => {
-    const got = new Set<string>();
+  it('spreads extra slots over every skill a weapon starts with', () => {
+    const got = new Set<ChainSkill>();
     for (let seed = 1; seed <= 60; seed++) {
-      const w = weapon('rare', seed);
-      for (const skill of CHAIN_SKILLS)
-        if ((w.moveset!.slots[skill] ?? 0) > baseSlots(registry, w.baseId, skill)) got.add(skill);
+      const w = weapon('legendary', seed, 'sword');
+      for (const s of CHAIN_SKILLS)
+        if ((w.moveset!.slots[s] ?? 0) > slotRange(registry, w, s)[0]) got.add(s);
     }
-    expect([...got].sort()).toEqual(['basic', 'defensive', 'primary']);
+    expect([...got].sort()).toEqual(['basic', 'defensive', 'primary', 'ultimate']);
   });
 
-  it('never grows a chain past 5: a dagger basic string of 4 takes at most one extra', () => {
-    for (let seed = 1; seed <= 60; seed++)
-      expect(weapon('legendary', seed, 'dagger').moveset!.slots.basic).toBeLessThanOrEqual(5);
+  it('never grows a skill past its ceiling: a common dagger basic string of 4 stays at 4', () => {
+    for (let seed = 1; seed <= 20; seed++)
+      expect(weapon('common', seed, 'dagger').moveset!.slots.basic).toBe(4);
   });
 
   it('gives no moveset to gear other than weapons', () => {
     const chest = generateItem(
       registry,
-      { uid: 'c', ilvl: 5, rarity: 'legendary', slot: 'chest' },
-      new SeededRNG(3),
+      { uid: 'c', ilvl: 2, rarity: 'legendary', slot: 'chest' },
+      new SeededRNG(1),
     );
     expect(chest.moveset).toBeUndefined();
-    expect(extraSlots(registry, chest)).toBe(0);
   });
 });
 
@@ -314,19 +322,25 @@ describe('determinism', () => {
 describe('save schema: a weapon moveset', () => {
   const sword = weapon('uncommon', 1, 'sword');
 
-  it('reads an item with a moveset, and one without (a version 5 save)', () => {
+  it('reads an item with a moveset, and one without; `bought` defaults to none', () => {
     expect(GearItemSchema.safeParse(sword).success).toBe(true);
     const { moveset: _m, ...old } = sword;
     expect(GearItemSchema.safeParse(old).success).toBe(true);
+    const { bought: _b, ...noBought } = sword.moveset!;
+    expect(GearItemSchema.parse({ ...sword, moveset: noBought }).moveset!.bought).toEqual({});
   });
 
-  it('refuses a chain longer than its slots, a chain without slots, and slots without a chain', () => {
+  it('refuses a chain longer than its slots, a chain without slots, slots without a chain, and a Basic with no blow; an empty ability chain is fine', () => {
     const m = sword.moveset!;
     const bad = (moveset: object) => GearItemSchema.safeParse({ ...sword, moveset }).success;
     expect(bad({ ...m, slots: { ...m.slots, basic: 2 } })).toBe(false);
     expect(bad({ ...m, slots: { basic: 3 } })).toBe(false);
-    expect(bad({ ...m, slots: { ...m.slots, defensive: 1 } })).toBe(false);
+    expect(bad({ ...m, slots: { ...m.slots, ultimate: 1 } })).toBe(false);
     expect(bad({ ...m, slots: { ...m.slots, primary: 5 } })).toBe(true);
+    expect(bad({ ...m, chains: { ...m.chains, basic: [] } })).toBe(false);
+    expect(bad({ ...m, chains: { ...m.chains, primary: { moves: [], payment: 'mana' } } })).toBe(
+      true,
+    );
   });
 });
 
@@ -438,177 +452,137 @@ describe('an absent skill (a null chain)', () => {
 describe('a save: fitting its weapons to the data at load', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 
-  it("fits a save's weapons to the data at load", () => {
+  it("gives a weapon without a moveset its defaults, minted; keeps a kept chain's slots; mints a missing uid", () => {
     const p = createDelveProfile(registry, 3, { primary: 'fire' });
-    const common = weapon('common', 4, 'sword');
-    const rare = weapon('rare', 5, 'axe');
     const { moveset: _m, ...bare } = weapon('magic', 6, 'bow');
-    const moveset = common.moveset!;
+    const rare = weapon('rare', 5, 'axe');
     const [one, two] = rare.moveset!.chains.basic!;
     const bag = [
-      bare, // no moveset: its base defaults
-      {
-        ...common,
-        moveset: {
-          chains: { ...moveset.chains, defensive: rare.moveset!.chains.defensive },
-          slots: { ...moveset.slots, defensive: 3 },
-        },
-      }, // a chain its rarity doesn't carry, with 2 extra slots
+      bare, // no moveset: its defaults, minted
       {
         ...rare,
         moveset: {
           chains: { basic: [one, two], primary: rare.moveset!.chains.primary },
           slots: { basic: 2, primary: rare.moveset!.slots.primary },
+          bought: {},
         },
-      }, // a Defensive to add, a basic slot count to raise
+      }, // two skills left out and a short basic string: kept as they are, uids minted
     ];
-    const loaded = parseDelveProfile(registry, json({ ...p, bag }))!.profile;
-    const fitted = loaded.bag;
-    expect(fitted[0].moveset).toEqual(defaultMoveset(registry, bare, 'storm'));
-    expect(fitted[1].moveset).toEqual(moveset);
-    // The dropped Defensive's extra slots come back as Links, as salvaging would give.
-    expect(loaded.links).toBe(p.links + 2);
-    expect(fitted[2].moveset!.chains.defensive).toEqual(
-      defaultMoveset(registry, rare, 'storm').chains.defensive,
+    const loaded = parseDelveProfile(registry, json({ ...p, bag }))!;
+    expect('profile' in loaded).toBe(true);
+    const fitted = (loaded as { profile: DelveProfile }).profile.bag;
+    expect(JSON.parse(JSON.stringify(fitted[0].moveset, (k, v) => (k === 'uid' ? undefined : v)))).toEqual(
+      JSON.parse(JSON.stringify(defaultMoveset(registry, bare, 'storm'))),
     );
-    expect(fitted[2].moveset!.slots.defensive).toBe(1);
-    expect(fitted[2].moveset!.slots.basic).toBe(3);
-    expect(fitted[2].moveset!.chains.basic).toEqual([one, two]);
+    expect(fitted[1].moveset!.slots).toEqual({ basic: 2, primary: rare.moveset!.slots.primary });
+    expect(fitted[1].moveset!.chains.defensive).toBeUndefined();
+    const ids = [fitted[0], fitted[1]].flatMap((w) =>
+      CHAIN_SKILLS.flatMap((s) => movesOf(w.moveset!.chains[s]).map((c) => c.uid)),
+    );
+    expect(ids.every((u) => /^c\d+$/.test(u!))).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 
-describe('the edit price (movesetEditPrice): by origin', () => {
+describe('the edit price (movesetEditPrice): by uid', () => {
   const E = bal.movesets.editDust;
   const X = bal.movesets.elementDust;
-  const bolt = (kind: Move['kind'], ...elements: ManaType[]): Move => ({
+  const strike = (uid: string | null, kind: Move['kind'], ...elements: ManaType[]): Move => ({
+    ...(uid && { uid }),
     kind,
-    form: 'bolt',
+    form: 'strike',
     elements,
   });
   const chain = (...moves: Move[]): Chain => ({ moves, payment: 'mana' });
-  const price = (old: Chain, next: Chain, origins?: (number | null)[]) =>
-    movesetEditPrice(
-      registry,
-      { primary: old },
-      { primary: next },
-      origins && { primary: origins },
-    );
-  const A = bolt('light', 'fire');
-  const B = bolt('medium', 'fire');
-  const C = bolt('heavy', 'storm');
+  const price = (old: Chain, next: Chain) =>
+    movesetEditPrice(registry, { primary: old }, { primary: next });
+  const A = strike('a', 'light', 'fire');
+  const B = strike('b', 'medium', 'fire');
+  const C = strike('c', 'heavy', 'storm');
 
-  it('prices what the builder did: removing or inserting a move costs only that move', () => {
+  it('a construct kept is free wherever it sits; one removed or new costs editDust', () => {
     expect(price(chain(A, B, C), chain(A, B, C))).toBe(0);
-    expect(price(chain(A, B, C), chain(A, C), [0, 2])).toBe(E);
-    expect(price(chain(A, B, C), chain(B, C), [1, 2])).toBe(E);
-    expect(price(chain(A, C), chain(A, B, C), [0, null, 1])).toBe(E); // Fire is an old move's element
+    expect(price(chain(A, B, C), chain(C, B, A))).toBe(0);
+    expect(price(chain(A, B, C), chain(A, C))).toBe(E);
+    expect(price(chain(A, B, C), chain(B, C))).toBe(E);
+    expect(price(chain(A, C), chain(A, strike(null, 'medium', 'fire'), C))).toBe(E); // Fire is a saved construct's element
+    expect(price(chain(A, C), chain(A, strike('new', 'medium', 'fire'), C))).toBe(E);
+    // A removed construct and a new one alike: a removal and a new move.
+    expect(price(chain(A, B), chain(A, strike(null, 'medium', 'fire')))).toBe(2 * E);
   });
 
-  it('without origins, move j came from saved move j: an edit in place', () => {
-    // B edited into C (its kind and elements), and the saved C removed.
-    expect(price(chain(A, B, C), chain(A, C))).toBe(E + X + E);
-    expect(price(chain(A, B), chain(A, bolt('heavy', 'fire')))).toBe(E);
+  it("a kept construct's changed kind or form costs editDust, its changed elements elementDust", () => {
+    expect(price(chain(A, B), chain(A, { ...B, kind: 'heavy' }))).toBe(E);
     expect(price(chain(A, B), chain(A, { ...B, form: 'lance' }))).toBe(E);
-    expect(price(chain(A, B), chain(A, bolt('medium', 'storm')))).toBe(X);
-    expect(price(chain(A, B), chain(A, bolt('medium', 'fire', 'storm')))).toBe(X);
-    expect(price(chain(A, B), chain(A, bolt('heavy', 'storm', 'fire')))).toBe(E + X);
+    expect(price(chain(A, B), chain(A, { ...B, elements: ['storm'] }))).toBe(X);
+    expect(price(chain(A, B), chain(A, { ...B, elements: ['fire', 'storm'] }))).toBe(X);
+    expect(price(chain(A, B), chain(A, { ...B, kind: 'heavy', elements: ['storm', 'fire'] }))).toBe(
+      E + X,
+    );
   });
 
-  it('a card that moved costs editDust, even one edited back: the longest rising run stays free', () => {
-    expect(price(chain(A, B, C), chain(B, C, A), [1, 2, 0])).toBe(E);
-    expect(price(chain(A, B), chain(B, A), [1, 0])).toBe(E);
-    // Two cards alike swapped: still a move.
-    expect(price(chain(A, A), chain(A, A), [1, 0])).toBe(E);
-    // A card removed and one alike added: a removal and a new move.
-    expect(price(chain(A, B), chain(A, B), [0, null])).toBe(2 * E);
-  });
-
-  it('a new element set is charged once per Apply, however many moves take it', () => {
-    const fire: Blow = { kind: 'light', element: 'fire' };
-    const storm: Blow = { kind: 'light', element: 'storm' };
+  it('a new element set is charged once per Apply, however many constructs take it', () => {
+    const fire: Blow = { uid: 'f', kind: 'light', element: 'fire' };
+    const storm: Blow = { uid: 's', kind: 'light', element: 'storm' };
     const blows = (old: Blow[], next: Blow[]) =>
       movesetEditPrice(registry, { basic: old }, { basic: next });
-    expect(blows([fire], [fire, storm])).toBe(E + X);
-    expect(blows([fire, storm], [fire, storm, storm])).toBe(E);
-    expect(blows([fire], [fire, storm, storm])).toBe(2 * E + X);
-    // Two moves re-coloured to one new set, and a new move in it: Storm charged once.
-    expect(price(chain(A, B), chain(bolt('light', 'storm'), bolt('medium', 'storm'), C))).toBe(
-      X + E,
-    );
+    expect(blows([fire], [fire, { ...storm, uid: undefined }])).toBe(E + X);
+    expect(blows([fire, storm], [fire, storm, { ...storm, uid: undefined }])).toBe(E);
+    expect(blows([fire], [fire, { kind: 'light', element: 'storm' }, { kind: 'heavy', element: 'storm' }])).toBe(2 * E + X);
+    // Two constructs re-coloured to one new set, and a new one in it: Storm charged once.
+    expect(
+      price(chain(A, B), chain({ ...A, elements: ['storm'] }, { ...B, elements: ['storm'] }, { ...C, uid: undefined })),
+    ).toBe(X + E);
   });
 
-  it('is 0 only for the same chain in place, and never beats doing it in two Applies (random triples, origins composed)', () => {
+  it('is 0 only for the same constructs, in any order (random chains)', () => {
     const rng = new SeededRNG(7);
     const pick = <T>(xs: readonly T[]): T => xs[rng.nextInt(0, xs.length - 1)];
     const kinds: Move['kind'][] = ['light', 'heavy', 'hold'];
-    const sets: ManaType[][] = [
-      ['fire'],
-      ['storm'],
-      ['frost'],
-      ['fire', 'storm'],
-      ['storm', 'fire'],
-    ];
-    const forms = ['bolt', 'lance'] as const;
-    const randomChain = (): Chain => ({
-      moves: Array.from({ length: rng.nextInt(1, 5) }, () => ({
-        kind: pick(kinds),
-        form: pick(forms),
-        elements: pick(sets),
-      })),
-      payment: pick(['mana', 'cast'] as const),
-    });
-    const randomBlows = (): Blow[] =>
-      Array.from({ length: rng.nextInt(1, 5) }, () => ({
-        kind: pick(kinds),
-        element: pick(['fire', 'storm', 'frost'] as const),
-      }));
-    /** Random origins from `from` moves to `to`: each new move a fresh saved index, or null. */
-    const randomOrigins = (from: number, to: number): (number | null)[] => {
-      const free = Array.from({ length: from }, (_, i) => i);
-      return Array.from({ length: to }, () =>
-        free.length === 0 || rng.next() < 0.3
-          ? null
-          : free.splice(rng.nextInt(0, free.length - 1), 1)[0],
-      );
+    const sets: ManaType[][] = [['fire'], ['storm'], ['frost'], ['fire', 'storm'], ['storm', 'fire']];
+    const forms = ['strike', 'lance'] as const;
+    /** A random chain over the uids `pool`, each at most once (a construct without a uid is new by contract: none here). */
+    const randomChain = (pool: string[]): Chain => {
+      const free = [...pool];
+      return {
+        moves: Array.from({ length: rng.nextInt(1, 5) }, () => ({
+          uid: free.splice(rng.nextInt(0, free.length - 1), 1)[0],
+          kind: pick(kinds),
+          form: pick(forms),
+          elements: pick(sets),
+        })),
+        payment: pick(['mana', 'cast'] as const),
+      };
     };
-    const length = (x: Partial<Chains>) => movesOf(x.basic ?? x.primary).length;
-    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const same = (a: Chain, b: Chain) =>
+      a.moves.length === b.moves.length &&
+      a.payment === b.payment &&
+      a.moves.every((m, i) => JSON.stringify(m) === JSON.stringify(b.moves[i]));
     let bad = 0;
     for (let n = 0; n < 4000; n++) {
-      const basic = n % 2 === 0;
-      const skill = basic ? 'basic' : 'primary';
-      const [a, b, c] = basic
-        ? [randomBlows(), randomBlows(), randomBlows()].map((x) => ({ basic: x }))
-        : [randomChain(), randomChain(), randomChain()].map((x) => ({ primary: x }));
-      const ab = randomOrigins(length(a), length(b));
-      const bc = randomOrigins(length(b), length(c));
-      const ac = bc.map((o) => (o === null ? null : ab[o]));
-      const p = (x: Partial<Chains>, y: Partial<Chains>, o?: (number | null)[]) =>
-        movesetEditPrice(registry, x, y, o && { [skill]: o });
-      if (p(a, c, ac) > p(a, b, ab) + p(b, c, bc)) bad++;
-      if ((p(a, b) === 0) !== same(a, b)) bad++;
+      const pool = ['p', 'q', 'r', 's', 't'];
+      const [a, b] = [randomChain(pool), randomChain(pool)];
+      const p = (x: Chain, y: Chain) => movesetEditPrice(registry, { primary: x }, { primary: y });
+      if (p(a, b) < 0) bad++;
+      if (p(a, a) !== 0) bad++;
+      const reordered = { ...a, moves: [...a.moves].reverse() };
+      if (p(a, reordered) !== 0) bad++;
+      if (p(a, b) === 0 && !same(a, { ...b, moves: a.moves.map((m) => b.moves.find((x) => x.uid === m.uid)!) })) bad++;
     }
     expect(bad).toBe(0);
   });
 
-  it('a move left over: a new one costs editDust and, with elements no old move has, elementDust; a removal editDust', () => {
-    expect(price(chain(A), chain(A, bolt('medium', 'nature')))).toBe(E + X);
-    expect(price(chain(A, C), chain(A, C, bolt('light', 'storm')))).toBe(E);
-    expect(price(chain(A, B, C), chain(A))).toBe(2 * E);
-  });
-
-  it('a changed payment costs editDust; blows price the same way; chains left out cost nothing, nor do their origins', () => {
+  it('a changed payment costs editDust; blows price the same way; chains left out cost nothing', () => {
     expect(price(chain(A), { moves: [A], payment: 'cast' })).toBe(E);
-    const fire: Blow = { kind: 'light', element: 'fire' };
-    const heavy: Blow = { kind: 'heavy', element: 'fire' };
-    const blows = (old: Blow[], next: Blow[], origins?: (number | null)[]) =>
-      movesetEditPrice(registry, { basic: old }, { basic: next }, origins && { basic: origins });
-    expect(blows([fire, fire, heavy], [fire, heavy], [0, 2])).toBe(E);
-    expect(blows([fire, fire, heavy], [fire, fire, { ...heavy, element: 'frost' }])).toBe(X);
+    const fire: Blow = { uid: 'f', kind: 'light', element: 'fire' };
+    const heavy: Blow = { uid: 'h', kind: 'heavy', element: 'fire' };
+    const blows = (old: Blow[], next: Blow[]) =>
+      movesetEditPrice(registry, { basic: old }, { basic: next });
+    expect(blows([fire, { ...fire, uid: 'f2' }, heavy], [fire, heavy])).toBe(E);
+    expect(blows([fire, heavy], [fire, { ...heavy, element: 'frost' }])).toBe(X);
     const old = { basic: [fire], primary: chain(A) };
-    expect(movesetEditPrice(registry, old, { primary: chain(B) })).toBe(E);
-    expect(movesetEditPrice(registry, old, { basic: [heavy], primary: chain(B) })).toBe(2 * E);
-    expect(movesetEditPrice(registry, old, { primary: chain(B) }, { basic: [null] })).toBe(E);
+    expect(movesetEditPrice(registry, old, { primary: chain(B) })).toBe(2 * E);
+    expect(movesetEditPrice(registry, old, { basic: [heavy], primary: chain(A) })).toBe(2 * E);
   });
 
   it('a rune is no part of the Dust: a socket or a rune alone costs none', () => {
@@ -618,7 +592,6 @@ describe('the edit price (movesetEditPrice): by origin', () => {
 });
 
 describe('edits: setChain and setChains', () => {
-  const light = (...elements: ManaType[]): Move => ({ kind: 'light', form: 'bolt', elements });
   /** A Fire hero past its first dive, with 20 Mana Dust and an uncommon sword. */
   const veteran = (): DelveProfile => {
     const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
@@ -626,30 +599,30 @@ describe('edits: setChain and setChains', () => {
   };
 
   it('edits the equipped weapon for its price; nothing before the first dive, nothing unchanged', () => {
-    const next: Chain = {
-      moves: [{ kind: 'heavy', form: 'bolt', elements: ['fire'] }],
-      payment: 'mana',
-    };
     const fresh = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
-    const free = setChain(registry, fresh, 'primary', next);
+    const heavier = (p: DelveProfile): Chain => {
+      const c = chainsOf(p).primary!;
+      return { ...c, moves: c.moves.map((m, i) => (i === 0 ? { ...m, kind: 'heavy' } : m)) };
+    };
+    const free = setChain(registry, fresh, 'primary', heavier(fresh));
     expect(free.ok).toBe(true);
-    expect(chainsOf(free.profile).primary).toEqual(next);
+    expect(chainsOf(free.profile).primary).toEqual(heavier(fresh));
     expect(free.profile.manaDust).toBe(0);
-    const paid = setChain(registry, veteran(), 'primary', next);
+    const paid = setChain(registry, veteran(), 'primary', heavier(veteran()));
     expect(paid.profile.manaDust).toBe(20 - bal.movesets.editDust);
     const same = setChain(registry, veteran(), 'primary', chainsOf(veteran()).primary!);
     expect(same.profile.manaDust).toBe(20);
     const poor = { ...veteran(), manaDust: bal.movesets.editDust - 1 };
-    expect(setChain(registry, poor, 'primary', next)).toEqual({
+    expect(setChain(registry, poor, 'primary', heavier(poor))).toEqual({
       ok: false,
       profile: poor,
       reason: 'Not enough Mana Dust',
     });
   });
 
-  it("refuses mid-dive, unarmed, a skill the weapon doesn't carry, and more moves than slots", () => {
+  it('refuses mid-dive, unarmed, a skill with no slot, and more moves than slots', () => {
     const p = veteran();
-    const one: Chain = { moves: [light('fire')], payment: 'mana' };
+    const one: Chain = { moves: [{ kind: 'light', form: 'lance', elements: ['fire'] }], payment: 'mana' };
     const reason = (q: DelveProfile, skill: 'primary' | 'defensive' | 'ultimate', c = one) =>
       setChain(registry, q, skill, c).reason;
     expect(reason(startDive(registry, p, 1), 'primary')).toBe(
@@ -658,119 +631,75 @@ describe('edits: setChain and setChains', () => {
     expect(reason(unequipSlot(registry, p, 'weapon'), 'primary')).toBe(
       'Equip a weapon to build your moves',
     );
-    const ward = { moves: [{ ...light('fire'), form: 'ward' as const }], payment: 'mana' as const };
-    expect(reason(p, 'defensive', ward)).toBe('Carried by rare weapons and better');
-    const rare = {
-      ...p,
-      equipped: { ...p.equipped, weapon: weapon('rare', 2, 'sword') },
-    };
-    const nova = { moves: [{ ...light('fire'), form: 'nova' as const }], payment: 'mana' as const };
-    expect(reason(rare, 'ultimate', nova)).toBe(
-      'Carried by epic weapons and better, or an awakened rare',
-    );
-    expect(reason(p, 'primary', { ...one, moves: [light('fire'), light('fire')] })).toBe(
-      'A chain holds 1 to 1 moves',
-    );
+    const nova = { moves: [{ ...one.moves[0], form: 'nova' as const }], payment: 'charge' as const };
+    expect(reason(p, 'ultimate', nova)).toBe(OPEN_SKILL_TEXT);
+    const three = { ...one, moves: [one.moves[0], one.moves[0], one.moves[0]] };
+    expect(reason(p, 'primary', three)).toBe('A chain holds 0 to 2 moves');
   });
 
-  it('keeps, moves and removes off-pair moves, but never adds, copies or re-colours one', () => {
+  it('keeps, moves and removes off-pair constructs, but never adds, copies or re-colours one', () => {
     const p0 = bindSecondary(registry, veteran(), 'storm').profile;
-    const [F, N, NF] = [light('fire'), light('nature'), light('nature', 'fire')];
+    const lance = (uid: string, ...elements: ManaType[]): Move => ({ uid, kind: 'light', form: 'lance', elements });
+    const [F, N, NF] = [lance('F', 'fire'), lance('N', 'nature'), lance('NF', 'nature', 'fire')];
+    const F2 = { ...F, uid: 'F2' };
     const p = {
-      ...withChains(p0, { primary: { moves: [F, N, NF, F], payment: 'mana' } }),
+      ...withChains(p0, { primary: { moves: [F, N, NF, F2], payment: 'mana' } }),
       manaDust: 999,
     };
     const ok = (...moves: Move[]) => setChain(registry, p, 'primary', { moves, payment: 'mana' });
-    expect(ok(F, N, NF, F).ok).toBe(true); // kept
-    expect(ok(N, F, F, NF).ok).toBe(true); // moved
+    expect(ok(F, N, NF, F2).ok).toBe(true); // kept
+    expect(ok(N, F, F2, NF).ok).toBe(true); // moved
     expect(ok(F, NF).ok).toBe(true); // removed
-    expect(ok(F, N, NF, { ...N, kind: 'heavy' }).reason).toBe('Pick from your two elements'); // copied
-    expect(ok(F, N, NF, light('frost')).reason).toBe('Pick from your two elements'); // added
-    expect(ok(F, light('frost'), NF, F).reason).toBe('Pick from your two elements'); // re-coloured
-    expect(ok(F, { ...N, kind: 'heavy' }, NF, F).ok).toBe(true); // its kind changed
-    expect(ok(F, N, light('fire', 'nature'), F).ok).toBe(true); // its elements' order: the same set
+    expect(ok(F, N, NF, { ...N, uid: 'N2', kind: 'heavy' }).reason).toBe('Pick from your two elements'); // copied
+    expect(ok(F, N, NF, { ...lance('x', 'frost'), uid: undefined }).reason).toBe('Pick from your two elements'); // added
+    expect(ok(F, { ...N, elements: ['frost'] }, NF, F2).reason).toBe('Pick from your two elements'); // re-coloured
+    expect(ok(F, { ...N, kind: 'heavy' }, NF, F2).ok).toBe(true); // its kind changed
+    expect(ok(F, N, { ...NF, elements: ['fire', 'nature'] }, F2).ok).toBe(true); // its elements' order: the same set
     const blows: Blow[] = [
-      { kind: 'light', element: 'fire' },
-      { kind: 'heavy', element: 'nature' },
+      { uid: 'b1', kind: 'light', element: 'fire' },
+      { uid: 'b2', kind: 'heavy', element: 'nature' },
     ];
     const b = { ...withChains(p0, { basic: blows }), manaDust: 999 };
     expect(setChain(registry, b, 'basic', [...blows].reverse()).ok).toBe(true);
-    expect(setChain(registry, b, 'basic', [blows[1], blows[1]]).reason).toBe(
+    expect(setChain(registry, b, 'basic', [blows[1], { ...blows[1], uid: 'b3' }]).reason).toBe(
       'Pick from your two elements',
     );
   });
 
   it('setChains applies every chain or none, for their total', () => {
     const p = veteran();
-    const basic: Blow[] = [{ kind: 'heavy', element: 'fire' }];
-    const primary: Chain = {
-      moves: [{ kind: 'heavy', form: 'bolt', elements: ['fire'] }],
-      payment: 'mana',
-    };
-    // The basic chain keeps its heavy blow (the builder's origins); the Primary edits in place.
-    const origins = { basic: [2] };
-    const both = setChains(registry, p, { basic, primary }, { origins });
-    expect(both.ok).toBe(true);
-    expect(chainsOf(both.profile)).toEqual({ basic, primary });
+    const [, , heavy] = chainsOf(p).basic!;
+    const basic: Blow[] = [heavy];
+    const primary = chainsOf(p).primary!;
+    const heavier: Chain = { ...primary, moves: primary.moves.map((m, i) => (i === 0 ? { ...m, kind: 'heavy' } : m)) };
     // Two blows removed and a kind changed: 3 × editDust.
+    const both = setChains(registry, p, { basic, primary: heavier });
+    expect(both.ok).toBe(true);
+    expect(chainsOf(both.profile)).toEqual({ basic, primary: heavier, defensive: chainsOf(p).defensive });
     expect(both.profile.manaDust).toBe(20 - 3 * bal.movesets.editDust);
     const poor = { ...p, manaDust: 3 * bal.movesets.editDust - 1 };
-    expect(setChains(registry, poor, { basic, primary }, { origins })).toMatchObject({
+    expect(setChains(registry, poor, { basic, primary: heavier })).toMatchObject({
       ok: false,
       profile: poor,
       reason: 'Not enough Mana Dust',
     });
-    const ward = {
-      moves: [{ kind: 'medium' as const, form: 'ward' as const, elements: ['fire' as const] }],
-      payment: 'mana' as const,
+    const nova = {
+      moves: [{ kind: 'medium' as const, form: 'nova' as const, elements: ['fire' as const] }],
+      payment: 'charge' as const,
     };
-    expect(setChains(registry, p, { primary, defensive: ward })).toMatchObject({
+    expect(setChains(registry, p, { primary: heavier, ultimate: nova })).toMatchObject({
       ok: false,
       profile: p,
     });
   });
-});
 
-describe('edits by origin', () => {
-  const E = bal.movesets.editDust;
-  /** A Fire hero past its first dive, with Mana Dust to spare. */
-  const veteran = (): DelveProfile => {
-    const p = createDelveProfile(registry, 3, { primary: 'fire' });
-    return { ...p, manaDust: 99, stats: { ...p.stats, dives: 1 } };
-  };
-
-  it('setChains prices by the origins it is given, and refuses bad ones', () => {
+  it('sameChain reads a reorder as a change, and the same constructs in order as none', () => {
     const p = veteran();
-    const blows = chainsOf(p).basic!; // the sword's light, light, heavy
-    const swapped = [blows[2], blows[0], blows[1]];
-    // The heavy moved to the front: one move.
-    const moved = setChains(registry, p, { basic: swapped }, { origins: { basic: [2, 0, 1] } });
-    expect(moved.profile.manaDust).toBe(99 - E);
-    expect(chainsOf(moved.profile).basic).toEqual(swapped);
-    // Without origins, in place: the first light became heavy, and the heavy light.
-    expect(setChains(registry, p, { basic: swapped }).profile.manaDust).toBe(99 - 2 * E);
-    for (const basic of [
-      [0, 0, 1],
-      [0, 1],
-      [0, 1, 3],
-      [0, 1, -1],
-      [0.5, 1, 2],
-    ])
-      expect(setChains(registry, p, { basic: swapped }, { origins: { basic } })).toMatchObject({
-        ok: false,
-        profile: p,
-        reason: 'Bad origins',
-      });
-    // Origins for a skill the edit leaves out are ignored.
-    const origins = { basic: [2, 0, 1], primary: [7] };
-    expect(setChains(registry, p, { basic: swapped }, { origins }).ok).toBe(true);
-  });
-
-  it('the first dive is still free, whatever moved', () => {
-    const fresh = createDelveProfile(registry, 3, { primary: 'fire' });
-    const blows = chainsOf(fresh).basic!;
-    const res = setChains(registry, fresh, { basic: [blows[2]] }, { origins: { basic: [2] } });
-    expect(res.profile.manaDust).toBe(0);
+    const c = chainsOf(p).primary!;
+    const [a, b] = c.moves;
+    expect(sameChain(c, { ...c, moves: [a, b] })).toBe(true);
+    expect(sameChain(c, { ...c, moves: [b, a] })).toBe(false);
+    expect(sameChain(c, { ...c, moves: [{ ...a, uid: undefined }, b] })).toBe(true); // no uid: by what it is
   });
 });
 
@@ -784,88 +713,78 @@ describe('slots: addSlot', () => {
     scrap: 9999,
   });
 
-  it("prices a slot by its position: the 2nd 1 Link, a sword's 4th basic slot 3", () => {
+  it("prices a slot by its position: an uncommon sword's 3rd Primary slot 2 Links; its Basic at its ceiling and its Ultimate at 0 slots have none", () => {
     const sword = rich().equipped.weapon!;
-    expect(slotPrice(registry, sword, 'primary')).toEqual({ links: 1, scrap: 20 });
-    expect(slotPrice(registry, sword, 'basic')).toEqual({ links: 3, scrap: 60 });
-    expect(slotPrice(registry, sword, 'defensive')).toBeNull();
+    expect(slotPrice(registry, sword, 'primary')).toEqual({ links: 2, scrap: 40 });
+    expect(slotPrice(registry, sword, 'basic')).toBeNull();
+    expect(slotPrice(registry, sword, 'defensive')).toEqual({ links: 1, scrap: 20 });
+    expect(slotPrice(registry, sword, 'ultimate')).toBeNull();
     const res = addSlot(registry, rich(), 'primary');
-    expect(res.profile).toMatchObject({ links: 98, scrap: 9979 });
-    expect(slotPrice(registry, res.profile.equipped.weapon!, 'primary')).toEqual({
-      links: 2,
-      scrap: 40,
-    });
+    expect(res.profile).toMatchObject({ links: 97, scrap: 9959 });
+    expect(slotPrice(registry, res.profile.equipped.weapon!, 'primary')).toBeNull(); // the ceiling, 3
+    expect(movesOf(chainsOf(res.profile).primary).map((m) => m.uid).every((u) => /^c\d+$/.test(u!))).toBe(true);
+    expect(res.profile.equipped.weapon!.moveset!.bought).toEqual({ primary: 1 });
   });
 
-  it("appends the default kind at the chain's end, in the last move's form and in-pair elements", () => {
+  it("appends the default kind at the chain's end, in the last move's form and in-pair elements, minted", () => {
     const p = rich();
     const primary = addSlot(registry, p, 'primary').profile;
-    expect(chainsOf(primary).primary!.moves).toEqual([
-      { kind: 'light', form: 'bolt', elements: ['fire'] },
-      { kind: 'medium', form: 'bolt', elements: ['fire'] },
+    expect(bare(chainsOf(primary).primary!.moves)).toEqual([
+      { kind: 'medium', form: 'strike', elements: ['fire'] },
+      { kind: 'medium', form: 'strike', elements: ['fire'] },
+      { kind: 'heavy', form: 'strike', elements: ['fire'] },
     ]);
-    expect(primary.equipped.weapon!.moveset!.slots.primary).toBe(2);
+    expect(primary.equipped.weapon!.moveset!.slots.primary).toBe(3);
     // A Lance's default chain, [medium, medium, heavy], at the new move's place.
     const lance: Chain = {
       moves: [{ kind: 'heavy', form: 'lance', elements: ['fire', 'storm'] }],
       payment: 'cast',
     };
     const bound = rich(withChains(bindSecondary(registry, p, 'storm').profile, { primary: lance }));
-    expect(chainsOf(addSlot(registry, bound, 'primary').profile).primary!.moves[1]).toEqual({
+    expect(bare(chainsOf(addSlot(registry, bound, 'primary').profile).primary!.moves[1])).toEqual({
       kind: 'medium',
       form: 'lance',
       elements: ['fire', 'storm'],
     });
-    // A blow past the sword's string of three: medium.
-    expect(chainsOf(addSlot(registry, p, 'basic').profile).basic![3]).toEqual({
-      kind: 'medium',
-      element: 'fire',
-    });
+    // A blow past a legendary sword's string of three: medium.
+    const legendary = rich({ ...p, equipped: { ...p.equipped, weapon: withUids({ ...p, equipped: { ...p.equipped, weapon: weapon('legendary', 3, 'sword') } }).equipped.weapon! } });
+    const blows = chainsOf(addSlot(registry, legendary, 'basic').profile).basic!;
+    // The sword's Storm blows are off the Fire hero's pair: the new blow takes the primary.
+    expect(bare(blows[blows.length - 1])).toEqual({ kind: 'medium', element: 'fire' });
   });
 
   it("gives the new move the pair's primary when the last move is off-pair", () => {
     const nature: Chain = {
-      moves: [{ kind: 'light', form: 'bolt', elements: ['nature', 'fire'] }],
+      moves: [{ kind: 'light', form: 'lance', elements: ['nature', 'fire'] }],
       payment: 'mana',
     };
-    const p = rich(
-      withChains(createDelveProfile(registry, 3, { primary: 'fire' }), { primary: nature }),
-    );
+    const p = rich(withChains(armed(registry, createDelveProfile(registry, 3, { primary: 'fire' })), { primary: nature }));
     expect(chainsOf(addSlot(registry, p, 'primary').profile).primary!.moves[1].elements).toEqual([
       'fire',
     ]);
   });
 
   it('never touches a slot the chain is not using', () => {
-    const dagger = {
+    const dagger = withUids({
       ...rich(),
-      equipped: { ...rich().equipped, weapon: weapon('common', 3, 'dagger') },
-    };
+      equipped: { ...rich().equipped, weapon: weapon('rare', 3, 'dagger') },
+    });
     const three = setChain(registry, dagger, 'basic', chainsOf(dagger).basic!.slice(0, 3)).profile;
     expect(three.equipped.weapon!.moveset!.slots.basic).toBe(4);
-    const added = addSlot(registry, three, 'basic').profile;
-    expect(added.equipped.weapon!.moveset!.slots.basic).toBe(5);
-    // The dagger's string at the fourth place: heavy.
-    expect(chainsOf(added).basic!.map((b) => b.kind)).toEqual([
-      'light',
-      'light',
-      'medium',
-      'heavy',
-    ]);
+    const four = setChain(registry, three, 'basic', [...chainsOf(three).basic!, { kind: 'light', element: 'fire' }]).profile;
+    expect(four.equipped.weapon!.moveset!.slots.basic).toBe(4);
+    expect(chainsOf(four).basic).toHaveLength(4);
   });
 
-  it("refuses mid-dive, unarmed, a skill the weapon doesn't carry, at 5 slots, and without the Links or the scrap", () => {
+  it('refuses mid-dive, unarmed, a skill with no slot, at the ceiling, and without the Links or the scrap', () => {
     const p = rich();
-    const reason = (q: DelveProfile, skill: 'basic' | 'primary' | 'defensive' = 'primary') =>
-      addSlot(registry, q, skill).reason;
+    const reason = (q: DelveProfile, skill: ChainSkill = 'primary') => addSlot(registry, q, skill).reason;
     expect(reason(startDive(registry, p, 1))).toBe('Chains can only change between dives');
     expect(reason(unequipSlot(registry, p, 'weapon'))).toBe('Equip a weapon to build your moves');
-    expect(reason(p, 'defensive')).toBe('Carried by rare weapons and better');
-    let full = p;
-    for (let i = 0; i < 4; i++) full = addSlot(registry, full, 'primary').profile;
-    expect(full.equipped.weapon!.moveset!.slots.primary).toBe(5);
-    // The 2nd to 5th slots: 1 + 2 + 3 + 4 Links and 20 + 40 + 60 + 80 scrap.
-    expect(full).toMatchObject({ links: 89, scrap: 9799 });
+    expect(reason(p, 'ultimate')).toBe(OPEN_SKILL_TEXT);
+    const full = addSlot(registry, p, 'primary').profile;
+    expect(full.equipped.weapon!.moveset!.slots.primary).toBe(3);
+    expect(full).toMatchObject({ links: 97, scrap: 9959 });
     expect(reason(full)).toBe('This chain has every slot');
     expect(reason({ ...p, links: 0 })).toBe('Not enough Links');
     expect(reason({ ...p, scrap: 19 })).toBe('Not enough scrap');
@@ -873,17 +792,17 @@ describe('slots: addSlot', () => {
 });
 
 /** `w` with a moveset of these slots, every move its default in `w`'s mana. */
-function slotted(w: GearItem, slots: Moveset['slots']): GearItem {
-  return { ...w, moveset: defaultMoveset(registry, w, w.mana, slots) };
+function slotted(w: GearItem, slots: Moveset['slots'], bought: Moveset['bought'] = {}): GearItem {
+  return { ...w, moveset: { ...defaultMoveset(registry, w, w.mana, slots), bought } };
 }
 
 describe('Links: salvage and banking', () => {
-  const rare = slotted(weapon('rare', 1, 'sword'), { basic: 4, primary: 3, defensive: 1 }); // 3 extra
+  // A rare sword with two bought slots.
+  const rare = slotted(weapon('rare', 1, 'sword'), { basic: 4, primary: 4, defensive: 2, ultimate: 1 }, { basic: 1, primary: 1 });
   const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
-  /** Its Links: the extra slots past the ones a rare forge grants free. */
-  const links = 3 - bal.crafting.weaponExtras.rare.slots;
+  const links = 2;
 
-  it('salvaging a weapon gives a Link for each extra slot past the forged ones; other gear none', () => {
+  it('salvaging a weapon gives a Link for each bought slot; other gear none; a drop none', () => {
     const chest = generateItem(
       registry,
       { uid: 'c', ilvl: 2, rarity: 'rare', slot: 'chest' },
@@ -892,6 +811,7 @@ describe('Links: salvage and banking', () => {
     const res = salvageItems(registry, { ...hero(), bag: [rare, chest] }, [rare.uid, chest.uid]);
     expect(res.links).toBe(links);
     expect(res.profile.links).toBe(links);
+    expect(weaponParts(registry, weapon('legendary', 2, 'sword')).links).toBe(0);
   });
 
   it("auto-salvage and a full bag give them too, into the floor's haul, and banking reports them for the dive", () => {
@@ -911,16 +831,15 @@ describe('Links: salvage and banking', () => {
   });
 });
 
-describe('transfer', () => {
-  const T = bal.movesets.transferScrap;
-  /** A Fire hero wielding `w`, with scrap to spare, and `bag` in the bag. */
+describe('Move all (the preview; B2 commits it)', () => {
+  /** A Fire hero wielding `w`, with `bag` in the bag, every construct minted. */
   const holding = (w: GearItem, ...bag: GearItem[]): DelveProfile => {
     const p = createDelveProfile(registry, 3, { primary: 'fire' });
-    return { ...p, equipped: { ...p.equipped, weapon: w }, bag, scrap: 1000 };
+    return withUids({ ...p, equipped: { ...p.equipped, weapon: w }, bag, scrap: 1000 });
   };
   const built = (w: GearItem, chains: Moveset['chains'], slots: Moveset['slots']): GearItem => {
     const m = slotted(w, slots).moveset!;
-    return { ...w, moveset: { chains: { ...m.chains, ...chains }, slots: m.slots } };
+    return { ...w, moveset: { chains: { ...m.chains, ...chains }, slots: m.slots, bought: {} } };
   };
   const lance: Chain = {
     moves: [
@@ -929,128 +848,88 @@ describe('transfer', () => {
     ],
     payment: 'cast',
   };
+  const uids = (c: Chains[ChainSkill] | undefined) => movesOf(c).map((m) => m.uid);
 
-  it("moves each chain with its extra slots onto the target's base, for scrap; the target's replaced extras come back as Links", () => {
-    // A rare sword: a 4-slot string (1 extra), a 3-slot Primary (2), a 2-slot Defensive (1).
-    const sword = built(
-      weapon('rare', 1, 'sword'),
-      { primary: lance },
-      { basic: 4, primary: 3, defensive: 2 },
-    );
-    // A rare axe with its own extra Primary slot.
-    const axe = slotted(
-      { ...weapon('rare', 2, 'axe'), uid: 'axe' },
-      { basic: 3, primary: 2, defensive: 1 },
-    );
-    const res = transferMoveset(registry, holding(sword, axe), 'axe');
-    expect(res.ok).toBe(true);
-    const moved = res.profile.equipped.weapon!;
-    expect(moved.uid).toBe('axe');
-    expect(moved.moveset!.slots).toEqual({ basic: 4, primary: 3, defensive: 2 });
-    expect(moved.moveset!.chains).toEqual(sword.moveset!.chains);
-    expect(res.links).toBe(1);
-    expect(res.profile.links).toBe(1);
-    expect(res.profile.scrap).toBe(1000 - 4 * T);
-    // The sword goes back to the bag at its base slots, its moves the defaults in its own mana.
-    expect(res.profile.bag).toEqual([
-      { ...sword, moveset: defaultMoveset(registry, sword, sword.mana) },
-    ]);
+  it("moves each chain's constructs slot for slot into the target's slots, its payment with them; the target's replaced constructs go to the bag", () => {
+    const sword = built(weapon('rare', 1, 'sword'), { primary: lance }, { basic: 4, primary: 3, defensive: 2, ultimate: 1 });
+    const axe = slotted({ ...weapon('rare', 2, 'axe'), uid: 'axe' }, { basic: 3, primary: 3, defensive: 2, ultimate: 1 });
+    const p = holding(sword, axe);
+    const worn = p.equipped.weapon!;
+    const target = p.bag[0];
+    const prev = moveAllPreview(registry, worn, target);
+    expect(prev.moveset.slots).toEqual(target.moveset!.slots);
+    expect(uids(prev.moveset.chains.primary)).toEqual(uids(worn.moveset!.chains.primary));
+    expect(prev.moveset.chains.primary!.payment).toBe('cast');
+    // The sword's 4-blow string onto a 3-slot Basic: the fourth blow to the bag with the axe's own three.
+    expect(uids(prev.moveset.chains.basic)).toEqual(uids(worn.moveset!.chains.basic).slice(0, 3));
+    const bagged = prev.toBag.map((c) => c.uid);
+    expect(bagged).toContain(uids(worn.moveset!.chains.basic)[3]);
+    for (const u of CHAIN_SKILLS.flatMap((s) => uids(target.moveset!.chains[s]))) expect(bagged).toContain(u);
+    expect(prev.dormant).toEqual([]);
+    // The old sword: refilled plain to its starts, no uids, its slots kept.
+    expect(prev.old.slots).toEqual(worn.moveset!.slots);
+    expect(movesOf(prev.old.chains.basic).every((c) => !c.uid)).toBe(true);
+    expect(prev.old.chains.primary!.moves).toHaveLength(3);
+    expect(prev.old.chains.primary!.payment).toBe('mana');
   });
 
-  it('a basic chain onto a shorter string drops moves from the end; past the cap its extras come back as Links', () => {
-    // A dagger's full string (4 + 1 extra) onto a maul (2): 3 slots, the last two blows gone.
-    const dagger = slotted(weapon('magic', 3, 'dagger'), { basic: 5, primary: 1, defensive: 1 });
-    const maul = { ...weapon('common', 4, 'maul'), uid: 'maul' };
-    const res = transferMoveset(registry, holding(dagger, maul), 'maul');
-    const basic = res.profile.equipped.weapon!.moveset!;
-    expect(basic.slots.basic).toBe(3);
-    expect(basic.chains.basic).toEqual(dagger.moveset!.chains.basic!.slice(0, 3));
-    expect(res.profile.scrap).toBe(1000 - T);
-    // A sword's 5-slot string (2 extra) onto a dagger (4): 5 slots, 1 Link back.
-    const sword = slotted(weapon('rare', 5, 'sword'), { basic: 5, primary: 1, defensive: 1 });
-    const onto = { ...weapon('common', 6, 'dagger'), uid: 'd' };
-    const over = transferMoveset(registry, holding(sword, onto), 'd');
-    expect(over.profile.equipped.weapon!.moveset!.slots.basic).toBe(5);
-    expect(over.links).toBe(1);
-    expect(over.profile.scrap).toBe(1000 - T);
+  it("a target skill the worn weapon moves nothing into keeps the target's own constructs; a chain the target has no slots for goes whole to the bag", () => {
+    const common = slotted(weapon('common', 9, 'sword'), { basic: 3, primary: 2 });
+    const epic = slotted({ ...weapon('epic', 10, 'axe'), uid: 'axe' }, { basic: 3, primary: 4, defensive: 2, ultimate: 2 });
+    const p = holding(common, epic);
+    const prev = moveAllPreview(registry, p.equipped.weapon!, p.bag[0]);
+    expect(prev.moveset.chains.ultimate).toEqual(p.bag[0].moveset!.chains.ultimate);
+    expect(prev.moveset.chains.defensive).toEqual(p.bag[0].moveset!.chains.defensive);
+    expect(prev.moveset.slots).toEqual({ basic: 3, primary: 4, defensive: 2, ultimate: 2 });
+    // The other way: the epic's Ultimate and Defensive have no slot on the common sword.
+    const back = holding(epic, { ...common, uid: 'common' });
+    const onto = moveAllPreview(registry, back.equipped.weapon!, back.bag[0]);
+    expect(Object.keys(onto.moveset.chains)).toEqual(['basic', 'primary']);
+    const gone = CHAIN_SKILLS.flatMap((s) => (s === 'defensive' || s === 'ultimate' ? uids(back.equipped.weapon!.moveset!.chains[s]) : []));
+    for (const u of gone) expect(onto.toBag.map((c) => c.uid)).toContain(u);
   });
 
-  it("leaves chains the target can't carry behind, their extras back as Links, and prices only what moves", () => {
-    const epic = slotted(weapon('epic', 7, 'sword'), {
-      basic: 3,
-      primary: 2,
-      defensive: 1,
-      ultimate: 3,
-    });
-    const uncommon = { ...weapon('uncommon', 8, 'axe'), uid: 'axe' };
-    const res = transferMoveset(registry, holding(epic, uncommon), 'axe');
-    const m = res.profile.equipped.weapon!.moveset!;
-    expect(Object.keys(m.chains)).toEqual(['basic', 'primary']);
-    expect(m.slots).toEqual({ basic: 3, primary: 2 });
-    expect(res.links).toBe(2); // the Ultimate's two extras
-    expect(res.profile.scrap).toBe(1000 - T); // the Primary's one extra moved
+  it("constructs the target's class can't express sit in their slots, dormant", () => {
+    const sword = holding(weapon('rare', 11, 'sword'), { ...weapon('rare', 12, 'bow'), uid: 'bow' });
+    const prev = moveAllPreview(registry, sword.equipped.weapon!, sword.bag[0]);
+    const strikes = uids(sword.equipped.weapon!.moveset!.chains.primary);
+    expect(uids(prev.moveset.chains.primary)).toEqual(strikes.slice(0, prev.moveset.slots.primary));
+    expect(prev.dormant.sort()).toEqual(strikes.slice(0, prev.moveset.slots.primary).sort());
   });
 
-  it("keeps the target's own chain for a skill only it carries", () => {
-    const common = weapon('common', 9, 'sword');
-    const epic = slotted(
-      { ...weapon('epic', 10, 'axe'), uid: 'axe' },
-      { basic: 3, primary: 1, defensive: 1, ultimate: 2 },
-    );
-    const res = transferMoveset(registry, holding(common, epic), 'axe');
-    const m = res.profile.equipped.weapon!.moveset!;
-    expect(m.chains.ultimate).toEqual(epic.moveset!.chains.ultimate);
-    expect(m.slots).toEqual({ basic: 3, primary: 1, defensive: 1, ultimate: 2 });
-    expect([res.links, res.profile.scrap]).toEqual([0, 1000]);
-  });
-
-  it('refuses mid-dive, unarmed, anything but a bag weapon, and without the scrap', () => {
-    const sword = slotted(weapon('rare', 11, 'sword'), { basic: 3, primary: 3, defensive: 1 });
-    const axe = { ...weapon('rare', 12, 'axe'), uid: 'axe' };
-    const helm = generateItem(
-      registry,
-      { uid: 'helm', ilvl: 2, rarity: 'rare', slot: 'helm' },
-      new SeededRNG(4),
-    );
-    const p = holding(sword, axe, helm);
-    const reason = (q: DelveProfile, uid = 'axe') => transferMoveset(registry, q, uid).reason;
-    expect(reason(startDive(registry, p, 1))).toBe('Transfer your moveset between dives');
-    expect(reason(unequipSlot(registry, p, 'weapon'))).toBe('Equip a weapon to build your moves');
-    expect(reason(p, p.equipped.chest!.uid)).toBe('Transfer onto a weapon in your bag');
-    expect(reason(p, 'helm')).toBe('Transfer onto a weapon in your bag');
-    expect(reason(p, 'nope')).toBe('Transfer onto a weapon in your bag');
-    expect(reason({ ...p, scrap: 2 * bal.movesets.transferScrap - 1 })).toBe('Not enough scrap');
+  it("the op itself refuses 'Not yet' until B2 fills it", () => {
+    const p = holding(weapon('rare', 11, 'sword'), { ...weapon('rare', 12, 'axe'), uid: 'axe' });
+    expect(moveAll(registry, p, 'axe')).toMatchObject({ ok: false, profile: p, reason: 'Not yet' });
   });
 });
 
 describe('valuing a weapon: as it is, and as a home', () => {
-  /** A Fire hero whose uncommon sword holds a 4-slot Primary, and `bag` in the bag. */
+  /** A Fire hero whose uncommon sword holds a 3-slot Primary, and `bag` in the bag. */
   const hero = (...bag: GearItem[]): DelveProfile => {
     const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
-    const sword = slotted(p.equipped.weapon!, { basic: 3, primary: 4 });
-    return { ...p, equipped: { ...p.equipped, weapon: sword }, bag, scrap: 1000 };
+    const sword = slotted(p.equipped.weapon!, { basic: 3, primary: 3, defensive: 1 });
+    return withUids({ ...p, equipped: { ...p.equipped, weapon: sword }, bag, scrap: 1000 });
   };
-  /** The same sword as the hero's, one upgrade better, with its base moveset. */
-  const spare = (p: DelveProfile): GearItem => ({
-    ...p.equipped.weapon!,
-    uid: 'spare',
-    upgrade: 1,
-    moveset: defaultMoveset(registry, p.equipped.weapon!, 'fire'),
-  });
+  /** The same sword as the hero's, one upgrade better, its 3-slot Primary holding one construct. */
+  const spare = (p: DelveProfile): GearItem => {
+    const m = defaultMoveset(registry, p.equipped.weapon!, 'fire', { basic: 3, primary: 3, defensive: 1 });
+    const primary = { ...m.chains.primary!, moves: m.chains.primary!.moves.slice(0, 1) };
+    return { ...p.equipped.weapon!, uid: 'spare', upgrade: 1, moveset: { ...m, chains: { ...m.chains, primary } } };
+  };
 
-  it('as it is: its own moveset; as a home: the equipped moveset moved onto it (the default)', () => {
+  it('as it is: its own moveset; as a home: the equipped constructs moved onto it (the default)', () => {
     const p0 = hero();
-    const p = { ...p0, bag: [spare(p0)] };
+    const p = withUids({ ...p0, bag: [spare(p0)] });
     const cmp = (value?: 'home' | 'asIs') =>
       compareItem(p.equipped, p.bag[0], registry, 1, p.pair, value);
     expect(cmp('asIs').newPower).toBe(profilePower(registry, equipItem(registry, p, 'spare')));
-    const moved = transferMoveset(registry, p, 'spare').profile;
+    const moved = { ...p, equipped: { ...p.equipped, weapon: { ...p.bag[0], moveset: moveAllPreview(registry, p.equipped.weapon!, p.bag[0]).moveset } } };
     expect(cmp('home').newPower).toBe(profilePower(registry, moved));
     expect(cmp()).toEqual(cmp('home'));
-    // A better base with fewer slots: junk as it is, an upgrade as a home.
-    expect(cmp('asIs').powerPct).toBeLessThanOrEqual(0);
+    // A better base with a shorter Primary: more as a home than as it is.
+    expect(cmp('home').powerPct).toBeGreaterThan(cmp('asIs').powerPct);
     expect(cmp('home').powerPct).toBeGreaterThan(0);
-    // The equipped weapon itself, and unarmed (no moveset to move), value as they are.
+    // The equipped weapon itself, and unarmed (nothing to move), value as they are.
     const worn = p.equipped.weapon!;
     expect(compareItem(p.equipped, worn, registry, 1, p.pair)).toEqual(
       compareItem(p.equipped, worn, registry, 1, p.pair, 'asIs'),
@@ -1064,7 +943,7 @@ describe('valuing a weapon: as it is, and as a home', () => {
 
   it('salvage never marks a good base as junk; Equip best leaves the weapon alone', () => {
     const p0 = hero();
-    const p = { ...p0, bag: [spare(p0)] };
+    const p = withUids({ ...p0, bag: [spare(p0)] });
     expect(salvageCandidates(registry, p, 'legendary')).toEqual([]);
     expect(equipBest(registry, p).equipped).toEqual([]);
   });
@@ -1088,7 +967,6 @@ describe('the dive lock', () => {
     const primary = chainsOf(diving).primary!;
     expect(setChain(registry, diving, 'primary', primary).ok).toBe(false);
     expect(addSlot(registry, diving, 'primary').ok).toBe(false);
-    expect(transferMoveset(registry, diving, 'axe').ok).toBe(false);
     expect(reattuneItem(registry, diving, 'h', 'fire').reason).toBe('Re-attune between dives');
     // The forge and salvage too: the Anvil can be visited with a dive still open.
     const forge = 'Forge at the Anvil, between dives';
@@ -1101,7 +979,6 @@ describe('the dive lock', () => {
     expect(equipBest(registry, choosing)).toEqual({ profile: choosing, equipped: [] });
     expect(setChain(registry, choosing, 'primary', primary).ok).toBe(false);
     expect(addSlot(registry, choosing, 'primary').ok).toBe(false);
-    expect(transferMoveset(registry, choosing, 'axe').ok).toBe(false);
     expect(upgradeGear(registry, choosing, 'h')).toMatchObject({ ok: false, reason: forge });
     expect(salvageItems(registry, choosing, ['h'])).toMatchObject({ count: 0 });
     // But auto-salvage of new loot still runs, so a full bag never blocks pickups.
@@ -1125,40 +1002,40 @@ describe('the autopilot between dives', () => {
   const veteran = (w?: GearItem): DelveProfile => {
     const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     const weapon = w ?? p.equipped.weapon!;
-    return {
+    return withUids({
       ...p,
       equipped: { ...p.equipped, weapon },
       materials: emptyMaterials(),
       stats: { ...p.stats, dives: 1 },
-    };
+    });
   };
 
-  it('moves its moveset onto the bag weapon that makes the best home, when it can pay', () => {
+  it('wears the bag weapon that raises Power as it is, its old one to the bag (D1 rewires it to Move all, B2 fills the op)', () => {
     const p0 = veteran();
-    const sword = slotted(p0.equipped.weapon!, { basic: 3, primary: 2 }); // 1 extra: 30 scrap
     const better = { ...p0.equipped.weapon!, uid: 'better', upgrade: 5 };
-    const p = { ...veteran(sword), bag: [better] };
-    const after = betweenDives(registry, { ...p, scrap: 1000 });
+    const p = { ...p0, bag: [better], scrap: 1000 };
+    // The old sword goes to the bag as it is, where the junk rule melts it (a plain common).
+    const after = betweenDives(registry, p);
     expect(after.equipped.weapon!.uid).toBe('better');
-    expect(after.equipped.weapon!.moveset!.chains).toEqual(sword.moveset!.chains);
-    expect(betweenDives(registry, { ...p, scrap: 0 }).equipped.weapon!.uid).toBe(sword.uid);
+    expect(after.bag.find((i) => i.uid === p0.equipped.weapon!.uid)).toBeUndefined();
   });
 
-  it('spends Links in the order Primary, basic chain, Ultimate, Defensive: each to three slots, then (after sockets) the rest', () => {
+  it('spends Links in the order Primary, basic chain, Ultimate, Defensive: each to three slots, then (after sockets) the rest, up to each ceiling', () => {
     const epic = weapon('epic', 1, 'sword');
     const base = {
-      ...veteran(slotted(epic, { basic: 3, primary: 1, defensive: 1, ultimate: 1 })),
+      ...veteran(slotted(epic, { basic: 3, primary: 4, defensive: 2, ultimate: 1 })),
       scrap: 9999,
     };
     const slots = (links: number) =>
       betweenDives(registry, { ...base, links }).equipped.weapon!.moveset!.slots;
-    expect(slots(1)).toEqual({ basic: 3, primary: 2, defensive: 1, ultimate: 1 });
-    // 1 + 2 each for the Primary's, the Ultimate's and the Defensive's 2nd and 3rd slots (9), then
-    // 3 for the Primary's 4th; its 5th (4) can't be paid, nor the basic chain's 4th (3).
-    expect(slots(13)).toEqual({ basic: 3, primary: 4, defensive: 3, ultimate: 3 });
-    // 9 + 3 + 4 brings the Primary to five; 3 more, the basic chain's 4th.
-    expect(slots(16)).toEqual({ basic: 3, primary: 5, defensive: 3, ultimate: 3 });
-    expect(slots(19)).toEqual({ basic: 4, primary: 5, defensive: 3, ultimate: 3 });
+    // The Primary is past three already; the Ultimate's 2nd slot costs 1.
+    expect(slots(1)).toEqual({ basic: 3, primary: 4, defensive: 2, ultimate: 2 });
+    // 1 + 2 for the Ultimate's 2nd and 3rd, 2 for the Defensive's 3rd (6), then the Primary's 5th (4): 10.
+    expect(slots(10)).toEqual({ basic: 3, primary: 5, defensive: 3, ultimate: 3 });
+    // 3 more for the basic chain's 4th, 4 more for its 5th: 17.
+    expect(slots(13)).toEqual({ basic: 4, primary: 5, defensive: 3, ultimate: 3 });
+    expect(slots(17)).toEqual({ basic: 5, primary: 5, defensive: 3, ultimate: 3 });
+    expect(betweenDives(registry, { ...base, links: 17 }).equipped.weapon!.moveset!.bought).toEqual({ basic: 2, primary: 1, defensive: 1, ultimate: 2 });
   });
 
   it('changes nothing on a dive still open: every op refuses, and it never loops', () => {
@@ -1173,21 +1050,21 @@ describe('the autopilot between dives', () => {
     const primary = (q: DelveProfile) => chainsOf(q).primary!.moves.map((m) => m.elements);
     const poor = betweenDives(registry, p);
     expect(poor.pair.secondary).toBe('frost');
-    expect(primary(poor)).toEqual([['fire']]);
+    expect(primary(poor)).toEqual([['fire'], ['fire']]);
     const paid = betweenDives(registry, { ...p, manaDust: bal.movesets.elementDust });
-    expect(primary(paid)).toEqual([['fire', 'frost']]);
+    expect(primary(paid).some((e) => e.includes('frost'))).toBe(true);
     expect(paid.manaDust).toBe(0);
   });
 });
 
-/** A moveset without its sockets (see the runes spec: weapon drops roll some, empty). */
+/** A moveset without its sockets (see the runes spec: weapon drops roll some, empty) and runes. */
 function unsocketed(m: Moveset): Moveset {
-  const strip = <X extends Move | Blow>({ runes: _r, ...x }: X) => x;
+  const strip = <X extends Construct>({ runes: _r, ...x }: X) => x;
   const chains = Object.fromEntries(
     Object.entries(m.chains).map(([skill, c]) => [
       skill,
       Array.isArray(c) ? c.map(strip) : { ...c, moves: c!.moves.map(strip) },
     ]),
   );
-  return { chains, slots: m.slots };
+  return { chains, slots: m.slots, bought: m.bought };
 }

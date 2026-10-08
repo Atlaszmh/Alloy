@@ -58,7 +58,11 @@ export const RuneRefSchema = z.object({
 /** A move's or a blow's open sockets, each a rune or null (see the runes spec). */
 const SocketsSchema = z.array(RuneRefSchema.nullable()).max(MAX_SOCKETS).optional();
 
+/** A construct's id, `c<n>` (the constructs spec §3.1); optional until save v14 requires it. */
+const UidSchema = z.string().min(1).optional();
+
 export const MoveSchema = z.object({
+  uid: UidSchema,
   kind: MoveKindSchema,
   form: FormIdSchema,
   elements: ElementsSchema,
@@ -66,10 +70,14 @@ export const MoveSchema = z.object({
 });
 
 export const BlowSchema = z.object({
+  uid: UidSchema,
   kind: MoveKindSchema,
   element: ManaTypeSchema,
   runes: SocketsSchema,
 });
+
+/** A move or a blow in the bag or a haul (the constructs spec §3.1). */
+export const ConstructSchema = z.union([MoveSchema, BlowSchema]);
 
 /** Loose runes: rune id → counts by tier. */
 export const RunePouchSchema = z.record(
@@ -98,11 +106,12 @@ export const HaulSchema = MaterialsPouchSchema.extend({
   dust: count,
   links: count,
   runes: RunePouchSchema,
+  constructs: z.array(ConstructSchema).default([]),
 });
 
-/** An ability chain: 1 to `MAX_CHAIN` moves and a payment (see `slotChain` for the forms). */
+/** An ability chain: 0 to `MAX_CHAIN` moves (empty: an uncarried skill) and a payment (see `slotChain` for the forms). */
 export const ChainSchema = z.object({
-  moves: z.array(MoveSchema).min(1).max(MAX_CHAIN),
+  moves: z.array(MoveSchema).min(0).max(MAX_CHAIN),
   payment: PaymentSchema,
 });
 
@@ -116,7 +125,7 @@ function slotChain(slot: AbilitySlot) {
 
 const CapSchema = z.number().int().min(1).max(MAX_CHAIN);
 
-/** A weapon's moveset: a chain for each skill it carries, each within its skill's slots. */
+/** A weapon's moveset: a chain for each skill with slots, each within them, and the slots bought (the constructs spec §3.2). */
 export const MovesetSchema = z
   .object({
     chains: z.object({
@@ -131,6 +140,14 @@ export const MovesetSchema = z
       defensive: CapSchema.optional(),
       ultimate: CapSchema.optional(),
     }),
+    bought: z
+      .object({
+        basic: count.optional(),
+        primary: count.optional(),
+        defensive: count.optional(),
+        ultimate: count.optional(),
+      })
+      .default({}),
   })
   .refine(
     ({ chains, slots }) =>
@@ -169,7 +186,6 @@ export const GearItemSchema = z.object({
   hones: z.number().int().min(0).default(0),
   locked: z.boolean(),
   moveset: MovesetSchema.optional(),
-  awakened: z.boolean().optional(),
 });
 
 const PerRarityCount = z.object({
@@ -306,6 +322,7 @@ const ProfileSchema = z.object({
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
   nextUid: z.number().int().min(0),
+  nextConstructUid: z.number().int().min(0).default(0),
   equipped: z.object({
     weapon: GearItemSchema.optional(),
     helm: GearItemSchema.optional(),
@@ -341,6 +358,9 @@ const ProfileSchema = z.object({
   manaDust: z.number().int().min(0),
   links: z.number().int().min(0),
   runes: RunePouchSchema,
+  // The move bag and its auto-salvage of plain constructs (the constructs spec §3.1, §3.3).
+  constructs: z.array(ConstructSchema).default([]),
+  autoSalvagePlain: z.boolean().default(true),
   materials: MaterialsPouchSchema,
   patterns: z.array(z.string()),
   essencesSeen: z.array(z.string()),
@@ -352,6 +372,8 @@ const ProfileSchema = z.object({
 /** A tutorial depth's entry: the profile as it entered, its dive without an entry (never nested). */
 const TutorialEntrySchema = ProfileSchema.extend({ dive: DiveSchema });
 
-export const DelveProfileSchema = ProfileSchema.extend({
+// Annotated: with the constructs' union in every haul (the dive's and its tutorial entry's) the
+// inferred type is past what the compiler serialises.
+export const DelveProfileSchema: z.ZodTypeAny = ProfileSchema.extend({
   dive: DiveSchema.extend({ tutorialEntry: TutorialEntrySchema.nullable() }).nullable(),
 });

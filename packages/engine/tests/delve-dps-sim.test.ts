@@ -386,8 +386,8 @@ describe('the rune view (see the runes spec)', () => {
   const socketed = runeRows.filter((s) => s.dims.rune !== 'none');
   const echo = [{ id: 'echo', tier: 3 }];
 
-  it('192 rune rows, each rune on every attack form and weapon it fits, and 34 baselines', () => {
-    expect(socketed).toHaveLength(192);
+  it('197 rune rows (Detonate on its five forms since the constructs), each rune on every attack form and weapon it fits, and 34 baselines', () => {
+    expect(socketed).toHaveLength(197);
     expect(runeRows.filter((s) => s.dims.rune === 'none')).toHaveLength(34);
     expect(socketed.filter((s) => s.dims.rune === 'split').map((s) => s.dims.on)).toEqual([
       'bolt',

@@ -32,12 +32,11 @@ import {
   runeFits,
   runeKnobs,
   runeText,
-  socketCap,
   socketPrice,
   socketsOf,
   takeFromPouch,
 } from '../src/loot/runes.js';
-import type { RunePouch, RuneRef, RuneTier } from '../src/types/rune.js';
+import { MAX_SOCKETS, type RunePouch, type RuneRef, type RuneTier } from '../src/types/rune.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { MOVE_KINDS, type Move } from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
@@ -212,8 +211,9 @@ describe("a shot's pierce count", () => {
 describe('data: runes', () => {
   const runes = registry.getRunes();
 
-  it("loads the spec's 14 runes in its order, each with five tiers", () => {
+  it("loads the spec's 14 runes in its order, and the constructs spec's Detonate first, each with five tiers", () => {
     expect(runes.map((r) => r.id)).toEqual([
+      'detonate',
       'split',
       'multishot',
       'pierce',
@@ -230,7 +230,7 @@ describe('data: runes', () => {
       'guard',
     ]);
     expect(runes.map((r) => r.family)).toEqual([
-      ...Array(5).fill('shape'),
+      ...Array(6).fill('shape'),
       ...Array(3).fill('tempo'),
       ...Array(3).fill('elemental'),
       ...Array(3).fill('sustain'),
@@ -290,7 +290,8 @@ describe('data: runes', () => {
   });
 
   it('refuses four tiers, an unknown family, a misspelled knob or a repeated id', () => {
-    const [split, multishot] = runesData;
+    const split = runesData.find((r) => r.id === 'split')!;
+    const multishot = runesData.find((r) => r.id === 'multishot')!;
     const bad = (rows: unknown[]) => RunesSchema.safeParse(rows).success;
     expect(bad(runesData)).toBe(true);
     expect(bad([{ ...split, tiers: split.tiers.slice(0, 4) }])).toBe(false);
@@ -304,8 +305,7 @@ describe('data: runes', () => {
 describe('balance: delve.runes', () => {
   it("loads the spec's numbers", () => {
     expect(bal.runes).toEqual({
-      socketCap: { common: 1, uncommon: 1, magic: 2, rare: 2, epic: 3, legendary: 3 },
-      // The constructs spec §3.5: a drop's socketed rune (the switch task reads it).
+      // The constructs spec §3.5: a drop's socketed rune.
       runeChance: { common: 0, uncommon: 0, magic: 0.05, rare: 0.1, epic: 0.2, legendary: 0.35 },
       socketLinks: [1, 2, 3],
       socketScrap: [20, 40, 60],
@@ -317,7 +317,7 @@ describe('balance: delve.runes', () => {
         epic: [1, 2],
         legendary: [2, 3],
       },
-      unsocket: 'destroy',
+      unsocket: 'pay',
       pullScrap: [15, 30, 50, 80, 120],
       fuseCount: 3,
       fuseScrap: [20, 40, 80, 160],
@@ -335,14 +335,13 @@ describe('balance: delve.runes', () => {
     });
   });
 
-  it('refuses a cap past MAX_SOCKETS and price tables of the wrong length', () => {
+  it('refuses price tables of the wrong length and an unknown pull rule', () => {
     const withRunes = (runes: object) => ({
       ...balanceData,
       delve: { ...balanceData.delve, runes: { ...balanceData.delve.runes, ...runes } },
     });
     const ok = (runes: object) => BalanceConfigSchema.safeParse(withRunes(runes)).success;
     expect(ok({})).toBe(true);
-    expect(ok({ socketCap: { ...balanceData.delve.runes.socketCap, legendary: 4 } })).toBe(false);
     expect(ok({ socketLinks: [1, 2] })).toBe(false);
     // A free socket would let a removal's flat 1-Link refund mint Links.
     expect(ok({ socketLinks: [0, 2, 3] })).toBe(false);
@@ -524,11 +523,9 @@ describe('rune helpers: costs (the rune costs spec)', () => {
 });
 
 describe('rune helpers: sockets and the pouch', () => {
-  it("caps a move's sockets by its weapon's rarity; unarmed has none", () => {
-    expect(socketCap(registry, 'common')).toBe(1);
-    expect(socketCap(registry, 'rare')).toBe(2);
-    expect(socketCap(registry, 'legendary')).toBe(3);
-    expect(socketCap(registry, null)).toBe(0);
+  it('every construct takes up to MAX_SOCKETS (3), whatever weapon holds it (the constructs spec §3.1)', () => {
+    expect(MAX_SOCKETS).toBe(3);
+    expect(bal.runes).not.toHaveProperty('socketCap');
   });
 
   it('prices the next socket by the sockets the move has, none past MAX_SOCKETS', () => {
@@ -593,8 +590,16 @@ describe('the sim and the index: the contract is in place', () => {
       'runeKnobs',
       'runeText',
       'extraShotPower',
-      'socketCap',
       'socketPrice',
+      'rollSocketedRunes',
+      'openSkill',
+      'openSkillPrice',
+      'moveAllPreview',
+      'draftRefusal',
+      'applyStyle',
+      'signatureFor',
+      'withSignature',
+      'mintUid',
       'pouchCount',
       'addToPouch',
       'takeFromPouch',
@@ -621,13 +626,14 @@ describe('the sim and the index: the contract is in place', () => {
 describe('save v9: sockets and the pouch', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
   const fresh = () => createDelveProfile(registry, 1, { primary: 'fire' });
+  /** A medium Fire Lance (a sword expresses it; a Bolt would be dormant) holding `runes`. */
   const bolt = (runes: (RuneRef | null)[]): Move => ({
     kind: 'medium',
-    form: 'bolt',
+    form: 'lance',
     elements: ['fire'],
     runes,
   });
-  /** A rare weapon: two sockets a move. */
+  /** A rare weapon. */
   const rare = (p: DelveProfile): DelveProfile => ({
     ...p,
     equipped: { ...p.equipped, weapon: { ...p.equipped.weapon!, rarity: 'rare' } },
@@ -654,7 +660,7 @@ describe('save v9: sockets and the pouch', () => {
     expect(parseDelveProfile(registry, json(res.profile))).toEqual(res);
   });
 
-  it('empties unknown and repeated runes and trims sockets past the cap: a Link each, the runes destroyed', () => {
+  it("empties unknown and repeated runes; the repeated one goes by the pull rule ('pay' as shipped: back to the pouch)", () => {
     const p = {
       ...withChains(rare(fresh()), {
         primary: {
@@ -677,21 +683,21 @@ describe('save v9: sockets and the pouch', () => {
     const res = parseDelveProfile(registry, json(p))!;
     expect(chainsOf(res.profile).primary!.moves.map((m) => m.runes)).toEqual([
       [null, { id: 'chain', tier: 1 }],
-      [{ id: 'quick', tier: 2 }, null],
+      [{ id: 'quick', tier: 2 }, null, { id: 'echo', tier: 1 }],
     ]);
-    expect(res.profile.links).toBe(p.links + 1);
-    // The trimmed Quick III and Echo I are destroyed: the pouch keeps only its own Echo.
-    expect(res.profile.runes).toEqual({ echo: [0, 0, 1, 0, 0] });
+    expect(res.profile.links).toBe(p.links);
+    // The repeated Quick III goes back to the pouch beside its own Echo.
+    expect(res.profile.runes).toEqual({ echo: [0, 0, 1, 0, 0], quick: [0, 0, 1, 0, 0] });
   });
 
-  it("in 'pay' mode the runes a trim takes off go back to the pouch", () => {
+  it("in 'destroy' mode a repeated rune is destroyed", () => {
     const p = {
       ...withChains(armed(registry, fresh()), {
         primary: {
           moves: [
             bolt([
               { id: 'quick', tier: 2 },
-              { id: 'echo', tier: 1 },
+              { id: 'quick', tier: 3 },
             ]),
           ],
           payment: 'mana',
@@ -699,19 +705,19 @@ describe('save v9: sockets and the pouch', () => {
       }),
       runes: { echo: [0, 0, 1, 0, 0] },
     };
-    bal.runes.unsocket = 'pay';
+    bal.runes.unsocket = 'destroy';
     try {
       const res = parseDelveProfile(registry, json(p))!;
-      expect(chainsOf(res.profile).primary!.moves[0].runes).toEqual([{ id: 'quick', tier: 2 }]);
-      expect(res.profile.links).toBe(p.links + 1);
-      expect(res.profile.runes).toEqual({ echo: [1, 0, 1, 0, 0] });
+      expect(chainsOf(res.profile).primary!.moves[0].runes).toEqual([{ id: 'quick', tier: 2 }, null]);
+      expect(res.profile.links).toBe(p.links);
+      expect(res.profile.runes).toEqual({ echo: [0, 0, 1, 0, 0] });
     } finally {
-      bal.runes.unsocket = 'destroy';
+      bal.runes.unsocket = 'pay';
     }
   });
 
-  it("a chain the weapon can't carry takes its sockets with it: a Link each, its runes by the rule", () => {
-    // A common sword carries no Defensive.
+  it('a chain on a skill the rarity starts at 0 is kept as it is (the slot table only gates buying)', () => {
+    // A common sword starts with no Defensive; a save that holds one keeps it.
     const ward: Move = {
       kind: 'medium',
       form: 'ward',
@@ -720,8 +726,8 @@ describe('save v9: sockets and the pouch', () => {
     };
     const p = withChains(fresh(), { defensive: { moves: [ward], payment: 'mana' } });
     const res = parseDelveProfile(registry, json(p))!;
-    expect(res.profile.equipped.weapon!.moveset!.chains.defensive).toBeUndefined();
-    expect(res.profile.links).toBe(p.links + 2);
+    expect(chainsOf(res.profile).defensive!.moves[0].runes).toEqual([{ id: 'guard', tier: 1 }, null]);
+    expect(res.profile.links).toBe(p.links);
     expect(res.profile.runes).toEqual({});
   });
 

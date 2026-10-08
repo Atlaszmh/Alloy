@@ -6,6 +6,14 @@ import {
   isDefaultBasic,
 } from '../src/arpg/abilities/resolve.js';
 import { UNARMED, defaultMoveset } from '../src/loot/moveset.js';
+
+/** `x` without its constructs' uids (what a test compares against the data's defaults). */
+const noUids = <T>(x: T): T =>
+  JSON.parse(
+    JSON.stringify(x, (k, v) =>
+      k === 'uid' && typeof v === 'string' && v.startsWith('c') ? undefined : v,
+    ),
+  );
 import { betweenDives, runAutopilot } from '../src/delve/autopilot.js';
 import { bankWorld, beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
 import {
@@ -342,7 +350,7 @@ describe('the save and the pair', () => {
       pair: { primary: 'fire', secondary: 'storm' },
     };
     const res = fixChainsToPair(registry, p);
-    const fixed = chainsOf(res.profile) as Chains;
+    const fixed = noUids(chainsOf(res.profile)) as Chains;
     expect(fixed.basic).toEqual([chains.basic[0], { kind: 'heavy', element: 'fire' }]);
     expect(fixed.primary.moves).toEqual([
       { kind: 'medium', form: 'lance', elements: ['storm'] },
@@ -350,7 +358,7 @@ describe('the save and the pair', () => {
     ]);
     expect(fixed.defensive.moves).toEqual([{ kind: 'light', form: 'ward', elements: ['fire'] }]);
     expect(fixed.ultimate).toEqual(chains.ultimate);
-    expect(res.fixed).toEqual([
+    expect(noUids(res.fixed)).toEqual([
       { skill: 'basic', index: 1, removed: ['frost'], move: fixed.basic[1] },
       { skill: 'primary', index: 0, removed: ['frost'], move: fixed.primary.moves[0] },
       { skill: 'defensive', index: 0, removed: ['nature'], move: fixed.defensive.moves[0] },
@@ -400,18 +408,20 @@ describe('the pair ops', () => {
     ]);
     expect(res.profile.bag).toEqual([spare]);
     const sword = res.profile.equipped.weapon!;
-    expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'storm'));
+    expect(noUids(sword.moveset)).toEqual(defaultMoveset(registry, sword, 'storm'));
     // A weapon with extra slots starts over at its base slots too.
     const roomy = withChains(p0, { primary: defaultChains(registry, 'fire', 'sword').primary });
     expect(roomy.equipped.weapon!.moveset!.slots.primary).toBe(4);
     const rebuilt = chooseStartingMana(registry, roomy, 'frost').profile.equipped.weapon!;
-    expect(rebuilt.moveset).toEqual(defaultMoveset(registry, rebuilt, 'frost'));
+    expect(noUids(rebuilt.moveset)).toEqual(defaultMoveset(registry, rebuilt, 'frost'));
     expect(chooseStartingMana(registry, res.profile, 'fire')).toMatchObject({
       ok: false,
       reason: 'Your mana is already chosen',
     });
-    expect(createDelveProfile(registry, 3, { primary: 'storm' })).toEqual(
-      chooseStartingMana(registry, fresh(), 'storm').profile,
+    // The same save but for the constructs' uids: a fresh save's sword was minted before the choice rebuilt it.
+    const sameSave = (q: DelveProfile) => ({ ...noUids(q), nextConstructUid: 0 });
+    expect(sameSave(createDelveProfile(registry, 3, { primary: 'storm' }))).toEqual(
+      sameSave(chooseStartingMana(registry, fresh(), 'storm').profile),
     );
   });
 
@@ -559,9 +569,10 @@ describe('the pair ops', () => {
       { kind: 'heavy', element: 'storm' },
     ];
     const moves: Move[] = [
-      { kind: 'light', form: 'bolt', elements: ['fire', 'storm'] },
-      { kind: 'medium', form: 'bolt', elements: ['storm'] },
-      { kind: 'heavy', form: 'bolt', elements: ['fire'] },
+      // Lances: a sword expresses them (a Bolt would be dormant there, `heroChains`).
+      { kind: 'light', form: 'lance', elements: ['fire', 'storm'] },
+      { kind: 'medium', form: 'lance', elements: ['storm'] },
+      { kind: 'heavy', form: 'lance', elements: ['fire'] },
     ];
     // A Defensive and an Ultimate too (`withChains` sets any skill), one Fire move each.
     const one = (form: 'ward' | 'nova'): Chain => ({
@@ -802,7 +813,7 @@ describe("nothing re-colours a weapon's moves on its own", () => {
     const p = { ...hero(), manaDust: realignDust, scrap: realignScrap };
     // Fire's role (the primary) goes to Storm.
     const res = realign(registry, p, { primary: 'storm', secondary: 'nature' });
-    expect(chainsOf(res.profile).basic).toEqual(defaultBasic(registry, 'sword', 'storm'));
+    expect(noUids(chainsOf(res.profile).basic)).toEqual(defaultBasic(registry, 'sword', 'storm'));
     expect(res.fixed!.filter((f) => f.skill === 'basic').map((f) => [f.index, f.removed])).toEqual([
       [0, ['fire']],
       [1, ['fire']],
@@ -890,7 +901,7 @@ describe('real stats read the pair', () => {
   it('setChain refuses elements outside the pair (anything goes before the choice)', () => {
     const p = armed(registry, createDelveProfile(registry, 3, { primary: 'fire' }));
     const plague: Chain = {
-      moves: [{ kind: 'medium', form: 'bolt', elements: ['fire', 'nature'] }],
+      moves: [{ kind: 'medium', form: 'lance', elements: ['fire', 'nature'] }],
       payment: 'mana',
     };
     expect(setChain(registry, p, 'primary', plague).reason).toBe('Pick from your two elements');
@@ -898,7 +909,8 @@ describe('real stats read the pair', () => {
       'Pick from your two elements',
     );
     const withNature = bindSecondary(registry, p, 'nature').profile;
-    const set = (q: DelveProfile) => chainsOf(setChain(registry, q, 'primary', plague).profile);
+    const set = (q: DelveProfile) =>
+      noUids(chainsOf(setChain(registry, q, 'primary', plague).profile));
     expect(set(withNature).primary).toEqual(plague);
     expect(set(armed(registry, createDelveProfile(registry, 3))).primary).toEqual(plague);
   });

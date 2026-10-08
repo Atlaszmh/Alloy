@@ -4,7 +4,7 @@ import { nextMove } from '../arpg/abilities/cast.js';
 import { setDoor } from '../arpg/grid.js';
 import { honeCost, previewForge } from '../loot/forge.js';
 import { materialCount, refineCost } from '../loot/materials.js';
-import { baseSlots, movesetOf, movesetTransfer } from '../loot/moveset.js';
+import { movesetOf, slotRange } from '../loot/moveset.js';
 import { socketsOf } from '../loot/runes.js';
 import type { Move } from '../types/ability.js';
 import type { ArpgWorld } from '../types/arpg.js';
@@ -53,7 +53,7 @@ const BY_STATE: ReadonlySet<string> = new Set([
   'setChains',
   'salvage',
   'refine',
-  'transfer',
+  'moveAll',
   'hone',
 ]);
 
@@ -240,12 +240,12 @@ export function tutorialHolds(
       return !items.some((i) => i.slot === f.slot && i.rarity === f.rarity);
     case 'refine':
       return materialCount(profile.materials, { kind: 'metal', metal: f.metal as MetalId }) > 0;
-    case 'transfer': {
-      // The moveset moved with it: a plain Equip leaves the Primary at its base slots.
+    case 'moveAll': {
+      // The constructs moved with it: a plain Equip leaves the Primary at its start (D1 rewrites).
       const weapon = profile.equipped.weapon;
       return (
         atLeast(weapon, f.rarity) &&
-        primaryMoves(registry, profile).length > baseSlots(registry, weapon!.baseId, 'primary')
+        primaryMoves(registry, profile).length > slotRange(registry, weapon!, 'primary')[0]
       );
     }
     case 'hone':
@@ -311,9 +311,10 @@ function unaffordable(registry: DataRegistry, profile: DelveProfile, step: Tutor
       const cost = refineCost(registry, ref)!;
       return materialCount(profile.materials, ref) < cost.count || profile.scrap < cost.scrap;
     }
-    case 'transfer': {
+    case 'moveAll': {
+      // Move all is free; without a worn weapon or a target it can't be done. D1 rewires to B2's op.
       const target = profile.bag.find((i) => i.slot === 'weapon' && atLeast(i, f.rarity));
-      return !weapon || !target || movesetTransfer(registry, weapon, target).scrap > profile.scrap;
+      return !weapon || !target;
     }
     case 'hone':
       return !itemsOf(profile).some(

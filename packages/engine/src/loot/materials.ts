@@ -44,9 +44,9 @@ export function emptyMaterials(): MaterialsPouch {
   };
 }
 
-/** An empty haul: no materials, scrap, Mana Dust, Links or runes. */
+/** An empty haul: no materials, scrap, Mana Dust, Links, runes or constructs. */
 export function emptyHaul(): Haul {
-  return { ...emptyMaterials(), scrap: 0, dust: 0, links: 0, runes: {} };
+  return { ...emptyMaterials(), scrap: 0, dust: 0, links: 0, runes: {}, constructs: [] };
 }
 
 /** Counts by tier summed (a missing tier counts 0; the longer length is kept). */
@@ -78,7 +78,7 @@ export function addMaterials<P extends MaterialsPouch>(a: P, b: MaterialsPouch):
   };
 }
 
-/** Two hauls summed: materials, scrap, Mana Dust, Links and runes. */
+/** Two hauls summed: materials, scrap, Mana Dust, Links and runes; their constructs in order. */
 export function addHaul(a: Haul, b: Haul): Haul {
   return {
     ...addMaterials(a, b),
@@ -86,6 +86,7 @@ export function addHaul(a: Haul, b: Haul): Haul {
     dust: a.dust + b.dust,
     links: a.links + b.links,
     runes: sumKeys(a.runes, b.runes, sumTiers),
+    constructs: [...(a.constructs ?? []), ...(b.constructs ?? [])],
   };
 }
 
@@ -115,8 +116,12 @@ export function addMaterial(haul: Haul, ref: MaterialRef, amount = 1): Haul {
   return addHaul(haul, one);
 }
 
-/** `profile` with `haul` in its stockpile: materials, scrap (counted as earned), Mana Dust, Links and runes. */
+/**
+ * `profile` with `haul` in its stockpile: materials, scrap (counted as earned), Mana Dust, Links
+ * and runes, and its constructs into the move bag (the constructs spec §3.3).
+ */
 export function stockHaul(profile: DelveProfile, haul: Haul): DelveProfile {
+  const constructs = haul.constructs ?? [];
   return {
     ...profile,
     materials: addMaterials(profile.materials, haul),
@@ -124,6 +129,7 @@ export function stockHaul(profile: DelveProfile, haul: Haul): DelveProfile {
     manaDust: profile.manaDust + haul.dust,
     links: profile.links + haul.links,
     runes: sumKeys(profile.runes, haul.runes, sumTiers),
+    constructs: constructs.length > 0 ? [...profile.constructs, ...constructs] : profile.constructs,
     stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + haul.scrap },
   };
 }

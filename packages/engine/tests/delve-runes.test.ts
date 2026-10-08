@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
-import { baseSlots, carriedSkills, defaultMoveset } from '../src/loot/moveset.js';
-import { sameChain, setChains, transferMoveset } from '../src/delve/moveset.js';
+import { defaultMoveset, moveAllPreview, slotRange } from '../src/loot/moveset.js';
+import { OPEN_SKILL_TEXT, sameChain, setChains } from '../src/delve/moveset.js';
 import { bankWorld, beginFloor, failFloor, startDive } from '../src/delve/dive.js';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import { setSandboxToggles } from '../src/arpg/sandbox.js';
@@ -34,13 +34,19 @@ import {
   socketsOf,
   weaponParts,
 } from '../src/loot/runes.js';
-import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
+import {
+  CHAIN_SKILLS,
+  type Blow,
+  type Chain,
+  type Construct,
+  type Move,
+} from '../src/types/ability.js';
 import type { ArpgWorld, Drop, DropKind, MonsterKind } from '../src/types/arpg.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import { RARITY_ORDER } from '../src/types/gear.js';
 import type { DelveProfile, StopKind } from '../src/types/delve.js';
-import type { RunePouch, RuneRef } from '../src/types/rune.js';
-import { arena, bal, chainsOf, dummy, registry, run } from './fixtures/arena.js';
+import { MAX_SOCKETS, type RunePouch, type RuneRef } from '../src/types/rune.js';
+import { arena, bal, chainsOf, dummy, registry, run, withUids } from './fixtures/arena.js';
 import { armed } from './fixtures/carries.js';
 
 // See the runes spec: sockets, the pouch, the draft's price, fusing, drops and the stop.
@@ -70,7 +76,7 @@ function bare(m: Moveset): Moveset {
       Array.isArray(c) ? c.map(strip) : { ...c, moves: c!.moves.map(strip) },
     ]),
   );
-  return { chains, slots: m.slots };
+  return { chains, slots: m.slots, bought: m.bought };
 }
 
 const weapon = (rarity: Rarity, seed: number, baseId?: string): GearItem =>
@@ -156,6 +162,7 @@ describe('the socket roll', () => {
       expect(JSON.stringify(m)).toBe(before);
       expect(bare(out)).toEqual(m);
       expect(openSockets(out)).toBeGreaterThanOrEqual(2);
+      for (const x of allMoves(out)) expect(socketsOf(x).length).toBeLessThanOrEqual(MAX_SOCKETS);
     }
     // Nothing to open: the moveset itself, untouched.
     expect(rollSockets(registry, { rarity: 'uncommon' }, m, new SeededRNG(1))).toBe(m);
@@ -163,40 +170,45 @@ describe('the socket roll', () => {
 });
 
 describe("a weapon's parts", () => {
-  it('a Link for each extra slot and each open socket, and the runes in them; other gear none', () => {
+  it('a Link for each bought slot, the runes in its sockets, and its constructs; other gear none', () => {
     const w = weapon('rare', 1, 'sword');
     const moveset = defaultMoveset(registry, w, 'storm', { basic: 4, primary: 2, defensive: 1 });
+    moveset.bought = { basic: 1, primary: 1 };
     const [first] = moveset.chains.basic!;
     moveset.chains.basic![0] = { ...first, runes: [{ id: 'chain', tier: 2 }, null] };
     const primary = moveset.chains.primary!;
     primary.moves[1] = { ...primary.moves[1], runes: [{ id: 'quick', tier: 1 }] };
-    expect(weaponParts(registry, { ...w, moveset })).toEqual({
-      links: 2 + 3,
+    const parts = weaponParts(registry, { ...w, moveset });
+    expect(parts).toMatchObject({
+      links: 2,
       runes: [
         { id: 'chain', tier: 2 },
         { id: 'quick', tier: 1 },
       ],
     });
+    expect(parts.constructs).toHaveLength(allMoves(moveset).length);
     const chest = generateItem(
       registry,
       { uid: 'c', ilvl: 2, rarity: 'rare', slot: 'chest' },
       new SeededRNG(2),
     );
-    expect(weaponParts(registry, chest)).toEqual({ links: 0, runes: [] });
+    expect(weaponParts(registry, chest)).toEqual({ links: 0, runes: [], constructs: [] });
   });
 });
+
 
 const CHAIN_II: RuneRef = { id: 'chain', tier: 2 };
 const SPLIT_I: RuneRef = { id: 'split', tier: 1 };
 
 /**
- * A rare sword (`uid`) with one extra basic slot and three open sockets: its
- * first blow holds Chain II and an empty socket, its Bolt holds Split I.
- * Its parts: 4 Links, and the two runes.
+ * A rare sword (`uid`) with one bought basic slot and three open sockets: its
+ * first blow holds Chain II and an empty socket, its first Strike holds Split I.
+ * Its parts: 1 Link (the bought slot), and the two runes.
  */
 function socketedSword(uid = 'w'): GearItem {
   const w = { ...weapon('rare', 1, 'sword'), uid };
   const moveset = defaultMoveset(registry, w, 'storm', { basic: 4, primary: 1, defensive: 1 });
+  moveset.bought = { basic: 1 };
   moveset.chains.basic![0] = { ...moveset.chains.basic![0], runes: [CHAIN_II, null] };
   const primary = moveset.chains.primary!;
   primary.moves[0] = { ...primary.moves[0], runes: [SPLIT_I] };
@@ -205,27 +217,26 @@ function socketedSword(uid = 'w'): GearItem {
 
 describe('the parts rule', () => {
   const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
-  /** The socketed sword's Links on salvage: its parts past a rare forge's free extras. */
-  const free = bal.crafting.weaponExtras.rare;
-  const links = 4 - free.slots - free.sockets;
+  /** The socketed sword's Links on salvage: its one bought slot. */
+  const links = 1;
 
-  it('reads the pull mode from the balance unless overridden', () => {
-    expect(R.unsocket).toBe('destroy');
-    expect(unsocketMode(registry)).toBe('destroy');
-    expect(unsocketMode(registry, null)).toBe('destroy');
+  it("reads the pull mode from the balance ('pay' as shipped) unless overridden", () => {
+    expect(R.unsocket).toBe('pay');
+    expect(unsocketMode(registry)).toBe('pay');
+    expect(unsocketMode(registry, null)).toBe('pay');
     expect(unsocketMode(registry, 'pay')).toBe('pay');
     expect(unsocketMode(registry, 'destroy')).toBe('destroy');
   });
 
-  it('salvage: a Link for each extra slot and open socket past the forged ones; the runes destroyed, or back to the pouch in pay mode', () => {
+  it('salvage: a Link for each bought slot; the runes back to the pouch, or destroyed in destroy mode', () => {
     const p = { ...hero(), bag: [socketedSword()] };
-    const gone = salvageItems(registry, p, ['w']);
-    expect(gone).toMatchObject({ links, count: 1, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
-    expect(gone.profile.links).toBe(links);
-    expect(gone.profile.runes).toEqual({});
-    const paid = salvageItems(registry, p, ['w'], { unsocket: 'pay' });
-    expect(paid).toMatchObject({ links, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    const paid = salvageItems(registry, p, ['w']);
+    expect(paid).toMatchObject({ links, count: 1, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect(paid.profile.links).toBe(links);
     expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
+    const gone = salvageItems(registry, p, ['w'], { unsocket: 'destroy' });
+    expect(gone).toMatchObject({ links, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
+    expect(gone.profile.runes).toEqual({});
     // Nothing melts mid-dive, so nothing comes back.
     const diving = startDive(registry, p, 1);
     expect(salvageItems(registry, diving, ['w'])).toMatchObject({
@@ -238,16 +249,16 @@ describe('the parts rule', () => {
 
   it('auto-salvage and a full bag melt a socketed weapon the same way', () => {
     const auto = setAutoSalvage(hero(), 'rare', true);
-    const melted = addLootToBag(registry, auto, [socketedSword()]);
-    expect(melted).toMatchObject({ links, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
-    const paid = addLootToBag(registry, auto, [socketedSword()], { unsocket: 'pay' });
+    const paid = addLootToBag(registry, auto, [socketedSword()]);
     expect(paid).toMatchObject({ links, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
     expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
+    const melted = addLootToBag(registry, auto, [socketedSword()], { unsocket: 'destroy' });
+    expect(melted).toMatchObject({ links, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
     const full = { ...hero(), bag: Array(bal.loot.bagSize).fill(socketedSword('x')) };
     expect(addLootToBag(registry, full, [socketedSword()])).toMatchObject({
       bagFull: true,
       links,
-      destroyed: [CHAIN_II, SPLIT_I],
+      runes: [CHAIN_II, SPLIT_I],
     });
     // Kept loot gives nothing back.
     expect(addLootToBag(registry, hero(), [socketedSword()])).toMatchObject({
@@ -278,21 +289,31 @@ describe('the parts rule', () => {
     expect(salvageCandidates(registry, wield(plain), 'epic')).toEqual(['w']);
   });
 
-  it('the choice of mana rebuilds the weapon: its sockets back as Links, its runes by the rule', () => {
+  it('the choice of mana rebuilds the weapon plain: its bought slots back as Links, its runes by the rule', () => {
     const unchosen = createDelveProfile(registry, 3);
     const p = { ...unchosen, equipped: { ...unchosen.equipped, weapon: socketedSword() } };
     const res = chooseStartingMana(registry, p, 'fire');
-    expect(res).toMatchObject({ ok: true, links: 3, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
-    expect(res.profile.links).toBe(3); // the open sockets; the extra slot, as before, is not refunded
+    expect(res).toMatchObject({ ok: true, links: 1, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect(res.profile.links).toBe(1);
     const sword = res.profile.equipped.weapon!;
-    expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'fire'));
-    const paid = chooseStartingMana(registry, p, 'fire', { unsocket: 'pay' });
-    expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
+    expect(bareUids(sword.moveset)).toEqual(defaultMoveset(registry, sword, 'fire'));
+    expect(allMoves(sword.moveset!).every((m) => /^c\d+$/.test(m.uid!))).toBe(true);
+    expect(res.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
+    const gone = chooseStartingMana(registry, p, 'fire', { unsocket: 'destroy' });
+    expect(gone).toMatchObject({ runes: [], destroyed: [CHAIN_II, SPLIT_I] });
     // A fresh hero has no parts: a new save is unchanged.
     const fresh = createDelveProfile(registry, 3, { primary: 'fire' });
     expect([fresh.links, fresh.runes]).toEqual([0, {}]);
   });
 });
+
+/** A moveset without its constructs' uids. */
+function bareUids(m: Moveset | undefined): unknown {
+  return JSON.parse(
+    JSON.stringify(m, (k, v) => (k === 'uid' && typeof v === 'string' && v.startsWith('c') ? undefined : v)),
+  );
+}
+
 
 const QUICK_I: RuneRef = { id: 'quick', tier: 1 };
 const ECHO_I: RuneRef = { id: 'echo', tier: 1 };
@@ -308,39 +329,31 @@ function slotted(w: GearItem, slots: Moveset['slots']): GearItem {
   return { ...w, moveset: defaultMoveset(registry, w, w.mana, slots) };
 }
 
-describe('transfer: sockets move with their moves', () => {
-  const T = bal.movesets.transferScrap;
-  /** A Storm hero wielding `w`, with scrap to spare, and `bag` in the bag. */
+describe('Move all: sockets and runes travel with their constructs (the preview)', () => {
+  /** A Storm hero wielding `w`, with scrap to spare, and `bag` in the bag, every construct minted. */
   const holding = (w: GearItem, ...bag: GearItem[]): DelveProfile => {
     const p = createDelveProfile(registry, 3, { primary: 'storm' });
-    return { ...p, equipped: { ...p.equipped, weapon: w }, bag, scrap: 1000 };
+    return withUids({ ...p, equipped: { ...p.equipped, weapon: w }, bag, scrap: 1000 });
   };
+  const runesOf = (c: Construct[]) => c.flatMap((m) => socketsOf(m).filter((r): r is RuneRef => r !== null));
 
-  it("moves each kept move's sockets and runes, priced per open socket; the target's replaced ones come back", () => {
-    // The target: a rare axe whose own Bolt holds Quick I.
+  it("each moved construct keeps its sockets and runes; the target's replaced constructs go to the bag with theirs", () => {
+    // The target: a rare axe whose own first Strike holds Quick I.
     const axe = slotted(
       { ...weapon('rare', 2, 'axe'), uid: 'axe' },
-      { basic: 3, primary: 1, defensive: 1 },
+      { basic: 3, primary: 3, defensive: 2, ultimate: 1 },
     );
-    const bolt = axe.moveset!.chains.primary!;
-    bolt.moves[0] = { ...bolt.moves[0], runes: [QUICK_I] };
-    const res = transferMoveset(registry, holding(socketedSword(), axe), 'axe');
-    expect(res.ok).toBe(true);
-    const moved = res.profile.equipped.weapon!.moveset!;
-    expect(moved.chains.basic![0].runes).toEqual([CHAIN_II, null]);
-    expect(moved.chains.primary!.moves[0].runes).toEqual([SPLIT_I]);
-    // The sword's extra slot and its three open sockets move; the axe's socket comes back.
-    expect(res.profile.scrap).toBe(1000 - 4 * T);
-    expect(res).toMatchObject({ links: 1, runes: [], destroyed: [QUICK_I] });
-    expect(res.profile.links).toBe(1);
-    const paid = transferMoveset(registry, holding(socketedSword(), axe), 'axe', {
-      unsocket: 'pay',
-    });
-    expect(paid).toMatchObject({ links: 1, runes: [QUICK_I], destroyed: [] });
-    expect(paid.profile.runes).toEqual({ quick: [1, 0, 0, 0, 0] });
+    const strike = axe.moveset!.chains.primary!;
+    strike.moves[0] = { ...strike.moves[0], runes: [QUICK_I] };
+    const p = holding(socketedSword(), axe);
+    const prev = moveAllPreview(registry, p.equipped.weapon!, p.bag[0]);
+    expect(prev.moveset.chains.basic![0].runes).toEqual([CHAIN_II, null]);
+    expect(prev.moveset.chains.primary!.moves[0].runes).toEqual([SPLIT_I]);
+    expect(runesOf(prev.toBag)).toEqual([QUICK_I]);
+    expect(prev.dormant).toEqual([]);
   });
 
-  it("a blow's rune that doesn't fit the target leaves, its socket open; past the cap and on a chain left behind, they come back", () => {
+  it("a blow's rune that doesn't fit the target stays on the blow, dormant there; a construct past the target's slots goes to the bag with its runes", () => {
     // A legendary bow: its first blow holds Split II, Chain I and an empty socket; its Ward Guard I.
     const bow = slotted(weapon('legendary', 3, 'bow'), {
       basic: 3,
@@ -352,30 +365,22 @@ describe('transfer: sockets move with their moves', () => {
     blows[0] = { ...blows[0], runes: [{ id: 'split', tier: 2 }, { id: 'chain', tier: 1 }, null] };
     const ward = bow.moveset!.chains.defensive!;
     ward.moves[0] = { ...ward.moves[0], runes: [GUARD_I] };
-    // Onto a common sword: one socket a move, no Defensive.
+    // Onto a common sword: no Defensive slot.
     const sword = { ...weapon('common', 4, 'sword'), uid: 'sword' };
-    const res = transferMoveset(registry, holding(bow, sword), 'sword');
-    expect(res.profile.equipped.weapon!.moveset!.chains.basic![0].runes).toEqual([null]);
-    // Back: the two sockets past the cap and the Ward's; Split doesn't fit a sword's blows.
-    expect(res).toMatchObject({
-      links: 3,
-      destroyed: [{ id: 'chain', tier: 1 }, { id: 'split', tier: 2 }, GUARD_I],
-    });
-    expect(res.profile.scrap).toBe(1000 - T); // the one socket that moved
+    const p = holding(bow, sword);
+    const prev = moveAllPreview(registry, p.equipped.weapon!, p.bag[0]);
+    expect(prev.moveset.chains.basic![0].runes).toEqual([
+      { id: 'split', tier: 2 },
+      { id: 'chain', tier: 1 },
+      null,
+    ]);
+    expect(prev.moveset.chains.defensive).toBeUndefined();
+    expect(runesOf(prev.toBag)).toContainEqual(GUARD_I);
+    // The bow's Bolt sits on the sword, dormant (its class can't express it).
+    expect(prev.dormant).toEqual([p.equipped.weapon!.moveset!.chains.primary!.moves[0].uid]);
   });
 
-  it('a move the transfer drops takes its sockets with it, back as Links', () => {
-    // A dagger's full string (4 + 1 extra) onto a maul (2): 3 slots, the last two blows gone.
-    const dagger = slotted(weapon('magic', 3, 'dagger'), { basic: 5, primary: 1, defensive: 1 });
-    const blows = dagger.moveset!.chains.basic!;
-    blows[4] = { ...blows[4], runes: [ECHO_I] };
-    const maul = { ...weapon('common', 4, 'maul'), uid: 'maul' };
-    const res = transferMoveset(registry, holding(dagger, maul), 'maul');
-    expect(res).toMatchObject({ links: 1, destroyed: [ECHO_I] });
-    expect(res.profile.scrap).toBe(1000 - T); // the extra slot; the dropped socket isn't priced
-  });
-
-  it('conserves Links and runes over random transfers and salvages, in both modes, and reads back', () => {
+  it('conserves runes over random Move all previews: every rune is on the moveset or in the bag', () => {
     const rng = new SeededRNG(77);
     const bases = ['sword', 'axe', 'dagger', 'maul', 'staff', 'wand', 'bow'];
     /** A random weapon at random slots, each move with random sockets holding random fitting runes. */
@@ -388,14 +393,16 @@ describe('transfer: sockets move with their moves', () => {
         rng.fork(uid),
       );
       const slots: Moveset['slots'] = {};
-      for (const s of carriedSkills(registry, { rarity }))
-        slots[s] = rng.nextInt(baseSlots(registry, baseId, s), bal.chains.cap[s]);
+      for (const s of CHAIN_SKILLS) {
+        const [start, ceiling] = slotRange(registry, w, s);
+        if (start > 0) slots[s] = rng.nextInt(start, ceiling);
+      }
       const moveset = defaultMoveset(registry, w, 'fire', slots);
       for (const m of allMoves(moveset)) {
         const on = 'form' in m ? { form: m.form } : { weapon: baseId, kind: m.kind };
         const fit = registry.getRunes().filter((d) => runeFits(d, on));
         const runes: (RuneRef | null)[] = [];
-        for (let i = rng.nextInt(0, R.socketCap[rarity]); i > 0; i--) {
+        for (let i = rng.nextInt(0, MAX_SOCKETS); i > 0; i--) {
           const def = fit[rng.nextInt(0, fit.length - 1)];
           const empty = rng.next() < 0.3 || runes.some((r) => r?.id === def.id);
           runes.push(empty ? null : { id: def.id, tier: rng.nextInt(1, 5) as RuneRef['tier'] });
@@ -404,32 +411,27 @@ describe('transfer: sockets move with their moves', () => {
       }
       return { ...w, moveset };
     };
-    const totals = (q: DelveProfile, destroyed: RuneRef[]) => {
-      const weapons = [q.equipped.weapon!, ...q.bag].map((i) => weaponParts(registry, i));
-      return {
-        links: q.links + weapons.reduce((n, p) => n + p.links, 0),
-        runes:
-          pouchSize(q.runes) + weapons.reduce((n, p) => n + p.runes.length, 0) + destroyed.length,
-      };
-    };
-    for (let n = 0; n < 400; n++) {
-      const unsocket = n % 2 === 0 ? 'destroy' : 'pay';
+    const count = (runes: RuneRef[]) => runes.map((r) => `${r.id}:${r.tier}`).sort();
+    for (let n = 0; n < 200; n++) {
       const a = randomWeapon(`a${n}`);
       const b = randomWeapon(`b${n}`);
-      const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
-      const p = { ...p0, equipped: { ...p0.equipped, weapon: a }, bag: [b], scrap: 1e6 };
-      const before = totals(p, []);
-      const t = transferMoveset(registry, p, b.uid, { unsocket });
-      expect(t.ok).toBe(true);
-      expect(totals(t.profile, t.destroyed!)).toEqual(before);
-      const saved = JSON.parse(JSON.stringify(t.profile));
-      expect(parseDelveProfile(registry, saved)!.profile).toEqual(t.profile);
-      const s = salvageItems(registry, t.profile, [a.uid], { unsocket });
-      expect(s.count).toBe(1);
-      expect(totals(s.profile, [...t.destroyed!, ...s.destroyed])).toEqual(before);
+      const p = holding(a, b);
+      const before = count([...weaponParts(registry, p.equipped.weapon!).runes, ...weaponParts(registry, p.bag[0]).runes]);
+      const prev = moveAllPreview(registry, p.equipped.weapon!, p.bag[0]);
+      const after = count([
+        ...allMoves(prev.moveset).flatMap((m) => socketsOf(m).filter((r): r is RuneRef => r !== null)),
+        ...runesOf(prev.toBag),
+      ]);
+      expect(after).toEqual(before);
+      // Nothing of the old weapon's refill carries a rune or a uid.
+      expect(allMoves(prev.old).every((m) => !m.uid && socketsOf(m).every((r) => r === null))).toBe(true);
+      // Every moved construct keeps its uid once, and the bag the rest.
+      const uids = [...allMoves(prev.moveset), ...prev.toBag].map((m) => m.uid);
+      expect(new Set(uids).size).toBe(uids.length);
     }
   });
 });
+
 
 const QUICK_II: RuneRef = { id: 'quick', tier: 2 };
 const CHAIN_I: RuneRef = { id: 'chain', tier: 1 };
@@ -452,7 +454,7 @@ function ready(): DelveProfile {
   const primary = bow.moveset!.chains.primary!;
   primary.moves[0] = { ...primary.moves[0], runes: [SPLIT_I, null] };
   primary.moves[1] = { ...primary.moves[1], runes: [QUICK_II] };
-  return {
+  return withUids({
     ...p,
     equipped: { ...p.equipped, weapon: bow },
     links: 10,
@@ -460,7 +462,7 @@ function ready(): DelveProfile {
     manaDust: 100,
     stats: { ...p.stats, dives: 1 },
     runes: { split: [2, 0, 0, 0, 0], chain: [1, 0, 0, 0, 0], echo: [1, 0, 0, 0, 0] },
-  };
+  });
 }
 
 /** The hero's Primary chain. */
@@ -496,15 +498,16 @@ describe('the draft: sockets and runes through setChains', () => {
     expect(R.socketScrap).toEqual([20, 40, 60]);
   });
 
-  it('a pull follows the mode: destroy is free and the rune is gone; pay costs its tier and returns it', () => {
+  it('a pull follows the mode: destroy is free and the rune is gone; pay (as shipped) costs its tier and returns it', () => {
     const p = ready();
     const c = withRunes(primaryOf(p), 1, [null]);
-    expect(draftPrice(registry, p, { primary: c })).toMatchObject({
+    const DESTROY = { unsocket: 'destroy' as const };
+    expect(draftPrice(registry, p, { primary: c }, DESTROY)).toMatchObject({
       scrap: 0,
       destroys: [QUICK_II],
       returns: [],
     });
-    const gone = setChains(registry, p, { primary: c });
+    const gone = setChains(registry, p, { primary: c }, DESTROY);
     expect(gone).toMatchObject({ ok: true, runes: [], destroyed: [QUICK_II] });
     expect(gone.profile.scrap).toBe(500);
     expect(gone.profile.runes).toEqual(p.runes);
@@ -522,31 +525,27 @@ describe('the draft: sockets and runes through setChains', () => {
       pouch: paid.profile.runes,
     });
     // Overwriting is a pull and a socket: Quick II out, Echo I in from the pouch.
-    const over = setChains(registry, p, { primary: withRunes(primaryOf(p), 1, [ECHO_I]) });
+    const over = setChains(registry, p, { primary: withRunes(primaryOf(p), 1, [ECHO_I]) }, DESTROY);
     expect(over).toMatchObject({ ok: true, destroyed: [QUICK_II] });
     expect(over.profile.runes.echo).toEqual([0, 0, 0, 0, 0]);
   });
 
-  it('reordering carries the runes; a removed move gives its sockets back, netted against those opened', () => {
+  it('reordering carries the runes, free; a removed construct gives its sockets back, netted against those opened', () => {
     const p = ready();
     const [m0, m1, m2] = primaryOf(p).moves;
     const swapped = { ...primaryOf(p), moves: [m1, m0, m2] };
-    const moved = setChains(registry, p, { primary: swapped }, { origins: { primary: [1, 0, 2] } });
+    const moved = setChains(registry, p, { primary: swapped });
     expect(moved).toMatchObject({ ok: true, destroyed: [] });
-    expect(moved.profile).toMatchObject({ links: 10, scrap: 500, manaDust: 100 - E });
+    expect(moved.profile).toMatchObject({ links: 10, scrap: 500, manaDust: 100 });
     expect(primaryOf(moved.profile).moves.map((m) => m.runes)).toEqual([
       [QUICK_II],
       [SPLIT_I, null],
       undefined,
     ]);
-    // Read in place, the same chain would close move 0's second socket.
-    expect(draftPrice(registry, p, { primary: swapped })).toEqual({
-      refused: "Sockets can't be closed",
-    });
-    // Move 0 removed (2 sockets back, Split I pulled), move 2's first socket opened.
+    // Move 0 removed (2 sockets back, Split I pulled, 'destroy' here), move 2's first socket opened.
     const removed = { ...primaryOf(p), moves: [m1, { ...m2, runes: [null] }] };
-    const origins = { primary: [1, 2] };
-    expect(draftPrice(registry, p, { primary: removed }, { origins })).toEqual({
+    const DESTROY = { unsocket: 'destroy' as const };
+    expect(draftPrice(registry, p, { primary: removed }, DESTROY)).toEqual({
       dust: E,
       links: 1,
       scrap: 20,
@@ -555,12 +554,10 @@ describe('the draft: sockets and runes through setChains', () => {
       returns: [],
       pouch: p.runes,
     });
-    const res = setChains(registry, p, { primary: removed }, { origins });
+    const res = setChains(registry, p, { primary: removed }, DESTROY);
     expect(res.profile).toMatchObject({ links: 10 - 1 + 2, scrap: 480, manaDust: 100 - E });
     // The refund pays for the socket: a hero with no Links can still do it.
-    expect(setChains(registry, { ...p, links: 0 }, { primary: removed }, { origins }).ok).toBe(
-      true,
-    );
+    expect(setChains(registry, { ...p, links: 0 }, { primary: removed }, DESTROY).ok).toBe(true);
   });
 
   it('a rune that changes moves is a pull plus a socket: destroy needs another in the pouch, pay can re-socket it', () => {
@@ -570,19 +567,20 @@ describe('the draft: sockets and runes through setChains', () => {
       ...primaryOf(p),
       moves: [{ ...m0, runes: [null, null] }, m1, { ...m2, runes: [SPLIT_I] }],
     };
-    expect(draftPrice(registry, p, { primary: c })).toEqual({
+    const DESTROY = { unsocket: 'destroy' as const };
+    expect(draftPrice(registry, p, { primary: c }, DESTROY)).toEqual({
       dust: 0,
       links: 1,
       scrap: 20,
       refundLinks: 0,
       destroys: [SPLIT_I],
       returns: [],
-      pouch: setChains(registry, p, { primary: c }).profile.runes,
+      pouch: setChains(registry, p, { primary: c }, DESTROY).profile.runes,
     });
-    const res = setChains(registry, p, { primary: c });
+    const res = setChains(registry, p, { primary: c }, DESTROY);
     expect(res.profile.runes.split).toEqual([1, 0, 0, 0, 0]);
     const empty = { ...p, runes: {} };
-    expect(setChains(registry, empty, { primary: c })).toMatchObject({
+    expect(setChains(registry, empty, { primary: c }, DESTROY)).toMatchObject({
       ok: false,
       profile: empty,
       reason: 'Not enough runes in your pouch',
@@ -592,7 +590,7 @@ describe('the draft: sockets and runes through setChains', () => {
     expect(paid.profile).toMatchObject({ scrap: 500 - 20 - 15, runes: { split: [0, 0, 0, 0, 0] } });
   });
 
-  it('refuses past the cap, a closed socket, a rune twice, one that does not fit or is unknown, and bad origins', () => {
+  it('refuses past MAX_SOCKETS, a closed socket, a rune twice, and one that does not fit or is unknown', () => {
     const p = ready();
     const c = primaryOf(p);
     const reason = (next: Chain, opts = {}) => {
@@ -600,16 +598,13 @@ describe('the draft: sockets and runes through setChains', () => {
       expect(res.profile).toBe(p);
       return res.reason;
     };
-    expect(reason(withRunes(c, 2, [null, null, null, null]))).toBe(
-      "This weapon's moves hold at most 3 sockets",
-    );
+    expect(reason(withRunes(c, 2, [null, null, null, null]))).toBe('A move holds at most 3 sockets');
     expect(reason(withRunes(c, 0, [SPLIT_I]))).toBe("Sockets can't be closed");
     expect(reason(withRunes(c, 0, [SPLIT_I, { id: 'split', tier: 2 }]))).toBe(
       'A move takes one Split',
     );
     expect(reason(withRunes(c, 2, [{ id: 'widen', tier: 1 }]))).toBe("Widen doesn't fit a Bolt");
     expect(reason(withRunes(c, 2, [{ id: 'nope', tier: 1 }]))).toBe('Unknown rune nope');
-    expect(reason(c, { origins: { primary: [0, 0, 1] } })).toBe('Bad origins');
     // A form change is refused while a socketed rune wouldn't fit it.
     const lance = {
       ...c,
@@ -651,31 +646,24 @@ describe('the draft: sockets and runes through setChains', () => {
     expect(sameChain(c, withRunes(c, 1, [QUICK_II]))).toBe(true);
   });
 
-  it('nets Links: a batch is never dearer than its edits one Apply at a time, and the same when it removes no move (random edits, origins composed)', () => {
+  it('nets Links: a batch is never dearer than its edits one Apply at a time, and the same when it removes no move (random edits, by uid)', () => {
     const rng = new SeededRNG(21);
     const fits = registry.getRunes().filter((d) => runeFits(d, { form: 'bolt' }));
     const pouch = Object.fromEntries(registry.getRunes().map((d) => [d.id, [50, 50, 50, 50, 50]]));
-    /** One edit as the builder makes it: the new chain, and each new move's index in `c` (null: new). */
-    const randomEdit = (c: Chain, remove: boolean): { next: Chain; map: (number | null)[] } => {
+    /** One edit as the builder makes it: the new chain (its constructs keep their uids; a new one has none). */
+    const randomEdit = (c: Chain, remove: boolean): { next: Chain } => {
       const moves = c.moves.map((m) => ({ ...m }));
-      const map: (number | null)[] = moves.map((_, i) => i);
       const i = rng.nextInt(0, moves.length - 1);
       const sockets = [...socketsOf(moves[i])];
       switch (rng.nextInt(0, 5)) {
         case 0:
-          if (remove && moves.length > 1) [moves, map].forEach((xs) => xs.splice(i, 1));
+          if (remove && moves.length > 1) moves.splice(i, 1);
           break;
         case 1:
-          if (i + 1 < moves.length) {
-            [moves[i], moves[i + 1]] = [moves[i + 1], moves[i]];
-            [map[i], map[i + 1]] = [map[i + 1], map[i]];
-          }
+          if (i + 1 < moves.length) [moves[i], moves[i + 1]] = [moves[i + 1], moves[i]];
           break;
         case 2:
-          if (moves.length < 3) {
-            moves.push({ kind: 'light', form: 'bolt', elements: ['storm'] });
-            map.push(null);
-          }
+          if (moves.length < 3) moves.push({ kind: 'light', form: 'bolt', elements: ['storm'] });
           break;
         case 3:
           if (sockets.length < 3) moves[i].runes = [...sockets, null];
@@ -698,7 +686,7 @@ describe('the draft: sockets and runes through setChains', () => {
           break;
         }
       }
-      return { next: { ...c, moves }, map };
+      return { next: { ...c, moves } };
     };
     for (let n = 0; n < 300; n++) {
       const unsocket = n % 2 === 0 ? 'destroy' : 'pay';
@@ -707,29 +695,24 @@ describe('the draft: sockets and runes through setChains', () => {
       const remove = n % 4 < 2;
       const start = { ...ready(), links: 999, scrap: 99999, manaDust: 9999, runes: pouch };
       let step = start;
-      let chain = primaryOf(start);
-      let origins: (number | null)[] = chain.moves.map((_, i) => i);
       for (let k = 0; k < 8; k++) {
-        const { next, map } = randomEdit(chain, remove);
-        const opts = { origins: { primary: map }, unsocket };
-        const res = setChains(registry, step, { primary: next }, opts);
+        const { next } = randomEdit(primaryOf(step), remove);
+        const res = setChains(registry, step, { primary: next }, { unsocket });
         expect(res.ok).toBe(true);
         step = res.profile;
-        chain = next;
-        origins = map.map((o) => (o === null ? null : origins[o]));
       }
-      const opts = { origins: { primary: origins }, unsocket };
-      const batch = setChains(registry, start, { primary: chain }, opts);
+      // The batch: the saved chain as the steps left it (a construct the steps minted is new to `start`).
+      const batch = setChains(registry, start, { primary: primaryOf(step) }, { unsocket });
       expect(batch.ok).toBe(true);
       if (remove) expect(batch.profile.links).toBeGreaterThanOrEqual(step.links);
       else expect(batch.profile.links).toBe(step.links);
-      expect(primaryOf(batch.profile)).toEqual(primaryOf(step));
+      expect(bareUids(primaryOf(batch.profile))).toEqual(bareUids(primaryOf(step)));
     }
   });
 });
 
 describe('opening a socket, socketing a rune, fusing', () => {
-  it("opens a move's next socket for Links and scrap by its index, up to the rarity's cap", () => {
+  it("opens a move's next socket for Links and scrap by its index, up to MAX_SOCKETS on any weapon", () => {
     const p = ready();
     const one = openSocket(registry, p, 'primary', 2);
     expect(one.ok).toBe(true);
@@ -746,17 +729,16 @@ describe('opening a socket, socketing a rune, fusing', () => {
     expect(openSocket(registry, { ...p, links: 0 }, 'primary', 2).reason).toBe('Not enough Links');
     expect(openSocket(registry, { ...p, scrap: 0 }, 'primary', 2).reason).toBe('Not enough scrap');
     expect(openSocket(registry, p, 'primary', 3).reason).toBe('Pick a move the chain holds');
-    // An uncommon weapon: one socket a move, and no Defensive.
+    // An uncommon weapon: three sockets a move too, and no Ultimate slot.
     const fresh = {
       ...armed(registry, createDelveProfile(registry, 3, { primary: 'fire' })),
       links: 9,
       scrap: 999,
     };
-    const opened = openSocket(registry, fresh, 'primary', 0).profile;
+    let opened = fresh;
+    for (let i = 0; i < 3; i++) opened = openSocket(registry, opened, 'primary', 0).profile;
     expect(openSocket(registry, opened, 'primary', 0).reason).toBe('This move has every socket');
-    expect(openSocket(registry, fresh, 'defensive', 0).reason).toBe(
-      'Carried by rare weapons and better',
-    );
+    expect(openSocket(registry, fresh, 'ultimate', 0).reason).toBe(OPEN_SKILL_TEXT);
     expect(openSocket(registry, unequipSlot(registry, fresh, 'weapon'), 'primary', 0).reason).toBe(
       'Equip a weapon to build your moves',
     );
@@ -769,11 +751,11 @@ describe('opening a socket, socketing a rune, fusing', () => {
     expect(primaryOf(res.profile).moves[0].runes).toEqual([SPLIT_I, CHAIN_I]);
     expect(res.profile).toMatchObject({ links: 10, scrap: 500, manaDust: 100 });
     expect(res.profile.runes.chain).toEqual([0, 0, 0, 0, 0]);
-    expect(socketRune(registry, p, 'primary', 1, 0, ECHO_I)).toMatchObject({
+    expect(socketRune(registry, p, 'primary', 1, 0, ECHO_I, { unsocket: 'destroy' })).toMatchObject({
       ok: true,
       destroyed: [QUICK_II],
     });
-    const paid = socketRune(registry, p, 'primary', 1, 0, ECHO_I, { unsocket: 'pay' });
+    const paid = socketRune(registry, p, 'primary', 1, 0, ECHO_I);
     expect(paid).toMatchObject({ ok: true, runes: [QUICK_II], destroyed: [] });
     expect(paid.profile.scrap).toBe(470);
     expect(socketRune(registry, p, 'primary', 2, 0, CHAIN_I).reason).toBe('Open this socket first');
@@ -832,9 +814,6 @@ describe('opening a socket, socketing a rune, fusing', () => {
         forge,
       );
       const bag = { ...q, bag: ['a', 'b', 'c'].map((uid) => socketedSword(uid)) };
-      expect(transferMoveset(registry, bag, 'a').reason).toBe(
-        'Transfer your moveset between dives',
-      );
       expect(salvageItems(registry, bag, ['a'])).toMatchObject({ count: 0, destroyed: [] });
     }
     // The choice of mana stays open (a migrated save may be diving).
@@ -939,7 +918,10 @@ describe('rune drops in the world', () => {
       split: [1, 0, 0, 0, 0],
     });
     expect(paid.profile.runes).toEqual({});
-    expect(addLootToBag(registry, auto, [socketedSword()]).profile.dive!.haul.runes).toEqual({});
+    expect(
+      addLootToBag(registry, auto, [socketedSword()], { unsocket: 'destroy' }).profile.dive!.haul
+        .runes,
+    ).toEqual({});
     w.pending.items = [socketedSword()];
     expect(bankWorld(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({});
     w.pending.items = [socketedSword()];
@@ -1052,7 +1034,7 @@ describe("the stop's fifth kind: socket a rune", () => {
 });
 
 describe('sockets on weapon drops', () => {
-  it("opens the rarity's sockets, empty, over the moves it carries, never past a move's cap", () => {
+  it("opens the rarity's sockets over its constructs, never past MAX_SOCKETS; at most one holds a rune (runeChance)", () => {
     expect(R.socketDrops).toEqual({
       common: [0, 0],
       uncommon: [0, 0],
@@ -1066,10 +1048,8 @@ describe('sockets on weapon drops', () => {
       for (let seed = 1; seed <= 80; seed++) {
         const m = weapon(rarity, seed).moveset!;
         seen.add(openSockets(m));
-        for (const x of allMoves(m)) {
-          expect(socketsOf(x).length).toBeLessThanOrEqual(R.socketCap[rarity]);
-          expect(socketsOf(x).every((r) => r === null)).toBe(true);
-        }
+        for (const x of allMoves(m)) expect(socketsOf(x).length).toBeLessThanOrEqual(MAX_SOCKETS);
+        expect(allMoves(m).flatMap(socketsOf).filter((r) => r !== null).length).toBeLessThanOrEqual(1);
       }
       expect(Math.min(...seen)).toBe(R.socketDrops[rarity][0]);
       expect(Math.max(...seen)).toBe(R.socketDrops[rarity][1]);
@@ -1091,6 +1071,19 @@ describe('sockets on weapon drops', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const w = weapon('legendary', seed);
       expect(bare(w.moveset!)).toEqual(defaultMoveset(registry, w, 'storm', w.moveset!.slots));
+    }
+    // The socketed rune draws on its own fork: with none, the sockets are as rolled.
+    const w = weapon('legendary', 3);
+    const bal2 = registry.getDelveBalance();
+    const was = bal2.runes.runeChance.legendary;
+    bal2.runes.runeChance.legendary = 0;
+    try {
+      const plain = weapon('legendary', 3);
+      expect(allMoves(plain.moveset!).map((x) => socketsOf(x).length)).toEqual(
+        allMoves(w.moveset!).map((x) => socketsOf(x).length),
+      );
+    } finally {
+      bal2.runes.runeChance.legendary = was;
     }
   });
 });

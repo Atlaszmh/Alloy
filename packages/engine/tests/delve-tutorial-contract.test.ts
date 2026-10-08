@@ -3,9 +3,9 @@ import * as engine from '../src/index.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { applyTutorialEvents, tutorialFloorOf } from '../src/delve/tutorial.js';
 import { tutorialTick } from '../src/arpg/tutorial.js';
-import { forge, hone, refine } from '../src/delve/crafting.js';
+import { forge, hone, openSkill, refine } from '../src/delve/crafting.js';
 import { beginFloor, startDive } from '../src/delve/dive.js';
-import { setChains, transferMoveset } from '../src/delve/moveset.js';
+import { setChains } from '../src/delve/moveset.js';
 import { bindSecondary } from '../src/delve/pair.js';
 import { createDelveProfile, equipItem, salvageItems } from '../src/delve/profile.js';
 import { applyQuestEvents, claimQuest } from '../src/delve/quests.js';
@@ -55,8 +55,8 @@ describe('the stubs', () => {
       'tutorialExitHeld',
       'worldTutorialEvents',
       'tutorialChest',
-      'awaken',
-      'awakenPrice',
+      'openSkill',
+      'openSkillPrice',
       'essenceAllowed',
       'doorShut',
       'tutorialDataProblems',
@@ -106,20 +106,16 @@ describe('the hooks are called', () => {
     expect(lastEvents()).toEqual([{ type: 'salvage', slot: 'chest' }]);
   });
 
-  it('the bind, an Apply, a transfer and a claim emit theirs', () => {
+  it('the bind, an Apply, Open a skill and a claim emit theirs', () => {
     const p = forged();
     bindSecondary(registry, p, 'frost');
     expect(lastEvents()).toEqual([{ type: 'bind' }]);
     const { chains } = movesetOf(registry, p.equipped.weapon!);
     expect(setChains(registry, p, { primary: chains.primary }).ok).toBe(true);
     expect(lastEvents()).toEqual([{ type: 'setChains' }]);
-    const blade = generateItem(
-      registry,
-      { uid: 'b1', ilvl: 1, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
-      new SeededRNG(9),
-    );
-    expect(transferMoveset(registry, { ...p, bag: [...p.bag, blade] }, 'b1').ok).toBe(true);
-    expect(lastEvents()).toEqual([{ type: 'transfer' }]);
+    const sword = p.equipped.weapon!;
+    expect(openSkill(registry, { ...p, links: 1 }, sword.uid, 'defensive').ok).toBe(true);
+    expect(lastEvents()).toEqual([{ type: 'openSkill', skill: 'defensive' }]);
     const done = applyQuestEvents(registry, p, [{ type: 'reachDepth', depth: 2 }]);
     expect(claimQuest(registry, done, 'first_steps').ok).toBe(true);
     expect(lastEvents()).toEqual([{ type: 'claim', quest: 'first_steps' }]);

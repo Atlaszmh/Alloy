@@ -124,14 +124,12 @@ describe('CraftingDataSchema', () => {
 describe('balance: delve.crafting and delve.drops', () => {
   const bal = registry.getDelveBalance();
 
-  it("loads both blocks; a forged weapon's extras start at the low end of a drop's", () => {
+  it("loads both blocks; a forged weapon's free extra slots start at the low end of a drop's (no sockets: they belong to the constructs)", () => {
     expect(bal.crafting.deathLoss).toBe(0.4);
     expect(bal.crafting.shardBench).toEqual({ scrap: 30, dust: 5 });
     for (const r of RARITY_ORDER)
-      expect(bal.crafting.weaponExtras[r]).toEqual({
-        slots: bal.movesets.extraSlots[r][0],
-        sockets: bal.runes.socketDrops[r][0],
-      });
+      expect(bal.crafting.weaponExtras[r]).toEqual({ slots: bal.movesets.extraSlots[r][0] });
+    expect(bal.crafting).not.toHaveProperty('awaken');
     expect(bal.drops.scrapByKind).toEqual({ normal: 9, elite: 27, boss: 90 });
     expect([bal.drops.magnetSpeed, bal.drops.vacuumSpeed, bal.drops.pickupDelay]).toEqual([
       10, 18, 0.35,

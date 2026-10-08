@@ -182,6 +182,8 @@ export interface Knobs {
   cleave: number;
   /** A cast style's trait: shots home toward foes, radians a second (the wand's; 0: none). */
   homing: number;
+  /** A cast style's trait: added to `chains.stepBonus` a chain step (the sword's; B1 reads it in `stepBonus()`). */
+  stepBonus: number;
 }
 
 /** Knobs as data sets them (elements, fusions, runes): partial, `pierce` true for all. */

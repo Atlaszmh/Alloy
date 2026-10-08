@@ -20,7 +20,7 @@ import {
   shardTiersOf,
   withMaterial,
 } from '../src/loot/materials.js';
-import { baseSlots } from '../src/loot/moveset.js';
+import { slotRange } from '../src/loot/moveset.js';
 import { socketsOf } from '../src/loot/runes.js';
 import { forge, hone, imprint } from '../src/delve/crafting.js';
 import { startDive } from '../src/delve/dive.js';
@@ -255,20 +255,24 @@ describe('previewForge', () => {
     expect(prev.weapon).toBeNull();
   });
 
-  it("places a weapon's extras by S7: the Primary's slots first, sockets on its first moves", () => {
+  it("shows a weapon's class and each skill's slots against its ceiling: the free extras on the Primary first, no sockets", () => {
     const p = smith();
     const weapon = (flux?: FluxGrade) =>
       previewForge(registry, p, req({ baseId: 'sword', flux })).weapon;
-    expect(weapon()).toEqual({ carries: ['basic'], slots: { basic: 0 }, sockets: 0 });
+    expect(weapon()).toEqual({
+      class: 'melee',
+      slots: { basic: [3, 3], primary: [2, 3], defensive: [0, 1], ultimate: [0, 0] },
+      sockets: 0,
+    });
     expect(weapon('rare')).toEqual({
-      carries: ['basic', 'primary', 'defensive'],
-      slots: { basic: 0, primary: C.weaponExtras.rare.slots, defensive: 0 },
-      sockets: C.weaponExtras.rare.sockets,
+      class: 'melee',
+      slots: { basic: [3, 4], primary: [3 + C.weaponExtras.rare.slots, 4], defensive: [2, 3], ultimate: [1, 2] },
+      sockets: 0,
     });
     expect(weapon('epic')).toEqual({
-      carries: ['basic', 'primary', 'defensive', 'ultimate'],
-      slots: { basic: 0, primary: C.weaponExtras.epic.slots, defensive: 0, ultimate: 0 },
-      sockets: C.weaponExtras.epic.sockets,
+      class: 'melee',
+      slots: { basic: [3 + 1, 5], primary: [5, 5], defensive: [2, 4], ultimate: [1, 3] },
+      sockets: 0,
     });
   });
 
@@ -386,15 +390,17 @@ describe('forgeItem', () => {
         continue;
       }
       const m = item.moveset!;
-      expect(Object.keys(m.chains).sort()).toEqual([...prev.weapon.carries].sort());
-      for (const s of prev.weapon.carries)
-        expect(m.slots[s]! - baseSlots(registry, r.baseId, s)).toBe(prev.weapon.slots[s]);
+      for (const s of CHAIN_SKILLS) {
+        expect(m.slots[s] ?? 0).toBe(prev.weapon.slots[s][0]);
+        expect(prev.weapon.slots[s][1]).toBe(slotRange(registry, item, s)[1]);
+      }
+      expect(m.bought).toEqual({});
       const sockets = CHAIN_SKILLS.flatMap((s) => movesOf(m.chains[s])).flatMap(socketsOf);
       expect(sockets).toHaveLength(prev.weapon.sockets);
     }
   });
 
-  it('rolls the same item from the same stream, named by its rarity, sockets on the Primary first', () => {
+  it('rolls the same item from the same stream, named by its rarity, no sockets', () => {
     const p = smith();
     expect(forgeItem(registry, p, reqs[2], new SeededRNG(9))).toEqual(
       forgeItem(registry, p, reqs[2], new SeededRNG(9)),
@@ -402,7 +408,7 @@ describe('forgeItem', () => {
     const helm = forgeItem(registry, p, reqs[0], new SeededRNG(1));
     expect(helm.name).toBe(`Rusty ${registry.getGearBase('helm').name}`);
     const primary = forgeItem(registry, p, reqs[4], new SeededRNG(1)).moveset!.chains.primary!;
-    expect(primary.moves.map((m) => socketsOf(m).length)).toEqual([1, 1, 0, 0]);
+    expect(primary.moves.map((m) => socketsOf(m).length)).toEqual([0, 0, 0, 0, 0]);
   });
 
   it("previews each shard line's and the legendary's range as the floored draw's ends", () => {
@@ -447,7 +453,12 @@ describe('forge: the profile op', () => {
     const prev = previewForge(registry, p, r);
     const res = forge(registry, p, r);
     expect(res.ok).toBe(true);
-    expect(res.item).toEqual(forgeItem(registry, p, r, forgeStream(p)));
+    // The forged item, its constructs minted uids (the constructs spec §3.1).
+    const rolled = forgeItem(registry, p, r, forgeStream(p));
+    expect(JSON.parse(JSON.stringify(res.item, (k, v) => (k === 'uid' && /^c\d+$/.test(v) ? undefined : v)))).toEqual(rolled);
+    const minted = CHAIN_SKILLS.flatMap((s) => movesOf(res.item!.moveset!.chains[s])).map((m) => m.uid);
+    expect(minted.every((u) => /^c\d+$/.test(u!))).toBe(true);
+    expect(res.profile.nextConstructUid).toBe(p.nextConstructUid + minted.length);
     const q = res.profile;
     expect(q.bag).toEqual([...p.bag, res.item]);
     expect(q.scrap).toBe(p.scrap - prev.price.scrap);

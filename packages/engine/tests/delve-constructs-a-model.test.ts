@@ -196,19 +196,20 @@ describe('dormantUids and fillSlots', () => {
 
   it("fills a skill's empty slots below its start with plain constructs, raising its slots to the start", () => {
     const rare = { baseId: 'sword', rarity: 'rare' as const };
-    // An uncommon sword's moveset as the old carries make it: the Basic and a two-Bolt Primary.
+    // An uncommon sword's moveset: the Basic, a two-Strike Primary (a sword's class default) and a Ward.
     const m = defaultMoveset(registry, { baseId: 'sword', rarity: 'uncommon' }, 'fire', { primary: 2 });
     const filled = fillSlots(registry, rare, m, 'storm');
     // A rare's Primary starts at 3 (the two kept, one Storm Strike added), its Defensive at 2.
     expect(filled.slots).toMatchObject({ basic: 3, primary: 3, defensive: 2 });
     expect(filled.chains.primary!.moves.map((x) => [x.form, x.elements[0]])).toEqual([
-      ['bolt', 'fire'],
-      ['bolt', 'fire'],
+      ['strike', 'fire'],
+      ['strike', 'fire'],
       ['strike', 'storm'],
     ]);
+    // The uncommon's own Fire Ward is kept; the rare's second Defensive slot takes a Storm one.
     expect(filled.chains.defensive).toEqual({
       moves: [
-        { kind: 'medium', form: 'ward', elements: ['storm'] },
+        { kind: 'medium', form: 'ward', elements: ['fire'] },
         { kind: 'medium', form: 'ward', elements: ['storm'] },
       ],
       payment: 'mana',

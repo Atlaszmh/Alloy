@@ -18,6 +18,7 @@
       "class": "melee",
       "style": {
         "name": "Quick",
+        "text": "Casts gain 15% crit chance",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "none",
         "trait": {},
@@ -58,6 +59,7 @@
       "class": "melee",
       "style": {
         "name": "Balanced",
+        "text": "Each chain step hits a little harder",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "none",
         "trait": {},
@@ -93,6 +95,7 @@
       "class": "melee",
       "style": {
         "name": "Sweeping",
+        "text": "Single-target hits cleave a small arc behind the first foe",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "none",
         "trait": {},
@@ -133,6 +136,7 @@
       "class": "melee",
       "style": {
         "name": "Heavy",
+        "text": "Heavy and hold moves stagger",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "none",
         "trait": {},
@@ -168,6 +172,7 @@
       "class": "ranged",
       "style": {
         "name": "Channeled",
+        "text": "Impacts leave a brief small zone",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "none",
         "trait": {},
@@ -209,6 +214,7 @@
       "class": "ranged",
       "style": {
         "name": "Seeking",
+        "text": "Shots home slightly",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "none",
         "trait": {},
@@ -250,6 +256,7 @@
       "class": "ranged",
       "style": {
         "name": "Marksman",
+        "text": "Shots pierce one foe",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "none",
         "trait": {},

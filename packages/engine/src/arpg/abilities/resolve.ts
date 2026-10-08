@@ -16,7 +16,7 @@ import {
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
 import type { CastStyle, FormDef } from '../../types/arpg.js';
-import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
+import { defaultForm, weaponClass, weaponString } from '../../loot/moveset.js';
 import { extraShotPower, loadEase, runeFits, runeKnobs, runeLoad } from '../../loot/runes.js';
 import type { RuneRef } from '../../types/rune.js';
 import type {
@@ -54,6 +54,7 @@ export const NEUTRAL: Knobs = Object.freeze({
   critBonus: 0,
   cleave: 0,
   homing: 0,
+  stepBonus: 0,
 });
 
 /**
@@ -111,6 +112,7 @@ export function mergeKnobs(...parts: KnobsData[]): Knobs {
     k.critBonus += p.critBonus ?? 0;
     k.cleave += p.cleave ?? 0;
     k.homing += p.homing ?? 0;
+    k.stepBonus += p.stepBonus ?? 0;
   }
   return k;
 }
@@ -503,17 +505,19 @@ export function followBasic(
 }
 
 /**
- * A new (or reset) hero's chains, all of `element`: each slot's default form's
- * whole default chain with its payment (`DEFAULT_FORMS`: a Bolt, a Ward and a
- * charged Nova), and the weapon's default basic chain.
+ * A new (or reset) hero's chains, all of `element`: each slot's class default
+ * form's whole default chain with its payment (`defaultForm`: a Strike on a
+ * melee weapon or a Bolt, a Ward and a charged Nova), and the weapon's default
+ * basic chain.
  */
 export function defaultChains(
   registry: DataRegistry,
   element: ManaType,
   weaponBaseId: string | null,
 ): Chains {
+  const cls = weaponClass(registry, weaponBaseId);
   const chain = (slot: AbilitySlot): Chain => {
-    const { form, payment } = DEFAULT_FORMS[slot];
+    const { form, payment } = defaultForm(registry, slot, cls);
     const moves = registry.getForm(form).defaultChain.map((kind) => ({
       kind,
       form,

@@ -4,7 +4,7 @@ import type { GearAffixDef, ImplicitTemplate } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, RARITY_ORDER } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
-import { rollMoveset, rollSockets } from './moveset.js';
+import { rollMoveset, rollSocketedRunes, rollSockets } from './moveset.js';
 import { metalAt } from './materials.js';
 
 export interface ItemGenOptions {
@@ -234,7 +234,8 @@ export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: 
   // Last, from their own streams: every other roll, and every later drop, stays as it was.
   if (item.slot === 'weapon') {
     const moveset = rollMoveset(registry, item, rng.fork('moveset'));
-    item.moveset = rollSockets(registry, item, moveset, rng.fork('sockets'));
+    const socketed = rollSockets(registry, item, moveset, rng.fork('sockets'));
+    item.moveset = rollSocketedRunes(registry, item, socketed, rng.fork('socketed'));
   }
   return item;
 }
