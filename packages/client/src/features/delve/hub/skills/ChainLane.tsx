@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
   chainCycle,
+  resolveChain,
   socketsOf,
   type AbilityPayment,
   type ChainCycle,
@@ -29,6 +30,9 @@ export function dropIndex(from: number, dx: number, step: number, count: number)
   return Math.min(count - 1, Math.max(0, from + Math.round(dx / step)));
 }
 
+/** The summary of a chain with no construct in it. */
+export const EMPTY_CHAIN = 'No construct in this chain: place one from your bag, or add a move.';
+
 /** A card the mouse is dragging: its place, where the press began, and a place's width. */
 interface Drag {
   i: number;
@@ -40,7 +44,7 @@ interface Drag {
 /**
  * The Skills tab's chain pane: the chosen chain's header (its slots, payment and rule) and its
  * summary line (its moves' names, or what carries it), its move cards in order (each its kind, element tile and form glyph, element or fusion, socket
- * pips and price; a click on a card, or A, opens its move's editor, a pip's at its socket), "+ Move" while a slot is free and "+ Slot"
+ * pips and price; a click on a card, or A, opens its move's editor, a pip's at its socket), "+ Move" in the first empty slot, a dashed well for each other empty slot, the ceiling in the header ("up to 4"), a dormant card greyed with its reason (`data-dormant`), and "+ Slot"
  * with its price while the chain is under its cap, a refused Apply's or Add slot's reason, and for
  * an ability chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37). Focus chooses a card,
  * and the chosen one leads the pad (`data-pad-first`).
@@ -56,15 +60,24 @@ export function ChainLane({
   onEdit: (i: number, socket?: number) => void;
 }) {
   const registry = getDelveRegistry();
-  const { skill, entries, index, names, locked, absent, chain, resolved } = ed;
-  const { caps, stats, runes, absentText } = anvil.editor;
-  const slots = caps[skill] ?? 0;
+  const { skill, slot, entries, index, names, locked, absent, chain, resolved, slots, ceiling } =
+    ed;
+  const { stats, runes, absentText } = anvil.editor;
   const offer = anvil.slotOffer(skill);
   const id = useId();
   const [drag, setDrag] = useState<Drag | null>(null);
   // A drag that moved swallows the click that ends it.
   const dragged = useRef(false);
-  const cycle = resolved ? chainCycle(registry, stats, resolved) : null;
+  // The cycle of the chain as it plays: a dormant construct (one the weapon's class can't
+  // express) is skipped, as `heroChains` skips it.
+  const playing =
+    chain && slot && entries.some((_, i) => ed.dormantWhy(i))
+      ? resolveChain(registry, stats, slot, {
+          ...chain,
+          moves: chain.moves.filter((_, i) => !ed.dormantWhy(i)),
+        })
+      : resolved;
+  const cycle = playing && playing.moves.length > 0 ? chainCycle(registry, stats, playing) : null;
   const message = useChainMessage((s) => s.text);
   // The guided start's lesson: its step names how many moves the Primary should hold, and its
   // last move takes the pair's secondary.
@@ -106,6 +119,10 @@ export function ChainLane({
             <span data-testid="chain-slots">
               {entries.length} of {slots} slots
             </span>
+            {' · '}
+            <span data-testid="chain-ceiling" data-ceiling={ceiling}>
+              {slots < ceiling ? `up to ${ceiling}` : 'at its ceiling'}
+            </span>
             {chain
               ? ` · pays ${chain.payment} · each press casts the next move`
               : ' · free · each swing strikes the next blow'}
@@ -113,7 +130,7 @@ export function ChainLane({
         )}
       </div>
       <p className="k-note m-0" data-testid="abilities-summary">
-        {absent ? absentText?.(skill) : chainText(names)}
+        {absent ? absentText?.(skill) : entries.length === 0 ? EMPTY_CHAIN : chainText(names)}
       </p>
       {locked && !absent && (
         <div
@@ -130,6 +147,7 @@ export function ChainLane({
           const color = manaStyle(registry, el).color;
           const ab = resolved?.moves[i];
           const off = offPair(e, ed.allowed);
+          const why = ed.dormantWhy(i);
           const moving = drag?.i === i;
           return (
             <Fragment key={i}>
@@ -143,6 +161,7 @@ export function ChainLane({
                 style={{
                   borderColor: on ? 'var(--k-hot-hi)' : undefined,
                   background: on ? 'var(--k-wood-0)' : undefined,
+                  opacity: why ? 0.6 : undefined,
                   transform: moving ? `translateX(${drag.dx}px)` : undefined,
                   zIndex: moving ? 1 : undefined,
                 }}
@@ -150,9 +169,13 @@ export function ChainLane({
                 <button
                   type="button"
                   data-card={i}
+                  data-construct={e.uid}
+                  data-dormant={why ? '' : undefined}
                   className="flex flex-col gap-3 bg-transparent p-0 text-left"
                   aria-pressed={on}
-                  aria-label={off ? `${names[i]}, off-pair` : names[i]}
+                  aria-label={[names[i], off && 'off-pair', why && 'dormant']
+                    .filter(Boolean)
+                    .join(', ')}
                   onClick={() => {
                     if (!dragged.current) onEdit(i);
                     dragged.current = false;
@@ -205,6 +228,11 @@ export function ChainLane({
                       off-pair
                     </span>
                   )}
+                  {why && (
+                    <span className="text-[16px] text-[var(--k-hot)]" data-testid="card-dormant">
+                      Dormant: {why}
+                    </span>
+                  )}
                 </button>
                 <span className="flex flex-wrap items-center gap-2">
                   {runes && (
@@ -245,6 +273,18 @@ export function ChainLane({
             free slot
           </button>
         )}
+        {/* The slots past "+ Move", empty: marks, not stops. */}
+        {!absent &&
+          Array.from({ length: Math.max(0, slots - entries.length - 1) }, (_, k) => (
+            <span
+              key={k}
+              aria-hidden
+              className="flex flex-[0_0_150px] items-center justify-center border-2 border-dashed border-[var(--k-steel-1)] text-[16px] text-[var(--k-text-3)]"
+              data-testid="slot-empty"
+            >
+              empty slot
+            </span>
+          ))}
         {!absent && offer.price && (
           <button
             type="button"
