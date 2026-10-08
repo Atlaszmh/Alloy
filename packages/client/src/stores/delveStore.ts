@@ -28,7 +28,14 @@ import {
   setAutoSalvage,
   setChains as engineSetChains,
   addSlot as engineAddSlot,
+  applyDraft as engineApplyDraft,
   draftPrice,
+  draftRefusal,
+  salvageConstruct as engineSalvageConstruct,
+  unsocketMode,
+  movesOf,
+  movesetOf,
+  socketsOf,
   moveAll as engineMoveAll,
   openSkill as engineOpenSkill,
   takeStop as engineTakeStop,
@@ -39,11 +46,12 @@ import {
   resolveOvertake,
   pairElements,
   CHAIN_SKILLS,
-  heroChains,
   sameChain,
   type ArpgWorld,
   type ChainFix,
   type Chains,
+  type Construct,
+  type ConstructDraft,
   type AbilitySlot,
   type ChainSkill,
   type DataRegistry,
@@ -69,7 +77,7 @@ import {
   type TutorialEvent,
   type UnsocketMode,
 } from '@alloy/engine';
-import { SKILL_NAME, listed } from '@/features/delve/chains/chain-text';
+import { SKILL_NAME, lessRunes, listed } from '@/features/delve/chains/chain-text';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { runeName } from '@/features/delve/runes/rune-style';
 import { createHmrStore } from './hmr-store';
@@ -214,50 +222,162 @@ export function questNotices(
   return notices;
 }
 
-/** The Anvil builder's unapplied edits (session only): one weapon's, under one pair. */
+/**
+ * The Anvil builder's unapplied edits (session only): one weapon's, under one pair, with the
+ * move bag as the draft sees it (a construct unsocketed joins it, one placed leaves it).
+ */
 export interface ChainDraft {
   uid: string;
   pair: ManaPair;
   chains: Partial<Chains>;
+  bag: Construct[];
+}
+
+/** Whether two chains hold the same constructs (by uid, as Apply prices them) the same way. */
+function sameConstructs(
+  a: Chains[ChainSkill] | undefined,
+  b: Chains[ChainSkill] | undefined,
+): boolean {
+  return sameChain(a, b) && movesOf(a).every((m, i) => m.uid === movesOf(b)[i]?.uid);
+}
+
+/** A bag's uids as a key: its order is no change. */
+const bagKey = (bag: readonly Construct[]) =>
+  bag
+    .map((c) => c.uid ?? '')
+    .sort()
+    .join();
+
+/** The draft is this weapon's, under this pair (equipping another, a bind or a realign drops it). */
+function draftFits(profile: DelveProfile, draft: ChainDraft | null): draft is ChainDraft {
+  const weapon = profile.equipped.weapon;
+  const { primary, secondary } = profile.pair;
+  return (
+    !!draft &&
+    !!weapon &&
+    draft.uid === weapon.uid &&
+    draft.pair.primary === primary &&
+    draft.pair.secondary === secondary
+  );
 }
 
 /**
- * The draft's chains that still differ from the equipped weapon's; none when
- * the draft belongs to another weapon or another pair (equipping another
- * weapon, a bind or a realign drops it).
+ * The draft's chains that still differ from the equipped weapon's own (every construct, a dormant
+ * one too: the uid diff's saved side); none when the draft belongs to another weapon or pair.
  */
 export function draftChanges(
   registry: DataRegistry,
   profile: DelveProfile,
   draft: ChainDraft | null,
 ): Partial<Chains> {
-  const weapon = profile.equipped.weapon;
-  const { primary, secondary } = profile.pair;
-  if (!draft || !weapon || draft.uid !== weapon.uid) return {};
-  if (draft.pair.primary !== primary || draft.pair.secondary !== secondary) return {};
-  const saved = heroChains(registry, profile.equipped, profile.pair);
+  if (!draftFits(profile, draft)) return {};
+  const saved = movesetOf(registry, profile.equipped.weapon!).chains;
   return Object.fromEntries(
-    CHAIN_SKILLS.filter((s) => draft.chains[s] && !sameChain(draft.chains[s], saved[s])).map(
+    CHAIN_SKILLS.filter((s) => draft.chains[s] && !sameConstructs(draft.chains[s], saved[s])).map(
       (s) => [s, draft.chains[s]],
     ),
   );
 }
 
-/** Apply's options: the pull rule (the dev override, else the balance's). The price is by uid: no origins. */
-function applyOpts(_draft: ChainDraft | null, unsocket: UnsocketMode | null): SetChainsOptions {
-  return { unsocket: unsocket ?? undefined };
+/** What Apply would set: the chains that differ and the draft's bag; null with nothing pending. */
+export function draftOf(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  draft: ChainDraft | null,
+): ConstructDraft | null {
+  if (!draftFits(profile, draft)) return null;
+  const chains = draftChanges(registry, profile, draft);
+  if (Object.keys(chains).length === 0 && bagKey(draft.bag) === bagKey(profile.constructs))
+    return null;
+  return { chains, bag: draft.bag };
+}
+
+/** Why a bag construct can't be salvaged while the draft holds changes (the constructs spec, 3.3). */
+export const SALVAGE_WAITS = 'Apply or discard your Skills changes first';
+
+/** More than any draft can spend: the copy Apply is priced on. */
+const RICH = 1_000_000_000;
+
+/** The runes held on the worn weapon and in the bag. */
+function heldRunes(registry: DataRegistry, p: DelveProfile): RuneRef[] {
+  const weapon = p.equipped.weapon;
+  const onWeapon = weapon
+    ? CHAIN_SKILLS.flatMap((s) => movesOf(movesetOf(registry, weapon).chains[s]))
+    : [];
+  return [...onWeapon, ...p.constructs].flatMap((c) =>
+    socketsOf(c).filter((r): r is RuneRef => r !== null),
+  );
+}
+
+/**
+ * The draft's price from a dry run of Apply on a copy of `before` that holds RICH of everything:
+ * what it spent in Mana Dust, Links (net; a refund beyond the spend is `refundLinks`) and scrap,
+ * the pouch it leaves, and the runes it pulled off the weapon and the bag, destroyed or returned
+ * by the pull rule.
+ */
+// ponytail: priced by a rich dry run; swap in an engine draftPrice(registry, profile, draft, opts) if B2 adds one.
+// Its multiset diff reads a rune pulled from one construct and socketed on another in the same
+// Apply as no pull (the pouch and scrap still say what Apply spent); an engine price would name it.
+export function priceFromDry(
+  registry: DataRegistry,
+  before: DelveProfile,
+  after: DelveProfile,
+  pay: boolean,
+): DraftPrice {
+  const net = RICH - after.links;
+  const pulled = lessRunes(heldRunes(registry, before), heldRunes(registry, after));
+  return {
+    dust: RICH - after.manaDust,
+    links: Math.max(0, net),
+    refundLinks: Math.max(0, -net),
+    scrap: RICH - after.scrap,
+    destroys: pay ? [] : pulled,
+    returns: pay ? pulled : [],
+    pouch: after.runes,
+  };
+}
+
+/** Phase A's placeholder `applyDraft` refuses every draft with this until B2 fills it. */
+const NOT_YET = 'Not yet';
+
+/**
+ * Apply's op: the engine's `applyDraft`. While it is A's placeholder (it refuses "Not yet") a
+ * draft that moves nothing into or out of the bag is `applyDraft`'s own `setChains` step, so
+ * it goes there, once `draftRefusal` has passed it (the lost-construct, two-slot and class rules
+ * run on every draft). A draft that moves the bag waits for B2.
+ */
+// ponytail: delete the fallback (keep the engineApplyDraft call) once B2's applyDraft is merged.
+function applyNow(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  draft: ConstructDraft,
+  opts: SetChainsOptions,
+): ProfileActionResult {
+  const res = engineApplyDraft(registry, profile, draft, opts);
+  if (res.ok || res.reason !== NOT_YET || bagKey(draft.bag) !== bagKey(profile.constructs))
+    return res;
+  const refused = draftRefusal(registry, profile, draft);
+  return refused
+    ? { ok: false, profile, reason: refused }
+    : engineSetChains(registry, profile, draft.chains, opts);
 }
 
 /** What Apply would do with the draft: the Anvil's builder and its Delve button both show it. */
 export interface DraftApply {
+  /** The engine's draft: the chains that differ and the bag; null with nothing pending. */
+  draft: ConstructDraft | null;
   /** The chains it would set: the draft's that differ from the weapon's. */
   changes: Partial<Chains>;
   opts: SetChainsOptions;
-  /** The total, from the engine's `draftPrice`; null with nothing pending, or when it refuses. */
+  /** The total; null with nothing pending, or when the engine refuses the draft. */
   price: DraftPrice | null;
-  /** Why `draftPrice` refuses (and so Apply would); null when it prices the draft. */
+  /**
+   * Why the engine won't price the draft (`draftRefusal`'s rules on a draft that moves the bag,
+   * else `draftPrice`'s: a rune the pouch lacks); null when it prices it. A rule that only stops
+   * Apply (an element outside the pair) is `dry`'s reason.
+   */
   refused: string | null;
-  /** The engine's `setChains` as a dry run: whether Apply goes through, and why not. */
+  /** The engine's `applyDraft` as a dry run: whether Apply goes through, and why not. */
   dry: ProfileActionResult | null;
   /** The pouch once Apply has taken what it sockets (and, paying, given back what it pulls). */
   pouch: RunePouch;
@@ -266,23 +386,59 @@ export interface DraftApply {
 export function draftApply(
   registry: DataRegistry,
   profile: DelveProfile,
-  draft: ChainDraft | null,
+  chainDraft: ChainDraft | null,
   unsocket: UnsocketMode | null,
 ): DraftApply {
-  const changes = draftChanges(registry, profile, draft);
-  const opts = applyOpts(draft, unsocket);
-  if (Object.keys(changes).length === 0)
-    return { changes, opts, price: null, refused: null, dry: null, pouch: profile.runes };
-  const price = draftPrice(registry, profile, changes, opts);
-  const refused = 'refused' in price ? price.refused : null;
+  const draft = draftOf(registry, profile, chainDraft);
+  const opts: SetChainsOptions = { unsocket: unsocket ?? undefined };
+  if (!draft)
+    return {
+      draft,
+      changes: {},
+      opts,
+      price: null,
+      refused: null,
+      dry: null,
+      pouch: profile.runes,
+    };
+  // The rules first (a wrong class, a rune the pouch lacks, a uid in two places), on a copy that
+  // can pay anything (`draftRefusal` runs `setChains`, which would refuse the price too), then
+  // the price on that copy, then the op itself (what Apply can't afford).
+  const rich = { ...profile, manaDust: RICH, links: RICH, scrap: RICH };
+  const rules = draftRefusal(registry, rich, draft);
+  if (rules) {
+    // Apply stays off with the rule's reason. A draft that leaves the bag as it is still shows
+    // what it would cost (the engine's `draftPrice` on its chains; display only), so a fix such
+    // as an element back in the pair reads its price; one that moves the bag reads the rule.
+    const priced =
+      bagKey(draft.bag) === bagKey(profile.constructs)
+        ? draftPrice(registry, profile, draft.chains, opts)
+        : { refused: rules };
+    const price = 'refused' in priced ? null : priced;
+    return {
+      draft,
+      changes: draft.chains,
+      opts,
+      price,
+      refused: 'refused' in priced ? priced.refused : null,
+      dry: { ok: false, profile, reason: rules },
+      // Refused, the picker shows the pouch as it is.
+      pouch: price?.pouch ?? profile.runes,
+    };
+  }
+  const paid = applyNow(registry, rich, draft, opts);
+  const price = paid.ok
+    ? priceFromDry(registry, profile, paid.profile, unsocketMode(registry, unsocket) === 'pay')
+    : null;
   return {
-    changes,
+    draft,
+    changes: draft.chains,
     opts,
-    price: 'refused' in price ? null : price,
-    refused,
-    dry: engineSetChains(registry, profile, changes, opts),
-    // Refused (a rune short, say), the picker shows the pouch as it is.
-    pouch: 'refused' in price ? profile.runes : price.pouch,
+    price,
+    refused: paid.ok ? null : (paid.reason ?? 'Cannot apply'),
+    dry: applyNow(registry, profile, draft, opts),
+    // Refused, the picker shows the pouch as it is.
+    pouch: price?.pouch ?? profile.runes,
   };
 }
 
@@ -502,13 +658,19 @@ interface DelveStore {
   /** Set the equipped weapon's changed chains, for Mana Dust: all or nothing. */
   setChains: (chains: Partial<Chains>) => ProfileActionResult;
   /**
-   * Put a chain into the builder's draft (a chain back as it was leaves it). `map` (the builder's
-   * record of where each move came from) is taken and ignored: the moves carry their uids, and
-   * Apply prices by them (C1 drops it).
+   * Put a chain into the builder's draft (a chain back as it was leaves it), with the bag as the
+   * edit leaves it (an unsocket, a place); without `bag` the draft's bag stays (the save's at first).
    */
-  editDraft: <S extends ChainSkill>(skill: S, chain: Chains[S], map?: (number | null)[]) => void;
-  /** Pay for the draft's changes and set them (`setChains`); a refusal keeps the draft. */
+  editDraft: <S extends ChainSkill>(skill: S, chain: Chains[S], bag?: Construct[]) => void;
+  /** Pay for the draft and set its chains and bag together (`applyDraft`); a refusal keeps the draft. */
   applyDraft: () => ProfileActionResult;
+  /**
+   * Melt bag construct `uid` at once (the constructs spec, 3.3): its runes to the pouch at the pull
+   * price; refused while the draft has unapplied changes. Undo for `UNDO_MS`, as a salvage
+   * (`undoSalvage` takes it back). C2's action: its thin body here keeps this branch typechecking
+   * (the bag pane calls it); at merge C2's body wins (see Needs routed).
+   */
+  salvageConstruct: (uid: string) => ProfileActionResult & { runes?: RuneRef[] };
   revertDraft: () => void;
   /** Add a slot to a chain of the equipped weapon, for Links and scrap (dropping its draft). */
   addSlot: (skill: ChainSkill) => ProfileActionResult;
@@ -531,9 +693,15 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
   const commit = (profile: DelveProfile) => {
     saveProfile(profile);
     const prev = get();
-    // The chain draft belongs to one weapon: equipping another (or a transfer) drops it.
+    // The chain draft belongs to one weapon and one bag: equipping another (or Move all) drops
+    // it, as does any save that changed the bag (a Loadout salvage's constructs; Apply nulls the
+    // draft itself) or one made while it holds no change (its bag would go stale).
     const draft = prev?.chainDraft;
-    const kept = !draft || profile.equipped.weapon?.uid === draft.uid;
+    const kept =
+      !draft ||
+      (profile.equipped.weapon?.uid === draft.uid &&
+        profile.constructs === prev.profile.constructs &&
+        Object.keys(draft.chains).length > 0);
     // A floor begins (a door taken): its finds are what the dive picks up from here.
     const was = prev?.profile.dive;
     const now = profile.dive;
@@ -818,22 +986,28 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     setChains: (chains) => applyResult(engineSetChains(registry(), get().profile, chains)),
 
-    editDraft: (skill, chain) => {
+    editDraft: (skill, chain, bag) => {
       const { profile, chainDraft } = get();
       const weapon = profile.equipped.weapon;
       if (!weapon) return;
-      const changes = draftChanges(registry(), profile, chainDraft);
+      const live = draftFits(profile, chainDraft) ? chainDraft : null;
+      const next: ChainDraft = {
+        uid: weapon.uid,
+        pair: profile.pair,
+        chains: { ...draftChanges(registry(), profile, chainDraft), [skill]: chain },
+        bag: bag ?? live?.bag ?? profile.constructs,
+      };
       // Only what differs from the weapon is kept: an edit undone by hand leaves nothing.
-      const next = { uid: weapon.uid, pair: profile.pair, chains: { ...changes, [skill]: chain } };
       set({ chainDraft: { ...next, chains: draftChanges(registry(), profile, next) } });
     },
 
     applyDraft: () => {
-      const { profile, chainDraft, unsocket } = get();
-      const changes = draftChanges(registry(), profile, chainDraft);
-      const res = applyResult(
-        engineSetChains(registry(), profile, changes, applyOpts(chainDraft, unsocket)),
-      );
+      const { profile, chainDraft } = get();
+      const draft = draftOf(registry(), profile, chainDraft) ?? {
+        chains: {},
+        bag: profile.constructs,
+      };
+      const res = applyResult(applyNow(registry(), profile, draft, pull()));
       if (res.ok) set({ chainDraft: null });
       return res;
     },
@@ -844,11 +1018,26 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     addSlot: (skill) => {
       const res = applyResult(engineAddSlot(registry(), get().profile, skill));
-      // The draft's edit of that chain was made on fewer slots: it goes.
-      const draft = get().chainDraft;
-      if (res.ok && draft?.chains[skill]) {
-        const { [skill]: _gone, ...chains } = draft.chains;
-        set({ chainDraft: { ...draft, chains } });
+      // A chain's draft was made on fewer slots: the draft goes (the lane holds Add slot off while
+      // that chain has a change, so this is the store's own guard).
+      if (res.ok && get().chainDraft?.chains[skill]) set({ chainDraft: null });
+      return res;
+    },
+
+    salvageConstruct: (uid) => {
+      const before = get().profile;
+      // The engine can't see the draft: a salvage waits while it holds changes, as a dive does
+      // (the pane's Salvage is off then too, but the keys reach here).
+      if (Object.keys(draftChanges(registry(), before, get().chainDraft)).length > 0)
+        return { ok: false, profile: before, reason: SALVAGE_WAITS };
+      const res = applyResult(engineSalvageConstruct(registry(), before, uid, pull()));
+      if (res.ok) {
+        // Something melted: Undo may take it back for UNDO_MS.
+        const undo: SalvageUndo = { before, after: res.profile, newUids: {} };
+        set({ undo });
+        setTimeout(() => {
+          if (get().undo === undo) set({ undo: null });
+        }, UNDO_MS);
       }
       return res;
     },
