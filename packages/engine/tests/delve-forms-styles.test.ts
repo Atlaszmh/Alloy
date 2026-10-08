@@ -60,3 +60,39 @@ describe('Detonate (impact.ts)', () => {
     expect(value(chain([DETONATE]))).toBeGreaterThan(value(chain([])));
   });
 });
+
+describe('Whirl (forms.ts performTick)', () => {
+  const whirl = { kind: 'medium', form: 'whirl', elements: ['fire'] } as const;
+
+  it('spins: a sweep all round now and every tick for its duration, the hero walking slowed meanwhile', () => {
+    const w = arena([dummy(13, 34.4), dummy(13, 37.8)], { noBasic: true, primary: { ...whirl } });
+    const form = registry.getForm('whirl');
+    const beats = Math.round(form.duration! / form.tick!);
+    // A short walk (at `actionMove`, as a swing's), then standing: every beat still reaches both.
+    const events = [
+      ...press(w, 0),
+      ...run(w, 0.2, { x: 1, y: 0 }),
+      ...run(w, form.duration! - 0.1, { x: 0, y: 0 }),
+    ];
+    // The sweeps' own hits (the burn's ticks come as `dot` hits beside them).
+    for (const m of w.monsters)
+      expect(hits(events, m.id).filter((e) => e.source === 'skill')).toHaveLength(beats);
+    const walked = w.hero.x - 13;
+    expect(walked).toBeGreaterThan(0.3);
+    expect(walked).toBeLessThan(w.hero.stats.moveSpeed * 0.2 * bal.feel.actionMove + 0.1);
+    expect(w.hero.perform ?? null).toBeNull();
+    expect(events.filter((e) => e.kind === 'slash' && e.arc === 360)).toHaveLength(beats);
+  });
+
+  it("its hits are direct (a chain's first move's stacks), and a second press starts the spin over", () => {
+    const w = arena([dummy(13, 34.4)], { noBasic: true, primary: { ...whirl } });
+    const events = press(w, 0);
+    expect(w.monsters[0].status.stacks.fire).toBe(moveOf(w, 0).stacks);
+    expect(hits(events, w.monsters[0].id)[0].source).toBe('skill');
+    run(w, 0.3);
+    w.hero.cooldowns[0][0] = 0;
+    w.hero.beatUntil[0] = 0;
+    press(w, 0);
+    expect(w.hero.perform?.struck).toBe(1);
+  });
+});
