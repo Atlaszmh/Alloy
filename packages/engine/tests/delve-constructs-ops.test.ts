@@ -509,3 +509,46 @@ describe('moveAll (constructs.ts)', () => {
     expect(moveAll(registry, { ...p, bag: [...p.bag, ring('r1')] }, 'r1').reason).toBe('Move onto a weapon in your bag');
   });
 });
+
+describe('salvageConstruct (constructs.ts)', () => {
+  const { pullScrap } = bal.runes;
+  /** A hero with its first Strike (Quick I socketed) and a plain blow in the bag. */
+  function bagged(): DelveProfile {
+    let p = hero();
+    p = openSocket(registry, p, 'primary', 0).profile;
+    p = socketRune(registry, p, 'primary', 0, 0, { id: 'quick', tier: 1 }).profile;
+    p = unsocketConstruct(registry, p, 'primary', 0).profile;
+    return unsocketConstruct(registry, p, 'basic', 2).profile;
+  }
+
+  it("a bag construct: its runes to the pouch at the pull price, salvageDust Dust, nothing else; refused short of the scrap", () => {
+    const p = bagged();
+    const [socketed, blow] = p.constructs;
+    const res = salvageConstruct(registry, p, socketed.uid!, { unsocket: 'pay' });
+    expect(res.ok).toBe(true);
+    expect(res.runes).toEqual([{ id: 'quick', tier: 1 }]);
+    expect(res.profile.runes.quick).toEqual([p.runes.quick[0] + 1, 0, 0, 0, 0]);
+    expect(res.profile.scrap).toBe(p.scrap - pullScrap[0]);
+    expect(res.profile.manaDust).toBe(p.manaDust + bal.movesets.salvageDust);
+    expect(res.profile.links).toBe(p.links);
+    expect(res.profile.constructs).toEqual([blow]);
+    const plain = salvageConstruct(registry, res.profile, blow.uid!, { unsocket: 'pay' });
+    expect([plain.ok, plain.runes, plain.profile.scrap, plain.profile.constructs]).toEqual([true, [], res.profile.scrap, []]);
+    expect(salvageConstruct(registry, { ...p, scrap: pullScrap[0] - 1 }, socketed.uid!, { unsocket: 'pay' }).reason).toBe('Not enough scrap to pull its runes');
+  });
+
+  it("in 'destroy' (the dev chip) the runes are destroyed for nothing", () => {
+    const p = bagged();
+    const res = salvageConstruct(registry, p, p.constructs[0].uid!, { unsocket: 'destroy' });
+    expect([res.runes, res.destroyed, res.profile.scrap]).toEqual([[], [{ id: 'quick', tier: 1 }], p.scrap]);
+    expect(res.profile.runes).toEqual(p.runes);
+  });
+
+  it("the balance's mode is the default (ships 'pay'); refused mid-dive and for a uid not in the bag", () => {
+    const p = bagged();
+    expect(bal.runes.unsocket).toBe('pay');
+    expect(salvageConstruct(registry, p, p.constructs[0].uid!).profile.scrap).toBe(p.scrap - pullScrap[0]);
+    expect(salvageConstruct(registry, startDive(registry, p, 1), p.constructs[0].uid!).reason).toBe('Salvage between dives');
+    expect(salvageConstruct(registry, p, primary(p)[0].uid!).reason).toBe('Not in your bag');
+  });
+});
