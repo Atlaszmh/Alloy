@@ -11,18 +11,25 @@ import { DelveProfileSchema } from './profile-schema.js';
 import { chooseStartingMana, type ChainFix } from './pair.js';
 import { isDiveActive } from './dive.js';
 import type { SetChainsOptions } from './runes.js';
-import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
+import {
+  chainMoves,
+  constructSkill,
+  defaultMoveset,
+  fillSlots,
+  movesetOf,
+  weaponParts,
+} from '../loot/moveset.js';
 import { emptyMaterials } from '../loot/materials.js';
 import { applyQuestEvents, emptyQuests } from './quests.js';
 import { applyTutorialEvents } from './tutorial.js';
 import { refillBoard } from './contracts.js';
 import { rollFloor } from '../loot/forge.js';
 import { applySalvage, salvageRng } from '../loot/salvage-yield.js';
-import { addToPouch, socketCap } from '../loot/runes.js';
-import type { RuneRef } from '../types/rune.js';
+import { addToPouch } from '../loot/runes.js';
+import { MAX_SOCKETS, type RuneRef } from '../types/rune.js';
 import type { ShardRef } from '../types/crafting.js';
 import type { RewardGrant } from '../types/quests.js';
-import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
+import { CHAIN_SKILLS, type ChainSkill, type Construct } from '../types/ability.js';
 
 export interface ProfileActionResult {
   ok: boolean;
@@ -76,7 +83,10 @@ export function createDelveProfile(
     diveCount: 0,
     forgeCount: 0,
     nextUid: 2,
+    nextConstructUid: 0,
     equipped: { weapon, chest },
+    constructs: [],
+    autoSalvagePlain: true,
     bag: [],
     scrap: kit.startingMaterials.scrap,
     bestDepth: 0,
@@ -104,17 +114,62 @@ export function createDelveProfile(
     tutorial: null,
     dive: null,
   };
+  // The starter sword's constructs take their uids (a world drop's have none; the constructs spec §3.1).
+  const [moveset, minted] = mintMoveset(profile, weapon.moveset!);
+  const armed = { ...minted, equipped: { ...minted.equipped, weapon: { ...weapon, moveset } } };
   // The first unlocks, and a full Contract board once there are templates (see the quests spec).
-  let started = applyQuestEvents(registry, profile, []);
+  let started = applyQuestEvents(registry, armed, []);
   if (registry.getQuestsData().contractTemplates.length > 0)
     started = refillBoard(registry, started);
   return opts.primary ? chooseStartingMana(registry, started, opts.primary).profile : started;
 }
 
-/** `profile` with its equipped weapon's moveset replaced (it has a weapon). */
+/** `profile` with its equipped weapon's moveset replaced (it has a weapon). Uids are kept as given. */
 export function withMoveset(profile: DelveProfile, moveset: Moveset): DelveProfile {
   const weapon = profile.equipped.weapon!;
   return { ...profile, equipped: { ...profile.equipped, weapon: { ...weapon, moveset } } };
+}
+
+/**
+ * A fresh construct uid, `c<nextConstructUid>`, and the profile with that counter moved on (the
+ * constructs spec §3.1). The constructs' counter is apart from the items' `nextUid`: the floor
+ * keys its drops and RNG streams on that one, so a bank's minting must never move it.
+ */
+export function mintUid(profile: DelveProfile): [uid: string, profile: DelveProfile] {
+  return [
+    `c${profile.nextConstructUid}`,
+    { ...profile, nextConstructUid: profile.nextConstructUid + 1 },
+  ];
+}
+
+/** `moveset` with a uid minted for each construct lacking one, and the profile with its counter moved on. */
+export function mintMoveset(
+  profile: DelveProfile,
+  moveset: Moveset,
+): [moveset: Moveset, profile: DelveProfile] {
+  let p = profile;
+  const mint = <M extends Construct>(m: M): M => {
+    if (m.uid) return m;
+    const [uid, next] = mintUid(p);
+    p = next;
+    return { ...m, uid };
+  };
+  const chains: Moveset['chains'] = {};
+  for (const skill of CHAIN_SKILLS) {
+    const chain = moveset.chains[skill];
+    if (!chain) continue;
+    (chains as Record<ChainSkill, unknown>)[skill] = Array.isArray(chain)
+      ? chain.map(mint)
+      : { ...chain, moves: chain.moves.map(mint) };
+  }
+  return [{ ...moveset, chains, bought: moveset.bought ?? {} }, p];
+}
+
+/** `item` with its moveset's constructs minted (`mintMoveset`); other gear as it is. */
+function mintItem(profile: DelveProfile, item: GearItem): [GearItem, DelveProfile] {
+  if (item.slot !== 'weapon') return [item, profile];
+  const [moveset, p] = mintMoveset(profile, item.moveset ?? { chains: {}, slots: {}, bought: {} });
+  return [{ ...item, moveset }, p];
 }
 
 /**
@@ -124,25 +179,27 @@ export function withMoveset(profile: DelveProfile, moveset: Moveset): DelveProfi
 export type ParsedDelveProfile = { profile: DelveProfile } | { reset: true };
 
 /**
- * Every weapon's moveset fitted to the data: a weapon without one gets its
- * base defaults in its own mana; a chain its rarity no longer carries is
- * dropped, its extra slots back as Links (as salvaging would give); a newly
- * carried one gets its base default; and a basic chain's slots are raised to
- * its weapon's string. (A base whose string grew absorbs extras it can't tell
- * from its new base: the old base isn't stored, so those give no Links.)
+ * Every weapon's moveset fitted to the data at load (the constructs spec §3.1):
+ * a weapon without a moveset gets its defaults in its own mana with uids
+ * minted, and a construct without a uid is minted one; then every uid must be
+ * unique across the worn weapon, the bag weapons, the bag and an open dive's
+ * `haul` and `banked` constructs (a settled dive's are in the bag already),
+ * each construct in a slot of its own skill, no chain past its slots, no empty
+ * Basic, and `bought` within the slots: anything else resets the save (null
+ * here). A class mismatch is dormancy, not an error.
  *
  * And its sockets (see the runes spec): a rune the data doesn't know, or the
- * second of one id on a move, is emptied; sockets past the rarity's cap are
- * trimmed from the end, and a dropped chain's go with it. Each socket that
- * goes comes back as a Link, and each known rune taken off leaves by the parts
- * rule in the balance's mode: back to the pouch ('pay') or destroyed
- * ('destroy'). The pouch drops ids the data doesn't know.
+ * second of one id on a move, is emptied; sockets past `MAX_SOCKETS` are
+ * trimmed from the end. Each socket that goes comes back as a Link, and each
+ * known rune taken off leaves by the parts rule in the balance's mode: back to
+ * the pouch ('pay') or destroyed ('destroy'). The pouch drops ids the data
+ * doesn't know.
  */
-function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfile | null {
   let links = 0;
   const off: RuneRef[] = [];
   const known = (r: RuneRef | null): r is RuneRef => !!r && !!registry.findRune(r.id);
-  const fitSockets = <M extends Move | Blow>(m: M, cap: number): M => {
+  const fitSockets = <M extends Construct>(m: M): M => {
     if (!m.runes) return m;
     const seen = new Set<string>();
     const runes = m.runes.map((r) => {
@@ -154,39 +211,42 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
       seen.add(r.id);
       return r;
     });
-    for (const r of runes.slice(cap)) {
+    for (const r of runes.slice(MAX_SOCKETS)) {
       links++;
       if (r) off.push(r);
     }
-    return { ...m, runes: runes.slice(0, cap) };
+    return { ...m, runes: runes.slice(0, MAX_SOCKETS) };
   };
+  let p = profile;
+  let bad: string | null = null;
   const fit = (item: GearItem): GearItem => {
     if (item.slot !== 'weapon') return item;
-    const old = movesetOf(registry, item);
-    const carried = carriedSkills(registry, item);
-    const cap = socketCap(registry, item.rarity);
-    const moveset: Moveset = { chains: {}, slots: {} };
+    const [withUids, next] = mintItem(
+      p,
+      item.moveset ? item : { ...item, moveset: defaultMoveset(registry, item, item.mana) },
+    );
+    p = next;
+    const old = withUids.moveset!;
+    const moveset: Moveset = { chains: {}, slots: {}, bought: {} };
     for (const skill of CHAIN_SKILLS) {
-      const base = baseSlots(registry, item.baseId, skill);
       const chain = old.chains[skill];
-      if (!carried.includes(skill)) {
-        links += Math.max(0, (old.slots[skill] ?? base) - base);
-        for (const m of chain ? (Array.isArray(chain) ? chain : chain.moves) : [])
-          for (const r of m.runes ?? []) {
-            links++;
-            if (known(r)) off.push(r);
-          }
-        continue;
-      }
+      const slots = old.slots[skill] ?? 0;
+      if (!chain !== (slots === 0)) bad = `${item.uid}: ${skill} has a chain without slots, or slots without a chain`;
+      if (!chain) continue;
+      const moves = chainMoves(chain);
+      if (moves.length > slots) bad = `${item.uid}: ${skill} past its slots`;
+      if (skill === 'basic' && moves.length === 0) bad = `${item.uid}: an empty Basic`;
+      if ((old.bought?.[skill] ?? 0) > slots) bad = `${item.uid}: ${skill} bought past its slots`;
+      for (const m of moves)
+        if (constructSkill(registry, m) !== skill) bad = `${item.uid}: ${m.uid} in a ${skill} slot`;
       const set = moveset.chains as Record<ChainSkill, unknown>;
-      set[skill] = !chain
-        ? defaultChain(registry, skill, item.baseId, item.mana, base)
-        : Array.isArray(chain)
-          ? chain.map((b) => fitSockets(b, cap))
-          : { ...chain, moves: chain.moves.map((m) => fitSockets(m, cap)) };
-      moveset.slots[skill] = chain ? Math.max(old.slots[skill]!, base) : base;
+      set[skill] = Array.isArray(chain)
+        ? chain.map(fitSockets)
+        : { ...chain, moves: chain.moves.map(fitSockets) };
+      moveset.slots[skill] = slots;
+      if (old.bought?.[skill]) moveset.bought[skill] = old.bought[skill];
     }
-    return { ...item, moveset };
+    return { ...withUids, moveset };
   };
   const equipped: EquippedGear = {};
   for (const slot of GEAR_SLOTS) {
@@ -194,14 +254,37 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
     if (item) equipped[slot] = fit(item);
   }
   const bag = profile.bag.map(fit);
+  // The bag's constructs, each in its own right, get a uid too.
+  const constructs = profile.constructs.map((c) => {
+    if (c.uid) return c;
+    const [uid, next] = mintUid(p);
+    p = next;
+    return { ...c, uid };
+  });
+  // Every uid once, over everything the profile holds (an open dive's haul and banked too).
+  const seen = new Set<string>();
+  const weapons = [...GEAR_SLOTS.flatMap((s) => equipped[s] ?? []), ...bag];
+  const dive = profile.dive && !profile.dive.settled ? profile.dive : null;
+  const all = [
+    ...weapons.flatMap((w) => CHAIN_SKILLS.flatMap((s) => chainMoves(w.moveset?.chains[s]))),
+    ...constructs,
+    ...(dive?.haul.constructs ?? []),
+    ...(dive?.banked.constructs ?? []),
+  ];
+  for (const c of all) {
+    if (!c.uid || seen.has(c.uid)) bad = `uid ${c.uid} twice`;
+    seen.add(c.uid ?? '');
+  }
+  if (bad) return null;
   const pouch = Object.fromEntries(
     Object.entries(profile.runes).filter(([id]) => registry.findRune(id)),
   );
   const pay = registry.getDelveBalance().runes.unsocket === 'pay';
   return {
-    ...profile,
+    ...p,
     equipped,
     bag,
+    constructs,
     links: profile.links + links,
     runes: pay ? addToPouch(pouch, off) : pouch,
   };
@@ -209,14 +292,18 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
 
 /**
  * Validate an unknown JSON blob as a save. A version 13 save is fitted to the
- * data (`fitMovesets`); a save of any other version is `{ reset: true }`. Null
- * when it isn't an object, or a version 13 save doesn't fit the schema.
+ * data (`fitMovesets`); a save of any other version, or one whose constructs
+ * don't fit (a uid twice, a construct out of its skill, a chain past its
+ * slots, an empty Basic), is `{ reset: true }`. Null when it isn't an object,
+ * or a version 13 save doesn't fit the schema.
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   if (typeof raw !== 'object' || raw === null) return null;
   if ((raw as { version?: unknown }).version !== 13) return { reset: true };
   const parsed = DelveProfileSchema.safeParse(raw);
-  return parsed.success ? { profile: fitMovesets(registry, parsed.data as DelveProfile) } : null;
+  if (!parsed.success) return null;
+  const fitted = fitMovesets(registry, parsed.data as DelveProfile);
+  return fitted ? { profile: fitted } : { reset: true };
 }
 
 /** Depth used as the yardstick for Power and comparisons. */
@@ -361,7 +448,11 @@ export function addLootToBag(
   const kept: GearItem[] = [];
   const salvaged: GearItem[] = [];
   let bagFull = false;
-  for (const item of items) {
+  let p = recorded.profile;
+  for (const dropped of items) {
+    // A banked weapon's constructs take their uids as it enters the profile (the constructs spec §3.1).
+    const [item, next] = mintItem(p, dropped);
+    p = next;
     // Never while the tutorial runs: its set gear is the next steps' (see the tutorial spec).
     const auto =
       !profile.tutorial && item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
@@ -373,7 +464,7 @@ export function addLootToBag(
       kept.push(item);
     }
   }
-  const melted = melt(registry, { ...recorded.profile, bag }, salvaged, opts);
+  const melted = melt(registry, { ...p, bag }, salvaged, opts);
   return { ...melted, kept, salvaged, bagFull, newCodex: recorded.newCodex };
 }
 
@@ -514,11 +605,21 @@ export function upgradeGear(
   const cost = upgradeCost(registry, found.item);
   if (cost === null) return { ok: false, profile, reason: 'Already at max upgrade' };
   if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
-  const item = applyUpgrade(registry, found.item);
+  const upgraded = applyUpgrade(registry, found.item);
+  // A weapon's skills below its rarity's starts gain plain-filled slots up to them, not bought
+  // (the constructs spec §3.2), their constructs minted. (An upgrade keeps the rarity here, so
+  // a weapon at its starts is left as it is.)
+  const [item, minted] =
+    upgraded.slot === 'weapon'
+      ? mintItem(profile, {
+          ...upgraded,
+          moveset: fillSlots(registry, upgraded, movesetOf(registry, upgraded), upgraded.mana),
+        })
+      : [upgraded, profile];
   return {
     ok: true,
     item,
-    profile: { ...replaceItem(profile, item), scrap: profile.scrap - cost },
+    profile: { ...replaceItem(minted, item), scrap: profile.scrap - cost },
   };
 }
 

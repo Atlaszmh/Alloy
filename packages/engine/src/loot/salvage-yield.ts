@@ -8,7 +8,7 @@ import { salvageDust } from '../delve/pair.js';
 import { applyQuestEvents } from '../delve/quests.js';
 import { settleParts, type SetChainsOptions } from '../delve/runes.js';
 import { addHaul, addMaterial, emptyHaul, shardTiersOf, stockHaul } from './materials.js';
-import { extraSlots, weaponParts } from './moveset.js';
+import { weaponParts } from './moveset.js';
 import { salvageValue } from './smithing.js';
 
 /**
@@ -30,18 +30,11 @@ function salvageTier(registry: DataRegistry, stat: HeroStatKey, roll: number): n
 }
 
 /**
- * A weapon's Links on salvage: one for each extra slot and open socket past the
- * free ones a forge of its rarity grants (`crafting.weaponExtras`), dropped or
- * forged alike, so forging then salvaging never makes Links.
+ * What salvaging `item` could give (the Loadout's preview). A weapon's Links
+ * are one per bought slot (`weaponParts`; the constructs spec §3.3): free extra
+ * slots and open sockets give nothing, so forging or finding a weapon and
+ * melting it mints no Links.
  */
-function salvageLinks(registry: DataRegistry, item: GearItem, partLinks: number): number {
-  if (item.slot !== 'weapon') return 0;
-  const free = registry.getDelveBalance().crafting.weaponExtras[item.rarity];
-  const slots = extraSlots(registry, item);
-  return Math.max(0, slots - free.slots) + Math.max(0, partLinks - slots - free.sockets);
-}
-
-/** What salvaging `item` could give (the Loadout's preview). */
 export function salvageYield(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -57,12 +50,14 @@ export function salvageYield(
   return {
     scrap: salvageValue(registry, item),
     dust: salvageDust(registry, item, profile.pair),
-    links: salvageLinks(registry, item, parts.links),
+    links: parts.links,
     shards,
     extraShard: shards.length > 1 ? registry.getDelveBalance().crafting.salvageExtraShard : 0,
     pattern: profile.patterns.includes(item.baseId) ? null : item.baseId,
     essence,
     runes: parts.runes,
+    // B2 sends them to the bag; in Phase A they leave with the weapon as before.
+    constructs: [],
   };
 }
 
@@ -125,5 +120,6 @@ export function applySalvage(
     essence: y.essence,
     runes: settled.runes,
     destroyed: settled.destroyed,
+    constructs: [],
   };
 }

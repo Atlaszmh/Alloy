@@ -231,6 +231,7 @@ describe('mergeKnobs', () => {
       stackTime: 0,
       detonate: 0,
       critBonus: 0,
+      stepBonus: 0,
       cleave: 0,
       homing: 0,
     });

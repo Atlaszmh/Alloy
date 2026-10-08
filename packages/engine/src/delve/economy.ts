@@ -46,7 +46,7 @@ export interface EconomyReport {
 
 /** The stockpile as a haul: materials, scrap, Mana Dust, Links and runes. */
 function stockOf(p: DelveProfile): Haul {
-  return { ...p.materials, scrap: p.scrap, dust: p.manaDust, links: p.links, runes: p.runes };
+  return { ...p.materials, scrap: p.scrap, dust: p.manaDust, links: p.links, runes: p.runes, constructs: [] };
 }
 
 /** `h` with every count passed through `f`. */
@@ -64,6 +64,7 @@ function mapHaul(h: Haul, f: (n: number) => number): Haul {
     dust: f(h.dust),
     links: f(h.links),
     runes: tiers(h.runes),
+    constructs: [],
   };
 }
 

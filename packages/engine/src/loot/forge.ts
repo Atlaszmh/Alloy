@@ -29,8 +29,8 @@ import {
   weightedPick,
 } from './item-generator.js';
 import { materialCount, shardTiersOf } from './materials.js';
-import { baseSlots, carriedSkills, defaultMoveset } from './moveset.js';
-import { socketCap, socketsOf } from './runes.js';
+import { ceilingOf, defaultMoveset, slotRange, weaponClass } from './moveset.js';
+import { socketsOf } from './runes.js';
 
 /**
  * Forging and the Temper sinks on an item (see the crafting spec): the forge's
@@ -63,38 +63,27 @@ function shardBand(registry: DataRegistry, shard: ShardRef): [number, number] | 
 const EXTRAS_ORDER: readonly ChainSkill[] = ['primary', 'basic', 'ultimate', 'defensive'];
 
 /**
- * A forged weapon's moveset (the crafting spec's S7): the skills its rarity
- * carries, every move its default in the item's mana; `crafting.weaponExtras`
- * extra slots fill the Primary to its cap first, then Basic, Ultimate and
- * Defensive; the open sockets go one a move in that order (the Primary's first
- * moves first), round after round up to the rarity's cap.
+ * A forged weapon's moveset (the constructs spec §3.5): each skill at its
+ * rarity's start, every slot a plain construct in the item's mana;
+ * `crafting.weaponExtras.slots` free extra slots (not bought) fill the Primary
+ * to its ceiling first, then Basic, Ultimate and Defensive, only skills with a
+ * start (a forge never opens a skill). No sockets, no uids (`forge` mints them).
  */
 export function forgedMoveset(
   registry: DataRegistry,
   item: Pick<GearItem, 'baseId' | 'rarity' | 'mana'>,
 ): Moveset {
-  const bal = registry.getDelveBalance();
-  const extras = bal.crafting.weaponExtras[item.rarity];
-  const carried = carriedSkills(registry, item);
-  const order = EXTRAS_ORDER.filter((s) => carried.includes(s));
+  const extras = registry.getDelveBalance().crafting.weaponExtras[item.rarity];
   const slots: Partial<Record<ChainSkill, number>> = {};
   let left = extras.slots;
-  for (const s of order) {
-    const base = baseSlots(registry, item.baseId, s);
-    const add = Math.min(left, Math.max(0, bal.chains.cap[s] - base));
-    slots[s] = base + add;
+  for (const s of EXTRAS_ORDER) {
+    const [start, ceiling] = slotRange(registry, item, s);
+    if (start === 0) continue;
+    const add = Math.min(left, Math.max(0, ceiling - start));
+    slots[s] = start + add;
     left -= add;
   }
-  const moveset = defaultMoveset(registry, item, item.mana, slots);
-  const moves = order.flatMap((s) => movesOf(moveset.chains[s]));
-  let open = extras.sockets;
-  for (let round = 0; round < socketCap(registry, item.rarity); round++)
-    for (const m of moves)
-      if (open > 0) {
-        m.runes = [...socketsOf(m), null];
-        open--;
-      }
-  return moveset;
+  return defaultMoveset(registry, item, item.mana, slots);
 }
 
 /** What a forge consumes besides scrap and Mana Dust: the bar, the flux, the essence and the shards. */
@@ -215,14 +204,14 @@ export function previewForge(
       dust: inPair(profile, req.element) ? 0 : bal.crafting.offPairDust,
     },
     weapon: moveset && {
-      carries: [...carriedSkills(registry, { rarity })],
-      // Each carried skill's extra slots, past its base.
+      class: weaponClass(registry, base.id)!,
+      // Each skill's slots against its ceiling (a skill at 0 slots listed too).
       slots: Object.fromEntries(
-        carriedSkills(registry, { rarity }).map((s) => [
+        CHAIN_SKILLS.map((s) => [
           s,
-          moveset.slots[s]! - baseSlots(registry, base.id, s),
+          [moveset.slots[s] ?? 0, ceilingOf(registry, { baseId: base.id, rarity }, s)],
         ]),
-      ),
+      ) as Record<ChainSkill, [number, number]>,
       sockets: CHAIN_SKILLS.flatMap((s) => movesOf(moveset.chains[s])).flatMap(socketsOf).length,
     },
   };

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
-import { baseSlots } from '../src/loot/moveset.js';
+import { slotRange } from '../src/loot/moveset.js';
 import { runeFits } from '../src/loot/runes.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { TutorialFloorDef } from '../src/types/tutorial-floor.js';
@@ -68,10 +68,14 @@ describe("a hand-built floor's set drops", () => {
       ilvl: 3,
     });
     const { chains, slots } = blade.item!.moveset!;
-    expect(slots).toEqual({ basic: baseSlots(registry, 'sword', 'basic'), primary: 2 });
+    expect(slots).toEqual({
+      basic: slotRange(registry, blade.item!, 'basic')[0],
+      primary: 2,
+      defensive: slotRange(registry, blade.item!, 'defensive')[0],
+    });
     expect(chains.primary!.moves.map((m) => [m.form, m.elements, m.runes])).toEqual([
-      ['bolt', ['fire'], undefined],
-      ['bolt', ['fire'], undefined],
+      ['strike', ['fire'], undefined],
+      ['strike', ['fire'], undefined],
     ]);
     expect([blade.roomId, w.loot.nextUid, w.loot.dropsGiven]).toEqual([1, 101, [1]]);
     const ore = w.drops.filter((d) => d.material?.kind === 'metal' && d.amount === 2);
@@ -104,7 +108,7 @@ describe("a hand-built floor's set drops", () => {
       const [charm] = set(w);
       return [charm.rune!.tier, runeFits(registry.getRune(charm.rune!.id), { form })];
     };
-    expect(fits(builtWorld(registry, 't-2'), 'bolt')).toEqual([2, true]);
+    expect(fits(builtWorld(registry, 't-2'), 'strike')).toEqual([2, true]);
     const strike = {
       kind: 'medium' as const,
       form: 'strike' as const,
@@ -119,7 +123,8 @@ describe("a hand-built floor's set drops", () => {
     const events = kill(w, 'grask');
     expect(set(w).map((d) => [d.item?.rarity, d.item?.mana])).toEqual([['rare', 'frost']]);
     const { chains } = set(w)[0].item!.moveset!;
-    expect([chains.primary!.moves[0].runes, chains.basic![0].runes]).toEqual([[null], [null]]);
+    // Two sockets, one a construct, the Primary's first: its first two moves (a rare's Primary starts at 3).
+    expect([chains.primary!.moves[0].runes, chains.primary!.moves[1].runes]).toEqual([[null], [null]]);
     expect(events.filter((e) => e.kind === 'drop' && e.dropKind === 'item').length).toBe(1);
   });
 

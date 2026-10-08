@@ -5,7 +5,7 @@ import { DataRegistry } from '../src/data/registry.js';
 import { tutorialDataProblems } from '../src/data/tutorial-check.js';
 import { forge, hone, refine } from '../src/delve/crafting.js';
 import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
-import { addSlot, setChains, transferMoveset } from '../src/delve/moveset.js';
+import { addSlot, setChains } from '../src/delve/moveset.js';
 import { bindSecondary } from '../src/delve/pair.js';
 import { createDelveProfile, equipItem, salvageItems } from '../src/delve/profile.js';
 import { applyQuestEvents, claimQuest, questStates } from '../src/delve/quests.js';
@@ -165,7 +165,7 @@ describe('the guided path', () => {
   });
 
   it('Anvil lesson 1, op by op: claim, forge, equip, bind, the Primary, salvage, refine, claim', () => {
-    const bolt = (elements: Move['elements']): Move => ({ kind: 'medium', form: 'bolt', elements });
+    const bolt = (elements: Move['elements']): Move => ({ kind: 'medium', form: 'strike', elements });
     let p = createDelveProfile(registry, 7, { primary: 'fire' });
     const old = p.equipped.weapon!;
     p = withChains(
@@ -225,11 +225,13 @@ describe('the guided path', () => {
     expect(tutorialBlocksDive(registry, p)).toBeNull();
   });
 
-  it('Anvil lesson 2: the compare beat, Transfer, hone, claim, the board, the Training Grounds, farewell', () => {
-    // The blade as dive 1 drops it: its Primary at two slots, which the Transfer carries over.
+  it('Anvil lesson 2: the compare beat, Move all, hone, claim, the board, the Training Grounds, farewell', () => {
+    // The blade as dive 1 drops it: its Primary at two slots. Move all is B2's op (D1 rewires the
+    // bot): here the rare arrives holding four Primary constructs, which is what the step reads.
     const b1 = sword('uncommon', 'b1');
     const blade = { ...b1, moveset: defaultMoveset(registry, b1, 'fire', { primary: 2 }) };
-    const rare = sword('rare', 'r1');
+    const r1 = sword('rare', 'r1');
+    const rare = { ...r1, moveset: defaultMoveset(registry, r1, 'fire', { primary: 4 }) };
     let p = createDelveProfile(registry, 7, { primary: 'fire' });
     p = {
       ...p,
@@ -240,7 +242,7 @@ describe('the guided path', () => {
     };
     p = applyTutorialEvents(registry, p, [{ type: 'ack' }]);
     expect(p.tutorial).toEqual(st('l2-transfer'));
-    p = transferMoveset(registry, p, 'r1').profile;
+    p = equipItem(registry, p, 'r1');
     expect(p.tutorial).toEqual(st('l2-hone'));
     p = claimAll(hone(registry, p, 'r1', 0).profile);
     expect(p.tutorial).toEqual(st('l2-board'));

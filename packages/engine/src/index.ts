@@ -92,13 +92,15 @@ export {
   editPrice,
   addSlot,
   slotPrice,
-  transferMoveset,
   movesOf,
   moveKey,
   sameChain,
   withMove,
   takesElements,
   legendaryNeeds,
+  classRefusal,
+  wornClass,
+  OPEN_SKILL_TEXT,
 } from './delve/moveset.js';
 export {
   STOP_KINDS,
@@ -130,14 +132,28 @@ export {
   heroChains,
   movesetOf,
   defaultMoveset,
-  extraSlots,
-  baseSlots,
-  carriedSkills,
-  carriedByText,
-  carriedFrom,
-  movesetTransfer,
+  defaultChain,
+  defaultForm,
+  weaponClass,
+  formAllowed,
+  slotRange,
+  ceilingOf,
+  plainConstruct,
+  fillSlots,
+  rollMoveset,
+  constructSkill,
+  isPlain,
+  dormantUids,
+  moveAllPreview,
+  chainMoves,
+  UNARMED,
 } from './loot/moveset.js';
-export type { MovesetTransfer } from './loot/moveset.js';
+export type { MovesetOwner, MoveAllPreview } from './loot/moveset.js';
+// Constructs (see the constructs spec): the ops module whole (B2 fills it), the style pipeline and the signature hook.
+export * from './delve/constructs.js';
+export { mintUid, mintMoveset } from './delve/profile.js';
+export { applyStyle } from './arpg/abilities/resolve.js';
+export * from './arpg/abilities/signatures.js';
 export {
   GearItemSchema,
   MoveSchema,

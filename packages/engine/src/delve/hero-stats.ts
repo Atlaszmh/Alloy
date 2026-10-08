@@ -21,7 +21,7 @@ import {
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
-import { heroChains, movesetTransfer } from '../loot/moveset.js';
+import { heroChains, moveAllPreview } from '../loot/moveset.js';
 import { runeKnobs } from '../loot/runes.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
@@ -365,6 +365,10 @@ const TARGETS: Record<string, number> = {
   armor: 1,
   surge: 0,
   blink: 1.5,
+  // The constructs spec's forms, as their kin until B1 tunes them.
+  whirl: 2,
+  repel: 2.5,
+  onslaught: 3,
 };
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -867,8 +871,8 @@ function estimateLoadout(
 }
 
 /**
- * How a weapon is valued: `home`, with the equipped weapon's moveset moved
- * onto it (`movesetTransfer`); `asIs`, with its own, as it would fight if
+ * How a weapon is valued: `home`, with the equipped weapon's constructs moved
+ * onto it (`moveAllPreview`); `asIs`, with its own, as it would fight if
  * equipped now.
  */
 export type WeaponValue = 'home' | 'asIs';
@@ -891,7 +895,7 @@ export function compareItem(
   const worn = equipped.weapon;
   const home = value === 'home' && item.slot === 'weapon' && worn && worn.uid !== item.uid;
   const candidate = home
-    ? { ...item, moveset: movesetTransfer(registry, worn, item).moveset }
+    ? { ...item, moveset: moveAllPreview(registry, worn, item).moveset }
     : item;
   const next = { ...equipped, [item.slot]: candidate };
   const { stats: beforeStats, estimate: before } = estimateLoadout(equipped, registry, depth, pair);

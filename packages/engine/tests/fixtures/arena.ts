@@ -2,7 +2,7 @@ import { createDefaultRegistry } from '../../src/data/default-registry.js';
 import { SeededRNG } from '../../src/rng/seeded-rng.js';
 import { createFloorWorld, createMonsterEntity } from '../../src/arpg/world.js';
 import { stepWorld } from '../../src/arpg/step.js';
-import { withMoveset } from '../../src/delve/profile.js';
+import { mintMoveset, withMoveset } from '../../src/delve/profile.js';
 import { computeHeroStats, type HeroStatsExtra } from '../../src/delve/hero-stats.js';
 import { generateItem } from '../../src/loot/item-generator.js';
 import { heroChains, movesetOf } from '../../src/loot/moveset.js';
@@ -50,11 +50,13 @@ export function chainsOf(p: DelveProfile): Partial<Chains> {
 
 /**
  * `p` with its weapon holding `chains`, each skill given at least as many slots
- * as moves (a test's shortcut: no price, and any skill, carried or not).
+ * as moves (a test's shortcut: no price, and any skill, with slots or not), and
+ * every construct without a uid minted one (the constructs spec §3.1); those with
+ * one keep it.
  */
 export function withChains(p: DelveProfile, chains: Partial<Chains>): DelveProfile {
   const moveset = movesetOf(registry, p.equipped.weapon!);
-  const next = { chains: { ...moveset.chains }, slots: { ...moveset.slots } };
+  const next = { chains: { ...moveset.chains }, slots: { ...moveset.slots }, bought: { ...moveset.bought } };
   for (const skill of CHAIN_SKILLS) {
     const chain = chains[skill];
     if (!chain) continue;
@@ -62,7 +64,22 @@ export function withChains(p: DelveProfile, chains: Partial<Chains>): DelveProfi
     (next.chains as Record<string, unknown>)[skill] = chain;
     next.slots[skill] = Math.max(next.slots[skill] ?? 0, length);
   }
-  return withMoveset(p, next);
+  const [minted, q] = mintMoveset(p, next);
+  return withMoveset(q, minted);
+}
+
+/** `p` with every construct of its worn and bag weapons minted a uid where it lacks one. */
+export function withUids(p: DelveProfile): DelveProfile {
+  let q = p;
+  const mint = (w: EquippedGear['weapon']) => {
+    if (!w) return w;
+    const [moveset, next] = mintMoveset(q, movesetOf(registry, w));
+    q = next;
+    return { ...w, moveset };
+  };
+  const weapon = mint(p.equipped.weapon);
+  const bag = p.bag.map((i) => (i.slot === 'weapon' ? mint(i)! : i));
+  return { ...q, equipped: { ...p.equipped, ...(weapon && { weapon }) }, bag };
 }
 
 /** A slot's chain in a test: its one move with these parts changed and its payment, or whole `moves`. */

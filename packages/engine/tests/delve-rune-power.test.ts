@@ -78,34 +78,35 @@ describe('Power without runes', () => {
       .profile;
   };
 
-  it("is what it was at v0.50.0: the starters (an Earth Bolt's endless pierce included) and an archer", () => {
-    // The starter sword made uncommon: its basic chain and a Bolt, as the common one carried then.
+  it('is what it is at the switch: the starters (two Strikes and a Ward on an uncommon sword) and an archer', () => {
+    // The starter sword made uncommon: its basic chain, two Strikes and a Ward (the slot table).
     const starter = (primary: ManaType) =>
       estimate(armed(registry, createDelveProfile(registry, 3, { primary })), DEPTH);
     expect(starter('fire')).toEqual({
-      dps: 36.424338129677416,
-      ehp: 162.01086642686363,
-      power: 768,
+      dps: 42.61095657127015,
+      ehp: 210.61412635492272,
+      power: 947,
     });
     expect(starter('earth')).toEqual({
-      dps: 34.21053596129032,
-      ehp: 162.01086642686363,
-      power: 744,
+      dps: 39.590204171370964,
+      ehp: 239.33423449423037,
+      power: 973,
     });
     expect(starter('storm')).toEqual({
-      dps: 40.66745895241935,
-      ehp: 162.01086642686363,
-      power: 812,
+      dps: 46.532077687802406,
+      ehp: 210.61412635492272,
+      power: 990,
     });
     expect(starter('shadow')).toEqual({
-      dps: 34.21053596129032,
-      ehp: 162.01086642686363,
-      power: 744,
+      dps: 39.590204171370964,
+      ehp: 210.61412635492272,
+      power: 913,
     });
+    // The epic bow's drop rolls its moveset over the slot table (four Bolts, two Wards, a Nova).
     expect(estimate(archer(), 15)).toEqual({
-      dps: 336.61787210212225,
+      dps: 378.9112929933396,
       ehp: 198.09056273093927,
-      power: 2582,
+      power: 2740,
     });
   });
 
@@ -276,11 +277,11 @@ describe('the autopilot and runes', () => {
       stats: { ...p.stats, dives: 1 },
     };
   };
-  /** `p` with its Primary one medium Fire Bolt whose sockets hold `runes`. */
+  /** `p` with its Primary one medium Fire Lance (a sword expresses it) whose sockets hold `runes`. */
   const bolt = (p: DelveProfile, runes: (RuneRef | null)[]) =>
     withChains(p, {
       primary: {
-        moves: [{ kind: 'medium', form: 'bolt', elements: ['fire'], runes }],
+        moves: [{ kind: 'medium', form: 'lance', elements: ['fire'], runes }],
         payment: 'mana',
       },
     });
@@ -305,14 +306,14 @@ describe('the autopilot and runes', () => {
   });
 
   it('opens sockets with the Links the slots leave, each for a pouch rune that goes in: the cheapest first, the Primary first', () => {
+    // A wand: it expresses the Bolts (on a sword they'd be dormant).
     const magic = generateItem(
       registry,
-      { uid: 'm', ilvl: 5, rarity: 'magic', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      { uid: 'm', ilvl: 5, rarity: 'magic', slot: 'weapon', baseId: 'wand', mana: 'fire' },
       new SeededRNG(1),
     );
     const five = <T>(make: () => T): T[] => Array.from({ length: 5 }, make);
-    // Every chain it carries at its cap of 5, so no Link goes to a slot; two sockets a move; Fire
-    // and Nature bound.
+    // Every chain at 5 moves, so no Link goes to a slot; Fire and Nature bound.
     const pair = { primary: 'fire', secondary: 'nature' } as const;
     const bound: DelveProfile = { ...veteran(magic), pair };
     const full = withChains(bound, {
@@ -336,19 +337,19 @@ describe('the autopilot and runes', () => {
     });
     // With the runes' price zeroed, so every Leech and Guard nets Power (the price is the next
     // test's). No rune to put in: no socket opens, and the Links stay (the scrap goes to upgrades).
-    const empty = betweenDives(unloaded, { ...full, links: 17, scrap: 340 });
+    const empty = betweenDives(unloaded, { ...full, links: 16, scrap: 320 });
     expect(sockets(empty, 'primary')).toEqual([0, 0, 0, 0, 0]);
-    expect(empty.links).toBe(17);
+    expect(empty.links).toBe(16);
     // The first sockets (1 Link + 20 scrap each), then second ones (2 + 40), each filled as it
-    // opens: none on the fourth and fifth Wards, where neither rune adds Power, so the Primary's
-    // and the basic chain's first moves take a second.
+    // opens: none on the third to fifth Wards, where neither rune adds Power (Guard's gain rounds
+    // away on a wand), so the Primary's and the basic chain's first moves take a second.
     const runes = { leech: [20, 0, 0, 0, 0], guard: [20, 0, 0, 0, 0] };
-    const after = betweenDives(unloaded, { ...full, links: 17, scrap: 340, runes });
+    const after = betweenDives(unloaded, { ...full, links: 16, scrap: 320, runes });
     expect(sockets(after, 'primary')).toEqual([2, 1, 1, 1, 1]);
     expect(sockets(after, 'basic')).toEqual([2, 1, 1, 1, 1]);
-    expect(sockets(after, 'defensive')).toEqual([1, 1, 1, 0, 0]);
+    expect(sockets(after, 'defensive')).toEqual([1, 1, 0, 0, 0]);
     expect(after).toMatchObject({ links: 0, scrap: 0 });
-    expect(after.runes.leech[0] + after.runes.guard[0]).toBe(40 - 15);
+    expect(after.runes.leech[0] + after.runes.guard[0]).toBe(40 - 14);
   });
 
   it('sockets the pouch rune that raises Power most, and keeps the rest', () => {
@@ -361,14 +362,14 @@ describe('the autopilot and runes', () => {
     expect(after.runes).toMatchObject({ echo: [0, 0, 0, 0, 0], leech: [1, 0, 0, 0, 0] });
   });
 
-  it('changes a socketed rune only for one that gains Power (in destroy mode the old one is gone)', () => {
+  it("changes a socketed rune only for one that gains Power (the old one back in the pouch: the pull rule 'pay')", () => {
     const leeched = {
       ...bolt(veteran(), [{ id: 'leech', tier: 1 }]),
       runes: { echo: [0, 0, 1, 0, 0] },
     };
     const swapped = betweenDives(registry, leeched);
     expect(primaryRunes(swapped)).toEqual([III('echo')]);
-    expect(pouchCount(swapped.runes, { id: 'leech', tier: 1 })).toBe(0);
+    expect(pouchCount(swapped.runes, { id: 'leech', tier: 1 })).toBe(1);
     const echoed = { ...bolt(veteran(), [III('echo')]), runes: { leech: [1, 0, 0, 0, 0] } };
     const kept = betweenDives(registry, echoed);
     expect(primaryRunes(kept)).toEqual([III('echo')]);
@@ -398,7 +399,7 @@ describe('the autopilot and runes', () => {
     expect(opened(dear)).toBe(0);
   });
 
-  it('values a transfer without the runes it would destroy (a rare holds two sockets a move)', () => {
+  it('values a Move all with every rune: sockets belong to the construct, whatever weapon holds it', () => {
     const epic = generateItem(
       registry,
       { uid: 'e', ilvl: 10, rarity: 'epic', slot: 'weapon', baseId: 'sword', mana: 'fire' },
@@ -409,11 +410,12 @@ describe('the autopilot and runes', () => {
       const twin = { ...p.equipped.weapon!, uid: 'twin', rarity: 'rare' as const };
       return compareItem(p.equipped, twin, registry, referenceDepth(p), p.pair);
     };
-    // Echo III in the first socket moves with the move; in the third, past the rare's cap, it's destroyed.
-    const kept = value([III('echo'), null, null]);
-    const lost = value([null, null, III('echo')]);
-    expect(lost.power).toBe(kept.power);
-    expect(lost.newPower).toBeLessThan(kept.newPower);
+    // Echo III in the first socket or the third: the construct moves whole either way.
+    const first = value([III('echo'), null, null]);
+    const third = value([null, null, III('echo')]);
+    expect(third.power).toBe(first.power);
+    expect(third.newPower).toBe(first.newPower);
+    expect(first.newPower).toBeGreaterThan(value([null, null, null]).newPower);
   });
 });
 
@@ -424,7 +426,8 @@ describe('Power and the pool (valuedChain; see the rune costs spec)', () => {
   const pool = manaPool(stats, registry).max;
   const chain = (slot: AbilitySlot, moves: Move[], payment: Chain['payment'] = 'mana') =>
     resolveChain(registry, stats, slot, { moves, payment });
-  const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
+  // A Lance: the starter's sword expresses it (a Bolt would be dormant there: `heroChains`).
+  const bolt = (kind: MoveKind): Move => ({ kind, form: 'lance', elements: ['fire'] });
   const nova = (kind: MoveKind): Move => ({ kind, form: 'nova', elements: ['fire'] });
 
   it('with no pool, is valuedMove for every move (a hold at full charge)', () => {
@@ -483,8 +486,8 @@ describe('Power and the pool (valuedChain; see the rune costs spec)', () => {
     expect(estimateCombat(s, small, DEPTH, { ...rest, defensive: ward('heavy') })).toEqual(without);
   });
 
-  it('a runed Primary: its v0.51.0 Power with the loads zeroed, and less with them', () => {
-    // Echo, Heavy and Linger III on every move of a Bolt's default chain (mana-bound at a pool of 66).
+  it('a runed Primary: its Power with the loads zeroed, and less with them', () => {
+    // Echo, Heavy and Linger III on every move of a four-Lance chain (mana-bound at a pool of 66).
     const runes = ['echo', 'heavy', 'linger'].map(III);
     const runed = withChains(starter, {
       primary: {
@@ -497,7 +500,7 @@ describe('Power and the pool (valuedChain; see the rune costs spec)', () => {
     });
     const at = (r: DataRegistry) =>
       estimateCombat(profileStats(r, runed), r, DEPTH, chainsOf(runed));
-    expect(at(unloaded)).toEqual({ dps: 97.61729476678113, ehp: 162.01086642686363, power: 1258 });
+    expect(at(unloaded)).toEqual({ dps: 134.34157473298708, ehp: 162.01086642686363, power: 1475 });
     expect(at(registry).dps).toBeLessThan(at(unloaded).dps);
     expect(at(registry).power).toBeLessThan(at(unloaded).power);
   });

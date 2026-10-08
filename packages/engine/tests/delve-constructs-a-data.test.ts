@@ -84,6 +84,16 @@ describe('weapon classes and cast styles (inert)', () => {
     wand: ['ranged', 'Seeking', 'spark'],
     bow: ['ranged', 'Marksman', 'arrow'],
   };
+  /** Each style's one line of text (the spec §2.2), carried on the row for the client. */
+  const STYLE_TEXT: Record<string, string> = {
+    Quick: 'Casts gain 15% crit chance',
+    Balanced: 'Each chain step hits a little harder',
+    Sweeping: 'Single-target hits cleave a small arc behind the first foe',
+    Heavy: 'Heavy and hold moves stagger',
+    Channeled: 'Impacts leave a brief small zone',
+    Seeking: 'Shots home slightly',
+    Marksman: 'Shots pierce one foe',
+  };
 
   it('every weapon base has its class and a style of every factor 1, no motion, no trait', () => {
     const weapons = registry.getGearBasesForSlot('weapon');
@@ -93,6 +103,7 @@ describe('weapon classes and cast styles (inert)', () => {
       expect(w.class, w.id).toBe(cls);
       expect(w.style, w.id).toEqual({
         name,
+        text: STYLE_TEXT[name],
         numbers: { windup: 1, cooldown: 1, power: 1, range: 1, radius: 1, speed: 1, duration: 1 },
         motion: 'none',
         trait: {},
@@ -144,6 +155,11 @@ describe('the runes fit the new forms as their kin', () => {
   it('whirl where strike, repel where ward, onslaught where nova', () => {
     for (const r of registry.getRunes()) {
       const f = r.fits.forms;
+      // Detonate (the switch task's row) fits the forms the constructs spec names: Strike, Whirl, Volley, Lance and Onslaught.
+      if (r.id === 'detonate') {
+        expect(f).toEqual(['strike', 'whirl', 'volley', 'lance', 'onslaught']);
+        continue;
+      }
       expect(f.includes('whirl'), `${r.id} whirl`).toBe(f.includes('strike'));
       expect(f.includes('repel'), `${r.id} repel`).toBe(f.includes('ward'));
       expect(f.includes('onslaught'), `${r.id} onslaught`).toBe(f.includes('nova'));

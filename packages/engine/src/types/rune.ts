@@ -1,4 +1,4 @@
-import type { FormId, MoveKind, ChainSkill, KnobsData } from './ability.js';
+import type { FormId, MoveKind, KnobsData } from './ability.js';
 
 /**
  * Runes (see the runes spec): pouch items socketed on a move or a basic blow,
@@ -52,9 +52,6 @@ export type RunePouch = Record<RuneId, number[]>;
 
 /** What a pull does: the rune is destroyed, or it costs scrap and goes back to the pouch. */
 export type UnsocketMode = 'destroy' | 'pay';
-
-/** For each chain, the saved move index each new move came from (null: a new move). */
-export type ChainOrigins = Partial<Record<ChainSkill, (number | null)[]>>;
 
 /** What a rune is socketed on: an ability move's form, or a basic blow on a weapon. */
 export type RuneTarget =

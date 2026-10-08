@@ -1,3 +1,4 @@
+import type { ChainSkill } from './ability.js';
 import type { DropKind } from './arpg.js';
 import type { MaterialRef } from './crafting.js';
 import type { StopKind } from './delve.js';
@@ -64,7 +65,8 @@ export const TUTORIAL_TRIGGERS = [
   'equip',
   'setChains',
   'salvage',
-  'transfer',
+  'moveAll',
+  'openSkill',
   'hone',
 ] as const;
 export type TutorialTriggerType = (typeof TUTORIAL_TRIGGERS)[number];
@@ -90,7 +92,9 @@ export type TutorialOnlyEvent =
   | { type: 'equip'; slot: GearSlot }
   | { type: 'setChains' }
   | { type: 'salvage'; slot: GearSlot }
-  | { type: 'transfer' }
+  /** Move all (the constructs spec §3.3, in Transfer's place) and Open a skill (in Awaken's). */
+  | { type: 'moveAll' }
+  | { type: 'openSkill'; skill: ChainSkill }
   | { type: 'hone' }
   | { type: 'skipStep' };
 

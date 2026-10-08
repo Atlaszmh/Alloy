@@ -248,9 +248,10 @@ describe('the autopilot at the Anvil', () => {
     expect(after.equipped.weapon!.uid).toBe('W');
     expect(after.materials.essences.twin_fang).toBe(1);
     expect(after.links).toBeLessThan(20);
-    expect(movesetOf(registry, after.equipped.weapon!).slots.primary).toBeGreaterThan(
-      movesetOf(registry, worn).slots.primary!,
-    );
+    // The Links went to the weapon's slots (a legendary's Primary may roll at its ceiling of 5 already).
+    const slotsOf = (w: typeof worn) =>
+      Object.values(movesetOf(registry, w).slots).reduce((a, n) => a + (n ?? 0), 0);
+    expect(slotsOf(after.equipped.weapon!)).toBeGreaterThan(slotsOf(worn));
   });
 
   it('buys the tier I shard that makes a triple of an affix it wants, and refines it', () => {

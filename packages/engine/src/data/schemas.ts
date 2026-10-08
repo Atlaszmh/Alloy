@@ -196,6 +196,8 @@ export const DelveDataSchema = z.object({
         style: z
           .object({
             name: z.string().min(1),
+            // The trait as the player reads it ("Shots pierce one foe"): the item header's line.
+            text: z.string().min(1),
             numbers: z
               .object({
                 windup: z.number().positive(),
@@ -797,6 +799,7 @@ export const KnobsSchema = z
     critBonus: z.number().min(0).max(1),
     cleave: z.number().min(0),
     homing: z.number().min(0),
+    stepBonus: z.number().min(0),
   })
   .partial()
   .strict();
@@ -1092,9 +1095,7 @@ const StartDepthsSchema = z
 export const CraftingBalanceSchema = z.object({
   forgeScrap: perRarity(z.number().min(0)),
   offPairDust: z.number().int().min(0),
-  weaponExtras: perRarity(
-    z.object({ slots: z.number().int().min(0), sockets: z.number().int().min(0) }),
-  ),
+  weaponExtras: perRarity(z.object({ slots: z.number().int().min(0) })),
   honeScrap: z.number().min(0),
   honeGrowth: z.number().min(1),
   imprintScrap: perRarity(z.number().min(0)),
@@ -1115,11 +1116,6 @@ export const CraftingBalanceSchema = z.object({
   salvageExtraShard: z.number().min(0).max(1),
   shardBench: z.object({ scrap: z.number().min(0), dust: z.number().min(0) }),
   deathLoss: z.number().min(0).max(1),
-  awaken: z.object({
-    epicFlux: z.number().int().min(0),
-    links: z.number().int().min(0),
-    scrap: z.number().min(0),
-  }),
 });
 
 /** `balance.json → delve.drops` (see the crafting spec). */
@@ -1420,22 +1416,6 @@ const DelveBalanceSchema = z.object({
     .refine((c) => c.holdStages[0] < c.holdStages[1], 'holdStages must rise')
     .refine((c) => c.holdMax >= c.holdTime, 'holdMax must be at least holdTime'),
   movesets: z.object({
-    // Every weapon swings a basic chain; each skill once.
-    carries: perRarity(
-      z
-        .array(z.enum(['basic', 'primary', 'defensive', 'ultimate']))
-        .refine((s) => s.includes('basic'), 'every weapon carries basic')
-        .refine((s) => new Set(s).size === s.length, 'each skill once'),
-    )
-      .refine(
-        (c) =>
-          RARITY_ORDER.slice(1).every((r, i) => c[RARITY_ORDER[i]].every((s) => c[r].includes(s))),
-        'a rarity carries every chain the rarity below it does',
-      )
-      .refine(
-        (c) => CHAIN_SKILLS.every((s) => c.legendary.includes(s)),
-        'the legendary carries all four chains',
-      ),
     // Each rarity's slots by skill, `[start, ceiling]` (the constructs spec §3.2): the Basic's
     // start 0 means the weapon's string; a ceiling never below its start nor the rarity below's,
     // and the legendary's all 5.
@@ -1484,12 +1464,10 @@ const DelveBalanceSchema = z.object({
     ),
     editDust: z.number().int().min(0),
     elementDust: z.number().int().min(0),
-    transferScrap: z.number().int().min(0),
     // Mana Dust salvaging a construct gives (the constructs spec §3.3 gives none: 0 as shipped).
     salvageDust: z.number().int().min(0),
   }),
   runes: z.object({
-    socketCap: perRarity(z.number().int().min(0).max(MAX_SOCKETS)),
     // Chance a weapon drop's open socket holds a rune, by rarity (the constructs spec §3.5).
     runeChance: perRarity(z.number().min(0).max(1)),
     // By the sockets the move already has: the first socket's price first.

@@ -35,6 +35,7 @@ import { arena, dummy, gear, moveOf, press, registry } from './fixtures/arena.js
 describe('rune costs: the data', () => {
   it("pins every rune's five loads", () => {
     expect(Object.fromEntries(registry.getRunes().map((d) => [d.id, d.load]))).toEqual({
+      detonate: [0.3, 0.35, 0.4, 0.45, 0.5],
       split: [0.27, 0.36, 0.45, 0.54, 0.63],
       multishot: [0.15, 0.2, 0.25, 0.3, 0.35],
       pierce: [0.57, 0.76, 0.95, 1.14, 1.33],
@@ -53,7 +54,7 @@ describe('rune costs: the data', () => {
   });
 
   it('refuses a rune without a load, with four, with one below 0, or with one that falls with tier', () => {
-    const [split] = runesData;
+    const split = runesData.find((r) => r.id === 'split')!;
     const ok = (row: object) => RunesSchema.safeParse([row]).success;
     const { load, ...noLoad } = split;
     expect(ok(split)).toBe(true);
@@ -398,7 +399,8 @@ describe('basicIncome and manaSupport', () => {
     const cases: [Partial<Record<AbilitySlot, Chain>> | undefined, number, number][] = [
       [drained, 77.33972432955927, 1098],
       [charged, 122.88517595614529, 1385],
-      [undefined, 158.57566058873041, 1573],
+      // No chains: the sword's class defaults (two Strikes, a Ward, a Nova) since the constructs spec.
+      [undefined, 177.7613550749895, 1665],
     ];
     for (const [chains, dps, power] of cases) {
       // The chains are runed: v0.51.0's numbers are theirs with the loads zeroed.
