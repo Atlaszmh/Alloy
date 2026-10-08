@@ -88,6 +88,7 @@ describe('wind-up targets', () => {
   it('a cast-paid ability still lands where its target was if the target died meanwhile', () => {
     const w = arena([dummy(13, 29)], {
       noBasic: true,
+      weapon: 'staff',
       primary: { form: 'burst', payment: 'cast' },
     });
     pressOnly(w, 0);

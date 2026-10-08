@@ -467,7 +467,7 @@ describe('Multi-shot (the extraShots knob)', () => {
     const near = dummy(13, 34);
     const aside = dummy(13 + 5 * Math.sin(0.22), 36 - 5 * Math.cos(0.22));
     const cast = (runes: RuneRef[]) => {
-      const w = world([near, aside], { primary: { form: 'lance', runes } });
+      const w = world([near, aside], { weapon: 'staff', primary: { form: 'lance', runes } });
       const events = press(w, 0);
       const hitsOn = (i: number) =>
         skillHits(events).filter((e) => e.id === w.monsters[i].id).length;
@@ -876,6 +876,7 @@ describe('Drain (the manaOnHit knob)', () => {
   it('counts from before the cast’s hits land: a new cast has its own budget', () => {
     const lance = (runes: RuneRef[]) => {
       const w = world([dummy(13, 33), dummy(13, 31), dummy(13, 29)], {
+        weapon: 'staff',
         primary: { form: 'lance', runes },
       });
       w.hero.drained[0] = bal.runes.drainFoes;

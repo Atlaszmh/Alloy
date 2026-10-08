@@ -24,12 +24,14 @@
     {
       "id": "lance", "slot": "primary", "class": "both", "name": "Lance", "icon": "🗡️",
       "power": 1.55, "range": 7.5, "radius": 0.55, "motion": -0.3,
+      "melee": { "range": 5, "radius": 0.8, "motion": 0, "text": "A lunge along the line, striking every foe you pass. Each later move of a chain hits harder." },
       "defaultChain": ["medium", "medium", "heavy"],
       "text": "An instant line that hits every foe along it. Each later move of a chain reaches further and hits harder."
     },
     {
       "id": "burst", "slot": "primary", "class": "both", "name": "Burst", "icon": "💥",
       "power": 1.7, "range": 8, "radius": 1.6, "motion": 0.2, "speed": 30,
+      "melee": { "range": 5, "motion": 0.3, "text": "You slam the ground and it erupts where you aim, within 5 units. Each later move of a chain is bigger." },
       "defaultChain": ["medium", "medium", "heavy"],
       "text": "An explosion where you aim. Each later move of a chain is bigger."
     },
@@ -89,6 +91,7 @@
     {
       "id": "maelstrom", "slot": "ultimate", "class": "both", "name": "Maelstrom", "icon": "🌪️",
       "power": 0.5, "range": 9, "radius": 3.5, "duration": 6, "tick": 0.5, "motion": 0.2,
+      "melee": { "motion": 0, "text": "A storm round you that moves with you, hitting everything inside for 6 s." },
       "defaultChain": ["medium"],
       "text": "A lingering storm at the target that hits everything inside for 6 s."
     }

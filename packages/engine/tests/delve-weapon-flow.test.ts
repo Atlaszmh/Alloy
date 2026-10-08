@@ -315,7 +315,7 @@ describe('no rooting', () => {
 describe('past the aim point', () => {
   /** A `form` Primary aimed 0.2 ahead, the hero steering on up through its wind-up. */
   const walkPast = (form: FormId) => {
-    const w = arena([dummy(13, 20)], { noBasic: true, primary: { form } });
+    const w = arena([dummy(13, 20)], { noBasic: true, weapon: 'staff', primary: { form } });
     pressOnly(w, 0, { x: 13, y: 35.8 });
     for (let i = 0; i < 60 && w.hero.windup; i++)
       stepWorld(registry, w, { move: { x: 0, y: -1 } }, STEP);

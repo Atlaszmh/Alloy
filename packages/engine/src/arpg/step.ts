@@ -558,6 +558,11 @@ function zonesTick(ctx: SimCtx): void {
       }
       continue;
     }
+    // A melee Maelstrom rides the hero.
+    if (z.follow) {
+      z.x = h.x;
+      z.y = h.y;
+    }
     // Barrage impacts and thrown Bursts land once.
     if (z.detonateAt > 0) {
       if (world.t >= z.detonateAt) {

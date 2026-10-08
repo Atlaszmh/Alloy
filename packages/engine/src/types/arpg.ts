@@ -349,6 +349,8 @@ export interface Zone {
   fromY?: number;
   /** How hard its landing hits (client feel). */
   heft?: number;
+  /** A melee Maelstrom's: moved to the hero each tick before it ticks (the constructs spec §2.2). */
+  follow?: boolean;
   dead: boolean;
 }
 

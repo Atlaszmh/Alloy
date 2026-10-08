@@ -103,6 +103,8 @@ export function chainsWith(
 
 export interface ArenaOpts {
   equipped?: EquippedGear;
+  /** The weapon base the fixture's Fire weapon takes (default a sword; `equipped` wins). */
+  weapon?: string;
   primary?: ChainOpts;
   defensive?: ChainOpts;
   ultimate?: ChainOpts;
@@ -115,7 +117,10 @@ export interface ArenaOpts {
 
 /** An arena holding exactly the monsters given (defaults: a normal foe at the centre). */
 export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts = {}): ArpgWorld {
-  const equipped = opts.equipped ?? { weapon: gear('fire'), chest: gear('earth', 'chest') };
+  const equipped = opts.equipped ?? {
+    weapon: gear('fire', 'weapon', opts.weapon ?? 'sword'),
+    chest: gear('earth', 'chest'),
+  };
   const depth = opts.depth ?? 2;
   const w = createFloorWorld(registry, {
     depth,

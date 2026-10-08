@@ -60,6 +60,7 @@ describe('primary forms', () => {
   it('Lance hits every foe on its line at once', () => {
     const w = arena([dummy(13, 33), dummy(13, 31), dummy(13, 29.5), dummy(18, 31)], {
       noBasic: true,
+      weapon: 'staff',
       primary: { form: 'lance' },
     });
     const events = press(w, 0);
@@ -174,6 +175,7 @@ describe('ultimate forms', () => {
   it('Maelstrom leaves a zone that keeps hitting', () => {
     const w = arena([dummy(13, 28)], {
       noBasic: true,
+      weapon: 'staff',
       ultimate: { form: 'maelstrom', payment: 'mana' },
     });
     press(w, 2);
@@ -199,6 +201,7 @@ describe('knobs', () => {
   it('pull: Magnetism drags foes toward the impact', () => {
     const w = arena([dummy(13, 28), dummy(16, 28)], {
       noBasic: true,
+      weapon: 'staff',
       primary: { form: 'burst', elements: ['storm', 'earth'] },
     });
     press(w, 0, { x: 13, y: 28 });
@@ -220,6 +223,7 @@ describe('knobs', () => {
   it('spread: Plague passes hex on when a foe dies', () => {
     const w = arena([dummy(13, 29, { hp: 1, maxHp: 1e6 }), dummy(14.5, 29)], {
       noBasic: true,
+      weapon: 'staff',
       primary: { form: 'lance', elements: ['shadow', 'nature'] },
     });
     const ctx = makeCtx(registry, w, []);

@@ -876,6 +876,7 @@ describe('heavy payoff and heft', () => {
   it("a fully held (Crushing) Maelstrom's ticks and Surge's basic hits never stagger (guard test)", () => {
     const w = arena([dummy(13, 30)], {
       noBasic: true,
+      weapon: 'staff',
       ultimate: { form: 'maelstrom', kind: 'hold', payment: 'mana' },
     });
     w.hero.mana = w.hero.manaMax = 1e6;
@@ -898,7 +899,11 @@ describe('heavy payoff and heft', () => {
 
 describe('Burst is thrown', () => {
   it('nothing lands until the lob arrives, then it explodes at the aim point', () => {
-    const w = arena([dummy(13, 29)], { noBasic: true, primary: { form: 'burst' } });
+    const w = arena([dummy(13, 29)], {
+      noBasic: true,
+      weapon: 'staff',
+      primary: { form: 'burst' },
+    });
     press(w, 0, { x: 13, y: 29 });
     const z = w.zones.find((q) => q.source === 'burst')!;
     expect(z).toBeDefined();

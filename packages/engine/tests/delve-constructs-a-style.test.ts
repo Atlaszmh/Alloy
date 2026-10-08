@@ -20,10 +20,13 @@ const stats = (baseId: string | null) =>
   );
 
 describe('applyStyle', () => {
-  it('with every factor 1 and no melee block, every form on every weapon comes back as it is', () => {
+  it('with every factor 1, every form on every weapon comes back as it is, a melee weapon taking its melee block', () => {
     for (const base of registry.getGearBasesForSlot('weapon'))
-      for (const form of registry.getArpgData().forms)
-        expect(applyStyle(form, base.class!, base.style!), `${base.id} ${form.id}`).toEqual(form);
+      for (const form of registry.getArpgData().forms) {
+        const { text: _text, ...melee } = form.melee ?? {};
+        const want = base.class === 'melee' ? { ...form, ...melee } : form;
+        expect(applyStyle(form, base.class!, base.style!), `${base.id} ${form.id}`).toEqual(want);
+      }
     expect(applyStyle(registry.getForm('bolt'), null, null)).toEqual(registry.getForm('bolt'));
   });
 
