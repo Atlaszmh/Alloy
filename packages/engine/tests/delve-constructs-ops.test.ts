@@ -129,3 +129,72 @@ describe('the haul carries constructs (materials.ts, constructs.ts)', () => {
     expect(minted.slots).toEqual(moveset.slots);
   });
 });
+
+describe("a weapon's salvage (salvage-yield.ts, profile.ts)", () => {
+  /**
+   * A Fire hero with an uncommon sword in the bag, built up first: a bought
+   * Primary slot, Quick I in a socket on its first Primary construct and
+   * Chain I on its first blow. 7 constructs: 3 blows, 3 Strikes, a Ward.
+   */
+  function built(): DelveProfile {
+    let p = equipItem(registry, banked(hero(), weapon('w1', 'sword', 'uncommon')), 'w1');
+    p = addSlot(registry, p, 'primary').profile;
+    p = openSocket(registry, p, 'primary', 0).profile;
+    p = socketRune(registry, p, 'primary', 0, 0, { id: 'quick', tier: 1 }).profile;
+    p = openSocket(registry, p, 'basic', 0).profile;
+    p = socketRune(registry, p, 'basic', 0, 0, { id: 'chain', tier: 1 }).profile;
+    expect(primary(p)).toHaveLength(3);
+    expect(socketsOf(primary(p)[0])).toEqual([{ id: 'quick', tier: 1 }]);
+    return unequipSlot(registry, p, 'weapon');
+  }
+
+  it('its constructs go to the bag with their runes; one Link per bought slot; the pouch is untouched', () => {
+    const p = built();
+    const w = p.bag.find((i) => i.uid === 'w1')!;
+    const y = salvageYield(registry, p, w);
+    expect(y.constructs).toHaveLength(7);
+    expect(y.links).toBe(1);
+    expect(y.runes).toEqual([{ id: 'chain', tier: 1 }, { id: 'quick', tier: 1 }]);
+    const res = salvageItems(registry, p, ['w1']);
+    expect([res.count, res.links, res.runes, res.destroyed]).toEqual([1, 1, [], []]);
+    expect(uids(res.constructs).sort()).toEqual(uids(y.constructs).sort());
+    expect(res.profile.links).toBe(p.links + 1);
+    expect(res.profile.runes).toEqual(p.runes);
+    expect(uids(res.profile.constructs).sort()).toEqual(uids(y.constructs).sort());
+    const socketed = res.profile.constructs.filter((c) => socketsOf(c).some((r) => r));
+    expect(socketed.map((c) => socketsOf(c)[0]!.id).sort()).toEqual(['chain', 'quick']);
+    expect(res.profile.bag.some((i) => i.uid === 'w1')).toBe(false);
+    expect(res.profile.forgeCount).toBe(p.forgeCount + 1);
+  });
+
+  it('under autoSalvagePlain only the socketed constructs reach the bag', () => {
+    const res = salvageItems(registry, { ...built(), autoSalvagePlain: true }, ['w1']);
+    expect(res.constructs).toHaveLength(7);
+    expect(res.profile.constructs).toHaveLength(2);
+  });
+
+  it("mid-dive (a full bag) they ride the floor's haul with uids, runes and all, and reach no bag", () => {
+    const p = startDive(registry, hero(), 1);
+    const full = { ...p, bag: Array.from({ length: bal.loot.bagSize }, (_, i) => ring(`r${i}`)) };
+    const res = addLootToBag(registry, full, [weapon('w9', 'bow', 'magic')]);
+    expect(res.bagFull).toBe(true);
+    expect(res.constructs.length).toBeGreaterThanOrEqual(5);
+    expect(res.constructs.every((c) => !!c.uid)).toBe(true);
+    expect(res.profile.dive!.haul.constructs).toEqual(res.constructs);
+    expect(res.profile.constructs).toEqual([]);
+    expect(res.profile.nextConstructUid).toBeGreaterThan(full.nextConstructUid);
+  });
+
+  it("a completed floor moves them to banked; banking reports them (BankResult.constructs)", () => {
+    const p = startDive(registry, hero(), 1);
+    const full = { ...p, bag: Array.from({ length: bal.loot.bagSize }, (_, i) => ring(`r${i}`)) };
+    // A world's first bank starts the haul afresh, so the drop melts in the floor's own bank.
+    const world = beginFloor(registry, full);
+    world.pending.items.push(weapon('w9', 'bow', 'magic'));
+    const done = completeFloor(registry, full, world);
+    expect(done.bagFull).toBe(true);
+    expect(done.constructs.length).toBeGreaterThanOrEqual(5);
+    expect(done.profile.dive!.haul.constructs).toEqual([]);
+    expect(uids(done.profile.dive!.banked.constructs)).toEqual(uids(done.constructs));
+  });
+});

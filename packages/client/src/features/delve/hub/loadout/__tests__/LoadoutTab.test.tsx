@@ -274,7 +274,10 @@ describe('LoadoutTab', () => {
     expect(screen.getByTestId('salvage-button')).not.toHaveTextContent('Press again');
     fireEvent.click(screen.getByTestId('salvage-button'));
     expect(store().profile.bag).toHaveLength(0);
-    expect(store().profile.runes).toEqual({ split: [0, 0, 1, 0, 0] });
+    // Its runes ride its constructs into the move bag (the constructs spec §3.3); none is pulled.
+    expect(store().profile.runes).toEqual({});
+    const runed = store().profile.constructs.flatMap((c) => c.runes ?? []);
+    expect(runed).toContainEqual({ id: 'split', tier: 3 });
   });
 
   it('for 5 s the footer offers Undo on B and Ctrl+Z; it puts the item back, and goes when the time is up', () => {
