@@ -248,8 +248,9 @@ describe('LoadoutTab', () => {
   });
 
   it('X salvages a precious item at once, and says the Links it gave', () => {
-    // Three extra Primary slots: two Links past the one a rare forge grants free.
-    put(rareSword('w1', { primary: 4 }));
+    // Two Primary slots bought on it: a Link each on salvage (the constructs spec §3.2).
+    const w = rareSword('w1', { primary: 4 });
+    put({ ...w, moveset: { ...w.moveset!, bought: { primary: 2 } } });
     const { props } = open({ link: { tab: 'loadout', uid: 'w1' } });
     expect(screen.getByTestId('salvage-button')).toHaveTextContent(
       /^Salvage · \+2 Links · \+\d+ scrap/,
@@ -264,6 +265,9 @@ describe('LoadoutTab', () => {
     useDelveStore.setState({ unsocket: null });
     putRunedSword('w2');
     open({ link: { tab: 'loadout', uid: 'w2' } });
+    // The pull rule 'pay' as shipped; 'destroy' under the dev override.
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent('Split III back to your pouch');
+    act(() => store().setUnsocket('destroy'));
     expect(screen.getByTestId('salvage-button')).toHaveTextContent('destroys Split III');
     act(() => store().setUnsocket('pay'));
     expect(screen.getByTestId('salvage-button')).toHaveTextContent('Split III back to your pouch');

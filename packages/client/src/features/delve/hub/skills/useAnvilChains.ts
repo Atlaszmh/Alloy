@@ -2,9 +2,10 @@ import { useMemo } from 'react';
 import { create } from 'zustand';
 import {
   CHAIN_SKILLS,
+  MAX_SOCKETS,
+  OPEN_SKILL_TEXT,
+  UNARMED,
   addSlot,
-  baseSlots,
-  carriedByText,
   heroChains,
   isDiveActive,
   movesOf,
@@ -13,7 +14,7 @@ import {
   profileStats,
   setChains,
   slotPrice,
-  socketCap,
+  slotRange,
   socketPrice,
   socketsOf,
   unsocketMode,
@@ -93,7 +94,7 @@ export function useAnvilChains(): AnvilChains {
   const slots = weapon
     ? movesetOf(registry, weapon).slots
     : Object.fromEntries(
-        CHAIN_SKILLS.filter((s) => chains[s]).map((s) => [s, baseSlots(registry, null, s)]),
+        CHAIN_SKILLS.filter((s) => chains[s]).map((s) => [s, slotRange(registry, UNARMED, s)[0]]),
       );
   const stats = useMemo(
     () =>
@@ -110,7 +111,7 @@ export function useAnvilChains(): AnvilChains {
   const runes: ChainRunes | undefined = weapon
     ? {
         pouch: view.pouch,
-        socketCap: socketCap(registry, weapon.rarity),
+        socketCap: MAX_SOCKETS,
         socketPrice: (open) => socketPrice(registry, open),
         weaponBaseId: weapon.baseId,
         pullText: (r) =>
@@ -135,7 +136,7 @@ export function useAnvilChains(): AnvilChains {
       stats,
       locked: isDiveActive(profile) || !weapon,
       lockedText: weapon ? undefined : 'Equip a weapon to build your moves.',
-      absentText: (s) => carriedByText(registry, s),
+      absentText: () => OPEN_SKILL_TEXT,
       onChange: (skill, chain, map) => useDelveStore.getState().editDraft(skill, chain, map),
       elements: elements.length > 0 ? elements : undefined,
       runes,

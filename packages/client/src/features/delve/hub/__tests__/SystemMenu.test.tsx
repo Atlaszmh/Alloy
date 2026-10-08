@@ -166,13 +166,13 @@ describe('SystemMenu', () => {
     act(() => useDelveStore.setState({ unsocket: null }));
     renderMenu();
     const chip = screen.getByTestId('unsocket-chip');
-    expect(chip).toHaveTextContent('Pull: destroys'); // the balance's rule
-    fireEvent.click(chip);
-    expect(chip).toHaveTextContent('Pull: pays');
-    expect(useDelveStore.getState().unsocket).toBe('pay');
-    expect(localStorage.getItem(UNSOCKET_KEY)).toBe('pay');
+    expect(chip).toHaveTextContent('Pull: pays'); // the balance's rule
     fireEvent.click(chip);
     expect(chip).toHaveTextContent('Pull: destroys');
+    expect(useDelveStore.getState().unsocket).toBe('destroy');
+    expect(localStorage.getItem(UNSOCKET_KEY)).toBe('destroy');
+    fireEvent.click(chip);
+    expect(chip).toHaveTextContent('Pull: pays');
   });
 
   it('a production build shows neither Restart nor the pull chip', () => {

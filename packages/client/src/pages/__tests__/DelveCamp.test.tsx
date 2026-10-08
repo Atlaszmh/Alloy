@@ -189,10 +189,11 @@ describe('DelveCamp', () => {
     const p = useDelveStore.getState().profile;
     expect(p.pair).toEqual({ primary: 'frost', secondary: null });
     expect(p.equipped.weapon!.mana).toBe('frost');
-    // Its common sword carries the basic chain alone, in Frost.
+    // Its common sword holds its basic chain and a two-slot Primary, in Frost.
     const chains = p.equipped.weapon!.moveset!.chains;
     expect(chains.basic!.map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
-    expect(Object.keys(chains)).toEqual(['basic']);
+    expect(Object.keys(chains)).toEqual(['basic', 'primary']);
+    expect(chains.primary!.moves.map((m) => m.elements)).toEqual([['frost'], ['frost']]);
     // Jump in promised How to delve: Help opens once; closed, the hub is the player's.
     fireEvent.click(within(screen.getByTestId('help-dialog')).getByRole('button', { name: /back/i }));
     expect(screen.queryByTestId('help-dialog')).toBeNull();

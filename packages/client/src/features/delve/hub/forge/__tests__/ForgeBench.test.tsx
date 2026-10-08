@@ -221,9 +221,11 @@ describe('ForgeBench', () => {
       expect(screen.getByTestId('forge-implicits')).toHaveTextContent(
         statRange(registry, im.stat, im.min, im.max),
       );
-    // A common weapon carries the basic chain alone.
-    expect(screen.getByTestId('forge-weapon')).toHaveTextContent('Carries Basic');
-    expect(screen.getByTestId('forge-weapon')).not.toHaveTextContent('Primary');
+    // A common sword's frame: melee, its Basic at the string's 3 slots and a two-slot Primary (the slot table).
+    expect(screen.getByTestId('forge-weapon')).toHaveTextContent(
+      'Melee · slots: Basic 3/3, Primary 2/3',
+    );
+    expect(screen.getByTestId('forge-weapon')).not.toHaveTextContent('Defensive');
     expect(uses()).toHaveTextContent('Uses Iron bar');
     expect(screen.getByTestId('forge-button')).toHaveTextContent(
       `Forge · ${prev.price.scrap} scrap`,

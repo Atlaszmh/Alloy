@@ -11,7 +11,7 @@ import {
   type Rarity,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { armed } from '../../../__tests__/armed';
+import { armed, wearing } from '../../../__tests__/armed';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { BagPane } from '../BagPane';
 import { getDelveRegistry } from '../../../registry';
@@ -77,19 +77,22 @@ describe('the bag pane', () => {
   it('counts the bag, and marks each tile ▲ better as it is, ◇ better only as a home, NEW', () => {
     const p = store().profile;
     const sword = p.equipped.weapon!;
-    // A built-up common sword against a plain uncommon one: worse as it is, better as a home.
+    // A built-up sword against a forged-up copy whose own Primary is one light Strike, with room
+    // for every construct: worse as it is, better as a home.
     const mine = {
       ...sword,
       moveset: defaultMoveset(registry, sword, 'fire', { primary: 5, basic: 5 }),
     };
-    const plain = generateItem(
-      registry,
-      { uid: 'w2', ilvl: 2, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
-      new SeededRNG(4),
-    );
+    const weak = defaultMoveset(registry, sword, 'fire', { primary: 2 });
+    weak.chains.primary!.moves = [{ kind: 'light', form: 'strike', elements: ['fire'] }];
+    const plain: GearItem = {
+      ...sword,
+      uid: 'w2',
+      upgrade: 1,
+      moveset: { ...weak, slots: { ...weak.slots, basic: 5, primary: 5 } },
+    };
     store().setProfile({
-      ...p,
-      equipped: { ...p.equipped, weapon: mine },
+      ...wearing(p, mine),
       bag: [gear('h1', 'helm'), plain],
     });
     store().markNew(['h1']);

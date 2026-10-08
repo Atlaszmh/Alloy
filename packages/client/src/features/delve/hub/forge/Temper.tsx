@@ -1,14 +1,18 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  awaken,
-  awakenPrice,
+  ABILITY_SLOTS,
   honeCost,
   imprintCost,
   itemStatLines,
+  movesetOf,
+  openSkill,
+  openSkillPrice,
   pairElements,
   reattuneCost,
+  slotRange,
   reforgeCost,
   upgradeCost,
+  type FluxGrade,
   type GearItem,
   type ManaType,
   type ShardRef,
@@ -24,6 +28,7 @@ import { ItemStatLines, AffixLine } from '../../items/ItemStatLines';
 import { manaStyle, SLOT_LABEL } from '../../format';
 import { heldShards, ShardPicker } from './ShardPicker';
 import { materialLabel, shardName } from './materials-text';
+import { SKILL_NAME } from '../../chains/chain-text';
 
 const BACK = { key: 'Escape', pad: 'b' } as const;
 
@@ -47,7 +52,7 @@ interface Op {
 
 /**
  * The Temper bench on the picked item: one list of its six operations (Upgrade +1, Reforge,
- * Hone and Imprint a line, Re-attune to the pair's other element, Awaken a rare weapon once),
+ * Hone and Imprint a line, Re-attune to the pair's other element, Open a skill on a weapon),
  * each row with the engine's price and, when it can't be done, why on the same row; Reforge,
  * Hone and Imprint open a line pick in its own pad scope. Beside it, the item's detail (no
  * stops). Two panels, for the bench's second and third columns.
@@ -81,12 +86,19 @@ export function Temper({ item }: { item: GearItem }) {
   const upShort = upCost !== null && upCost > scrap;
   const ready = line !== null && (op !== 'imprint' || shard !== null);
   const opShort = ready && opCost > scrap;
-  // Awaken, on a rare weapon not yet awakened: its price, and the engine's dry run.
-  const awakenable = item.slot === 'weapon' && item.rarity === 'rare' && !item.awakened;
-  const awakenCost = awakenable ? awakenPrice(registry, item) : null;
-  const awakenTry = useMemo(
-    () => (awakenable ? awaken(registry, profile, item.uid) : null),
-    [awakenable, registry, profile, item.uid],
+  // Open a skill (the constructs spec §3.2, Awaken's heir): the weapon's first skill at 0 slots
+  // with a ceiling, its price, and the engine's dry run.
+  const closed =
+    item.slot === 'weapon'
+      ? (ABILITY_SLOTS.find(
+          (s) =>
+            (movesetOf(registry, item).slots[s] ?? 0) === 0 && slotRange(registry, item, s)[1] > 0,
+        ) ?? null)
+      : null;
+  const openCost = closed ? openSkillPrice(registry, item) : null;
+  const openTry = useMemo(
+    () => (closed ? openSkill(registry, profile, item.uid, closed) : null),
+    [closed, registry, profile, item.uid],
   );
 
   const say = (text: string, good: boolean) => {
@@ -142,10 +154,11 @@ export function Temper({ item }: { item: GearItem }) {
     if (res.ok) playSound('combineMerge');
     done(res.ok, `Attuned to ${manaStyle(registry, to).name}`, res.reason, 'Cannot re-attune');
   };
-  const onAwaken = () => {
-    const res = store().awaken(item.uid);
+  const onOpenSkill = () => {
+    if (!closed) return;
+    const res = store().openSkill(item.uid, closed);
     if (res.ok) playSound('upgradeTier');
-    done(res.ok, 'Awakened!', res.reason, 'Cannot awaken');
+    done(res.ok, `${SKILL_NAME[closed]} opened!`, res.reason, 'Cannot open');
   };
 
   const shardFits = heldShards(registry, profile.materials.shards, item.slot, []).length > 0;
@@ -224,22 +237,25 @@ export function Temper({ item }: { item: GearItem }) {
           },
         ]),
     {
-      id: 'awaken',
-      label: 'Awaken',
-      price: awakenCost && (
+      id: 'open-skill',
+      label: closed ? `Open ${SKILL_NAME[closed]}` : 'Open a skill',
+      price: openCost && (
         <>
-          {awakenCost.epicFlux} {materialLabel(registry, { kind: 'flux', grade: 'epic' })} ·{' '}
-          <Price links={awakenCost.links} scrap={awakenCost.scrap} />
+          {(Object.entries(openCost.flux) as [FluxGrade, number][])
+            .map(([grade, n]) => `${n} ${materialLabel(registry, { kind: 'flux', grade })}`)
+            .join(' · ')}{' '}
+          · <Price links={openCost.links} scrap={openCost.scrap} />
         </>
       ),
-      why: item.awakened
-        ? 'Awakened: it carries the Ultimate'
-        : !awakenable
-          ? 'Only a rare weapon awakens'
-          : awakenTry && !awakenTry.ok
-            ? (awakenTry.reason ?? 'Cannot awaken')
-            : null,
-      run: onAwaken,
+      why:
+        item.slot !== 'weapon'
+          ? 'Only a weapon opens a skill'
+          : !closed
+            ? 'Every skill it can hold is open'
+            : openTry && !openTry.ok
+              ? (openTry.reason ?? 'Cannot open')
+              : null,
+      run: onOpenSkill,
     },
   ];
 
@@ -380,11 +396,6 @@ export function Temper({ item }: { item: GearItem }) {
           {item.hones > 0 && (
             <p className="k-note" data-testid="hone-count">
               Honed {item.hones} {item.hones === 1 ? 'time' : 'times'}: each hone costs more.
-            </p>
-          )}
-          {item.awakened && (
-            <p className="k-note" data-testid="awakened">
-              Awakened: it carries the Ultimate.
             </p>
           )}
         </div>

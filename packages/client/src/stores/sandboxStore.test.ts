@@ -6,6 +6,7 @@ import {
   generateItem,
   SeededRNG,
   type Blow,
+  mintMoveset,
 } from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { armed } from '@/features/delve/__tests__/armed';
@@ -109,11 +110,14 @@ describe('sandboxStore', () => {
   });
 
   it('keeps a saved loaded weapon only while the weapon choice still names it', () => {
-    const bow = generateItem(
+    const rolled = generateItem(
       registry,
       { uid: 'L1', ilvl: 9, rarity: 'legendary', slot: 'weapon', baseId: 'bow', mana: 'storm' },
       new SeededRNG(3),
     );
+    // A saved weapon's constructs carry their uids (save v14).
+    const [moveset] = mintMoveset(createDelveProfile(registry, 7), rolled.moveset!);
+    const bow = { ...rolled, moveset };
     const named = { baseId: 'bow', mana: 'storm', rarity: 'legendary' };
     expect(parseSandbox({ weapon: named, loadedWeapon: bow }).loadedWeapon).toEqual(bow);
     const other = { baseId: 'sword', mana: 'fire', rarity: 'rare' };
@@ -158,11 +162,11 @@ describe('sandboxStore', () => {
   it("Load my build keeps the sandbox's chains for the skills the weapon doesn't carry", () => {
     const profile = createDelveProfile(registry, 7, { primary: 'frost' });
     const before = store().chains;
-    store().loadMyBuild(profile); // a common sword: the basic chain alone
+    store().loadMyBuild(profile); // a common sword: its Basic and a two-slot Primary
     const sword = profile.equipped.weapon!.moveset!.chains;
     expect(store().chains).toEqual({
       basic: sword.basic,
-      primary: before.primary,
+      primary: sword.primary,
       defensive: before.defensive,
       ultimate: before.ultimate,
     });

@@ -11,6 +11,7 @@ import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { padPrompts } from '@/features/delve/kit/prompts';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { lancePrimary, wearing } from '../../../__tests__/armed';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { useUIStore } from '@/stores/uiStore';
 import { ONBOARDING } from '../../../onboarding';
@@ -26,17 +27,15 @@ const store = () => useDelveStore.getState();
 /** The hero's chains, as its equipped weapon carries them. */
 const chains = () => heroChains(registry, store().profile.equipped, store().profile.pair) as Chains;
 
-/** The starting sword made epic (all four skills), every chain at five slots, its default moves. */
+/** The starting sword made epic (every skill open), every chain at five slots, its default moves but a four-Lance Primary. */
 function roomy() {
   const p = store().profile;
   const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
   const lengths = { basic: 3, primary: 4, defensive: 1, ultimate: 1 };
   const moveset = defaultMoveset(registry, weapon, 'fire', lengths);
   const slots: Record<ChainSkill, number> = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
-  store().setProfile({
-    ...p,
-    equipped: { ...p.equipped, weapon: { ...weapon, moveset: { chains: moveset.chains, slots } } },
-  });
+  const chains = { ...moveset.chains, primary: lancePrimary() };
+  store().setProfile(wearing(p, { ...weapon, moveset: { chains, slots, bought: {} } }));
 }
 /** A key as the window hears it. */
 const press = (code: string, mods: { altKey?: boolean; ctrlKey?: boolean } = {}) =>
@@ -45,7 +44,7 @@ const press = (code: string, mods: { altKey?: boolean; ctrlKey?: boolean } = {})
 const held = (...on: PadButton[]) =>
   Object.fromEntries(PAD_BUTTONS.map((b) => [b, on.includes(b)])) as Record<PadButton, boolean>;
 const summary = () => screen.getByTestId('abilities-summary');
-const kinds = (...k: MoveKind[]) => k.map((kind) => `${kind} Fire Bolt`).join(' · ');
+const kinds = (...k: MoveKind[]) => k.map((kind) => `${kind} Fire Lance`).join(' · ');
 
 describe('SkillsTab: the footer, the keys and the pad', () => {
   beforeEach(() => {

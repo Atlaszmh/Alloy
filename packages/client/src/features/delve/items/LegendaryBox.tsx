@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { carriedSkills, legendaryNeeds, type ChainSkill, type GearItem } from '@alloy/engine';
+import { legendaryNeeds, movesetOf, type ChainSkill, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { legendaryText } from '../format';
@@ -21,7 +21,7 @@ export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null 
   const weapon = useDelveStore((s) => s.profile.equipped.weapon);
   if (!item.legendary) return null;
   const needs = legendaryNeeds(item.legendary.id);
-  const dead = !!needs && !carriedSkills(registry, weapon ?? null).includes(needs);
+  const dead = !!needs && !(weapon && (movesetOf(registry, weapon).slots[needs] ?? 0) > 0);
   return (
     <div
       className="mt-2 rounded-lg px-3 py-2 text-[18px]"

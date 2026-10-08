@@ -24,7 +24,7 @@ const renderSheet = () =>
       <ApplySheet skill="primary" onClose={onClose} />
     </MemoryRouter>,
   );
-/** The Primary's Bolt made a Lance. */
+/** The Primary's first Strike made a Lance. */
 const draftLance = () => {
   const primary = chains().primary;
   act(() =>
@@ -46,8 +46,8 @@ describe('the Apply sheet', () => {
     draftLance();
     renderSheet();
     const sheet = screen.getByTestId('apply-sheet');
-    expect(within(sheet).getByTestId('apply-line-primary')).toHaveTextContent('light Fire Bolt');
-    expect(within(sheet).getByTestId('apply-line-primary')).toHaveTextContent('light Fire Lance');
+    expect(within(sheet).getByTestId('apply-line-primary')).toHaveTextContent('medium Fire Strike');
+    expect(within(sheet).getByTestId('apply-line-primary')).toHaveTextContent('medium Fire Lance');
     expect(within(sheet).getByTestId('apply-sheet-price')).toHaveTextContent(
       'free until your first dive',
     );
@@ -73,7 +73,7 @@ describe('the Apply sheet', () => {
     fireEvent.click(within(screen.getByTestId('apply-sheet')).getByRole('button', { name: /Back/ }));
     expect(onClose).toHaveBeenCalledOnce();
     expect(store().chainDraft?.chains.primary?.moves[0].form).toBe('lance');
-    expect(chains().primary.moves[0].form).toBe('bolt');
+    expect(chains().primary.moves[0].form).toBe('strike');
   });
 
   it('Discard changes reverts the draft and closes it', () => {
@@ -90,7 +90,7 @@ describe('the Apply sheet', () => {
     act(() =>
       store().editDraft('primary', {
         ...primary,
-        moves: primary.moves.map((m) => ({ ...m, runes: [{ id: 'split', tier: 1 as const }] })),
+        moves: primary.moves.map((m) => ({ ...m, runes: [{ id: 'chain', tier: 1 as const }] })),
       }),
     );
     renderSheet();
@@ -112,7 +112,7 @@ describe('the Apply sheet', () => {
     expect(sandbox.loadedWeapon?.uid).toBe(store().profile.equipped.weapon!.uid);
     expect(sandbox.primary).toBe('fire');
     // The draft stays a draft: the save is untouched, the draft as it was.
-    expect(chains().primary.moves[0].form).toBe('bolt');
+    expect(chains().primary.moves[0].form).toBe('strike');
     expect(store().chainDraft?.chains.primary?.moves[0].form).toBe('lance');
     expect(onClose).toHaveBeenCalledOnce();
     expect(mockNavigate).toHaveBeenCalledWith('/delve/training', {
@@ -125,19 +125,20 @@ describe('the Apply sheet', () => {
     act(() =>
       store().editDraft('primary', {
         ...primary,
-        moves: primary.moves.map((m) => ({ ...m, runes: [{ id: 'split', tier: 1 as const }] })),
+        moves: primary.moves.map((m) => ({ ...m, runes: [{ id: 'chain', tier: 1 as const }] })),
       }),
     );
     renderSheet();
     expect(screen.getByTestId('apply-sheet-try')).toBeEnabled();
     fireEvent.click(screen.getByTestId('apply-sheet-try'));
     expect(useSandboxStore.getState().chains.primary.moves[0].runes).toEqual([
-      { id: 'split', tier: 1 },
+      { id: 'chain', tier: 1 },
     ]);
   });
 
   it('names what Apply destroys', () => {
-    // A socketed rune pulled under the shipped rule (destroy): the price says so.
+    // A socketed rune pulled under the 'destroy' rule (the dev override): the price says so.
+    act(() => store().setUnsocket('destroy'));
     const runed = { ...chains().primary.moves[0], runes: [{ id: 'quick', tier: 3 as const }] };
     const p = store().profile;
     const weapon = p.equipped.weapon!;
