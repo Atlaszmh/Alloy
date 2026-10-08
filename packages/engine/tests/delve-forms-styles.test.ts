@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { makeCtx, hurtHero } from '../src/arpg/combat.js';
 import { damagePerUse, expectedHit } from '../src/delve/hero-stats.js';
 import { resolveChain } from '../src/arpg/abilities/resolve.js';
+import { surgeMult, surgeTick } from '../src/arpg/abilities/defend.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { Chain } from '../src/types/ability.js';
 import {
@@ -225,5 +226,56 @@ describe('the melee versions (forms.ts): a Lance lunge, a Burst eruption, a Mael
     press(ranged, 2);
     run(ranged, 1, { x: 1, y: 0 });
     expect(ranged.zones.find((q) => q.source === 'maelstrom')!.x).toBe(13);
+  });
+});
+
+describe('Surge (defend.ts surgeMult, surgeTick)', () => {
+  const surged = () => {
+    const w = arena([dummy(13, 30)], { noBasic: true, defensive: { form: 'surge' } });
+    press(w, 1);
+    return w;
+  };
+
+  it('is 1 + its effect while up, 1 without', () => {
+    const w = surged();
+    expect(surgeMult(makeCtx(registry, w, []))).toBeCloseTo(1 + moveOf(w, 1).effect, 9);
+    expect(surgeMult(makeCtx(registry, arena([], { noBasic: true }), []))).toBe(1);
+  });
+
+  it('advances the running cooldowns, beats, a wind-up and the dodge recharge, never its own cooldown', () => {
+    const w = surged();
+    const ctx = makeCtx(registry, w, []);
+    const mult = surgeMult(ctx);
+    const t = w.t;
+    w.hero.cooldowns[0][0] = t + 2;
+    w.hero.beatUntil[0] = t + 1;
+    w.hero.comboAt[0] = t + 1;
+    w.hero.dodgeRechargeAt = t + 1.6;
+    const own = w.hero.cooldowns[1][0];
+    surgeTick(ctx, 0.1);
+    const extra = 0.1 * (mult - 1);
+    expect(w.hero.cooldowns[0][0]).toBeCloseTo(t + 2 - extra, 9);
+    expect(w.hero.beatUntil[0]).toBeCloseTo(t + 1 - extra, 9);
+    expect(w.hero.comboAt[0]).toBeCloseTo(t + 1 - extra, 9);
+    expect(w.hero.dodgeRechargeAt).toBeCloseTo(t + 1.6 - extra, 9);
+    expect(w.hero.cooldowns[1][0]).toBe(own);
+  });
+
+  it('mana regen and move speed run faster', () => {
+    const effect = registry.getForm('surge').effect!;
+    const regen = (surge: boolean) => {
+      const w = surge ? surged() : arena([dummy(13, 30)], { noBasic: true });
+      w.hero.mana = 0;
+      run(w, 1);
+      return w.hero.mana;
+    };
+    expect(regen(true)).toBeCloseTo(regen(false) * (1 + effect), 1);
+    const walked = (surge: boolean) => {
+      const w = surge ? surged() : arena([], { noBasic: true });
+      const y = w.hero.y;
+      run(w, 0.5, { x: 0, y: 1 });
+      return w.hero.y - y;
+    };
+    expect(walked(true) / walked(false)).toBeCloseTo(1 + effect, 1);
   });
 });

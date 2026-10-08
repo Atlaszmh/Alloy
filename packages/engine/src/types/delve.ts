@@ -258,7 +258,6 @@ export interface DelveAbilityBalance {
     earthReduction: number;
     shadowLifesteal: number;
     natureRegen: number;
-    surgeMove: number;
     blinkSeconds: number;
     /** Seconds Onslaught's protection lasts after its darts (the constructs spec §2.2). */
     onslaughtGuard: number;

@@ -8,7 +8,7 @@ import { perceives, sees } from './grid.js';
 import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
-import { guardLand, surging } from './abilities/defend.js';
+import { guardLand, surgeMult, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { boonPower, chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
 import { alive, muzzle, nearestMonster, SHOT, spawnProjectile } from './abilities/targeting.js';
@@ -22,11 +22,6 @@ import { hitStructures } from './terrain.js';
  * after a committed blow. See the combat weight, the moves and chains, and the
  * weapon flow specs.
  */
-
-function haste(ctx: SimCtx): number {
-  const surge = surging(ctx);
-  return surge ? 1 + surge.effect : 1;
-}
 
 /** The nearest foe the hero perceives within `range` inside the arc around `dir` (where a manual lunge stops). */
 function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): MonsterEntity | null {
@@ -99,7 +94,7 @@ export function startSwing(
   // Quick and Heavy (`quick`): the cycle × its beat; the startup, from the base cycle, × its
   // wind-up, at most the cycle.
   const q = blow.knobs.quick;
-  const base = (h.stats.attackInterval * s.time) / haste(ctx);
+  const base = (h.stats.attackInterval * s.time) / surgeMult(ctx);
   const cycle = base * q.beat;
   const startup = Math.min(cycle, base * s.startup * q.windup);
   if (t + startup > deadline + 1e-9) return false;
@@ -267,7 +262,7 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
   // blow's timing.
   const q = blow.knobs.quick;
   const cycle =
-    stage === null ? sw.cycle : ((h.stats.attackInterval * s.time) / haste(ctx)) * q.beat;
+    stage === null ? sw.cycle : ((h.stats.attackInterval * s.time) / surgeMult(ctx)) * q.beat;
   if (stage !== null && world.t > sw.held! + 1e-9)
     h.nextAttackAt = world.t + cycle * Math.max(0, 1 - (s.startup * q.windup) / q.beat);
   if (sw.committed)
