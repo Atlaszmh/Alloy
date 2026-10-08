@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import {
   compareItem,
   defaultMoveset,
   generateItem,
   heroChains,
+  moveAllPreview,
   referenceDepth,
   salvageYield,
   SeededRNG,
@@ -14,7 +15,7 @@ import {
   type SalvageYield,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { armed } from '../../../__tests__/armed';
+import { armed, wearing } from '../../../__tests__/armed';
 import { ToastContainer } from '@/components/Toast';
 import { ComparePane, VERDICT_TEXT, verdictOf } from '../ComparePane';
 import { getDelveRegistry } from '../../../registry';
@@ -35,6 +36,7 @@ const SCRAP_ONLY: SalvageYield = {
   pattern: null,
   essence: null,
   runes: [],
+  constructs: [],
 };
 
 const registry = getDelveRegistry();
@@ -76,6 +78,10 @@ const quick = { id: 'quick', tier: 1 } as const;
  * A built-up common sword worn against a plain uncommon one in the bag (`w2`): worse as it is,
  * better as a home for your moveset.
  */
+/**
+ * A built-up sword (five Strikes, five blows) against a forged-up copy (one forge level) whose own
+ * Primary is one light Strike, with room for every construct: worse as it is, better as a home.
+ */
 const putHomeOnlyWeapon = () => {
   const p = store().profile;
   const sword = p.equipped.weapon!;
@@ -83,14 +89,18 @@ const putHomeOnlyWeapon = () => {
     ...sword,
     moveset: defaultMoveset(registry, sword, 'fire', { primary: 5, basic: 5 }),
   };
-  const plain = generateItem(
-    registry,
-    { uid: 'w2', ilvl: 2, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
-    new SeededRNG(4),
-  );
-  const equipped = { ...p.equipped, weapon: mine };
-  store().setProfile({ ...p, equipped, bag: [plain] });
-  return { p, plain, equipped };
+  const weak = defaultMoveset(registry, sword, 'fire', { primary: 2 });
+  weak.chains.primary!.moves = [{ kind: 'light', form: 'strike', elements: ['fire'] }];
+  const plain: GearItem = {
+    ...sword,
+    uid: 'w2',
+    upgrade: 1,
+    moveset: { ...weak, slots: { ...weak.slots, basic: 5, primary: 5 } },
+  };
+  const q = wearing(p, mine);
+  const equipped = q.equipped;
+  store().setProfile({ ...q, bag: [plain] });
+  return { p: q, plain, equipped };
 };
 
 /** The pane showing `uid` as selected, and the toasts. */
@@ -202,6 +212,7 @@ describe('the compare pane', () => {
       extraShard: 0.25,
       pattern: 'axe',
       essence: essence.id,
+      constructs: [],
       runes: [],
     });
     put(helm('fire'));
@@ -341,7 +352,7 @@ describe('the compare pane', () => {
     expect(store().profile.equipped.helm).toBeUndefined();
   });
 
-  it('a bag weapon is valued as it is and with your moveset; Transfer moves your moveset onto it for scrap', () => {
+  it('a bag weapon is valued as it is and with your constructs; Move all is offered, free (B2 fills the op)', () => {
     const p = store().profile;
     const sword = p.equipped.weapon!;
     const mine = { ...sword, moveset: defaultMoveset(registry, sword, 'fire', { primary: 2 }) };
@@ -358,28 +369,22 @@ describe('the compare pane', () => {
     expect(screen.getByTestId('compare-as-is').closest('.k-scroll')).not.toBeNull();
     expect(screen.getByTestId('compare-as-is')).toHaveTextContent('Power');
     expect(screen.getByTestId('compare-home')).toHaveTextContent('Power');
-    expect(screen.getByTestId('item-compare')).toHaveTextContent(
-      'With your moveset · 30 scrap to move it',
+    expect(screen.getByTestId('item-compare')).toHaveTextContent('With your constructs moved here');
+    expect(screen.getByTestId('transfer-button')).toHaveTextContent(/Move all my constructs here$/);
+    // The rare sword's own blows and Primary constructs give way to yours: they go to the bag.
+    const { toBag } = moveAllPreview(registry, mine, store().profile.bag[0]);
+    expect(toBag.length).toBeGreaterThan(0);
+    expect(screen.getByTestId('transfer-leaves')).toHaveTextContent(
+      `${toBag.length} constructs to your bag`,
     );
-    // Your Primary's extra slot moves (30 scrap); the target's own extra Primary slot comes back.
-    expect(screen.getByTestId('transfer-button')).toHaveTextContent(
-      /Transfer my moveset here · 30 scrap · \+1 Link$/,
-    );
-    expect(screen.queryByTestId('transfer-leaves')).toBeNull(); // a rare sword carries all of yours
+    expect(screen.queryByTestId('transfer-dormant')).toBeNull(); // a sword expresses a Strike
+    // The engine's op is B2's: until then it refuses, and the sword stays worn.
     fireEvent.click(screen.getByTestId('transfer-button'));
-    expect(screen.getByText('Not enough scrap')).toBeInTheDocument();
-    act(() => store().setProfile({ ...store().profile, scrap: 30 }));
-    fireEvent.click(screen.getByTestId('transfer-button'));
-    const now = store().profile;
-    expect(now.equipped.weapon!.uid).toBe('w1');
-    expect(now.equipped.weapon!.moveset!.chains.primary).toEqual(mine.moveset.chains.primary);
-    expect(now.equipped.weapon!.moveset!.slots).toMatchObject({ primary: 2, defensive: 1 });
-    expect(now.bag.find((i) => i.uid === sword.uid)!.moveset!.slots.primary).toBe(1);
-    expect(now).toMatchObject({ scrap: 0, links: 1 });
-    expect(screen.getByText(/Your moveset moved onto .+ · \+1 Link$/)).toBeInTheDocument();
+    expect(screen.getByText('Not yet')).toBeInTheDocument();
+    expect(store().profile.equipped.weapon!.uid).toBe(mine.uid);
   });
 
-  it('each valuation shows its own delta: Equip is marked as it is, Transfer as a home', () => {
+  it('each valuation shows its own delta: Equip is marked as it is, Move all as a home', () => {
     const { p, plain, equipped } = putHomeOnlyWeapon();
     const depth = referenceDepth(store().profile);
     const asIs = compareItem(equipped, plain, registry, depth, p.pair, 'asIs').powerPct;
@@ -393,14 +398,13 @@ describe('the compare pane', () => {
       `Equip · ${formatDelta(asIs)} Power`,
     );
     expect(screen.getByTestId('equip-button')).not.toHaveClass('k-go');
-    // Four Primary and two basic extra slots move: 6 × 30 scrap.
     expect(screen.getByTestId('transfer-button')).toHaveTextContent(
-      /^▲ Transfer my moveset here · 180 scrap$/,
+      /^▲ Move all my constructs here$/,
     );
     expect(screen.getByTestId('transfer-button')).toHaveClass('k-go');
   });
 
-  it('Transfer onto a weapon that carries less says which of your chains stay behind', () => {
+  it('Move all onto a weapon with fewer slots says how many constructs go to your bag', () => {
     const p = store().profile;
     const epic = { ...p.equipped.weapon!, rarity: 'epic' as const };
     const mine = { ...epic, moveset: defaultMoveset(registry, epic, 'fire') };
@@ -411,37 +415,35 @@ describe('the compare pane', () => {
     );
     store().setProfile({ ...p, equipped: { ...p.equipped, weapon: mine }, bag: [plain] });
     show('w2');
+    // The epic's constructs past the uncommon's slots, and the uncommon's own replaced ones.
+    const { toBag } = moveAllPreview(registry, mine, plain);
+    expect(toBag.length).toBeGreaterThan(0);
     expect(screen.getByTestId('transfer-leaves')).toHaveTextContent(
-      'Leaves your Defensive and Ultimate behind',
+      `${toBag.length} constructs to your bag`,
     );
   });
 
-  it('a transfer counts the sockets it moves and names the runes that leave, by the pull rule', () => {
+  it("Move all onto a weapon of another class says which constructs sit dormant there; a construct's runes travel with it", () => {
     const p = store().profile;
-    // A rare sword's two sockets onto a common one (one a move): Quick has no socket there.
+    // A rare sword's Strikes onto a wand: a wand can't express a Strike.
     const worn = withRunes(rareSword('w1'), [split, quick]);
-    const common = { ...p.equipped.weapon!, uid: 'w2' };
-    store().setProfile({
-      ...p,
-      scrap: 999,
-      equipped: { ...p.equipped, weapon: worn },
-      bag: [common],
-    });
+    const wand = generateItem(
+      registry,
+      { uid: 'w2', ilvl: 2, rarity: 'rare', slot: 'weapon', baseId: 'wand', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    // Minted, as every worn construct is: the preview names the dormant ones by uid.
+    store().setProfile(wearing({ ...p, scrap: 999, bag: [wand] }, worn));
     show('w2');
-    expect(screen.getByTestId('item-compare')).toHaveTextContent(
-      'to move it, its 1 socket included',
+    const minted = store().profile.equipped.weapon!;
+    const { dormant, moveset } = moveAllPreview(registry, minted, wand);
+    expect(dormant.length).toBeGreaterThan(0);
+    expect(screen.getByTestId('transfer-dormant')).toHaveTextContent(
+      `${dormant.length} constructs dormant there`,
     );
-    expect(screen.getByTestId('transfer-runes')).toHaveTextContent(
-      'Destroys Quick I: no socket for it there',
-    );
-    act(() => store().setUnsocket('pay'));
-    expect(screen.getByTestId('transfer-runes')).toHaveTextContent('Quick I back to your pouch');
-    act(() => store().setUnsocket('destroy'));
-    fireEvent.click(screen.getByTestId('transfer-button'));
-    expect(
-      screen.getByText(/Your moveset moved onto .+ · \+1 Link · destroys Quick I$/),
-    ).toBeInTheDocument();
-    expect(store().profile.equipped.weapon!.uid).toBe('w2');
+    // The sockets belong to the construct: the runes are on the preview's moveset, nothing destroyed.
+    expect(moveset.chains.primary!.moves[0].runes).toEqual([split, quick]);
+    expect(screen.queryByTestId('transfer-runes')).toBeNull();
   });
 
   it("full compare adds a bag item's stat lines and a weapon's moveset", () => {
@@ -459,14 +461,15 @@ describe('the compare pane', () => {
       { uid: 'b1', ilvl: 3, rarity: 'legendary', slot: 'boots', mana: 'fire' },
       new SeededRNG(4),
     );
-    put({ ...boots, legendary: { id: 'nightstalker', value: 30, roll: 0.5 } });
+    // Rimeheart rides the Ultimate, which an uncommon sword has no slot for.
+    put({ ...boots, legendary: { id: 'rimeheart', value: 30, roll: 0.5 } });
     show('b1');
     expect(screen.getByTestId('legendary-dead')).toHaveTextContent(
-      "Needs a Defensive: your weapon doesn't carry one",
+      "Needs an Ultimate: your weapon doesn't carry one",
     );
   });
 
-  it('locked, Equip, Salvage, Lock, the bind choice, Transfer and Forge it give way to a note', () => {
+  it('locked, Equip, Salvage, Lock, the bind choice, Move all and Forge it give way to a note', () => {
     put(helm('storm'), rareSword('w1'));
     const view = show('h1', { locked: true });
     // Nothing salvages mid-dive, so the engine isn't asked.

@@ -95,9 +95,9 @@ describe('TrainingPanel', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     const picker = within(screen.getByTestId('rune-picker'));
     fireEvent.click(picker.getByRole('button', { name: 'Tier III' }));
-    fireEvent.click(picker.getByRole('button', { name: 'Split III' }));
+    fireEvent.click(picker.getByRole('button', { name: 'Quick III' }));
     expect(useSandboxStore.getState().chains.primary.moves[0].runes).toEqual([
-      { id: 'split', tier: 3 },
+      { id: 'quick', tier: 3 },
     ]);
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 1/3');
   });

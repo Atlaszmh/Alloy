@@ -3,7 +3,8 @@ import { flushSync } from 'react-dom';
 import {
   CHAIN_SKILLS,
   GEAR_SLOTS,
-  carriedByText,
+  MAX_SOCKETS,
+  OPEN_SKILL_TEXT,
   compareItem,
   editPrice,
   heroChains,
@@ -16,7 +17,6 @@ import {
   resolveChain,
   runeTargetOf,
   slotPrice,
-  socketCap,
   socketsOf,
   takeStop,
   upgradeCost,
@@ -414,7 +414,7 @@ function MovePick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
         stats={stats}
         locked={false}
         fixedShape
-        absentText={(s) => carriedByText(registry, s)}
+        absentText={() => OPEN_SKILL_TEXT}
         onChange={(skill, chain) => {
           const now = movesOf(chain);
           const shown = movesOf(chains[skill]);
@@ -553,7 +553,7 @@ function RunePick({ take }: { take: Take }) {
           </span>
           <SocketRow
             runes={socketsOf(move)}
-            cap={socketCap(registry, weapon.rarity)}
+            cap={MAX_SOCKETS}
             nextPrice={null}
             emptyOnly
             onSocketTap={(socket) => setAt({ skill, index, socket })}

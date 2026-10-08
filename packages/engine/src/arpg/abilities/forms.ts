@@ -8,6 +8,7 @@ import { stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, alive, muzzle, SHOT, spawnProjectile } from './targeting.js';
 import { hitObject, objectsIn, objectsOnBeam } from '../objects.js';
 import { hitStructures } from '../terrain.js';
+import { signatureFor } from './signatures.js';
 
 export interface FormResult {
   ok: boolean;
@@ -22,11 +23,14 @@ function rotate(d: Vec, a: number): Vec {
 /**
  * Carry out a move's form. A move after a chain's first lands with its step
  * bonus: harder, and a Bolt, a Lance or a Burst bigger. Fails (nothing
- * happens) when there is nothing to aim at.
+ * happens) when there is nothing to aim at. A signature the weapon has for the
+ * form (`signatureFor`, the constructs spec §4.3) replaces the form's behaviour.
  */
 export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): FormResult {
   const { world } = ctx;
   const h = world.hero;
+  const signature = signatureFor(h.stats.weapon.baseId, ab.form.id);
+  if (signature) return signature(ctx, ab, aim);
   const t = world.t;
   const p = aimPoint(ctx, ab, aim);
   if (!p) return { ok: false, tx: h.x, ty: h.y };
@@ -186,6 +190,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(p.x, p.y);
     }
 
+    // B1 replaces: in Phase A a Whirl plays as a Strike (the constructs spec §2.2).
+    case 'whirl':
     case 'strike': {
       h.facing = dir;
       // The last move of a chain slams all around.
@@ -225,6 +231,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x + dir.x * reach, h.y + dir.y * reach);
     }
 
+    // B1 replaces: in Phase A a Repel plays as a Ward.
+    case 'repel':
     case 'ward':
       buff('ward', ab.duration);
       h.ward = { hp: h.stats.maxHp * ab.effect, max: h.stats.maxHp * ab.effect };
@@ -274,6 +282,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x, h.y);
     }
 
+    // B1 replaces: in Phase A an Onslaught plays as a Nova.
+    case 'onslaught':
     case 'nova':
       impact(ctx, ab, h.x, h.y, ab.radius, hit, { noScatter: true, heft });
       return done(h.x, h.y);

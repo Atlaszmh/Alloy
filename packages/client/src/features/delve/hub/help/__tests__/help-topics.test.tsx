@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { CHAIN_SKILLS, carriedByText, carriedFrom, carriedSkills } from '@alloy/engine';
+import { ABILITY_SLOTS, RARITY_ORDER, type ChainSkill } from '@alloy/engine';
 import { HELP_TOPICS, HelpPage } from '../help-topics';
 import { getDelveRegistry } from '../../../registry';
 import { SKILL_NAME } from '../../../chains/chain-text';
@@ -61,21 +61,20 @@ describe('HelpPage', () => {
     expect(screen.getByTestId('delve-howto')).toHaveTextContent('Z dodges');
   });
 
-  it("names what a weapon carries in the engine's words, and where a rare awakens", () => {
+  it("names each skill's least rarity from the slot table, and where a skill opens", () => {
     render(<HelpPage topic="weapons" />);
-    const always = carriedSkills(registry, { rarity: 'common' });
+    const slots = registry.getDelveBalance().movesets.slots;
+    const from = (s: ChainSkill) => RARITY_ORDER.find((r) => slots[r][s][0] > 0)!;
     const carries = screen.getByTestId('howto-carries');
-    expect(carries).toHaveTextContent(
-      `Every weapon carries your ${always.map((s) => SKILL_NAME[s]).join(' and ')}`,
-    );
-    for (const s of CHAIN_SKILLS.filter((c) => !always.includes(c)))
+    expect(carries).toHaveTextContent('every weapon your Basic chain');
+    for (const s of ABILITY_SLOTS)
       expect(screen.getByTestId(`howto-carry-${s}`)).toHaveTextContent(
-        `${SKILL_NAME[s]}: ${carriedByText(registry, s).toLowerCase()}`,
+        `${SKILL_NAME[s]}: ${from(s) === 'common' ? 'every weapon' : `${from(s)} weapons and better`}`,
       );
-    expect(carries).toHaveTextContent("Awaken a rare weapon on the Forge's Temper bench");
-    // A Jump in save's first forge: the kit's flux at the rarity that carries the Primary.
+    expect(carries).toHaveTextContent("opens on the Forge's Temper bench");
+    // A Jump in save's first forge: the kit's flux at the rarity that starts a Defensive.
     expect(carries).toHaveTextContent(
-      `Forge your first weapon from your starting kit on the Forge tab: with ${carriedFrom(registry, 'primary')} flux it carries your Primary Q`,
+      `Forge your first weapon from your starting kit on the Forge tab: with ${from('defensive')} flux it holds a Defensive E too`,
     );
   });
 

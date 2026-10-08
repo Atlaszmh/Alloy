@@ -1,25 +1,19 @@
 import type { DataRegistry } from '../data/registry.js';
-import { carriedByText, movesetOf } from '../loot/moveset.js';
-import {
-  addToPouch,
-  runeFits,
-  socketCap,
-  socketPrice,
-  socketsOf,
-  takeFromPouch,
-} from '../loot/runes.js';
+import { movesetOf } from '../loot/moveset.js';
+import { addToPouch, runeFits, socketPrice, socketsOf, takeFromPouch } from '../loot/runes.js';
 import {
   CHAIN_SKILLS,
   type Blow,
   type Chains,
   type ChainSkill,
+  type Construct,
   type Move,
 } from '../types/ability.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { GearItem } from '../types/gear.js';
 import {
+  MAX_SOCKETS,
   RUNE_TIERS,
-  type ChainOrigins,
   type RunePouch,
   type RuneRef,
   type RuneTarget,
@@ -27,7 +21,7 @@ import {
   type UnsocketMode,
 } from '../types/rune.js';
 import { isDiveActive } from './dive.js';
-import { chainOrigins, editPrice, movesOf, setChains, withMove } from './moveset.js';
+import { OPEN_SKILL_TEXT, editPrice, movesOf, setChains, withMove } from './moveset.js';
 import type { ProfileActionResult } from './profile.js';
 
 /**
@@ -37,8 +31,8 @@ import type { ProfileActionResult } from './profile.js';
  * function declarations.
  */
 
+/** Apply's options: the pull rule (the dev override, else the balance's). Origins are gone: constructs have uids. */
 export interface SetChainsOptions {
-  origins?: ChainOrigins;
   unsocket?: UnsocketMode;
 }
 
@@ -113,15 +107,14 @@ function fitName(registry: DataRegistry, baseId: string | null, m: Move | Blow):
 }
 
 /**
- * Why `m`'s sockets can't be on `weapon`, or null: more than its rarity's cap,
- * an unknown rune (or tier), the same rune twice at any tier, or a rune that
- * doesn't fit the move's form or the weapon's blows.
+ * Why `m`'s sockets can't be on `weapon`, or null: more than `MAX_SOCKETS`
+ * (sockets belong to the construct, whatever weapon holds it: the constructs
+ * spec §3.1), an unknown rune (or tier), the same rune twice at any tier, or a
+ * rune that doesn't fit the move's form or the weapon's blows.
  */
 function socketRefusal(registry: DataRegistry, weapon: GearItem, m: Move | Blow): string | null {
   const sockets = socketsOf(m);
-  const cap = socketCap(registry, weapon.rarity);
-  if (sockets.length > cap)
-    return `This weapon's moves hold at most ${cap} socket${cap === 1 ? '' : 's'}`;
+  if (sockets.length > MAX_SOCKETS) return `A move holds at most ${MAX_SOCKETS} sockets`;
   const seen = new Set<string>();
   for (const r of sockets) {
     if (!r) continue;
@@ -138,16 +131,16 @@ function socketRefusal(registry: DataRegistry, weapon: GearItem, m: Move | Blow)
 
 /**
  * What the draft `chains` does to the equipped weapon's sockets (see the runes
- * spec), each new move against the saved move it came from (`opts.origins`;
- * missing, the identity map): sockets past the saved move's are opened, each
- * priced by its index (`socketPrice`); at each socket both have, a different
- * rune is a pull and a socket; a saved move no new move came from gives its
- * sockets back (`refundLinks`, netted against `links`) and its runes are
- * pulled; a new move opens all of its. A pull costs `pullScrap` in 'pay'
- * (`opts.unsocket`, else the balance's). Refuses unarmed, bad origins, a
- * socket refusal (`socketRefusal`), fewer sockets on a kept move, and a pouch
- * that can't hold what is socketed (in 'pay', what is pulled goes back first).
- * Chains `chains` doesn't hold, and their origins, are left out.
+ * spec), by uid (the constructs spec §3.3): a kept uid's sockets against its
+ * saved sockets (those past the saved ones are opened, each priced by its
+ * index, `socketPrice`; at each socket both have, a different rune is a pull
+ * and a socket); a new uid (or a construct without one) opens all of its; a
+ * removed uid gives its sockets back (`refundLinks`, netted against `links`)
+ * and its runes are pulled. A pull costs `pullScrap` in 'pay' (`opts.unsocket`,
+ * else the balance's). Refuses unarmed, a socket refusal (`socketRefusal`),
+ * fewer sockets on a kept construct, and a pouch that can't hold what is
+ * socketed (in 'pay', what is pulled goes back first). Chains `chains`
+ * doesn't hold are left out.
  */
 export function runeChange(
   registry: DataRegistry,
@@ -176,13 +169,13 @@ export function runeChange(
     if (!chain) continue;
     const was = movesOf(saved[skill]);
     const now = movesOf(chain);
-    const origins = chainOrigins(was.length, now.length, opts.origins?.[skill]);
-    if (!origins) return { refused: 'Bad origins' };
-    for (const [j, m] of now.entries()) {
+    const kept = new Set<string>();
+    for (const m of now) {
       const why = socketRefusal(registry, weapon, m);
       if (why) return { refused: why };
-      const o = origins[j];
-      const old = o === null ? [] : socketsOf(was[o]);
+      const from: Construct | undefined = m.uid ? was.find((s) => s.uid === m.uid) : undefined;
+      if (from?.uid) kept.add(from.uid);
+      const old = from ? socketsOf(from) : [];
       const next = socketsOf(m);
       if (next.length < old.length) return { refused: "Sockets can't be closed" };
       next.forEach((r, i) => {
@@ -198,12 +191,11 @@ export function runeChange(
         }
       });
     }
-    const from = new Set(origins);
-    was.forEach((m, i) => {
-      if (from.has(i)) return;
+    for (const m of was) {
+      if (m.uid && kept.has(m.uid)) continue;
       change.refundLinks += socketsOf(m).length;
       for (const r of socketsOf(m)) add(change.pulled, r);
-    });
+    }
   }
   if (pay) for (const r of change.pulled) change.scrap += pullScrap[r.tier - 1];
   const back = pay ? addToPouch(profile.runes, change.pulled) : profile.runes;
@@ -214,12 +206,12 @@ export function runeChange(
 
 /**
  * The draft's one total, as Apply would charge it (see the runes spec): the
- * Mana Dust (`editPrice`, by the origins), the Links and scrap the sockets and
- * pulls cost (`runeChange`), the Links removed moves give back, the runes a
- * pull destroys ('destroy') or returns ('pay'), and the pouch it leaves; or `runeChange`'s refusal
- * (unarmed, bad origins, a socket refusal, closed sockets, a short pouch). It
- * doesn't check the chains themselves (`setChains`' refusals) or whether the
- * hero can afford the total.
+ * Mana Dust (`editPrice`, by uid), the Links and scrap the sockets and pulls
+ * cost (`runeChange`), the Links removed constructs give back, the runes a
+ * pull destroys ('destroy') or returns ('pay'), and the pouch it leaves; or
+ * `runeChange`'s refusal (unarmed, a socket refusal, closed sockets, a short
+ * pouch). It doesn't check the chains themselves (`setChains`' refusals) or
+ * whether the hero can afford the total.
  */
 export function draftPrice(
   registry: DataRegistry,
@@ -231,7 +223,7 @@ export function draftPrice(
   if ('refused' in change) return change;
   const pay = unsocketMode(registry, opts.unsocket) === 'pay';
   return {
-    dust: editPrice(registry, profile, chains, opts.origins),
+    dust: editPrice(registry, profile, chains),
     links: change.links,
     scrap: change.scrap,
     refundLinks: change.refundLinks,
@@ -259,7 +251,7 @@ function moveAt(
   const weapon = profile.equipped.weapon;
   if (!weapon) return UNARMED_TEXT;
   const chain = movesetOf(registry, weapon).chains[skill];
-  if (!chain) return carriedByText(registry, skill);
+  if (!chain) return OPEN_SKILL_TEXT;
   const move = Number.isInteger(index) ? movesOf(chain)[index] : undefined;
   if (!move) return 'Pick a move the chain holds';
   return { chain, move };
@@ -269,8 +261,8 @@ function moveAt(
  * Open the next socket on the equipped weapon's move `index` of `skill`: one
  * `setChains` in place, so it costs `socketLinks[n]` Links and
  * `socketScrap[n]` scrap by the `n` sockets the move has. Refuses mid-dive,
- * unarmed, a skill the weapon doesn't carry, a move the chain doesn't hold, at
- * the weapon rarity's cap, and when it can't be paid.
+ * unarmed, a skill with no slot on the weapon, a move the chain doesn't hold,
+ * at `MAX_SOCKETS`, and when it can't be paid.
  */
 export function openSocket(
   registry: DataRegistry,
@@ -281,8 +273,7 @@ export function openSocket(
   const at = moveAt(registry, profile, skill, index);
   if (typeof at === 'string') return refuse(profile, at);
   const sockets = socketsOf(at.move);
-  if (sockets.length >= socketCap(registry, profile.equipped.weapon!.rarity))
-    return refuse(profile, 'This move has every socket');
+  if (sockets.length >= MAX_SOCKETS) return refuse(profile, 'This move has every socket');
   const move = { ...at.move, runes: [...sockets, null] };
   return setChains(registry, profile, { [skill]: withMove(at.chain, index, move) });
 }

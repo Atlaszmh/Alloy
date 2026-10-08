@@ -20,20 +20,20 @@ describe('MovesetView', () => {
     expect(screen.getByTestId('moveset-basic')).toHaveTextContent(
       'Basic 3/5 · light Fire blow · light Fire blow · heavy Fire blow',
     );
-    // A new save's common sword: the basic chain alone.
+    // A new save's common sword: its Basic and a two-slot Primary; no Defensive slot.
     expect(screen.getByTestId('moveset-primary')).toHaveTextContent(
-      'Primary: carried by uncommon weapons and better',
+      'Primary 2/5 · medium Fire Strike · medium Fire Strike',
     );
     expect(screen.getByTestId('moveset-defensive')).toHaveTextContent(
-      'Defensive: carried by rare weapons and better',
+      'Defensive: open this skill on the temper bench',
     );
-    expect(screen.getByTestId('item-sockets')).toHaveTextContent('Sockets · up to 1 a move');
+    expect(screen.getByTestId('item-sockets')).toHaveTextContent('Sockets · up to 3 a move');
     expect(screen.getByTestId('item-moveset').outerHTML).not.toMatch(
       /text-(\[(\d|1[0-3])px\]|xs\b)/,
     );
   });
 
-  it("shows a rare weapon's Defensive and its extra Primary slot", () => {
+  it("shows a rare weapon's Defensive and Ultimate at the slot table's starts", () => {
     const w = generateItem(
       registry,
       { uid: 'w1', ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'sword', mana: 'fire' },
@@ -43,9 +43,7 @@ describe('MovesetView', () => {
       <MovesetView item={{ ...w, moveset: defaultMoveset(registry, w, 'fire', { primary: 2 }) }} />,
     );
     expect(screen.getByTestId('moveset-primary')).toHaveTextContent(/^Primary 2\/5 · /);
-    expect(screen.getByTestId('moveset-defensive')).toHaveTextContent(/^Defensive 1\/5 · /);
-    expect(screen.getByTestId('moveset-ultimate')).toHaveTextContent(
-      'Ultimate: carried by epic weapons and better',
-    );
+    expect(screen.getByTestId('moveset-defensive')).toHaveTextContent(/^Defensive 2\/5 · /);
+    expect(screen.getByTestId('moveset-ultimate')).toHaveTextContent(/^Ultimate 1\/5 · /);
   });
 });

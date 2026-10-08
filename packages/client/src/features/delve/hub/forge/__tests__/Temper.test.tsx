@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent } from '@testing-library/react';
 import {
-  awaken,
-  awakenPrice,
   emptyMaterials,
   findItem,
   generateItem,
   honeCost,
   imprintCost,
+  openSkill,
+  openSkillPrice,
   reforgeCost,
   shardTiersOf,
   upgradeCost,
@@ -20,11 +20,11 @@ import { Temper } from '../Temper';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
-// Awaken's price and dry run (the tutorial's B3 fills them): each test says what they give.
+// Open a skill's price and dry run: each test says what they give.
 vi.mock('@alloy/engine', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@alloy/engine')>()),
-  awaken: vi.fn(),
-  awakenPrice: vi.fn(),
+  openSkill: vi.fn(),
+  openSkillPrice: vi.fn(),
 }));
 
 const registry = getDelveRegistry();
@@ -60,8 +60,8 @@ describe('Temper', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    vi.mocked(awaken).mockReset();
-    vi.mocked(awakenPrice).mockReset();
+    vi.mocked(openSkill).mockReset();
+    vi.mocked(openSkillPrice).mockReset();
   });
 
   it("lists the six operations as rows, each with its price; one it can't do is off and says why on its row", () => {
@@ -74,7 +74,7 @@ describe('Temper', () => {
       'temper-op-hone',
       'temper-op-imprint',
       'temper-op-reattune',
-      'temper-op-awaken',
+      'temper-op-open-skill',
     ]);
     const item = store().profile.bag[0];
     const op = (id: string) => screen.getByTestId(`temper-op-${id}`);
@@ -88,10 +88,10 @@ describe('Temper', () => {
     expect(why('imprint')).toHaveTextContent('No shard you hold fits a helm');
     // A pair of one element: nothing to re-attune to.
     expect(why('reattune')).toHaveTextContent('Bind a second element first');
-    // Not a rare weapon.
-    expect(why('awaken')).toHaveTextContent('Only a rare weapon awakens');
+    // Not a weapon.
+    expect(why('open-skill')).toHaveTextContent('Only a weapon opens a skill');
     // The reason sits in the row itself, beside its button.
-    expect(op('awaken').closest('[data-temper-row]')!.contains(why('awaken'))).toBe(true);
+    expect(op('open-skill').closest('[data-temper-row]')!.contains(why('open-skill'))).toBe(true);
   });
 
   it("an item with no lines can't Reforge, Hone or Imprint: each row says so", () => {
@@ -288,11 +288,11 @@ describe('Temper', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Attuned to Storm');
   });
 
-  it("awakens a rare weapon at the engine's price, as its dry run allows, and says why not", () => {
-    const price = { epicFlux: 1, links: 2, scrap: 150 };
-    vi.mocked(awakenPrice).mockReturnValue(price);
-    // The engine's rule stands in: 150 scrap awakens the sword.
-    vi.mocked(awaken).mockImplementation((_registry, p, uid) =>
+  it("opens a common sword's Defensive at the engine's price, as its dry run allows, and says why not", () => {
+    const price = { flux: { uncommon: 2 }, links: 1, scrap: 150 };
+    vi.mocked(openSkillPrice).mockReturnValue(price);
+    // The engine's rule stands in: 150 scrap opens the skill, its first slot bought.
+    vi.mocked(openSkill).mockImplementation((_registry, p, uid, skill) =>
       p.scrap < price.scrap
         ? { ok: false, profile: p, reason: 'Needs 150 scrap' }
         : {
@@ -300,61 +300,70 @@ describe('Temper', () => {
             profile: {
               ...p,
               scrap: p.scrap - price.scrap,
-              bag: p.bag.map((i) => (i.uid === uid ? { ...i, awakened: true } : i)),
+              bag: p.bag.map((i) =>
+                i.uid === uid
+                  ? {
+                      ...i,
+                      moveset: {
+                        ...i.moveset!,
+                        slots: { ...i.moveset!.slots, [skill]: 1 },
+                        bought: { ...i.moveset!.bought, [skill]: 1 },
+                      },
+                    }
+                  : i,
+              ),
             },
           },
     );
-    bench(sword('rare'), { scrap: 149 });
-    expect(awakenPrice).toHaveBeenCalledWith(
+    bench(sword('common'), { scrap: 149 });
+    expect(openSkillPrice).toHaveBeenCalledWith(
       registry,
-      expect.objectContaining({ uid: 'w1', rarity: 'rare' }),
+      expect.objectContaining({ uid: 'w1', rarity: 'common' }),
     );
-    const button = screen.getByTestId('temper-op-awaken');
-    expect(button).toHaveTextContent('Awaken');
-    expect(button).toHaveTextContent('1 Epic flux · 2 Links · 150 scrap');
+    const button = screen.getByTestId('temper-op-open-skill');
+    expect(button).toHaveTextContent('Open Defensive');
+    expect(button).toHaveTextContent('2 Uncommon flux · 1 Link · 150 scrap');
     expect(button).toBeDisabled();
     expect(button).toHaveAccessibleDescription('Needs 150 scrap');
     act(() => store().setProfile({ ...store().profile, scrap: 150 }));
     expect(button).toBeEnabled();
     expect(button).not.toHaveAttribute('aria-describedby');
     fireEvent.click(button);
-    expect(awaken).toHaveBeenLastCalledWith(
+    expect(openSkill).toHaveBeenLastCalledWith(
       registry,
       expect.objectContaining({ scrap: 150 }),
       'w1',
+      'defensive',
     );
-    expect(store().profile).toMatchObject({ scrap: 0, bag: [{ uid: 'w1', awakened: true }] });
-    expect(screen.getByRole('status')).toHaveTextContent('Awakened!');
-    // Once: the row and the detail say so.
-    expect(screen.getByTestId('temper-op-awaken')).toBeDisabled();
-    expect(screen.getByTestId('temper-op-awaken')).toHaveAccessibleDescription(
-      'Awakened: it carries the Ultimate',
+    expect(store().profile).toMatchObject({ scrap: 0 });
+    expect(store().profile.bag[0].moveset!.slots.defensive).toBe(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Defensive opened!');
+    // A common sword's Ultimate has a ceiling of 0: nothing is left to open.
+    expect(screen.getByTestId('temper-op-open-skill')).toBeDisabled();
+    expect(screen.getByTestId('temper-op-open-skill')).toHaveAccessibleDescription(
+      'Every skill it can hold is open',
     );
-    expect(screen.getByTestId('awakened')).toHaveTextContent('Awakened: it carries the Ultimate.');
   });
 
-  it('Awaken is enabled only on a rare weapon not yet awakened, as the dry run allows; an awakened one says it is', () => {
-    for (const item of [
-      sword('magic'),
-      sword('epic'),
-      { ...helm('fire'), rarity: 'rare' as const },
-    ]) {
-      const { unmount } = bench(item);
-      expect(screen.getByTestId('temper-op-awaken')).toBeDisabled();
-      expect(screen.getByTestId('temper-op-awaken')).toHaveAccessibleDescription(
-        'Only a rare weapon awakens',
-      );
-      expect(screen.queryByTestId('awakened')).toBeNull();
-      unmount();
-    }
-    bench({ ...sword('rare'), awakened: true });
-    expect(screen.getByTestId('temper-op-awaken')).toBeDisabled();
-    expect(screen.getByTestId('temper-op-awaken')).toHaveAccessibleDescription(
-      'Awakened: it carries the Ultimate',
+  it('Open a skill names the first closed skill with a ceiling; other gear and a weapon with every skill open say so', () => {
+    vi.mocked(openSkillPrice).mockReturnValue({ flux: { magic: 1 }, links: 2, scrap: 80 });
+    vi.mocked(openSkill).mockImplementation((_registry, p) => ({ ok: true, profile: p }));
+    // A magic sword starts with a Defensive; its Ultimate (a ceiling of 1) is the one to open.
+    bench(sword('magic'));
+    expect(screen.getByTestId('temper-op-open-skill')).toHaveTextContent('Open Ultimate');
+    expect(openSkill).toHaveBeenCalledWith(registry, expect.anything(), 'w1', 'ultimate');
+    cleanup();
+    // A rare sword starts with every skill.
+    bench(sword('rare'));
+    expect(screen.getByTestId('temper-op-open-skill')).toBeDisabled();
+    expect(screen.getByTestId('temper-op-open-skill')).toHaveAccessibleDescription(
+      'Every skill it can hold is open',
     );
-    expect(screen.getByTestId('awakened')).toBeInTheDocument();
-    // The engine is asked for neither the price nor a dry run.
-    expect(awakenPrice).not.toHaveBeenCalled();
-    expect(awaken).not.toHaveBeenCalled();
+    cleanup();
+    bench({ ...helm('fire'), rarity: 'rare' as const });
+    expect(screen.getByTestId('temper-op-open-skill')).toBeDisabled();
+    expect(screen.getByTestId('temper-op-open-skill')).toHaveAccessibleDescription(
+      'Only a weapon opens a skill',
+    );
   });
 });

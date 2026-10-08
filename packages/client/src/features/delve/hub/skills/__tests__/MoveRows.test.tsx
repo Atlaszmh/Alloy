@@ -3,6 +3,7 @@ import { screen, fireEvent, within } from '@testing-library/react';
 import { defaultMoveset, heroChains, type Chains, type ChainSkill } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { lancePrimary, wearing } from '../../../__tests__/armed';
 import { edit, renderSkills, stepTo, valuesOf } from './harness';
 
 vi.mock('react-router', async () => {
@@ -17,7 +18,7 @@ const saved = () => heroChains(registry, store().profile.equipped, store().profi
 const summary = () => screen.getByTestId('abilities-summary');
 const damage = () => screen.getByTestId('stat-damage').textContent;
 
-/** The starting sword made epic, every chain at five slots, the Primary its four default Bolts. */
+/** The starting sword made epic, every chain at five slots, the Primary four Lances. */
 function roomy() {
   const p = store().profile;
   const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
@@ -28,11 +29,13 @@ function roomy() {
     ultimate: 1,
   });
   const slots: Record<ChainSkill, number> = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
-  store().setProfile({
-    ...p,
-    pair: { primary: 'fire', secondary: 'nature' },
-    equipped: { ...p.equipped, weapon: { ...weapon, moveset: { chains: moveset.chains, slots } } },
-  });
+  const chains = { ...moveset.chains, primary: lancePrimary() };
+  store().setProfile(
+    wearing(
+      { ...p, pair: { primary: 'fire', secondary: 'nature' } },
+      { ...weapon, moveset: { chains, slots, bought: {} } },
+    ),
+  );
 }
 
 describe('the move editor', () => {
@@ -68,7 +71,7 @@ describe('the move editor', () => {
     stepTo('move-kind', 'Heavy');
     expect(draft()!.moves[0].kind).toBe('heavy');
     expect(saved().primary.moves[0].kind).toBe('light'); // a draft until Apply
-    expect(summary()).toHaveTextContent('heavy Fire Bolt · medium Fire Bolt');
+    expect(summary()).toHaveTextContent('heavy Fire Lance · medium Fire Lance');
     expect(damage()).not.toBe(before);
   });
 
@@ -89,7 +92,7 @@ describe('the move editor', () => {
     expect(position).toHaveAttribute('aria-valuetext', 'Position 1 of 4');
     fireEvent.keyDown(position, { key: 'ArrowRight' });
     expect(summary()).toHaveTextContent(
-      'medium Fire Bolt · light Fire Bolt · medium Fire Bolt · heavy Fire Bolt',
+      'medium Fire Lance · light Fire Lance · medium Fire Lance · heavy Fire Lance',
     );
     expect(screen.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('move-position')).toHaveAttribute(
@@ -97,8 +100,8 @@ describe('the move editor', () => {
       'Position 2 of 4',
     );
     expect(document.activeElement).toBe(screen.getByTestId('move-position'));
-    // The draft's origins follow the move: Apply's price sees a reorder, not two new moves.
-    expect(store().chainDraft!.origins.primary).toEqual([1, 0, 2, 3]);
+    // The moves keep their uids through the move: Apply's price sees a reorder, not two new moves.
+    expect(store().chainDraft!.chains.primary!.moves.every((m) => m.uid)).toBe(true);
   });
 
   it("Payment is the chain's: one stepper for every move", () => {
@@ -116,15 +119,15 @@ describe('the move editor', () => {
     fireEvent.click(screen.getByTestId('move-form'));
     const grid = screen.getByTestId('form-picker');
     expect(grid).toHaveAttribute('data-pad-scope');
-    expect(within(grid).getByTestId('form-bolt')).toHaveAttribute('aria-pressed', 'true');
-    expect(within(grid).getByTestId('form-damage-lance')).toHaveTextContent(
+    expect(within(grid).getByTestId('form-lance')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(grid).getByTestId('form-damage-burst')).toHaveTextContent(
       /chain damage a second/,
     );
     // A defensive form is no Primary's.
     expect(within(grid).queryByTestId('form-ward')).toBeNull();
-    fireEvent.click(within(grid).getByTestId('form-lance'));
+    fireEvent.click(within(grid).getByTestId('form-burst'));
     expect(screen.queryByTestId('form-picker')).toBeNull();
-    expect(draft()!.moves[0].form).toBe('lance');
+    expect(draft()!.moves[0].form).toBe('burst');
     expect(document.activeElement).toBe(screen.getByTestId('move-form'));
   });
 

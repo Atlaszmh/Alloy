@@ -1,4 +1,4 @@
-import type { ChainSkill } from './ability.js';
+import type { ChainSkill, Construct, WeaponClass } from './ability.js';
 import type { MonsterKind } from './arpg.js';
 import type { DelveProfile } from './delve.js';
 import type { GearSlot, HeroStatKey, Rarity } from './gear.js';
@@ -55,6 +55,8 @@ export interface Haul extends MaterialsPouch {
   dust: number;
   links: number;
   runes: RunePouch;
+  /** Constructs a weapon salvaged mid-dive gave (the constructs spec §3.3), lost with the haul. */
+  constructs: Construct[];
 }
 
 /** One material pickup's kind: a bar, a flux, a shard, an essence, Mana Dust or Links. */
@@ -128,10 +130,13 @@ export interface ForgePreview {
   legendary: { id: string; band: [number, number]; range: [number, number] } | null;
   /** What it costs besides the bar, flux, essence and shards it consumes. */
   price: { scrap: number; dust: number };
-  /** A weapon's carried skills, each one's extra slots past its base, and its open sockets (S7). */
+  /**
+   * A weapon's class, each skill's slots against its ceiling (a skill at 0 slots listed with its
+   * ceiling, so the bench can show "Defensive 0 / 1") and its open sockets (the constructs spec §3.5).
+   */
   weapon: {
-    carries: ChainSkill[];
-    slots: Partial<Record<ChainSkill, number>>;
+    class: WeaponClass;
+    slots: Record<ChainSkill, [slots: number, ceiling: number]>;
     sockets: number;
   } | null;
   refused: ForgeRefusal | null;
@@ -154,6 +159,8 @@ export interface SalvageYield {
   essence: string | null;
   /** A weapon's socketed runes, which go by the pull rule. */
   runes: RuneRef[];
+  /** A weapon's constructs, which go to the bag (the constructs spec §3.3; B2 fills it: empty in A). */
+  constructs: Construct[];
 }
 
 /** What one salvage gave (`applySalvage`): mid-dive into the floor's haul, at the Anvil into the stockpile. */
@@ -167,6 +174,8 @@ export interface SalvageResult {
   essence: string | null;
   runes: RuneRef[];
   destroyed: RuneRef[];
+  /** The constructs sent to the bag, or mid-dive the haul (B2 fills it: empty in A). */
+  constructs: Construct[];
 }
 
 // ── Data (crafting.json) ───────────────────────────────────────────────────
@@ -218,8 +227,8 @@ export interface CraftingBalance {
   forgeScrap: Record<Rarity, number>;
   /** Mana Dust to forge in an element outside the pair. */
   offPairDust: number;
-  /** A forged weapon's extra slots and open sockets, by rarity (placed as the spec's S7 says). */
-  weaponExtras: Record<Rarity, { slots: number; sockets: number }>;
+  /** A forged weapon's free extra slots by rarity (the Primary's first, then Basic, Ultimate, Defensive; not bought). */
+  weaponExtras: Record<Rarity, { slots: number }>;
   /** A hone's scrap: this × `forge.rarityCostMult` × `honeGrowth` ^ hones × `scrapLevelFactor(ilvl)`. */
   honeScrap: number;
   honeGrowth: number;
@@ -241,15 +250,6 @@ export interface CraftingBalance {
   shardBench: { scrap: number; dust: number };
   /** The share of a dive's banked materials a death or an abandon loses. */
   deathLoss: number;
-  /** Awaken's price, its scrap before `scrapLevelFactor(ilvl)` (see the tutorial spec). */
-  awaken: AwakenPrice;
-}
-
-/** What awakening a rare weapon costs (`awakenPrice`): epic flux, Links and scrap. */
-export interface AwakenPrice {
-  epicFlux: number;
-  links: number;
-  scrap: number;
 }
 
 export interface DropsBalance {

@@ -13,13 +13,13 @@ import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import { CONTRACT_TIERS } from '../types/quests.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves (version 13 only) — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 14 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
-  primary: ['bolt', 'volley', 'lance', 'burst', 'strike'],
-  defensive: ['ward', 'armor', 'surge', 'blink'],
-  ultimate: ['nova', 'barrage', 'maelstrom'],
+  primary: ['bolt', 'volley', 'lance', 'burst', 'strike', 'whirl'],
+  defensive: ['ward', 'repel', 'armor', 'surge', 'blink'],
+  ultimate: ['nova', 'onslaught', 'barrage', 'maelstrom'],
 };
 
 const FormIdSchema = z.enum([
@@ -28,13 +28,16 @@ const FormIdSchema = z.enum([
   'lance',
   'burst',
   'strike',
+  'whirl',
   'ward',
   'armor',
   'surge',
   'blink',
+  'repel',
   'nova',
   'barrage',
   'maelstrom',
+  'onslaught',
 ]);
 
 /** One element, or two different ones (a fusion). */
@@ -55,7 +58,11 @@ export const RuneRefSchema = z.object({
 /** A move's or a blow's open sockets, each a rune or null (see the runes spec). */
 const SocketsSchema = z.array(RuneRefSchema.nullable()).max(MAX_SOCKETS).optional();
 
+/** A construct's id, `c<n>` (the constructs spec §3.1): optional on a chain outside a save (the Training Grounds' sandbox); a save requires it (`SavedMoveSchema`). */
+const UidSchema = z.string().min(1).optional();
+
 export const MoveSchema = z.object({
+  uid: UidSchema,
   kind: MoveKindSchema,
   form: FormIdSchema,
   elements: ElementsSchema,
@@ -63,10 +70,18 @@ export const MoveSchema = z.object({
 });
 
 export const BlowSchema = z.object({
+  uid: UidSchema,
   kind: MoveKindSchema,
   element: ManaTypeSchema,
   runes: SocketsSchema,
 });
+
+/** A saved construct carries its uid (save v14): the weapon's chains, the bag and a haul. */
+const SavedMoveSchema = MoveSchema.extend({ uid: z.string().min(1) });
+const SavedBlowSchema = BlowSchema.extend({ uid: z.string().min(1) });
+
+/** A move or a blow in the bag or a haul (the constructs spec §3.1). */
+export const ConstructSchema = z.union([SavedMoveSchema, SavedBlowSchema]);
 
 /** Loose runes: rune id → counts by tier. */
 export const RunePouchSchema = z.record(
@@ -95,17 +110,23 @@ export const HaulSchema = MaterialsPouchSchema.extend({
   dust: count,
   links: count,
   runes: RunePouchSchema,
+  constructs: z.array(ConstructSchema).default([]),
 });
 
-/** An ability chain: 1 to `MAX_CHAIN` moves and a payment (see `slotChain` for the forms). */
+/** An ability chain: 0 to `MAX_CHAIN` moves (empty: an uncarried skill) and a payment (see `slotChain` for the forms). */
 export const ChainSchema = z.object({
-  moves: z.array(MoveSchema).min(1).max(MAX_CHAIN),
+  moves: z.array(MoveSchema).min(0).max(MAX_CHAIN),
   payment: PaymentSchema,
 });
 
-/** A chain whose every move is one of `slot`'s forms. */
+/** A saved chain: every move with its uid (save v14). */
+const SavedChainSchema = ChainSchema.extend({
+  moves: z.array(SavedMoveSchema).min(0).max(MAX_CHAIN),
+});
+
+/** A saved chain whose every move is one of `slot`'s forms. */
 function slotChain(slot: AbilitySlot) {
-  return ChainSchema.refine(
+  return SavedChainSchema.refine(
     (c) => c.moves.every((m) => SLOT_FORMS[slot].includes(m.form)),
     `every move must be a ${slot} form`,
   );
@@ -113,11 +134,11 @@ function slotChain(slot: AbilitySlot) {
 
 const CapSchema = z.number().int().min(1).max(MAX_CHAIN);
 
-/** A weapon's moveset: a chain for each skill it carries, each within its skill's slots. */
+/** A weapon's moveset: a chain for each skill with slots, each within them, and the slots bought (the constructs spec §3.2). */
 export const MovesetSchema = z
   .object({
     chains: z.object({
-      basic: z.array(BlowSchema).min(1).max(MAX_CHAIN).optional(),
+      basic: z.array(SavedBlowSchema).min(1).max(MAX_CHAIN).optional(),
       primary: slotChain('primary').optional(),
       defensive: slotChain('defensive').optional(),
       ultimate: slotChain('ultimate').optional(),
@@ -128,6 +149,14 @@ export const MovesetSchema = z
       defensive: CapSchema.optional(),
       ultimate: CapSchema.optional(),
     }),
+    bought: z
+      .object({
+        basic: count.optional(),
+        primary: count.optional(),
+        defensive: count.optional(),
+        ultimate: count.optional(),
+      })
+      .default({}),
   })
   .refine(
     ({ chains, slots }) =>
@@ -166,7 +195,6 @@ export const GearItemSchema = z.object({
   hones: z.number().int().min(0).default(0),
   locked: z.boolean(),
   moveset: MovesetSchema.optional(),
-  awakened: z.boolean().optional(),
 });
 
 const PerRarityCount = z.object({
@@ -298,11 +326,12 @@ const TutorialStateSchema = z.object({ step: z.string().min(1), count, misses: c
  * rebuild a different floor); older saves reset. Every field but the dive.
  */
 const ProfileSchema = z.object({
-  version: z.literal(13),
+  version: z.literal(14),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
   nextUid: z.number().int().min(0),
+  nextConstructUid: z.number().int().min(0).default(0),
   equipped: z.object({
     weapon: GearItemSchema.optional(),
     helm: GearItemSchema.optional(),
@@ -338,6 +367,9 @@ const ProfileSchema = z.object({
   manaDust: z.number().int().min(0),
   links: z.number().int().min(0),
   runes: RunePouchSchema,
+  // The move bag and its auto-salvage of plain constructs (the constructs spec §3.1, §3.3).
+  constructs: z.array(ConstructSchema).default([]),
+  autoSalvagePlain: z.boolean().default(true),
   materials: MaterialsPouchSchema,
   patterns: z.array(z.string()),
   essencesSeen: z.array(z.string()),
@@ -349,6 +381,8 @@ const ProfileSchema = z.object({
 /** A tutorial depth's entry: the profile as it entered, its dive without an entry (never nested). */
 const TutorialEntrySchema = ProfileSchema.extend({ dive: DiveSchema });
 
-export const DelveProfileSchema = ProfileSchema.extend({
+// Annotated: with the constructs' union in every haul (the dive's and its tutorial entry's) the
+// inferred type is past what the compiler serialises.
+export const DelveProfileSchema: z.ZodTypeAny = ProfileSchema.extend({
   dive: DiveSchema.extend({ tutorialEntry: TutorialEntrySchema.nullable() }).nullable(),
 });

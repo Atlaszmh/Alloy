@@ -56,7 +56,7 @@ describe('ApplyBar', () => {
     draftLance();
     fireEvent.click(screen.getByTestId('chain-apply'));
     expect(onApply).toHaveBeenCalledOnce();
-    expect(chains().primary.moves[0].form).toBe('bolt'); // the save untouched
+    expect(chains().primary.moves[0].form).toBe('strike'); // the save untouched
     expect(price()).toHaveTextContent('1 unapplied change');
   });
 

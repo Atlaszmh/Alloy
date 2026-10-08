@@ -1,14 +1,14 @@
 import type { DataRegistry } from '../data/registry.js';
 import { onRoomWall } from '../data/tutorial-floor-schema.js';
 import { generateItem } from '../loot/item-generator.js';
-import { DEFAULT_FORMS, defaultMoveset } from '../loot/moveset.js';
-import { runeFits, socketCap, socketsOf } from '../loot/runes.js';
+import { defaultForm, defaultMoveset, weaponClass } from '../loot/moveset.js';
+import { runeFits, socketsOf } from '../loot/runes.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { Blow, ChainSkill, Move } from '../types/ability.js';
 import type { ArpgWorld, Drop, MonsterEntity, Vec } from '../types/arpg.js';
 import type { Door, FloorMap, Interactable, Room } from '../types/floor-map.js';
 import type { GearItem } from '../types/gear.js';
-import type { RuneTier } from '../types/rune.js';
+import { MAX_SOCKETS, type RuneTier } from '../types/rune.js';
 import {
   TUTORIAL_INTERACTABLES,
   type TutorialDrop,
@@ -145,7 +145,7 @@ function setGear(
     return !chain ? [] : Array.isArray(chain) ? chain : chain.moves;
   });
   let open = g.sockets ?? 0;
-  for (let round = 0; round < socketCap(registry, item.rarity); round++)
+  for (let round = 0; round < MAX_SOCKETS; round++)
     for (const m of moves)
       if (open > 0) {
         m.runes = [...socketsOf(m), null];
@@ -176,7 +176,9 @@ function setDrop(ctx: SimCtx, d: TutorialSetDrop, from: Vec, roomId: number | nu
   let what: Pick<Drop, 'kind' | 'amount' | 'item' | 'rune' | 'material'>;
   if (g.kind === 'gear') what = { kind: 'item', amount: 1, item: setGear(registry, world, g, rng) };
   else if (g.kind === 'rune') {
-    const form = world.hero.chains[0]?.moves[0]?.form.id ?? DEFAULT_FORMS.primary.form;
+    const form =
+      world.hero.chains[0]?.moves[0]?.form.id ??
+      defaultForm(registry, 'primary', weaponClass(registry, world.hero.stats.weapon.baseId)).form;
     const fits = registry.getRunes().filter((def) => runeFits(def, { form }));
     if (fits.length === 0) return;
     const id = fits[rng.nextInt(0, fits.length - 1)].id;

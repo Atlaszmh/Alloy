@@ -4,7 +4,7 @@ import type { Interactable } from '../types/floor-map.js';
 import type { Buff } from '../types/boon.js';
 import { rollBoons } from './boons.js';
 import { refreshWorldHero } from '../arpg/world.js';
-import { carriedByText, heroChains, movesetOf } from '../loot/moveset.js';
+import { heroChains, movesetOf } from '../loot/moveset.js';
 import { upgradeCost } from '../loot/smithing.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { runeFits, socketsOf } from '../loot/runes.js';
@@ -14,7 +14,15 @@ import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ab
 import type { DelveProfile, DiveState, DiveStop, StopKind } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem } from '../types/gear.js';
 import type { RuneRef } from '../types/rune.js';
-import { addSlot, moveKey, movesOf, setChain, slotPrice, withMove } from './moveset.js';
+import {
+  OPEN_SKILL_TEXT,
+  addSlot,
+  moveKey,
+  movesOf,
+  setChain,
+  slotPrice,
+  withMove,
+} from './moveset.js';
 import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
 import { runeTargetOf, socketRune } from './runes.js';
 import { bankWorld } from './dive.js';
@@ -220,7 +228,7 @@ function runStop(
       const weapon = profile.equipped.weapon;
       if (!weapon) return { ok: false, profile, reason: 'Equip a weapon to build your moves' };
       const chain = movesetOf(registry, weapon).chains[action.skill];
-      if (!chain) return { ok: false, profile, reason: carriedByText(registry, action.skill) };
+      if (!chain) return { ok: false, profile, reason: OPEN_SKILL_TEXT };
       const moves = movesOf(chain);
       const { index, move } = action;
       if (!Number.isInteger(index) || index < 0 || index >= moves.length)
@@ -242,7 +250,7 @@ function runStop(
       const weapon = profile.equipped.weapon;
       if (!weapon) return { ok: false, profile, reason: 'Equip a weapon to build your moves' };
       const chain = movesetOf(registry, weapon).chains[action.skill];
-      if (!chain) return { ok: false, profile, reason: carriedByText(registry, action.skill) };
+      if (!chain) return { ok: false, profile, reason: OPEN_SKILL_TEXT };
       const { index, socket } = action;
       const move = Number.isInteger(index) ? movesOf(chain)[index] : undefined;
       if (!move) return { ok: false, profile, reason: 'Socket a rune into a move the chain holds' };

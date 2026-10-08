@@ -1,9 +1,24 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, ChainSkill, FormId, Knobs, KnobsData, MoveKind } from './ability.js';
+import type {
+  AbilitySlot,
+  ChainSkill,
+  Construct,
+  FormId,
+  Knobs,
+  KnobsData,
+  MoveKind,
+  WeaponClass,
+} from './ability.js';
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
-import type { MonsterKind } from './arpg.js';
-import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
+import type { CastStyle, MonsterKind } from './arpg.js';
+import type {
+  CraftingBalance,
+  DropsBalance,
+  FluxGrade,
+  Haul,
+  MaterialsPouch,
+} from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
 import type { AiBalance, LayoutBalance, LayoutsData, TerrainBalance } from './floor-map.js';
 import type { BoonOffer, BoonsBalance, Buff } from './boon.js';
@@ -91,6 +106,10 @@ export interface GearBaseDef {
   tempo?: number;
   /** Weapons only: the side a blow's side step takes when the steering doesn't pick one (default `alternate`). */
   sway?: WeaponSway;
+  /** Weapons only (every weapon has one): its class, which forms it can express (the constructs spec §2.1). */
+  class?: WeaponClass;
+  /** Weapons only (every weapon has one): its cast style (the constructs spec §4). */
+  style?: CastStyle;
   weight: number;
   implicits: ImplicitTemplate[];
 }
@@ -567,25 +586,27 @@ export interface DelveBalance {
   };
   /** Weapon movesets: which chains a weapon carries, its slots and their prices (see the weapon movesets spec). */
   movesets: {
-    /** The chains a weapon of each rarity carries (unarmed: basic and primary). */
-    carries: Record<Rarity, ChainSkill[]>;
-    /** Extra slots a weapon drop rolls, least and most, by rarity. */
+    /** Each rarity's slots by skill: `[start, ceiling]` (the Basic's start is the weapon's string; the constructs spec §3.2). */
+    slots: Record<Rarity, Record<ChainSkill, [number, number]>>;
+    /** Extra slots a weapon drop rolls, least and most, by rarity (free: not bought). */
     extraSlots: Record<Rarity, [number, number]>;
     /** Links a new slot costs, by its position: the 2nd slot's first. */
     slotLinks: number[];
     /** Scrap a new slot costs, by its position as `slotLinks`. */
     slotScrap: number[];
+    /** Open a skill (a skill's first slot), by the weapon's rarity: flux by grade, Links and scrap (× `scrapLevelFactor`). */
+    openSkill: Record<Rarity, { flux: Partial<Record<FluxGrade, number>>; links: number; scrap: number }>;
     /** Mana Dust a changed, moved, added or removed move costs, or a changed payment. */
     editDust: number;
     /** Mana Dust a move's changed elements cost, or a new move's elements that no old move has. */
     elementDust: number;
-    /** Scrap a transfer costs for each extra slot that moves. */
-    transferScrap: number;
+    /** Mana Dust salvaging a construct gives (the constructs spec §3.3 gives none: 0 as shipped; the key exists for tuning). */
+    salvageDust: number;
   };
   /** Runes: sockets and their prices, the pull rule, fusing, drops and the knobs' numbers (see the runes spec). */
   runes: {
-    /** Most sockets a move may open, by its weapon's rarity (at most `MAX_SOCKETS`). */
-    socketCap: Record<Rarity, number>;
+    /** Chance a weapon drop's open socket holds a rune (the constructs spec §3.5), by rarity. */
+    runeChance: Record<Rarity, number>;
     /** Links the next socket costs, by the sockets the move already has. */
     socketLinks: number[];
     /** Scrap the next socket costs, by the sockets the move already has. */
@@ -698,6 +719,9 @@ export interface HeroBlow extends ComboStepDef {
 
 export interface HeroWeapon {
   baseId: string | null;
+  /** Its class and cast style (the constructs spec §2.1, §4); unarmed neither. */
+  class: WeaponClass | null;
+  style: CastStyle | null;
   kind: 'melee' | 'bolt';
   range: number;
   arc: number;
@@ -866,11 +890,16 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 13;
+  version: 14;
   seed: number;
   diveCount: number;
   forgeCount: number;
   nextUid: number;
+  /**
+   * The constructs' own counter (`c<n>`, `mintUid`): apart from the items' `nextUid`, which the
+   * floor's drops and RNG streams key on, so when pickups bank never re-keys an item.
+   */
+  nextConstructUid: number;
   equipped: EquippedGear;
   bag: GearItem[];
   scrap: number;
@@ -887,6 +916,10 @@ export interface DelveProfile {
   links: number;
   /** Loose runes: counts by id and tier (see the runes spec). */
   runes: RunePouch;
+  /** The move bag (the constructs spec §3.1): every construct not in a weapon's slot, each with a uid. */
+  constructs: Construct[];
+  /** A plain construct (no socket, no rune) displaced into the bag is deleted (the constructs spec §3.3). */
+  autoSalvagePlain: boolean;
   /** Bars, flux, shards and essences: the stockpile at the Anvil (see the crafting spec). */
   materials: MaterialsPouch;
   /** The bases the hero can forge: learned from the start, from salvage and from pattern drops. */

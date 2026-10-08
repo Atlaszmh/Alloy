@@ -53,7 +53,7 @@ const legendary = generateItem(
   new SeededRNG(2),
 );
 
-/** An epic Fire sword as forged (two extra slots, one socket), Split I in its socket. */
+/** An epic Fire sword as forged (two free extra slots), a socket opened on its first Primary move, Split I in it. */
 function sword(): GearItem {
   const w = generateItem(
     registry,
@@ -82,6 +82,7 @@ describe('salvageYield', () => {
       pattern: 'gauntlets',
       essence: null,
       runes: [],
+      constructs: [],
     });
     const tierAt = (roll: number) =>
       salvageYield(registry, hero(), gloves({ affixes: [line('armor', roll)] })).shards[0].tier;
@@ -120,18 +121,21 @@ describe('salvageYield', () => {
       shards: [],
       extraShard: 0,
       essence: 'nightstalker',
+      constructs: [],
     });
   });
 
-  it("lists a weapon's runes, and a Link for each slot and socket past its rarity's forged extras", () => {
+  it("lists a weapon's runes, and a Link for each bought slot: a forged weapon's free extras and its sockets give none", () => {
     expect(salvageYield(registry, hero(), sword())).toMatchObject({
       links: 0,
       runes: [{ id: 'split', tier: 1 }],
       pattern: null,
+      constructs: [],
     });
     const w = sword();
     const m = w.moveset!;
     m.slots.primary! += 1;
+    m.bought = { primary: 1, basic: 2 };
     m.chains.primary!.moves.push({ ...m.chains.primary!.moves[0], runes: [null, null] });
     expect(salvageYield(registry, hero(), w).links).toBe(3);
   });
@@ -224,11 +228,11 @@ describe('applySalvage', () => {
     expect(res.profile.patterns).toContain('gauntlets');
   });
 
-  it("sends a weapon's runes by the parts rule, in the mode given", () => {
-    const gone = applySalvage(registry, hero(), sword(), new SeededRNG(1));
+  it("sends a weapon's runes by the parts rule, in the mode given ('pay' as shipped)", () => {
+    const gone = applySalvage(registry, hero(), sword(), new SeededRNG(1), { unsocket: 'destroy' });
     expect(gone).toMatchObject({ runes: [], destroyed: [{ id: 'split', tier: 1 }] });
     expect(gone.profile.runes).toEqual({});
-    const paid = applySalvage(registry, hero(), sword(), new SeededRNG(1), { unsocket: 'pay' });
+    const paid = applySalvage(registry, hero(), sword(), new SeededRNG(1));
     expect(paid).toMatchObject({ runes: [{ id: 'split', tier: 1 }], destroyed: [] });
     expect(paid.profile.runes).toEqual({ split: [1, 0, 0, 0, 0] });
     expect(paid.profile.links).toBe(hero().links + paid.links);

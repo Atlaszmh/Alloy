@@ -1,6 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import { roleHeir } from '../arpg/abilities/resolve.js';
-import { defaultMoveset, extraSlots, heroChains, movesetOf, weaponParts } from '../loot/moveset.js';
+import { defaultMoveset, heroChains, movesetOf, weaponParts } from '../loot/moveset.js';
 import { ABILITY_SLOTS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, HeroStats, ManaPair } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem, type HeroStatKey, type StatRoll } from '../types/gear.js';
@@ -8,7 +8,13 @@ import type { ManaMap, ManaType } from '../types/mana.js';
 import { buffSum } from './boons.js';
 import { isDiveActive } from './dive.js';
 import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
-import { findItem, replaceItem, withMoveset, type ProfileActionResult } from './profile.js';
+import {
+  findItem,
+  mintMoveset,
+  replaceItem,
+  withMoveset,
+  type ProfileActionResult,
+} from './profile.js';
 import { applyQuestEvents } from './quests.js';
 import { applyTutorialEvents } from './tutorial.js';
 import { settleParts, type SetChainsOptions } from './runes.js';
@@ -164,10 +170,10 @@ function attuneTo(item: GearItem, mana: ManaType): GearItem {
 /**
  * The one-time choice: `mana` becomes the primary, every equipped item is
  * re-attuned to it for free (the bag is left alone), and the equipped
- * weapon's moveset starts over at its base slots, every move the default in
- * it. Its open sockets come back as Links and its runes by the parts rule
- * (`opts.unsocket`; its extra slots aren't refunded). Allowed mid-dive (a
- * migrated save may be).
+ * weapon's constructs are replaced with plain ones in it at its starts, minted
+ * (the constructs spec §3.4; B2 sends the old ones to the bag). Its bought
+ * slots come back as Links and its runes by the parts rule (`opts.unsocket`).
+ * Allowed mid-dive (a migrated save may be).
  */
 export function chooseStartingMana(
   registry: DataRegistry,
@@ -185,15 +191,16 @@ export function chooseStartingMana(
   const weapon = equipped.weapon;
   if (!weapon) return { ok: true, profile: { ...profile, equipped, pair } };
   const parts = weaponParts(registry, weapon);
-  const links = parts.links - extraSlots(registry, weapon);
+  const links = parts.links;
   const settled = settleParts(registry, profile.runes, parts.runes, opts.unsocket);
-  equipped.weapon = { ...weapon, moveset: defaultMoveset(registry, weapon, mana) };
+  const [moveset, minted] = mintMoveset(profile, defaultMoveset(registry, weapon, mana));
+  equipped.weapon = { ...weapon, moveset };
   return {
     ok: true,
     links,
     runes: settled.runes,
     destroyed: settled.destroyed,
-    profile: { ...profile, equipped, pair, links: profile.links + links, runes: settled.pouch },
+    profile: { ...minted, equipped, pair, links: profile.links + links, runes: settled.pouch },
   };
 }
 

@@ -48,12 +48,12 @@ function sandbox(over: Partial<Chains> = {}, extra: HeroStatsExtra = {}, infinit
 
 describe('arena HUD snapshot', () => {
   it('a channelled ability dims the buttons only once its channel starts, not in its conjure', () => {
-    // A new hero whose sword is epic (all four skills), its Primary a cast Bolt.
+    // A new hero whose sword is epic (every skill), its Primary a cast Lance (a sword expresses it).
     const p = createDelveProfile(registry, 99);
     const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
     const moveset = defaultMoveset(registry, weapon, 'fire');
     moveset.chains.primary = {
-      moves: [{ kind: 'medium', form: 'bolt', elements: ['fire'] }],
+      moves: [{ kind: 'medium', form: 'lance', elements: ['fire'] }],
       payment: 'cast',
     };
     const armed = { ...p, equipped: { ...p.equipped, weapon: { ...weapon, moveset } } };
@@ -178,13 +178,13 @@ describe('arena HUD snapshot', () => {
   });
 
   it("a skill the weapon doesn't carry has no entry, and its slot keeps its place", () => {
-    // An uncommon sword: Basic and Primary only.
+    // An uncommon sword: Basic, Primary and Defensive; no Ultimate.
     const hero = armed(createDelveProfile(registry, 99));
     const w = beginFloor(registry, startDive(registry, hero, 1));
     const hud = snapshot(w, null);
     expect(hud.abilities).toHaveLength(3);
-    expect(hud.abilities[0]).toMatchObject({ name: 'Fire Bolt' });
-    expect(hud.abilities[1]).toBeNull();
+    expect(hud.abilities[0]).toMatchObject({ name: 'Fire Strike' });
+    expect(hud.abilities[1]).toMatchObject({ name: 'Fire Ward' });
     expect(hud.abilities[2]).toBeNull();
   });
 
@@ -232,7 +232,7 @@ describe('arena HUD snapshot: buffs and the map', () => {
     w.hero.dodgeRechargeAt = w.t + bal.dodge.recharge * 0.25; // a quarter of the eased recharge left
     const hud = snapshot(w, null);
     expect(hud.dodgeMax).toBe(bal.dodge.charges + 1);
-    expect(hud.dodgeRefill).toBeCloseTo(0.5); // (recharge × 0.25) ÷ (recharge × 0.5) left
+    expect(hud.dodgeRefill).toBeCloseTo(0.5); // (recharge ï¿½ 0.25) ï¿½ (recharge ï¿½ 0.5) left
   });
 
   it("lists the worn boons after them, one per boon, the dive's then the floor's, with count and lines", () => {

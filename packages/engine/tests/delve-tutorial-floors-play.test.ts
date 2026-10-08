@@ -7,7 +7,7 @@ import { createFloorWorld } from '../src/arpg/world.js';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { forge, hone, refine } from '../src/delve/crafting.js';
 import { pairElements } from '../src/delve/hero-stats.js';
-import { addSlot, setChains, transferMoveset } from '../src/delve/moveset.js';
+import { addSlot, setChains } from '../src/delve/moveset.js';
 import { bindSecondary, profileStats } from '../src/delve/pair.js';
 import {
   createDelveProfile,
@@ -22,6 +22,7 @@ import type { Haul } from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
+import { withUids } from './fixtures/arena.js';
 
 // See the tutorial spec: the Anvil lessons paid from the starter kit and the set drops alone (the
 // eight hand-built floors' gear and rune as the engine drops them), and a starter hero (the bot)
@@ -85,7 +86,8 @@ const fresh = (primary: ManaType) => createDelveProfile(registry, 7, { primary }
 function armed(p: DelveProfile): DelveProfile {
   const blade: GearItem = gearOf(kill(world(p, 'd1-1'), 'rat3'))[0];
   const bag = [...p.bag, p.equipped.weapon!];
-  return { ...p, nextUid: p.nextUid + 1, equipped: { ...p.equipped, weapon: blade }, bag };
+  // A set drop's constructs have no uids until they bank: minted here as `addLootToBag` would.
+  return withUids({ ...p, nextUid: p.nextUid + 1, equipped: { ...p.equipped, weapon: blade }, bag });
 }
 
 /**
@@ -128,8 +130,9 @@ describe('the Anvil lessons', () => {
     let p = afterLesson1(primary);
     const crown = gearOf(kill(world(p, 'd2-5'), 'grask'))[0];
     expect([crown.rarity, crown.mana]).toEqual(['rare', primary]);
-    p = stockHaul({ ...p, bag: [...p.bag, crown], bestDepth: 5 }, setHaul(2));
-    p = ok(transferMoveset(registry, p, crown.uid));
+    p = withUids(stockHaul({ ...p, bag: [...p.bag, crown], bestDepth: 5 }, setHaul(2)));
+    // Move all is B2's op (D1 rewires the lesson): the rare is worn as it is.
+    p = equipItem(registry, p, crown.uid);
     ok(hone(registry, p, crown.uid, 0));
   });
 });
@@ -157,7 +160,7 @@ describe('the eight floors', () => {
     const seen: Record<string, ArpgEvent[]> = {};
     for (const f of data.floors) {
       if (f.depth === 1) [hp, flasks] = [1, potions];
-      // A new save's common sword carries the Basic alone (the spec's carries).
+      // A new save's common sword holds its Basic and two Primary constructs (the slot table).
       const p = f.id === 'd1-1' ? start : heroes[f.dive as 1 | 2];
       const w = world(p, f.id, hp, flasks, f.id !== 'd1-1');
       seen[f.id] = play(w);

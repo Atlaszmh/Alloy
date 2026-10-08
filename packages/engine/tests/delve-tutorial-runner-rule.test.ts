@@ -140,7 +140,7 @@ const equipChest = lesson('equip', { slot: 'chest', rarity: 'uncommon' });
 const skills = lesson('setChains', { moves: 3 });
 const salvage = lesson('salvage', { slot: 'weapon', rarity: 'common' });
 const refine = lesson('refine', { metal: 'iron' });
-const transfer = lesson('transfer', { rarity: 'rare' });
+const moveAll = lesson('moveAll', { rarity: 'rare' });
 const hone = lesson('hone');
 
 describe('tutorialHolds', () => {
@@ -192,7 +192,7 @@ describe('tutorialHolds', () => {
     );
   });
 
-  it('salvage, refine, transfer and hone: the old sword gone, a bar made, a rare worn, a line honed', () => {
+  it('salvage, refine, Move all and hone: the old sword gone, a bar made, a rare worn with its constructs moved, a line honed', () => {
     const p = onStep('bind');
     const blade = weapon('uncommon');
     const swapped = equipItem(script, { ...p, bag: [blade] }, blade.uid);
@@ -205,15 +205,15 @@ describe('tutorialHolds', () => {
       materials: { ...p.materials, metals: { ...p.materials.metals, iron: 1 } },
     };
     expect(tutorialHolds(script, iron, refine)).toBe(true);
-    expect(tutorialHolds(script, swapped, transfer)).toBe(false);
-    // A rare worn with the moveset moved onto it: its Primary past its base slots.
+    expect(tutorialHolds(script, swapped, moveAll)).toBe(false);
+    // A rare worn with the constructs moved onto it: its Primary past its start (3).
     const rare = (primary: number) => {
       const w = weapon('rare');
       const moveset = defaultMoveset(script, w, 'fire', { primary });
       return { ...p, equipped: { ...p.equipped, weapon: { ...w, moveset } } };
     };
-    expect(tutorialHolds(script, rare(1), transfer)).toBe(false);
-    expect(tutorialHolds(script, rare(2), transfer)).toBe(true);
+    expect(tutorialHolds(script, rare(3), moveAll)).toBe(false);
+    expect(tutorialHolds(script, rare(4), moveAll)).toBe(true);
     expect(tutorialHolds(script, p, hone)).toBe(false);
     expect(tutorialHolds(script, replaceItem(p, { ...p.equipped.chest!, hones: 1 }), hone)).toBe(
       true,

@@ -275,6 +275,8 @@ describe('data: feel tables and default chains', () => {
       lance: [M, M, H],
       burst: [M, M, H],
       strike: [M, M, H, H],
+      // The constructs spec §2.2: a Whirl spins as a Lance strikes.
+      whirl: [M, M, H],
     };
     for (const form of registry.getArpgData().forms)
       expect(form.defaultChain, form.id).toEqual(want[form.id] ?? [M]);
@@ -334,15 +336,16 @@ describe('resolving a chain', () => {
     expect(chargeCap(chain)).toBeCloseTo(need(2));
   });
 
-  it("gives a new hero each form's default chain with today's payments, and the weapon's basics", () => {
+  it("gives a new hero each form's class default chain with today's payments, and the weapon's basics", () => {
     const moves = (form: FormId) =>
       registry.getForm(form).defaultChain.map((kind) => m(kind, form, ['frost']));
+    // A maul is melee: its Primary's default is Strike (the constructs spec §2.4).
     expect(defaultChains(registry, 'frost', 'maul')).toEqual({
       basic: [
         { kind: 'medium', element: 'frost' },
         { kind: 'heavy', element: 'frost' },
       ],
-      primary: { moves: moves('bolt'), payment: 'mana' },
+      primary: { moves: moves('strike'), payment: 'mana' },
       defensive: { moves: moves('ward'), payment: 'mana' },
       ultimate: { moves: moves('nova'), payment: 'charge' },
     });

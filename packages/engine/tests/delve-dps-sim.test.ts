@@ -189,11 +189,11 @@ function windowDps(series: number[], from: number, to: number): number {
 }
 
 describe('dpsCombos', () => {
-  it('252 basic combos, 3,456 one-move chains and 864 default chains, each with its own key', () => {
+  it('252 basic combos, 4,320 one-move chains and 1,080 default chains, each with its own key', () => {
     expect(grid.filter((s) => s.view === 'basic')).toHaveLength(252);
     const abilities = grid.filter((s) => s.view === 'ability');
-    expect(abilities.filter((s) => s.dims.kind !== 'default')).toHaveLength(3456);
-    expect(abilities.filter((s) => s.dims.kind === 'default')).toHaveLength(864);
+    expect(abilities.filter((s) => s.dims.kind !== 'default')).toHaveLength(4320);
+    expect(abilities.filter((s) => s.dims.kind === 'default')).toHaveLength(1080);
     // Primary and Ultimate forms only.
     expect([...new Set(abilities.map((s) => s.dims.form))]).toEqual([
       'bolt',
@@ -201,7 +201,9 @@ describe('dpsCombos', () => {
       'lance',
       'burst',
       'strike',
+      'whirl',
       'nova',
+      'onslaught',
       'barrage',
       'maelstrom',
     ]);
@@ -384,9 +386,9 @@ describe('the rune view (see the runes spec)', () => {
   const socketed = runeRows.filter((s) => s.dims.rune !== 'none');
   const echo = [{ id: 'echo', tier: 3 }];
 
-  it('170 rune rows, each rune on every attack form and weapon it fits, and 30 baselines', () => {
-    expect(socketed).toHaveLength(170);
-    expect(runeRows.filter((s) => s.dims.rune === 'none')).toHaveLength(30);
+  it('197 rune rows (Detonate on its five forms since the constructs), each rune on every attack form and weapon it fits, and 34 baselines', () => {
+    expect(socketed).toHaveLength(197);
+    expect(runeRows.filter((s) => s.dims.rune === 'none')).toHaveLength(34);
     expect(socketed.filter((s) => s.dims.rune === 'split').map((s) => s.dims.on)).toEqual([
       'bolt',
       'volley',
