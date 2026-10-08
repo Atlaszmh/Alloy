@@ -223,7 +223,7 @@ describe('arena HUD snapshot: buffs and the map', () => {
     expect(snapshot(w, null).buffs.map((b) => b.id)).toEqual(['barrier']);
   });
 
-  it("counts the worn boons in the dodge's charges and refill: Third Wind's third charge", () => {
+  it("counts the worn boons in the dodge's charges and refill: Third Wind's extra charge", () => {
     const w = sandbox();
     const bal = registry.getDelveBalance();
     w.hero.diveBuffs = [{ boon: 'third-wind', tier: 1, effect: { dodgeCharges: 1, dodgeRecharge: 0.5 } }];
@@ -232,7 +232,6 @@ describe('arena HUD snapshot: buffs and the map', () => {
     w.hero.dodgeRechargeAt = w.t + bal.dodge.recharge * 0.25; // a quarter of the eased recharge left
     const hud = snapshot(w, null);
     expect(hud.dodgeMax).toBe(bal.dodge.charges + 1);
-    expect(hud.dodgeMax).toBe(3);
     expect(hud.dodgeRefill).toBeCloseTo(0.5); // (recharge × 0.25) ÷ (recharge × 0.5) left
   });
 
