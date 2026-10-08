@@ -1,6 +1,13 @@
 import type { DataRegistry } from '../data/registry.js';
 import { constructSkill, formAllowed, isPlain, movesetOf } from '../loot/moveset.js';
-import { CHAIN_SKILLS, type Chains, type ChainSkill, type Construct } from '../types/ability.js';
+import {
+  CHAIN_SKILLS,
+  type Blow,
+  type Chains,
+  type ChainSkill,
+  type Construct,
+  type Move,
+} from '../types/ability.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { RuneRef } from '../types/rune.js';
 import { isDiveActive } from './dive.js';
@@ -144,25 +151,66 @@ export function applyDraft(
   return res.ok ? res : { ...res, profile };
 }
 
-/** A bag construct into slot `index` of `skill` (a one-op `applyDraft`; B2 fills it). */
-export function placeConstruct(
-  _registry: DataRegistry,
-  profile: DelveProfile,
-  _uid: string,
-  _skill: Chains extends infer _C ? keyof Chains : never,
-  _index: number,
-): ProfileActionResult {
-  return refuse(profile, NOT_YET);
+/** `chain` with its constructs replaced by `moves` (a chain of blows stays one). */
+function withMoves(chain: Chains[ChainSkill], moves: Construct[]): Chains[ChainSkill] {
+  return Array.isArray(chain) ? (moves as Blow[]) : { ...chain, moves: moves as Move[] };
 }
 
-/** Slot `index` of `skill` to the bag, its chain closing up (a one-op `applyDraft`; B2 fills it). */
-export function unsocketConstruct(
-  _registry: DataRegistry,
+/**
+ * Place bag construct `uid` into slot `index` of the worn weapon's `skill`
+ * chain: at the chain's end into a free slot, else over the construct there,
+ * which goes to the bag (a plain one deleted under `autoSalvagePlain`). Free
+ * (a one-op `applyDraft`, which refuses the wrong skill, a form the weapon's
+ * class can't express, mid-dive and unarmed; the pair is never checked, see
+ * the spec's §3.4).
+ */
+export function placeConstruct(
+  registry: DataRegistry,
   profile: DelveProfile,
-  _skill: keyof Chains,
-  _index: number,
+  uid: string,
+  skill: ChainSkill,
+  index: number,
 ): ProfileActionResult {
-  return refuse(profile, NOT_YET);
+  const weapon = profile.equipped.weapon;
+  if (!weapon) return refuse(profile, UNARMED_TEXT);
+  const c = profile.constructs.find((x) => x.uid === uid);
+  if (!c) return refuse(profile, 'Not in your bag');
+  const moveset = movesetOf(registry, weapon);
+  const chain = moveset.chains[skill];
+  if (!chain) return refuse(profile, `This weapon has no ${skill} slots`);
+  const moves = movesOf(chain);
+  if (!Number.isInteger(index) || index < 0 || index > moves.length || index >= moveset.slots[skill]!)
+    return refuse(profile, 'No slot there');
+  const next = [...moves];
+  const out = next.splice(index, 1, c); // at the end: appended, nothing out
+  return applyDraft(registry, profile, {
+    chains: { [skill]: withMoves(chain, next) },
+    bag: [...profile.constructs.filter((x) => x.uid !== uid), ...out],
+  });
+}
+
+/**
+ * Unsocket the construct at `index` of the worn weapon's `skill` chain into
+ * the bag; the chain closes up. Free (a one-op `applyDraft`). The Basic keeps
+ * at least one blow.
+ */
+export function unsocketConstruct(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  skill: ChainSkill,
+  index: number,
+): ProfileActionResult {
+  const weapon = profile.equipped.weapon;
+  if (!weapon) return refuse(profile, UNARMED_TEXT);
+  const chain = movesetOf(registry, weapon).chains[skill];
+  const moves = movesOf(chain);
+  const c = Number.isInteger(index) ? moves[index] : undefined;
+  if (!chain || !c) return refuse(profile, 'Pick a move the chain holds');
+  if (skill === 'basic' && moves.length === 1) return refuse(profile, 'The Basic keeps at least one blow');
+  return applyDraft(registry, profile, {
+    chains: { [skill]: withMoves(chain, moves.filter((_, i) => i !== index)) },
+    bag: [...profile.constructs, c],
+  });
 }
 
 /** Move all (the constructs spec §3.3): the worn weapon's constructs onto bag weapon `uid`, equipped (B2 fills it). */

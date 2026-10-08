@@ -389,3 +389,61 @@ describe('applyDraft (constructs.ts)', () => {
     expect(applyDraft(registry, startDive(registry, p, 1), asIs(p)).reason).toBe('Chains can only change between dives');
   });
 });
+
+describe('placeConstruct and unsocketConstruct (constructs.ts)', () => {
+  it('unsocket: to the bag, free; the chain closes up; the Basic keeps one blow', () => {
+    const p = hero();
+    const [a, b] = primary(p);
+    const res = unsocketConstruct(registry, p, 'primary', 0);
+    expect(res.ok).toBe(true);
+    expect(uids(primary(res.profile))).toEqual([b.uid]);
+    expect(res.profile.constructs).toEqual([a]);
+    expect(res.profile.manaDust).toBe(500);
+    expect(unsocketConstruct(registry, p, 'primary', 2).reason).toBe('Pick a move the chain holds');
+    let one = p;
+    one = unsocketConstruct(registry, one, 'basic', 2).profile;
+    one = unsocketConstruct(registry, one, 'basic', 1).profile;
+    expect(basic(one)).toHaveLength(1);
+    expect(unsocketConstruct(registry, one, 'basic', 0).reason).toBe('The Basic keeps at least one blow');
+    expect(one.constructs).toHaveLength(2);
+  });
+
+  it('place: into a free slot at its end, or over a construct, which goes to the bag; free; the wrong skill or class refused', () => {
+    const p = hero();
+    const [a, b] = primary(p);
+    const out = unsocketConstruct(registry, p, 'primary', 0).profile;
+    const over = placeConstruct(registry, out, a.uid!, 'primary', 0);
+    expect(over.ok).toBe(true);
+    expect(uids(primary(over.profile))).toEqual([a.uid]);
+    expect(over.profile.constructs).toEqual([b]);
+    const end = placeConstruct(registry, over.profile, b.uid!, 'primary', 1);
+    expect(uids(primary(end.profile))).toEqual([a.uid, b.uid]);
+    expect(end.profile.constructs).toEqual([]);
+    expect(end.profile.manaDust).toBe(500);
+    expect(placeConstruct(registry, out, a.uid!, 'primary', 2).reason).toBe('No slot there');
+    expect(placeConstruct(registry, out, a.uid!, 'basic', 0).reason).toBe('Not a basic construct');
+    expect(placeConstruct(registry, out, a.uid!, 'defensive', 0).reason).toBe('This weapon has no defensive slots');
+    expect(placeConstruct(registry, out, 'c999', 'primary', 0).reason).toBe('Not in your bag');
+    const bolt: Move = { uid: 'cb', kind: 'medium', form: 'bolt', elements: ['fire'] };
+    expect(placeConstruct(registry, { ...out, constructs: [bolt] }, 'cb', 'primary', 1).reason).toBe("A sword can't express Bolt");
+  });
+
+  it('under autoSalvagePlain a plain construct placed over is deleted at once', () => {
+    const p = hero();
+    const [a] = primary(p);
+    const out = { ...unsocketConstruct(registry, p, 'primary', 0).profile, autoSalvagePlain: true };
+    expect(isPlain(primary(out)[0])).toBe(true);
+    const over = placeConstruct(registry, out, a.uid!, 'primary', 0);
+    expect(uids(primary(over.profile))).toEqual([a.uid]);
+    expect(over.profile.constructs).toEqual([]);
+  });
+
+  it('a dormant construct placed by Move all may be reordered, never placed from the bag; place never checks the pair', () => {
+    const p = hero();
+    const frost: Move = { uid: 'cf', kind: 'medium', form: 'strike', elements: ['frost'] };
+    const out = placeConstruct(registry, { ...p, constructs: [frost] }, 'cf', 'primary', 1);
+    expect(out.ok).toBe(true);
+    expect(primary(out.profile)[1]).toEqual(frost);
+    expect(out.profile.manaDust).toBe(500);
+  });
+});
