@@ -19,6 +19,7 @@ import { Footer, usePrompts, type Prompt } from '@/features/delve/kit';
 import { useChainEditor, type ChainEditorProps } from '../../../chains/useChainEditor';
 import type { HubLink, HubMode } from '../../types';
 import { ChainLane } from '../ChainLane';
+import { ConstructBag } from '../ConstructBag';
 import { MoveInspector } from '../MoveInspector';
 import { SkillStrip } from '../SkillStrip';
 import { SkillsTab } from '../SkillsTab';
@@ -58,8 +59,14 @@ export function renderSkills(
   return render(opts.scoped ? <div data-pad-scope>{hub}</div> : hub);
 }
 
-/** The Skills panes over any chains (no store draft, nothing to buy), as the Anvil draws them. */
-export function Panes(props: ChainEditorProps) {
+/**
+ * The Skills panes over any chains (no store draft, nothing to buy), as the Anvil draws them;
+ * `changed` names the skills the stand-in draft changes (the bag's Salvage waits on them).
+ */
+export function Panes({
+  changed = {},
+  ...props
+}: ChainEditorProps & { changed?: Partial<Chains> }) {
   const ed = useChainEditor(props);
   const [editing, setEditing] = useState(false);
   const onEdit = (i: number, socket?: number) => {
@@ -72,7 +79,7 @@ export function Panes(props: ChainEditorProps) {
     editor: props,
     weapon: null,
     saved: props.chains,
-    changed: {},
+    changed,
     bag: props.bag ? [...props.bag] : [],
     slotOffer: () => ({ price: null, why: null }),
     buySlot: () => {},
@@ -81,6 +88,7 @@ export function Panes(props: ChainEditorProps) {
     <>
       <SkillStrip ed={ed} anvil={anvil} onMana={() => {}} />
       <ChainLane ed={ed} anvil={anvil} onEdit={onEdit} />
+      <ConstructBag ed={ed} anvil={anvil} />
       <MoveInspector
         ed={ed}
         anvil={anvil}
