@@ -613,3 +613,66 @@ describe("the stops' power-ups (stops.ts)", () => {
     expect(primary(res.profile)[1].uid).toBe(primary(at)[1].uid);
   });
 });
+
+describe('the pair on constructs (pair.ts)', () => {
+  it("chooseStartingMana replaces the starting weapon's constructs with plain ones in the primary, every slot refilled, minted; its runes by the parts rule; no Links", () => {
+    const fresh = createDelveProfile(registry, 3);
+    expect(fresh.pair.primary).toBeNull();
+    // Give its sword a bought slot, a socket and a rune first, as a hand-edited save might.
+    const sword = fresh.equipped.weapon!;
+    const set = movesetOf(registry, sword);
+    const [a, ...rest] = set.chains.primary!.moves;
+    const tricked: DelveProfile = {
+      ...fresh,
+      equipped: {
+        ...fresh.equipped,
+        weapon: {
+          ...sword,
+          moveset: {
+            ...set,
+            chains: { ...set.chains, primary: { ...set.chains.primary!, moves: [{ ...a, kind: 'heavy', runes: [{ id: 'quick', tier: 2 }] }, ...rest] } },
+            slots: { ...set.slots, primary: (set.slots.primary ?? 2) + 1 },
+            bought: { ...set.bought, primary: 1 },
+          },
+        },
+      },
+    };
+    const res = chooseStartingMana(registry, tricked, 'frost', { unsocket: 'pay' });
+    expect(res.ok).toBe(true);
+    const q = res.profile;
+    const after = worn(q);
+    expect(after.slots).toEqual(tricked.equipped.weapon!.moveset!.slots);
+    expect(after.bought).toEqual({ ...set.bought, primary: 1 });
+    const all = CHAIN_SKILLS.flatMap((s) => movesOf(after.chains[s]));
+    expect(all).toHaveLength(3 + 3);
+    expect(all.every((c) => isPlain(c) && !!c.uid)).toBe(true);
+    expect(primary(q).every((m) => m.elements.join() === 'frost' && m.form === 'strike')).toBe(true);
+    expect(basic(q).every((b) => b.element === 'frost')).toBe(true);
+    expect(q.nextConstructUid).toBe(tricked.nextConstructUid + 6);
+    expect(res.runes).toEqual([{ id: 'quick', tier: 2 }]);
+    expect(q.runes.quick).toEqual([0, 1, 0, 0, 0]);
+    expect([q.links, res.links, q.constructs]).toEqual([tricked.links, undefined, []]);
+    expect(chooseStartingMana(registry, q, 'fire').reason).toBe('Your mana is already chosen');
+  });
+
+  it('a new save after the choice holds its slots plain-filled in the primary, each with a uid; the save round-trips', () => {
+    const p = createDelveProfile(registry, 3, { primary: 'storm' });
+    const all = CHAIN_SKILLS.flatMap((s) => movesOf(worn(p).chains[s]));
+    expect(all.map((c) => ('element' in c ? c.element : c.elements.join()))).toEqual(Array(all.length).fill('storm'));
+    expect(new Set(uids(all)).size).toBe(all.length);
+    expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))).toEqual({ profile: p });
+  });
+
+  it("realign maps only the worn weapon's constructs; the bag's and a bag weapon's keep their elements", () => {
+    let p = bindSecondary(registry, banked(hero(), weapon('bow1', 'bow', 'uncommon')), 'frost').profile;
+    p = unsocketConstruct(registry, p, 'primary', 1).profile;
+    const bagWas = p.constructs;
+    const bowWas = movesetOf(registry, p.bag.find((i) => i.uid === 'bow1')!);
+    const res = realign(registry, { ...p, manaDust: 999, scrap: 9999 }, { primary: 'storm' });
+    expect(res.ok).toBe(true);
+    expect(primary(res.profile).every((m) => m.elements.join() === 'storm')).toBe(true);
+    expect(res.profile.constructs).toEqual(bagWas);
+    expect(movesetOf(registry, res.profile.bag.find((i) => i.uid === 'bow1')!)).toEqual(bowWas);
+    expect(res.fixed!.length).toBe(1 + basic(p).length);
+  });
+});

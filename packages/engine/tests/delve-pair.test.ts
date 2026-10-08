@@ -409,11 +409,17 @@ describe('the pair ops', () => {
     expect(res.profile.bag).toEqual([spare]);
     const sword = res.profile.equipped.weapon!;
     expect(noUids(sword.moveset)).toEqual(defaultMoveset(registry, sword, 'storm'));
-    // A weapon with extra slots starts over at its base slots too.
+    // A weapon with extra slots keeps them (and its bought count), every slot refilled plain.
     const roomy = withChains(p0, { primary: defaultChains(registry, 'fire', 'sword').primary });
-    expect(roomy.equipped.weapon!.moveset!.slots.primary).toBe(4);
+    const was = roomy.equipped.weapon!.moveset!;
+    expect(was.slots.primary).toBe(4);
     const rebuilt = chooseStartingMana(registry, roomy, 'frost').profile.equipped.weapon!;
-    expect(noUids(rebuilt.moveset)).toEqual(defaultMoveset(registry, rebuilt, 'frost'));
+    expect(rebuilt.moveset!.slots.primary).toBe(4);
+    expect(rebuilt.moveset!.bought).toEqual(was.bought);
+    expect(noUids(rebuilt.moveset)).toEqual({
+      ...defaultMoveset(registry, rebuilt, 'frost', was.slots),
+      bought: was.bought,
+    });
     expect(chooseStartingMana(registry, res.profile, 'fire')).toMatchObject({
       ok: false,
       reason: 'Your mana is already chosen',
