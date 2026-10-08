@@ -77,7 +77,7 @@
     },
     {
       "id": "onslaught", "slot": "ultimate", "class": "melee", "name": "Onslaught", "icon": "⚡",
-      "power": 1.2, "range": 6, "radius": 3, "count": 5, "duration": 1.2, "defaultChain": ["medium"],
+      "power": 1.2, "range": 6, "radius": 3, "count": 5, "duration": 1.2, "effect": 0.3, "defaultChain": ["medium"],
       "text": "Dart between foes in the target area, striking several times; untouchable while darting, then 30% less damage taken for 2 s."
     },
     {

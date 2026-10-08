@@ -980,6 +980,8 @@ export function hurtHero(
   if (!opts.unavoidable) dmg *= 1 - armorReduction(bal, h.stats.armor, world.depth);
   // Last Stand (a boon): less damage while it runs.
   if (world.t < (h.lastStandUntil ?? 0)) dmg *= 1 - (h.boon.lastStand?.reduce ?? 0);
+  // Onslaught's protection after its darts (the constructs spec §2.2).
+  if (h.onslaughtGuard && world.t < h.onslaughtGuard.until) dmg *= 1 - h.onslaughtGuard.reduce;
   dmg = shieldHero(ctx, dmg, source, !!opts.melee);
   if (dmg <= 0) return;
   world.hurt = true;

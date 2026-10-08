@@ -88,7 +88,7 @@
       "chargeRatio": 0.35, "lullCharge": 1.5, "lullRadius": 6, "chargeLockout": 1,
       "comboWindow": 1.2,
       "chainRange": 4, "chainPower": 0.7, "scatterReach": 1.5,
-      "defend": { "earthReduction": 0.2, "shadowLifesteal": 0.1, "natureRegen": 0.03, "surgeMove": 0.2, "blinkSeconds": 2 }
+      "defend": { "earthReduction": 0.2, "shadowLifesteal": 0.1, "natureRegen": 0.03, "surgeMove": 0.2, "blinkSeconds": 2, "onslaughtGuard": 2 }
     },
     "chains": {
       "cap": { "basic": 5, "primary": 5, "defensive": 5, "ultimate": 5 },

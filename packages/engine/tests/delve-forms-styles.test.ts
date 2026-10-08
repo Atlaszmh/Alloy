@@ -125,3 +125,45 @@ describe('Repel (forms.ts)', () => {
     expect(events.some((e) => e.kind === 'explode' && e.x === w.hero.x)).toBe(true);
   });
 });
+
+describe('Onslaught (forms.ts performTick, combat.ts hurtHero)', () => {
+  const onslaught = { form: 'onslaught', payment: 'mana' } as const;
+  const form = () => registry.getForm('onslaught');
+
+  it('darts between the foes in the area, striking count times, never the same foe twice running', () => {
+    const w = arena([dummy(13, 29), dummy(15, 28), dummy(13, 16)], {
+      noBasic: true,
+      ultimate: { ...onslaught },
+    });
+    const events = [...press(w, 2, { x: 13, y: 28 }), ...run(w, form().duration! + 0.1)];
+    const [a, b, far] = w.monsters;
+    // The darts' own hits (the burn's ticks come as `dot` hits beside them).
+    const struck = (id: number) => hits(events, id).filter((e) => e.source === 'skill').length;
+    expect(struck(a.id) + struck(b.id)).toBe(form().count);
+    expect(struck(a.id)).toBeGreaterThan(0);
+    expect(struck(b.id)).toBeGreaterThan(0);
+    expect(damaged(far)).toBe(false);
+    expect(events.filter((e) => e.kind === 'dash')).toHaveLength(form().count);
+    expect(w.hero.perform ?? null).toBeNull();
+    // It stands by its last foe.
+    const gaps = w.monsters.slice(0, 2).map((m) => Math.hypot(m.x - w.hero.x, m.y - w.hero.y));
+    expect(Math.min(...gaps)).toBeLessThan(2);
+  });
+
+  it('is invulnerable while darting, then takes effect less damage for onslaughtGuard seconds', () => {
+    const w = arena([dummy(13, 29)], { noBasic: true, ultimate: { ...onslaught } });
+    press(w, 2, { x: 13, y: 29 });
+    const ctx = makeCtx(registry, w, []);
+    const hp = w.hero.hp;
+    hurtHero(ctx, 30, null, null);
+    expect(w.hero.hp).toBe(hp);
+    run(w, form().duration! + STEP);
+    const guard = w.hero.onslaughtGuard!;
+    expect(guard.until).toBeCloseTo(w.t + bal.abilities.defend.onslaughtGuard, 1);
+    const plain = arena([dummy(13, 29)], { noBasic: true });
+    hurtHero(makeCtx(registry, plain, []), 30, null, null, { unavoidable: true });
+    hurtHero(ctx, 30, null, null, { unavoidable: true });
+    const lost = (x: ArpgWorld) => x.hero.stats.maxHp - x.hero.hp;
+    expect(lost(w)).toBeCloseTo(lost(plain) * (1 - moveOf(w, 2).effect), 6);
+  });
+});

@@ -1385,6 +1385,7 @@ const DelveBalanceSchema = z.object({
       natureRegen: z.number().min(0),
       surgeMove: z.number().min(0),
       blinkSeconds: z.number().min(0),
+      onslaughtGuard: z.number().min(0),
     }),
   }),
   chains: z

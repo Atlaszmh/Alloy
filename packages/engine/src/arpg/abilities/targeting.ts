@@ -95,7 +95,7 @@ export function muzzle(ctx: SimCtx, d: Vec, out: number): Vec {
 export const SHOT = 0.3;
 /** Forms fired along a way from the hero (the rest are placed, self-centred or Blink). */
 export const DIRECTIONAL = new Set(['bolt', 'volley', 'lance', 'strike']);
-const PLACED = new Set(['burst', 'barrage', 'maelstrom']);
+const PLACED = new Set(['burst', 'barrage', 'maelstrom', 'onslaught']);
 
 /**
  * Where an ability goes. An explicit aim is clamped to range and to the
