@@ -10,7 +10,7 @@ import {
 } from '@alloy/engine';
 import { formatNumber } from '../../../format';
 import { getDelveRegistry } from '../../../registry';
-import { dropIndex } from '../ChainLane';
+import { EMPTY_CHAIN, dropIndex } from '../ChainLane';
 import { Panes } from './harness';
 
 const registry = getDelveRegistry();
@@ -135,5 +135,84 @@ describe('ChainLane', () => {
     expect(dropIndex(1, 40, 100, 4)).toBe(1);
     expect(dropIndex(2, -1000, 100, 4)).toBe(0);
     expect(dropIndex(1, 1000, 100, 4)).toBe(3);
+  });
+
+  it('shows the filled slots, "+ Move" in the first empty slot, a well for each other, and the ceiling', () => {
+    render(
+      <Panes
+        chains={chains}
+        caps={{ ...caps, primary: 5 }}
+        stats={stats}
+        locked={false}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByTestId(/^move-\d$/)).toHaveLength(2);
+    expect(screen.getByTestId('chain-slots')).toHaveTextContent('2 of 5 slots');
+    expect(screen.getByTestId('move-add')).toBeInTheDocument();
+    expect(screen.getAllByTestId('slot-empty')).toHaveLength(2); // 5 slots: 2 cards, + Move, 2 wells
+    expect(screen.getByTestId('chain-ceiling')).toHaveTextContent('at its ceiling');
+    expect(screen.getByTestId('chain-ceiling')).toHaveAttribute('data-ceiling', '5');
+  });
+
+  it('says "up to n" while the chain is under its ceiling', () => {
+    render(
+      <Panes
+        chains={chains}
+        caps={{ ...caps, primary: 2 }}
+        ceilings={{ primary: 4 }}
+        stats={stats}
+        locked={false}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('chain-slots')).toHaveTextContent('2 of 2 slots');
+    expect(screen.getByTestId('chain-ceiling')).toHaveTextContent('up to 4');
+    expect(screen.queryByTestId('move-add')).toBeNull();
+    expect(screen.queryByTestId('slot-empty')).toBeNull();
+  });
+
+  it("each card carries its construct's uid; a dormant one is greyed with its reason, and the stats skip it", () => {
+    const withUids: Chains = {
+      ...chains,
+      primary: {
+        moves: [bolt({ kind: 'light', uid: 'c1' }), bolt({ kind: 'hold', uid: 'c2' })],
+        payment: 'mana',
+      },
+    };
+    render(
+      <Panes
+        chains={withUids}
+        caps={caps}
+        stats={stats}
+        locked={false}
+        onChange={vi.fn()}
+        dormantText={(c) =>
+          'form' in c && c.kind === 'hold' ? "A sword can't express Bolt" : null
+        }
+      />,
+    );
+    expect(screen.getByTestId('move-0')).toHaveAttribute('data-construct', 'c1');
+    expect(screen.getByTestId('move-0')).not.toHaveAttribute('data-dormant');
+    expect(screen.getByTestId('move-1')).toHaveAttribute('data-construct', 'c2');
+    expect(screen.getByTestId('move-1')).toHaveAttribute('data-dormant');
+    expect(screen.getByTestId('move-1')).toHaveAccessibleName('held Fire Bolt, dormant');
+    expect(screen.getByTestId('card-dormant')).toHaveTextContent(
+      "Dormant: A sword can't express Bolt",
+    );
+    // The cycle is the chain's as it plays: the light Bolt alone.
+    const alone = { moves: [withUids.primary.moves[0]], payment: 'mana' as const };
+    const cycle = chainCycle(registry, stats, resolveChain(registry, stats, 'primary', alone));
+    expect(screen.getByTestId('stat-damage')).toHaveTextContent(formatNumber(cycle.damage));
+  });
+
+  it('an empty chain says so, with "+ Move" and no stats', () => {
+    const empty: Chains = { ...chains, primary: { moves: [], payment: 'mana' } };
+    render(<Panes chains={empty} caps={caps} stats={stats} locked={false} onChange={vi.fn()} />);
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent(EMPTY_CHAIN);
+    expect(screen.getByTestId('chain-slots')).toHaveTextContent('0 of 5 slots');
+    expect(screen.queryByTestId(/^move-\d$/)).toBeNull();
+    expect(screen.getByTestId('move-add')).toBeInTheDocument();
+    expect(screen.queryByTestId('chain-stats')).toBeNull();
   });
 });
