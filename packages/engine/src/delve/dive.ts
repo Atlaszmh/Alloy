@@ -16,6 +16,7 @@ import { rollStop } from './stops.js';
 import { buffSum } from './boons.js';
 import { applyBuffs, pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
+import { intoBag } from './constructs.js';
 import { addToPouch } from '../loot/runes.js';
 import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
 import { stochasticRound } from '../loot/drops.js';
@@ -462,7 +463,10 @@ function mapCounts(haul: Haul, f: (n: number) => number): Haul {
  * (`dive.settled`; see the crafting spec's banking): an extract keeps it all; a
  * death or an abandon loses the floor's haul and `crafting.deathLoss` of
  * `banked` (each entry rounded stochastically on `death:${seed}`, banked
- * essences exempt), recorded in `dive.lost`; `banked` keeps what reached the
+ * essences exempt), and its banked constructs one by one at the same share
+ * after the counts, the haul's outright (see the constructs spec §3.3),
+ * recorded in `dive.lost`; what it keeps goes to the bag, a plain construct
+ * dropped under `autoSalvagePlain`; `banked` keeps what reached the
  * stockpile. `extractDive`, `failFloor` and `closeDive` call it; it leaves the
  * dive's phase alone.
  */
@@ -478,10 +482,15 @@ export function settleDive(registry: DataRegistry, profile: DelveProfile, outcom
     const share = mapCounts(dive.banked, (n) => stochasticRound(n * loss, rng));
     kept = addHaul(dive.banked, mapCounts(share, (n) => -n));
     lost = addHaul(dive.haul, share);
+    // Each banked construct is lost at `loss` too, one draw each after the counts (the constructs spec §3.3); the haul's go outright.
+    const gone = dive.banked.constructs.map(() => rng.next() < loss);
+    kept = { ...kept, constructs: dive.banked.constructs.filter((_, i) => !gone[i]) };
+    lost = { ...lost, constructs: [...dive.haul.constructs, ...dive.banked.constructs.filter((_, i) => gone[i])] };
   }
   // The dive's quest events applied as it banked and extracted: its dive-scoped objectives start afresh.
+  // What it kept goes to the stockpile, its constructs to the bag (`intoBag`: a plain one dropped under `autoSalvagePlain`).
   const settled = resetDiveQuests(registry, {
-    ...stockHaul(profile, kept),
+    ...intoBag(stockHaul(profile, { ...kept, constructs: [] }), kept.constructs),
     dive: { ...dive, haul: emptyHaul(), banked: kept, lost, settled: true },
   });
   // A dive that cleared a depth refills the Contract board (the quests spec's S2), once there are templates.

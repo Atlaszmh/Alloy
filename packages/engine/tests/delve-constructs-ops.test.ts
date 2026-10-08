@@ -198,3 +198,72 @@ describe("a weapon's salvage (salvage-yield.ts, profile.ts)", () => {
     expect(uids(done.profile.dive!.banked.constructs)).toEqual(uids(done.constructs));
   });
 });
+
+describe('the settle (dive.ts)', () => {
+  const loss = bal.crafting.deathLoss;
+  /** Diving at depth 1 with `n` constructs banked (the first two socketed) and two in the floor's haul. */
+  function holding(n = 20, over: Partial<DelveProfile> = {}): DelveProfile {
+    const p = startDive(registry, hero(over), 1);
+    const cs = Array.from({ length: n }, (_, i) => strike(`b${i}`));
+    cs[0] = { ...cs[0], runes: [{ id: 'quick', tier: 1 }] };
+    cs[1] = { ...cs[1], runes: [null] };
+    const dive = p.dive!;
+    return {
+      ...p,
+      dive: {
+        ...dive,
+        banked: { ...dive.banked, scrap: 100, constructs: cs },
+        haul: { ...dive.haul, constructs: [strike('h0'), strike('h1')] },
+      },
+    };
+  }
+
+  it('an extract puts every banked construct in the bag, once; the haul is already banked by then', () => {
+    const p = holding();
+    const out = settleDive(registry, p, 'extract');
+    expect(uids(out.constructs)).toEqual(uids(p.dive!.banked.constructs));
+    expect(out.dive).toMatchObject({ settled: true, lost: null });
+    expect(uids(out.dive!.banked.constructs)).toEqual(uids(p.dive!.banked.constructs));
+    expect(settleDive(registry, out, 'death')).toBe(out);
+    // Settled, they sit on `banked` (the summary's) and in the bag until closeDive: the save reads back as it is.
+    expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(out)))).toEqual({ profile: out });
+  });
+
+  it("a death loses the haul's outright and each banked one at deathLoss, drawn after the counts, recorded in lost", () => {
+    const p = holding();
+    const out = settleDive(registry, p, 'death');
+    const { banked: kept, lost } = out.dive!;
+    expect(settleDive(registry, p, 'death')).toEqual(out);
+    expect(uids(lost!.constructs).slice(0, 2)).toEqual(['h0', 'h1']);
+    const gone = uids(lost!.constructs).slice(2);
+    expect(gone.length).toBeGreaterThan(2);
+    expect(gone.length).toBeLessThan(18);
+    expect([...uids(kept.constructs), ...gone].sort()).toEqual(uids(p.dive!.banked.constructs).sort());
+    expect(uids(out.constructs)).toEqual(uids(kept.constructs));
+    // Today's draws come first: the scrap share is what the same settle gives with no construct banked.
+    const bare = { ...p, dive: { ...p.dive!, banked: { ...p.dive!.banked, constructs: [] }, haul: emptyHaul() } };
+    expect(kept.scrap).toBe(settleDive(registry, bare, 'death').dive!.banked.scrap);
+    expect(100 - kept.scrap === Math.floor(100 * loss) || 100 - kept.scrap === Math.ceil(100 * loss)).toBe(true);
+    expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(out)))).toEqual({ profile: out });
+  });
+
+  it('Insurance takes its points off the constructs too; at a loss of 0 every one is kept', () => {
+    const insured: Buff = { boon: 'insurance', tier: 3, effect: { deathLoss: loss } };
+    const p = holding();
+    const out = settleDive(registry, { ...p, dive: { ...p.dive!, diveBuffs: [insured] } }, 'death');
+    expect(uids(out.dive!.banked.constructs)).toEqual(uids(p.dive!.banked.constructs));
+    expect(uids(out.dive!.lost!.constructs)).toEqual(['h0', 'h1']);
+  });
+
+  it('under autoSalvagePlain the plain banked constructs are dropped at the settle, the socketed kept', () => {
+    const out = settleDive(registry, holding(20, { autoSalvagePlain: true }), 'extract');
+    expect(uids(out.constructs)).toEqual(['b0', 'b1']);
+    const dead = settleDive(registry, holding(20, { autoSalvagePlain: true }), 'death');
+    expect(dead.constructs.every((c) => !isPlain(c))).toBe(true);
+    expect(dead.constructs.length + dead.dive!.lost!.constructs.filter((c) => !isPlain(c)).length).toBe(2);
+    // What was lost is recorded lost, plain or not: the drop is only on what reaches the bag.
+    const lost = dead.dive!.lost!.constructs;
+    expect(uids(lost).slice(0, 2)).toEqual(['h0', 'h1']);
+    expect(lost.filter(isPlain).length).toBeGreaterThan(2);
+  });
+});
