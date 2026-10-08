@@ -15,6 +15,14 @@
       "name": "Dagger",
       "attackInterval": 0.55,
       "tempo": 0.85,
+      "class": "melee",
+      "style": {
+        "name": "Quick",
+        "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
+        "motion": "none",
+        "trait": {},
+        "look": "blade"
+      },
       "attack": {
         "kind": "melee",
         "range": 1.6,
@@ -47,6 +55,14 @@
       "name": "Sword",
       "attackInterval": 0.8,
       "tempo": 1.0,
+      "class": "melee",
+      "style": {
+        "name": "Balanced",
+        "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
+        "motion": "none",
+        "trait": {},
+        "look": "crescent"
+      },
       "attack": {
         "kind": "melee",
         "range": 1.9,
@@ -74,6 +90,14 @@
       "name": "Axe",
       "attackInterval": 1.05,
       "tempo": 1.15,
+      "class": "melee",
+      "style": {
+        "name": "Sweeping",
+        "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
+        "motion": "none",
+        "trait": {},
+        "look": "hatchet"
+      },
       "attack": {
         "kind": "melee",
         "range": 2.0,
@@ -106,6 +130,14 @@
       "name": "Maul",
       "attackInterval": 1.4,
       "tempo": 1.3,
+      "class": "melee",
+      "style": {
+        "name": "Heavy",
+        "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
+        "motion": "none",
+        "trait": {},
+        "look": "stone"
+      },
       "attack": {
         "kind": "melee",
         "range": 2.3,
@@ -133,6 +165,14 @@
       "name": "Staff",
       "attackInterval": 0.9,
       "tempo": 1.05,
+      "class": "ranged",
+      "style": {
+        "name": "Channeled",
+        "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
+        "motion": "none",
+        "trait": {},
+        "look": "orb"
+      },
       "sway": "alternate",
       "attack": {
         "kind": "bolt",
@@ -166,6 +206,14 @@
       "name": "Wand",
       "attackInterval": 0.5,
       "tempo": 0.8,
+      "class": "ranged",
+      "style": {
+        "name": "Seeking",
+        "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
+        "motion": "none",
+        "trait": {},
+        "look": "spark"
+      },
       "sway": "orbit",
       "attack": {
         "kind": "bolt",
@@ -199,6 +247,14 @@
       "name": "Bow",
       "attackInterval": 0.75,
       "tempo": 0.95,
+      "class": "ranged",
+      "style": {
+        "name": "Marksman",
+        "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
+        "motion": "none",
+        "trait": {},
+        "look": "arrow"
+      },
       "attack": {
         "kind": "bolt",
         "range": 9.5,

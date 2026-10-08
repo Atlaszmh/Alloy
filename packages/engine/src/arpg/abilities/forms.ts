@@ -186,6 +186,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(p.x, p.y);
     }
 
+    // B1 replaces: in Phase A a Whirl plays as a Strike (the constructs spec §2.2).
+    case 'whirl':
     case 'strike': {
       h.facing = dir;
       // The last move of a chain slams all around.
@@ -225,6 +227,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x + dir.x * reach, h.y + dir.y * reach);
     }
 
+    // B1 replaces: in Phase A a Repel plays as a Ward.
+    case 'repel':
     case 'ward':
       buff('ward', ab.duration);
       h.ward = { hp: h.stats.maxHp * ab.effect, max: h.stats.maxHp * ab.effect };
@@ -274,6 +278,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x, h.y);
     }
 
+    // B1 replaces: in Phase A an Onslaught plays as a Nova.
+    case 'onslaught':
     case 'nova':
       impact(ctx, ab, h.x, h.y, ab.radius, hit, { noScatter: true, heft });
       return done(h.x, h.y);

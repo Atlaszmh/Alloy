@@ -17,9 +17,9 @@ import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
-  primary: ['bolt', 'volley', 'lance', 'burst', 'strike'],
-  defensive: ['ward', 'armor', 'surge', 'blink'],
-  ultimate: ['nova', 'barrage', 'maelstrom'],
+  primary: ['bolt', 'volley', 'lance', 'burst', 'strike', 'whirl'],
+  defensive: ['ward', 'repel', 'armor', 'surge', 'blink'],
+  ultimate: ['nova', 'onslaught', 'barrage', 'maelstrom'],
 };
 
 const FormIdSchema = z.enum([
@@ -28,13 +28,16 @@ const FormIdSchema = z.enum([
   'lance',
   'burst',
   'strike',
+  'whirl',
   'ward',
   'armor',
   'surge',
   'blink',
+  'repel',
   'nova',
   'barrage',
   'maelstrom',
+  'onslaught',
 ]);
 
 /** One element, or two different ones (a fusion). */

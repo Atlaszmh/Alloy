@@ -48,6 +48,10 @@ export const NEUTRAL: Knobs = Object.freeze({
   manaOnHit: 0,
   guardOnLand: 0,
   stackTime: 0,
+  detonate: 0,
+  critBonus: 0,
+  cleave: 0,
+  homing: 0,
 });
 
 /**
@@ -55,7 +59,8 @@ export const NEUTRAL: Knobs = Object.freeze({
  * counts add (`pierce` true adds Infinity), flags OR, statuses union, a zone
  * takes the longer seconds and the larger tick power, `split` the larger count
  * with its power, `extraShots` adds counts and multiplies powers, `echo` the
- * largest, each part of `quick` multiplies, and `stackTime` adds.
+ * largest, each part of `quick` multiplies, and `stackTime`, `detonate`, `critBonus`, `cleave`
+ * and `homing` add.
  */
 export function mergeKnobs(...parts: KnobsData[]): Knobs {
   const k: Knobs = { ...NEUTRAL, applies: [], quick: { ...NEUTRAL.quick } };
@@ -100,6 +105,10 @@ export function mergeKnobs(...parts: KnobsData[]): Knobs {
     k.manaOnHit += p.manaOnHit ?? 0;
     k.guardOnLand += p.guardOnLand ?? 0;
     k.stackTime += p.stackTime ?? 0;
+    k.detonate += p.detonate ?? 0;
+    k.critBonus += p.critBonus ?? 0;
+    k.cleave += p.cleave ?? 0;
+    k.homing += p.homing ?? 0;
   }
   return k;
 }

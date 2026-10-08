@@ -6,9 +6,9 @@ const registry = createDefaultRegistry();
 const data = registry.getArpgData();
 
 describe('ability data', () => {
-  it('has 5 Primary, 4 Defensive and 3 Ultimate forms', () => {
+  it('has 6 Primary, 5 Defensive and 4 Ultimate forms (the constructs spec §2.2)', () => {
     const count = (slot: string) => data.forms.filter((f) => f.slot === slot).length;
-    expect([count('primary'), count('defensive'), count('ultimate')]).toEqual([5, 4, 3]);
+    expect([count('primary'), count('defensive'), count('ultimate')]).toEqual([6, 5, 4]);
   });
 
   it('has one fusion for every pair of the six elements, in either order', () => {

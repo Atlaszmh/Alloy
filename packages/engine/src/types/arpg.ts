@@ -12,6 +12,7 @@ import type { TutorialScript } from './tutorial-floor.js';
 import type {
   AbilityCast,
   AbilitySlot,
+  FormClass,
   FormId,
   Knobs,
   KnobsData,
@@ -55,6 +56,10 @@ export type ReactionId =
 export interface FormDef {
   id: FormId;
   slot: AbilitySlot;
+  /** The weapon class that expresses it, or both (the constructs spec §2.1). */
+  class: FormClass;
+  /** A shared form's melee version (spec §2.2): what differs when a melee weapon casts it. B1 fills the rows. */
+  melee?: { range?: number; radius?: number; motion?: number; speed?: number; text?: string };
   name: string;
   icon: string;
   text: string;
@@ -79,6 +84,31 @@ export interface FormDef {
   countByKind?: Record<MoveKind, number>;
   /** Units the hero moves when casting: positive steps in over the conjure, negative recoils after the release. */
   motion?: number;
+}
+
+/** A cast style's numbers: factors on the form's base (1 = unchanged). */
+export interface StyleNumbers {
+  windup: number;
+  cooldown: number;
+  power: number;
+  range: number;
+  radius: number;
+  speed: number;
+  duration: number;
+}
+/** How a cast style moves the hero as it casts (the weapon flow's pushes; B1 wires them). */
+export type StyleMotion = 'none' | 'dart' | 'step' | 'wade' | 'plant' | 'sway' | 'orbit' | 'back';
+/** A cast style's motif, client-only: drawn on its casts' shots and impacts (the constructs spec §4.2). */
+export type StyleLook = 'blade' | 'crescent' | 'hatchet' | 'stone' | 'orb' | 'spark' | 'arrow';
+
+/** A weapon's cast style (the constructs spec §4): how it expresses every ability form. */
+export interface CastStyle {
+  name: string;
+  numbers: StyleNumbers;
+  motion: StyleMotion;
+  /** Merged first, like a built-in rune that costs nothing. */
+  trait: KnobsData;
+  look: StyleLook;
 }
 
 /** What an element adds to any ability built with it. */
