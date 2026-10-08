@@ -1444,9 +1444,11 @@ const DelveBalanceSchema = z.object({
       duration: z.number().positive(),
       // The glide's ease-out: 0 a steady dash; under 1, so it never stops before its end.
       ease: z.number().min(0).lt(1),
+      // Seconds the button held stretches the slide past its end, its speed draining to a stop.
+      glide: z.number().min(0),
       // Radians a second the steering turns the dash.
       steer: z.number().min(0),
-      // Seconds into the dash before a ready press cuts its glide short.
+      // The burst: seconds into the dash before a move starts (the hero then acts as it slides).
       cancelAfter: z.number().min(0),
       iframes: z.number().positive(),
       perfectWindow: z.number().positive(),

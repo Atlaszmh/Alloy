@@ -579,7 +579,7 @@ describe('Lightning Rod', () => {
     h.dodgeRechargeAt = w.t + 1;
     refundDodgeCharge(ctx);
     expect(h).toMatchObject({ dodgeCharges: 1, dodgeRechargeAt: w.t + 1 });
-    refundDodgeCharge(ctx);
+    for (let n = 2; n <= bal.dodge.charges; n++) refundDodgeCharge(ctx);
     expect(h).toMatchObject({ dodgeCharges: bal.dodge.charges, dodgeRechargeAt: 0 });
     refundDodgeCharge(ctx);
     expect(h.dodgeCharges).toBe(bal.dodge.charges);

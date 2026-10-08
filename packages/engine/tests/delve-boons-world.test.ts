@@ -87,7 +87,10 @@ describe('the floor start (world.ts)', () => {
 
   it('Third Wind and No Retreat: a floor begins at dodgeMax', () => {
     expect(floor([{ dodgeCharges: 1 }]).hero.dodgeCharges).toBe(bal.dodge.charges + 1);
-    expect(floor([{ dodgeCharges: -1 }]).hero.dodgeCharges).toBe(1);
+    expect(floor([{ dodgeCharges: -1 }]).hero.dodgeCharges).toBe(
+      Math.max(1, bal.dodge.charges - 1),
+    );
+    expect(floor([{ dodgeCharges: -9 }]).hero.dodgeCharges).toBe(1);
     expect(floor().hero.dodgeCharges).toBe(bal.dodge.charges);
   });
 
@@ -118,7 +121,16 @@ describe('exitRevealed (fog.ts)', () => {
 
 describe('magnet (step.ts)', () => {
   const scrapAt = (w: ArpgWorld, y: number): Drop => {
-    const d: Drop = { id: w.nextId++, kind: 'scrap', x: 13, y, amount: 1, born: 0, vacuum: false, dead: false };
+    const d: Drop = {
+      id: w.nextId++,
+      kind: 'scrap',
+      x: 13,
+      y,
+      amount: 1,
+      born: 0,
+      vacuum: false,
+      dead: false,
+    };
     w.drops.push(d);
     return d;
   };
@@ -131,7 +143,9 @@ describe('magnet (step.ts)', () => {
     run(plain, 1);
     expect([far.dead, far.y]).toEqual([false, plain.hero.y - gap]);
 
-    const w = wear(wear(arena([dummy(13, 2)], { noBasic: true }), { magnet: 0.2 }), { magnet: 0.2 });
+    const w = wear(wear(arena([dummy(13, 2)], { noBasic: true }), { magnet: 0.2 }), {
+      magnet: 0.2,
+    });
     const near = scrapAt(w, w.hero.y - gap);
     run(w, 1);
     expect(near.dead).toBe(true);
@@ -147,7 +161,9 @@ describe('interact.ts', () => {
       return w.hero.hp;
     };
     const plain = clear(floorWorld(twoRooms('combat'), [dummy(16, 3, { roomId: 1 })]));
-    const w = wear(floorWorld(twoRooms('combat'), [dummy(16, 3, { roomId: 1 })]), { healOnClear: 0.06 });
+    const w = wear(floorWorld(twoRooms('combat'), [dummy(16, 3, { roomId: 1 })]), {
+      healOnClear: 0.06,
+    });
     expect(clear(w) - plain).toBeCloseTo(w.hero.stats.maxHp * 0.06, 6);
   });
 
@@ -260,7 +276,7 @@ describe('drops (material-drops.ts, rune-drops.ts)', () => {
     }
   });
 
-  it("Flux Nose reaches a vault chest: × its flux chance (already 1, so × 0 shows the factor)", () => {
+  it('Flux Nose reaches a vault chest: × its flux chance (already 1, so × 0 shows the factor)', () => {
     for (let s = 1; s <= 20; s++) {
       expect(vaultKinds(rollVault(registry, arena([]), new SeededRNG(s)))).toContain('flux');
       const none = rollVault(registry, wear(arena([]), { flux: 0 }), new SeededRNG(s));
@@ -294,7 +310,10 @@ describe('dive.ts', () => {
     const deeper = buff({ skip: 1 }, 'deeper-still');
     const entered = chooseDoor(
       registry,
-      { ...p, dive: { ...p.dive!, diveBuffs: [deeper], phase: 'choosing', doorChoices: ['winding'] } },
+      {
+        ...p,
+        dive: { ...p.dive!, diveBuffs: [deeper], phase: 'choosing', doorChoices: ['winding'] },
+      },
       'winding',
     );
     const parsed = parseDelveProfile(registry, JSON.parse(JSON.stringify(entered)));
@@ -312,7 +331,9 @@ describe('dive.ts', () => {
     expect(p.dive!.diveBuffs).toEqual([{ ...deeper, effect: { skip: 0, find: 20 } }]);
     expect(chooseDoor(registry, choosing(p, 'winding'), 'winding').dive!.depth).toBe(4);
     // Added to the door's own skip (the Plunge's 2).
-    expect(chooseDoor(registry, choosing(diving([deeper]), 'plunge'), 'plunge').dive!.depth).toBe(5);
+    expect(chooseDoor(registry, choosing(diving([deeper]), 'plunge'), 'plunge').dive!.depth).toBe(
+      5,
+    );
     expect(chooseDoor(registry, choosing(diving([]), 'winding'), 'winding').dive!.depth).toBe(2);
   });
 });
@@ -321,7 +342,8 @@ describe('noSlow (terrain.ts)', () => {
   const walk = (effects: BoonEffect[]) => {
     const w = onMap(arena([], { noBasic: true }), []);
     bindTerrain(w.map, bal.terrain);
-    for (let y = 20; y < 40; y++) for (let x = 8; x < 18; x++) w.map.cells[y * w.width + x] = CELL.slow;
+    for (let y = 20; y < 40; y++)
+      for (let x = 8; x < 18; x++) w.map.cells[y * w.width + x] = CELL.slow;
     for (const e of effects) wear(w, e);
     const y0 = w.hero.y;
     run(w, 0.5, { x: 0, y: -1 });
@@ -380,7 +402,11 @@ describe('heroMaxHp (dive.ts)', () => {
   };
 
   it("is the floor hero's max life, its dive boons worn", () => {
-    for (const buffs of [[], [buff({ maxLife: -0.2 })], [buff({ attune: { role: 'primary', points: 10 } })]]) {
+    for (const buffs of [
+      [],
+      [buff({ maxLife: -0.2 })],
+      [buff({ attune: { role: 'primary', points: 10 } })],
+    ]) {
       const p = diving(buffs);
       expect(heroMaxHp(registry, p)).toBe(beginFloor(registry, p).hero.stats.maxHp);
     }
@@ -388,7 +414,10 @@ describe('heroMaxHp (dive.ts)', () => {
 
   it('a Glass Cannon-like maxLife -0.2 entry lowers it', () => {
     const p = diving([]);
-    expect(heroMaxHp(registry, diving([buff({ maxLife: -0.2 })]))).toBeCloseTo(heroMaxHp(registry, p) * 0.8, 6);
+    expect(heroMaxHp(registry, diving([buff({ maxLife: -0.2 })]))).toBeCloseTo(
+      heroMaxHp(registry, p) * 0.8,
+      6,
+    );
   });
 });
 
@@ -399,7 +428,10 @@ describe('Famine between floors (dive.ts)', () => {
     const thirsty: DelveProfile = { ...p, dive };
     expect(canDrinkBetweenFloors(thirsty.dive!)).toBe(true);
     expect(drinkPotionBetweenFloors(registry, thirsty)).not.toBeNull();
-    const famished: DelveProfile = { ...p, dive: { ...dive, diveBuffs: [buff({ noPotions: true }, 'famine')] } };
+    const famished: DelveProfile = {
+      ...p,
+      dive: { ...dive, diveBuffs: [buff({ noPotions: true }, 'famine')] },
+    };
     expect(canDrinkBetweenFloors(famished.dive!)).toBe(false);
     expect(drinkPotionBetweenFloors(registry, famished)).toBeNull();
   });

@@ -101,10 +101,17 @@ const PLACED = new Set(['burst', 'barrage', 'maelstrom']);
  * Where an ability goes. An explicit aim is clamped to range and to the
  * hero's sight (a placed form can't land in an unseen room); otherwise
  * directional forms take the nearest foe, placed forms the densest cluster,
- * Blink runs from the nearest foe, and self-centred forms need nothing.
- * Null means there is nothing to aim at (the cast fails for free).
+ * Blink runs from the nearest foe, and self-centred forms need nothing. With
+ * none in reach, a directional or placed form goes toward the nearest foe in
+ * sight (`ai.sightRadius`), else along the hero's facing, so it never fizzles
+ * (without `fallback`, null instead: a hold's release keeps its own aim first).
  */
-export function aimPoint(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): Vec | null {
+export function aimPoint(
+  ctx: SimCtx,
+  ab: ResolvedAbility,
+  aim: Vec | null,
+  fallback = true,
+): Vec | null {
   const { world } = ctx;
   const h = world.hero;
   const form = ab.form.id;
@@ -115,14 +122,21 @@ export function aimPoint(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): Vec
     const p = snapToWalkable(world.map, h.x + (aim.x - h.x) * k, h.y + (aim.y - h.y) * k);
     return clipSight(world.map, h, p);
   }
-  if (DIRECTIONAL.has(form)) {
+  if (DIRECTIONAL.has(form) || PLACED.has(form)) {
     const shot = form === 'bolt' || form === 'volley' ? SHOT : undefined;
-    const m = nearestMonster(ctx, h.x, h.y, ab.range + 1, undefined, shot);
-    return m ? { x: m.x, y: m.y } : null;
-  }
-  if (PLACED.has(form)) {
-    const m = bestCluster(ctx, ab.range, Math.max(ab.radius, 1));
-    return m ? { x: m.x, y: m.y } : null;
+    const m = DIRECTIONAL.has(form)
+      ? nearestMonster(ctx, h.x, h.y, ab.range + 1, undefined, shot)
+      : bestCluster(ctx, ab.range, Math.max(ab.radius, 1));
+    if (m) return { x: m.x, y: m.y };
+    if (!fallback) return null;
+    // Nothing in reach: toward the nearest foe in sight, else along the facing (clamped as an aim).
+    const far = nearestMonster(ctx, h.x, h.y, ctx.bal.ai.sightRadius);
+    const reach = Math.max(ab.range, 1);
+    return aimPoint(
+      ctx,
+      ab,
+      far ? { x: far.x, y: far.y } : { x: h.x + h.facing.x * reach, y: h.y + h.facing.y * reach },
+    );
   }
   if (form === 'blink') {
     const m = nearestMonster(ctx, h.x, h.y, 8);

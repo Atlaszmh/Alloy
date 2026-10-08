@@ -591,6 +591,8 @@ export interface ArpgInput {
   potion?: boolean;
   /** Dodge this step (the dash follows `move`, or runs from the nearest foe). */
   dodge?: boolean;
+  /** The dodge button is held: a dash at its end glides on (up to `dodge.glide`) until let go. */
+  dodgeHeld?: boolean;
   /** Use the interactable in reach: a chest, a shrine, an alcove, the gate (a press; see the floor maps spec). */
   interact?: boolean;
   /**

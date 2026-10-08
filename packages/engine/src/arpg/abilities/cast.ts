@@ -328,7 +328,8 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   while (s > 0 && !canAfford(world, chainMove(chain, hold.step, s))) s--;
   const ab = chainMove(chain, hold.step, s);
   if (!canAfford(world, ab)) return;
-  const at = aimPoint(ctx, ab, aim) ?? hold.aim;
+  // A foe in reach now, else the hold's own aim (its target, or the facing it began with).
+  const at = aimPoint(ctx, ab, aim, false) ?? hold.aim ?? aimPoint(ctx, ab, null);
   if (!at) return;
   // A fresh aim (manual, or auto-aim now) aims from here; only the hold's own aim dates from its start.
   const from = at === hold.aim ? hold.from : { x: h.x, y: h.y };
@@ -337,8 +338,8 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   const free = pay(ctx, hold.slot, hold.step, ab, t + left);
   if (left < 1e-9) {
     const along = alongAim(h, { slot: hold.slot, step: hold.step, stage: s, from, at });
-    if (!fire(ctx, hold.slot, aim && (along ?? aim), hold.step, s, aim !== null, free))
-      fire(ctx, hold.slot, along ?? at, hold.step, s, aim !== null, free);
+    const p = firePoint(ctx, hold.slot, hold.step, s, aim, along, at);
+    fire(ctx, hold.slot, p, hold.step, s, aim !== null, free);
     return;
   }
   h.windup = {
@@ -372,7 +373,7 @@ export function holdTick(
   ctx: SimCtx,
   holding: number | null | undefined,
   dt: number,
-  dashing: boolean,
+  burst: boolean,
 ): void {
   const { world, bal } = ctx;
   const h = world.hero;
@@ -381,7 +382,7 @@ export function holdTick(
   if (holding !== null && holding !== undefined && h.chains[holding]) h.comboAt[holding] += dt;
   if (world.holdDropped !== null && holding !== world.holdDropped) world.holdDropped = null;
   if (!h.hold) {
-    if (holding !== null && holding !== undefined && !dashing && holding !== world.holdDropped)
+    if (holding !== null && holding !== undefined && !burst && holding !== world.holdDropped)
       startHold(ctx, holding);
     return;
   }
@@ -452,6 +453,31 @@ export function castTick(ctx: SimCtx): void {
   // A step-in finishes before the blow lands, so it hits from where the step took the hero.
   finishPushes(ctx, 'stepIn');
   const along = alongAim(h, w);
-  if (!fire(ctx, slot, aim && (along ?? aim), step, stage, aim !== null, free))
-    fire(ctx, slot, along ?? at, step, stage, aim !== null, free);
+  fire(
+    ctx,
+    slot,
+    firePoint(ctx, slot, step, stage, aim, along, at),
+    step,
+    stage,
+    aim !== null,
+    free,
+  );
+}
+
+/**
+ * Where a wind-up or a hold fires: a manual aim (along the press's way once walked past);
+ * else a foe in reach now, else the press's own point (`at`, or along its way).
+ */
+function firePoint(
+  ctx: SimCtx,
+  slot: number,
+  step: number,
+  stage: number,
+  aim: Vec | null,
+  along: Vec | null,
+  at: Vec,
+): Vec {
+  if (aim) return along ?? aim;
+  const move = chainMove(ctx.world.hero.chains[slot]!, step, stage);
+  return aimPoint(ctx, move, null, false) ?? along ?? at;
 }

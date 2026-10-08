@@ -601,7 +601,7 @@ describe('weapon strings', () => {
 });
 
 describe('presses held by a dash', () => {
-  it("a Q pressed on the same frame as a dodge fires past the dash's commit, cutting its glide", () => {
+  it("a Q pressed on the same frame as a dodge fires once the dash's burst ends, the slide going on", () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
     const events = stepWorld(
       registry,
@@ -613,7 +613,7 @@ describe('presses held by a dash', () => {
     const commit = w.hero.dodge!.start + bal.dodge.cancelAfter;
     events.push(...until(w, () => w.hero.windup !== null));
     expect(w.hero.windup!.start).toBeGreaterThanOrEqual(commit - 1e-9);
-    expect(w.hero.dodge!.until).toBe(w.hero.windup!.start);
+    expect(w.hero.dodge!.until).toBeGreaterThan(w.hero.windup!.start);
     events.push(...until(w, () => w.hero.windup === null));
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
   });

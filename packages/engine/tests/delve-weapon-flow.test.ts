@@ -302,12 +302,13 @@ describe('no rooting', () => {
     stepRight(w);
     expect(w.hero.facing).toEqual({ x: 1, y: 0 });
 
-    // A hold with nothing to aim at keeps the facing it started with.
+    // A hold with nothing to aim at aims along the facing it started with, and keeps it.
     const h = arena([], { noBasic: true, primary: { kind: 'hold' } });
     stepWorld(registry, h, { move: still, holding: 0 }, STEP);
-    expect(h.hero.hold).toMatchObject({ aim: null });
+    expect(h.hero.hold!.aim!.x).toBeCloseTo(h.hero.x, 9);
+    expect(h.hero.hold!.aim!.y).toBeLessThan(h.hero.y);
     stepRight(h, { holding: 0 });
-    expect(h.hero.facing).toEqual({ x: 0, y: -1 });
+    expect(h.hero.facing.y).toBeLessThan(-0.99);
   });
 });
 

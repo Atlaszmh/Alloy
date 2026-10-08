@@ -49,7 +49,16 @@ import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic.js';
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
-import { cutGlide, dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
+import {
+  cutGlide,
+  dodgeTick,
+  inBurst,
+  isDashing,
+  notePerfect,
+  perfectOrigin,
+  tryDodge,
+} from './dodge.js';
+import { comboPauseTick } from './combo.js';
 import { addMaterial } from '../loot/materials.js';
 import { clearanceOf, downhill, flowTick, homeWay, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
@@ -195,22 +204,19 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     !!h.chains[slot] &&
     !inBeat(h, slot, t) &&
     t >= h.cooldowns[slot][pressStep(h, slot, t, window)];
-  // The dash moves first, steered; presses made during it wait for it to end, but past its
-  // commit a ready one (another dodge, or an ability whose slot is ready) cuts the glide short.
-  dodgeTick(ctx, dt, move);
-  if (
-    isDashing(ctx) &&
-    ((world.queuedDodge && h.dodgeCharges >= 1) ||
-      world.queuedCasts.some((q) => ready(q.cast.slot)))
-  )
-    cutGlide(ctx);
+  // The dash moves first, steered. Presses made in its burst wait for it; past the burst the
+  // hero acts while it slides (see below), and a second dodge with a charge cuts the slide short.
+  dodgeTick(ctx, dt, move, !!input.dodgeHeld);
+  if (world.queuedDodge && h.dodgeCharges >= 1) cutGlide(ctx);
   if (world.queuedDodge && !isDashing(ctx)) {
     world.queuedDodge = false;
     tryDodge(ctx, move);
   }
   const dashing = isDashing(ctx);
-  const busy = dashing || !!h.windup || !!h.hold;
-  // The waiting presses (one per slot) wait out a wind-up, a hold, a dash, their slot's beat and
+  // Only the dash's burst holds an action back; its slide doesn't.
+  const burst = inBurst(ctx);
+  const busy = burst || !!h.windup || !!h.hold;
+  // The waiting presses (one per slot) wait out a wind-up, a hold, a dash's burst, their slot's beat and
   // the tick a swing strikes without ageing: each gets `buffer` from then.
   const striking = swingStrikes(h, t);
   for (const q of world.queuedCasts)
@@ -236,7 +242,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     }
   }
   // A hold starts, charges, or fires.
-  holdTick(ctx, input.holding, dt, dashing);
+  holdTick(ctx, input.holding, dt, burst);
   castTick(ctx);
   echoTick(ctx);
 
@@ -275,7 +281,8 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
       groundSpeed(world, h);
     Object.assign(h, moveCircle(world.map, h, h.radius, v.x * pace * dt, v.y * pace * dt));
   }
-  if (!dashing) pushesTick(ctx, heading);
+  // A push (a lunge, a step-in) adds to a slide as it does to a walk.
+  if (!burst) pushesTick(ctx, heading);
   if (acting) h.facing = actionFacing(h) ?? h.facing;
   else if (heading) h.facing = heading;
 
@@ -292,14 +299,14 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // While a press waits, a swing starts only if its blow strikes by the tick the press fires.
   const due = pressDue(ctx, input.holding);
   const deadline = due === Infinity ? Infinity : t + Math.ceil((due - t) / dt - 1e-6) * dt;
-  // A tap held by a dash, a wind-up, a hold, a swing, the weapon's cycle or a waiting press
-  // doesn't age either.
+  // A tap held by a dash's burst, a wind-up, a hold, a swing, the weapon's cycle or a waiting
+  // press doesn't age either.
   if (
     world.queuedAttack &&
-    (dashing || h.windup || h.hold || h.swing || t < h.nextAttackAt || due !== Infinity)
+    (burst || h.windup || h.hold || h.swing || t < h.nextAttackAt || due !== Infinity)
   )
     world.queuedAttack.until = Math.max(world.queuedAttack.until, t + bal.feel.buffer);
-  if (!h.swing && !h.windup && !h.hold && !dashing) {
+  if (!h.swing && !h.windup && !h.hold && !burst) {
     // Automatic unless the input says whether the attack is held (manual mode).
     if (input.attack === undefined) startSwing(ctx, false, speed <= 0.05, null, deadline);
     else {
@@ -310,6 +317,8 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     }
   }
   if (world.queuedAttack && t > world.queuedAttack.until) world.queuedAttack = null;
+  // The move under way holds every other chain's restart window (see `combo.ts`).
+  comboPauseTick(h, dt);
 
   // Infinite mana (Training Grounds) tops the pool up every tick.
   h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
@@ -367,7 +376,7 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
     if (chain.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
     return canAfford(world, ab);
   };
-  const busy = isDashing(ctx) || !!h.windup || !!h.hold;
+  const busy = inBurst(ctx) || !!h.windup || !!h.hold;
   let due = Infinity;
   for (const q of world.queuedCasts) {
     const at = readyAt(q.cast.slot);

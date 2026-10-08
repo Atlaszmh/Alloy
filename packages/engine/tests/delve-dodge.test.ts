@@ -50,14 +50,15 @@ describe('the dodge', () => {
 
   it('charges refill one at a time', () => {
     const w = arena([], { noBasic: true });
+    w.hero.dodgeCharges = 2;
     dodge(w);
     run(w, D.duration + 0.05);
     dodge(w);
     expect(w.hero.dodgeCharges).toBe(0);
-    run(w, D.recharge - D.duration);
-    expect(w.hero.dodgeCharges).toBe(1);
-    run(w, D.recharge);
-    expect(w.hero.dodgeCharges).toBe(2);
+    for (let n = 1; n <= D.charges; n++) {
+      run(w, n === 1 ? D.recharge - D.duration : D.recharge);
+      expect(w.hero.dodgeCharges).toBe(n);
+    }
     expect(w.hero.dodgeRechargeAt).toBe(0);
   });
 
@@ -81,7 +82,7 @@ describe('the dodge', () => {
     expect(w.hero.mana).toBeLessThan(mana - 1);
   });
 
-  it('holds a cast pressed mid-dash through its commit, then the cast cuts the glide short', () => {
+  it('holds a cast pressed in the burst until it ends, then casts as the slide carries on', () => {
     const w = arena([dummy(13, 28)], { noBasic: true });
     dodge(w, { x: 1, y: 0 });
     expect(kinds(pressOnly(w, 0))).not.toContain('windup');
@@ -89,11 +90,31 @@ describe('the dodge', () => {
     for (let i = 0; i < 60 && !w.hero.windup; i++)
       stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
     expect(w.hero.windup!.start).toBeGreaterThanOrEqual(start + D.cancelAfter - 1e-9);
-    expect(w.hero.windup!.start).toBeLessThan(until);
-    expect(w.hero.dodge!.until).toBe(w.hero.windup!.start);
+    expect(w.hero.windup!.start).toBeLessThan(start + D.cancelAfter + STEP + 1e-9);
+    // The slide isn't cut: it runs on to its end, carrying the hero as it winds up.
+    expect(w.hero.dodge!.until).toBe(until);
     const x = w.hero.x;
-    run(w, 0.1);
-    expect(w.hero.x).toBeCloseTo(x, 5);
+    stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
+    expect(w.hero.x).toBeGreaterThan(x + 0.01);
+  });
+
+  it('a manual attack held through a slide swings once the burst is over, the slide going on', () => {
+    const w = arena([dummy(19, 33)]);
+    stepWorld(
+      registry,
+      w,
+      { move: { x: 1, y: 0 }, dodge: true, dodgeHeld: true, attack: false },
+      STEP,
+    );
+    const { start } = w.hero.dodge!;
+    let swungAt = -1;
+    for (let i = 0; i < 40 && swungAt < 0; i++) {
+      stepWorld(registry, w, { move: { x: 1, y: 0 }, dodgeHeld: true, attack: true }, STEP);
+      if (w.hero.swing) swungAt = w.t;
+    }
+    expect(swungAt).toBeGreaterThanOrEqual(start + D.cancelAfter - 1e-9);
+    expect(swungAt).toBeLessThan(w.hero.dodge!.until + 1e-9);
+    expect(w.t).toBeLessThan(w.hero.dodge!.until);
   });
 
   it('a second dodge pressed mid-dash chains once the commit passes', () => {
@@ -115,6 +136,49 @@ describe('the dodge', () => {
 });
 
 describe('steering the dodge', () => {
+  it("the held glide loses speed tick by tick, from the dash's tail speed to nothing", () => {
+    const w = arena([], { noBasic: true });
+    stepWorld(registry, w, { move: { x: 1, y: 0 }, dodge: true, dodgeHeld: true }, STEP);
+    const end = w.hero.dodge!.start + D.duration;
+    const steps: number[] = [];
+    while (w.t < end + D.glide - 1e-9) {
+      const x = w.hero.x;
+      stepWorld(registry, w, { move: { x: 0, y: 0 }, dodgeHeld: true }, STEP);
+      if (w.t > end + 1e-9) steps.push(w.hero.x - x);
+    }
+    for (let i = 1; i < steps.length; i++) expect(steps[i]).toBeLessThan(steps[i - 1] + 1e-9);
+    const tail = ((1 - D.ease) * D.distance) / D.duration;
+    expect(steps[0] / STEP).toBeGreaterThan(tail * 0.85);
+    expect(steps.at(-1)! / STEP).toBeLessThan(tail * 0.15);
+  });
+
+  it('held, it glides on past its end, its speed draining to a stop over `glide`; let go, it stops at once', () => {
+    const heldStep = (w: ArpgWorld, held: boolean) =>
+      stepWorld(registry, w, { move: { x: 0, y: 0 }, dodgeHeld: held }, STEP);
+    const tail = ((1 - D.ease) * D.distance) / D.duration;
+    // Held throughout: the full dash, then the whole glide.
+    const w = arena([], { noBasic: true });
+    stepWorld(registry, w, { move: { x: 1, y: 0 }, dodge: true, dodgeHeld: true }, STEP);
+    for (let i = 0; i < Math.round((D.duration + D.glide + 0.3) / STEP); i++) heldStep(w, true);
+    expect(w.hero.x).toBeCloseTo(13 + D.distance + (tail * D.glide) / 2, 1);
+    expect(w.hero.dodge!.until).toBeCloseTo(w.hero.dodge!.start + D.duration + D.glide, 9);
+    // Let go a tenth of a second into the glide: it ends there.
+    const v = arena([], { noBasic: true });
+    stepWorld(registry, v, { move: { x: 1, y: 0 }, dodge: true, dodgeHeld: true }, STEP);
+    for (let i = 0; i < Math.round((D.duration + 0.1) / STEP); i++) heldStep(v, true);
+    expect(v.t).toBeLessThan(v.hero.dodge!.until);
+    const x = v.hero.x;
+    heldStep(v, false);
+    expect(v.t).toBeGreaterThanOrEqual(v.hero.dodge!.until);
+    run(v, 0.3);
+    expect(v.hero.x).toBeCloseTo(x, 4);
+    // A tap (let go before its end) dashes just its distance.
+    const tap = arena([], { noBasic: true });
+    stepWorld(registry, tap, { move: { x: 1, y: 0 }, dodge: true, dodgeHeld: true }, STEP);
+    run(tap, D.duration + D.glide + 0.2);
+    expect(tap.hero.x).toBeCloseTo(13 + D.distance, 1);
+  });
+
   it('bursts out and glides: the first half of the time covers most of the distance', () => {
     const w = arena([], { noBasic: true });
     dodge(w, { x: 1, y: 0 });

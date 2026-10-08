@@ -13,8 +13,11 @@ import { cancelSwing, cancelWindup, dropHold } from './action.js';
  * steering turns it as it goes, at most `dodge.steer` radians a second, so a
  * dodge is an arc the player skates through the fight. A monster attack that
  * would have hit the hero early in the dodge is a perfect dodge: the charge
- * comes back and the next real hit is a riposte. Past `dodge.cancelAfter` a
- * ready press (an ability or another dodge) cuts the glide short.
+ * comes back and the next real hit is a riposte. Past its burst
+ * (`dodge.cancelAfter`) the hero acts while it slides: abilities, holds and
+ * basic attacks start as the slide carries on, and a second dodge cuts it short. With the
+ * button still held at its end, it glides on, steered, its tail speed draining
+ * to a stop over `dodge.glide` seconds; letting go ends it at once.
  */
 
 /** The hero's dodge charges: `dodge.charges` plus the boons' (the boons spec §2), at least 1. */
@@ -39,6 +42,12 @@ function perfectWindow(bal: DelveBalance, boon: BoonSum): number {
 export function isDashing(ctx: SimCtx): boolean {
   const d = ctx.world.hero.dodge;
   return !!d && ctx.world.t < d.until;
+}
+
+/** In the dash's burst (its first `dodge.cancelAfter` seconds): no move starts until it's over. */
+export function inBurst(ctx: SimCtx): boolean {
+  const d = ctx.world.hero.dodge;
+  return isDashing(ctx) && ctx.world.t < d!.start + ctx.bal.dodge.cancelAfter;
 }
 
 /** Start a dodge along `move` (or away from the nearest foe, or along the facing). */
@@ -110,7 +119,7 @@ function steerToward(dir: Vec, want: Vec, max: number): Vec {
  * curves. Swept from where the hero stands (see the floor maps spec): a wall
  * takes the part of a slice against it, and the dash slides along it.
  */
-export function dodgeTick(ctx: SimCtx, dt: number, move: Vec = { x: 0, y: 0 }): void {
+export function dodgeTick(ctx: SimCtx, dt: number, move: Vec = { x: 0, y: 0 }, held = false): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const t = world.t;
@@ -121,8 +130,17 @@ export function dodgeTick(ctx: SimCtx, dt: number, move: Vec = { x: 0, y: 0 }): 
   }
   const d = h.dodge;
   if (!d || t - dt >= d.until) return;
-  const { distance, duration, ease, steer } = bal.dodge;
-  const at = (s: number) => dashProgress(ease, (s - d.start) / duration) * distance;
+  const { distance, duration, ease, glide, steer } = bal.dodge;
+  const end = d.start + duration;
+  // Held through its end (and not cut short), the dash glides on a tick at a time, up to `glide`.
+  if (held && d.until >= end - 1e-9) d.until = Math.min(end + glide, Math.max(d.until, t + 1e-6));
+  // Past its end the slide drains from the eased dash's tail speed to a stop over `glide`.
+  const tail = ((1 - ease) * distance) / duration;
+  const at = (s: number) => {
+    if (s <= end) return dashProgress(ease, (s - d.start) / duration) * distance;
+    const g = Math.min(s - end, glide);
+    return distance + (glide > 0 ? tail * (g - (g * g) / (2 * glide)) : 0);
+  };
   const v = clampLen(move);
   const tilt = Math.hypot(v.x, v.y);
   if (tilt > 0.05) {
@@ -134,10 +152,7 @@ export function dodgeTick(ctx: SimCtx, dt: number, move: Vec = { x: 0, y: 0 }): 
   Object.assign(h, moveCircle(world.map, h, h.radius, d.dir.x * slice, d.dir.y * slice));
 }
 
-/**
- * A ready press waits past the dodge's commit (`dodge.cancelAfter`): the
- * glide ends now, so the press fires this tick. True when it cut.
- */
+/** A second dodge pressed past the burst ends this one's slide now, so it fires this tick. */
 export function cutGlide(ctx: SimCtx): boolean {
   const { world, bal } = ctx;
   const d = world.hero.dodge;

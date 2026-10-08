@@ -23,6 +23,8 @@ export interface ArenaPadActions {
   /** Of those, the ones with hold-to-repeat on. */
   repeat: number[];
   dodge: boolean;
+  /** The dodge button held: the slide glides on past its end. */
+  dodgeHeld: boolean;
   potion: boolean;
   /** The interact button pressed this frame (A by default). */
   interact: boolean;
@@ -61,6 +63,7 @@ export function padToArena(
     held: slots((b) => state.buttons[b]),
     repeat: slots((b) => state.buttons[b], true),
     dodge: is(cfg.pad.dodge, (b) => pressed.has(b)),
+    dodgeHeld: is(cfg.pad.dodge, (b) => state.buttons[b]),
     potion: is(cfg.pad.potion, (b) => pressed.has(b)),
     interact: is(cfg.pad.interact, (b) => pressed.has(b)),
     attackHeld: is(cfg.pad.attack, (b) => state.buttons[b]),

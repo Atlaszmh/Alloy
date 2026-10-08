@@ -644,9 +644,11 @@ export interface DelveBalance {
     duration: number;
     /** The glide's ease-out (0 a steady dash): it bursts out and slows into its end. */
     ease: number;
+    /** Seconds the dodge button held stretches the slide past its end, its tail speed draining to a stop. */
+    glide: number;
     /** Radians a second the steering turns the dash, so a dodge can be an arc. */
     steer: number;
-    /** Seconds into the dash before a ready press (an ability, a dodge) cuts its glide short. */
+    /** The burst: seconds into the dash before a move starts; then the hero acts as it slides, and a dodge cuts the slide. */
     cancelAfter: number;
     iframes: number;
     /** A hit this soon after the dodge starts is a perfect dodge. */

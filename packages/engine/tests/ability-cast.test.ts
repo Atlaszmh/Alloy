@@ -51,11 +51,12 @@ describe('mana payment', () => {
     expect(w.hero.mana).toBeCloseTo(1);
   });
 
-  it('with nothing to aim at it fails for free', () => {
+  it('with nothing to aim at it fires along the facing, paid', () => {
     const w = arena([], { noBasic: true });
     const mana = w.hero.mana;
-    expect(press(w, 0).some((e) => e.kind === 'cast')).toBe(false);
-    expect(w.hero.mana).toBeCloseTo(mana, 0);
+    expect(press(w, 0).some((e) => e.kind === 'cast')).toBe(true);
+    expect(w.hero.mana).toBeLessThan(mana);
+    expect(w.hero.facing).toEqual({ x: 0, y: -1 });
   });
 });
 

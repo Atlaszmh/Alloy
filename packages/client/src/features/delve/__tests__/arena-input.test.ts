@@ -32,7 +32,12 @@ import { TAP_MS } from '../arena/aim';
 import { aimView } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
 import { armed } from './armed';
-import { padMemory, padToArena, REPEAT_DELAY, type ArenaPadActions } from '@/features/gamepad/arena-pad';
+import {
+  padMemory,
+  padToArena,
+  REPEAT_DELAY,
+  type ArenaPadActions,
+} from '@/features/gamepad/arena-pad';
 import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { useControlsStore } from '@/stores/controlsStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
@@ -307,7 +312,10 @@ describe('loot labels and the journal', () => {
       journal: true,
     });
     expect(padToArena(state('up'), new Set(['up']))).toMatchObject({ peek: true, potion: false });
-    expect(padToArena(state('down'), new Set(['down']))).toMatchObject({ peek: false, potion: true });
+    expect(padToArena(state('down'), new Set(['down']))).toMatchObject({
+      peek: false,
+      potion: true,
+    });
   });
 });
 
@@ -413,6 +421,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     held: [],
     repeat: [],
     dodge: false,
+    dodgeHeld: false,
     potion: false,
     interact: false,
     attackHeld: false,
@@ -546,6 +555,26 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       dodge: false,
       potion: false,
       attackTap: false,
+    });
+  });
+
+  it('sends the dodge held while its key or pad button stays down', () => {
+    const w = world();
+    const input = createArenaInput();
+    const mem = padMemory();
+    Object.assign(input, { dodge: true, dodgeHeld: true });
+    expect(frameInput(registry, w, input, null, mem, keys)).toMatchObject({
+      dodge: true,
+      dodgeHeld: true,
+    });
+    expect(frameInput(registry, w, input, null, mem, keys)).toMatchObject({
+      dodge: false,
+      dodgeHeld: true,
+    });
+    input.dodgeHeld = false;
+    expect(frameInput(registry, w, input, null, mem, keys)).toMatchObject({ dodgeHeld: false });
+    expect(frameInput(registry, w, input, pad({ dodgeHeld: true }), mem, opts)).toMatchObject({
+      dodgeHeld: true,
     });
   });
 

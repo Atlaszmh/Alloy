@@ -53,6 +53,8 @@ export interface ArenaInput {
   mouse: Vec | null;
   potion: boolean;
   dodge: boolean;
+  /** The dodge key held: the slide glides on past its end (`ArpgInput.dodgeHeld`). */
+  dodgeHeld: boolean;
   /** Interact pressed (a chest, a shrine, an alcove, the gate). */
   interact: boolean;
   /** Manual basic attacks: held now, pressed since the last frame, and the aim (client px, or null to auto-aim). */
@@ -76,6 +78,7 @@ export function createArenaInput(): ArenaInput {
     mouse: null,
     potion: false,
     dodge: false,
+    dodgeHeld: false,
     interact: false,
     attackHeld: false,
     attackTap: false,
@@ -148,6 +151,7 @@ export function frameInput(
       keys: { x: 0, y: 0 },
       pointer: { x: 0, y: 0 },
       aiming: null,
+      dodgeHeld: false,
       attackHeld: false,
       attackAim: null,
     });
@@ -187,6 +191,7 @@ function keysInput(input: ArenaInput, o: FrameOpts): ArpgInput {
     holding: holdingSlot(input),
     potion: input.potion,
     dodge: input.dodge,
+    dodgeHeld: input.dodgeHeld,
     interact: input.interact,
     ...(o.manual
       ? {
@@ -235,6 +240,7 @@ function padInput(
     holding: frame.holding,
     potion: pad.potion,
     dodge: pad.dodge,
+    dodgeHeld: pad.dodgeHeld,
     interact: pad.interact,
     ...(o.manual
       ? {
@@ -383,6 +389,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       input.aiming = { slot, since: performance.now(), at: null };
     } else if (action === 'dodge') {
       input.dodge = true;
+      input.dodgeHeld = true;
     } else if (action === 'potion') {
       input.potion = true;
     } else if (action === 'interact') {
@@ -401,6 +408,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     if (held.delete(e.code)) recompute();
     const action = keyAction(e.code);
     if (action === 'attack') input.attackHeld = false;
+    if (action === 'dodge') input.dodgeHeld = false;
     if (action === 'labels') {
       input.labels = false;
       e.preventDefault();
@@ -417,6 +425,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
   };
   const blur = () => {
     held.clear();
+    input.dodgeHeld = false;
     recompute();
     input.aiming = null;
     input.labels = false;

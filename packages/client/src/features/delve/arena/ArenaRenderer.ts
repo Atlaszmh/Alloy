@@ -61,6 +61,7 @@ import { SPRITE_PIXEL, spriteFrames } from './sprites';
 import { RoomSprites } from './room-sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
+import { ComboRings } from './fx/combo-rings';
 import { RARITY_TEXT } from '../format';
 import { PATTERN_COLOR, materialColor, materialLabel } from '../materials/material-style';
 import { contextZoom } from '../kit/zoom';
@@ -238,6 +239,10 @@ export class ArenaRenderer {
   private heroPerfectUntil = 0;
   /** Where the dodge's streak was last drawn to, while one runs. */
   private dashTrail: Vec | null = null;
+  /** Each chain's place, round the hero's feet. */
+  private comboRings = new ComboRings();
+  /** The combo rings' own smooth layer, on the ground under the creatures. */
+  private comboGfx = new Graphics();
   private aim: AimView | null = null;
   /** Alt or L3 held: every drop's loot label shows. */
   private labelsHeld = false;
@@ -254,6 +259,7 @@ export class ArenaRenderer {
     this.root.addChild(
       this.floor,
       this.doorGfx,
+      this.comboGfx,
       this.entities,
       this.groundFx.sprite,
       this.dropLayer,
@@ -831,6 +837,7 @@ export class ArenaRenderer {
     drawTelegraphs(ground, seen, this.time);
     drawHazards(ground, seen, this.time, getDelveRegistry().getDelveBalance().terrain.fuse);
     drawFooting(ground, w, this.time);
+    this.comboRings.draw(this.comboGfx, w, getDelveRegistry().getDelveBalance(), this.time);
     drawMonsterMarks(ground, air, seen, this.time);
     this.lifecycles.update(w, this.fx, this.time);
     drawProjectiles(air, w, this.time, this.trails, (id) => this.lifecycles.bornAt(id));

@@ -25,12 +25,27 @@ describe('targets in sight', () => {
     expect(bestCluster(ctx, 20, 2)).toBeNull();
   });
 
-  it('a directional move with only foes behind a wall fails for free', () => {
+  it('a directional move with only foes behind a wall fires along the facing', () => {
     const w = onMap(arena([dummy(13, 27)], { noBasic: true }), WALL_30);
     const mana = w.hero.mana;
     press(w, 0);
-    expect(w.projectiles).toEqual([]);
-    expect(w.hero.mana).toBe(mana);
+    expect(w.hero.mana).toBeLessThan(mana);
+    expect(w.hero.facing).toEqual({ x: 0, y: -1 });
+  });
+
+  it('with no foe in reach a move goes toward the nearest foe in sight, else along the facing', () => {
+    const ctxFor = (w: ReturnType<typeof arena>) => makeCtx(registry, w, []);
+    // A foe 9 units off (in sight, out of a short reach): aimed at it, clamped to the reach.
+    const near = arena([dummy(22, 36)], { noBasic: true, primary: { form: 'burst' } });
+    const ab = moveOf(near, 0);
+    const p = aimPoint(ctxFor(near), ab, null)!;
+    expect(p.y).toBeCloseTo(36, 5);
+    expect(p.x).toBeGreaterThan(13);
+    // Nobody in sight: along the facing (up), at the move's reach.
+    const alone = arena([], { noBasic: true });
+    const q = aimPoint(ctxFor(alone), moveOf(alone, 0), null)!;
+    expect(q.x).toBeCloseTo(13, 5);
+    expect(q.y).toBeLessThan(36);
   });
 });
 
