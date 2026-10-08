@@ -552,3 +552,64 @@ describe('salvageConstruct (constructs.ts)', () => {
     expect(salvageConstruct(registry, p, primary(p)[0].uid!).reason).toBe('Not in your bag');
   });
 });
+
+describe("the stops' power-ups (stops.ts)", () => {
+  const ALL: DiveStop = { kind: 'powerups', offers: ['equip', 'slot', 'move', 'upgrade', 'rune'], taken: false };
+  /** `p` on the door screen after depth 1, holding every power-up. */
+  function atStop(p: DelveProfile): DelveProfile {
+    const d = startDive(registry, p, 1);
+    return { ...d, dive: { ...d.dive!, phase: 'choosing', depthsCleared: 1, doorChoices: ['winding'], stop: ALL } };
+  }
+
+  it("'move' adjusts a construct in place: its uid, sockets and runes stay, one editDust, no uid minted", () => {
+    let p = hero();
+    p = openSocket(registry, p, 'primary', 0).profile;
+    p = socketRune(registry, p, 'primary', 0, 0, { id: 'quick', tier: 1 }).profile;
+    const at = atStop(p);
+    const was = primary(at)[0];
+    const res = takeStop(registry, at, {
+      kind: 'move',
+      skill: 'primary',
+      index: 0,
+      move: { kind: 'heavy', form: 'strike', elements: ['fire'], uid: 'stale', runes: [] } as Move,
+    });
+    expect(res.ok).toBe(true);
+    const now = primary(res.profile)[0];
+    expect(now).toEqual({ ...was, kind: 'heavy' });
+    expect(res.profile.nextConstructUid).toBe(at.nextConstructUid);
+    expect(res.profile.manaDust).toBe(at.manaDust - bal.movesets.editDust);
+    expect(res.profile.dive!.stop!.taken).toBe(true);
+  });
+
+  it("'slot' adds a bought slot under the ceiling, plain-filled; it never opens a skill", () => {
+    const at = atStop(hero());
+    const slot = takeStop(registry, at, { kind: 'slot', skill: 'primary' });
+    expect(slot.ok).toBe(true);
+    expect(worn(slot.profile).slots.primary).toBe(3);
+    expect(worn(slot.profile).bought?.primary).toBe(1);
+    expect(isPlain(primary(slot.profile)[2])).toBe(true);
+    expect(primary(slot.profile)[2].uid).toBe(`c${at.nextConstructUid}`);
+    const open = takeStop(registry, at, { kind: 'slot', skill: 'defensive' });
+    expect(open.ok).toBe(false);
+    expect(stopKinds(registry, { ...hero(), links: 0 })).not.toContain('slot');
+  });
+
+  it("'equip' equips a bag weapon with its own constructs; the old one keeps its own", () => {
+    const p = banked(hero(), weapon('bow1', 'bow', 'uncommon'));
+    const at = atStop(p);
+    const res = takeStop(registry, at, { kind: 'equip', uid: 'bow1' });
+    expect(res.ok).toBe(true);
+    expect(res.profile.equipped.weapon!.uid).toBe('bow1');
+    expect(primary(res.profile).every((m) => m.form === 'bolt' && !!m.uid)).toBe(true);
+    expect(res.profile.constructs).toEqual([]);
+    expect(new Set(uidsOf(res.profile)).size).toBe(uidsOf(res.profile).length);
+  });
+
+  it("'rune' sockets a pouch rune into an empty socket, as before", () => {
+    const at = atStop(openSocket(registry, hero(), 'primary', 1).profile);
+    const res = takeStop(registry, at, { kind: 'rune', skill: 'primary', index: 1, socket: 0, rune: { id: 'chain', tier: 1 } });
+    expect(res.ok).toBe(true);
+    expect(socketsOf(primary(res.profile)[1])).toEqual([{ id: 'chain', tier: 1 }]);
+    expect(primary(res.profile)[1].uid).toBe(primary(at)[1].uid);
+  });
+});
