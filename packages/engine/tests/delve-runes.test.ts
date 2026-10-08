@@ -297,14 +297,17 @@ describe('the parts rule', () => {
     expect(salvageCandidates(registry, wield(plain), 'epic')).toEqual(['w']);
   });
 
-  it('the choice of mana rebuilds the weapon plain: its bought slots back as Links, its runes by the rule', () => {
+  it('the choice of mana refills the weapon plain: its slots kept, no Links, its runes by the rule', () => {
     const unchosen = createDelveProfile(registry, 3);
     const p = { ...unchosen, equipped: { ...unchosen.equipped, weapon: socketedSword() } };
     const res = chooseStartingMana(registry, p, 'fire');
-    expect(res).toMatchObject({ ok: true, links: 1, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
-    expect(res.profile.links).toBe(1);
+    expect(res).toMatchObject({ ok: true, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect([res.links, res.profile.links]).toEqual([undefined, 0]);
     const sword = res.profile.equipped.weapon!;
-    expect(bareUids(sword.moveset)).toEqual(defaultMoveset(registry, sword, 'fire'));
+    expect(bareUids(sword.moveset)).toEqual({
+      ...defaultMoveset(registry, sword, 'fire', { basic: 4, primary: 1, defensive: 1 }),
+      bought: { basic: 1 },
+    });
     expect(allMoves(sword.moveset!).every((m) => /^c\d+$/.test(m.uid!))).toBe(true);
     expect(res.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
     const gone = chooseStartingMana(registry, p, 'fire', { unsocket: 'destroy' });
