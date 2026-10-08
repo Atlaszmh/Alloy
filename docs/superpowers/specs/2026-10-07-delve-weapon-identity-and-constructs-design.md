@@ -101,7 +101,7 @@ The weapon's rarity sets each skill's **starting** slots and its **ceiling**:
 - The Basic starts at the weapon's own string (maul 2, dagger 4, the rest 3); a string longer than the ceiling keeps its length.
 - A slot past the start costs Links and scrap by position (`slotPrice`, as today), up to the ceiling. It counts as **bought** (`GearItem.bought`) and arrives holding a plain construct (the next default kind, the class's default form, as `addSlot` adds a move today).
 - A skill's **first** slot (0 → 1) is **Open a skill**: Awaken generalised, paid in flux by rarity plus Links and scrap (`delve.movesets.openSkill`, replacing `crafting.awaken`). It counts as bought and arrives holding a plain construct. It replaces Awaken on the Temper bench.
-- **Upgrade** moves the weapon to the next rarity's row: every slot it has stays, and a skill below the new row's start gains plain-filled slots up to it (not bought).
+- **A rarity rise** (nothing raises a weapon's rarity today: Temper's Upgrade raises its upgrade level, not its rarity; the rule stands for any op that does) moves the weapon to the next rarity's row: every slot it has stays, and a skill below the new row's start gains plain-filled slots up to it (not bought).
 - **Free extra slots:** a drop's `extraSlots` (by rarity, as today) and a forge's `weaponExtras.slots` add slots past the start, up to the ceiling, plain-filled and **not** bought.
 - The table replaces carries by rarity (`delve.movesets.carries`, `carriedSkills`, `awakened`). First-pass numbers, tuned against the pacing rails.
 
