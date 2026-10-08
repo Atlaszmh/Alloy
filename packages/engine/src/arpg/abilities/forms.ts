@@ -1,5 +1,5 @@
 import type { ResolvedAbility } from '../../types/ability.js';
-import type { MonsterEntity, Vec } from '../../types/arpg.js';
+import type { HeroEntity, MonsterEntity, Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
 import { angleBetween, dirTo, dist, distToSegment } from '../geometry.js';
 import { clipSight, moveCircle, perceives, sees, snapToWalkable } from '../grid.js';
@@ -91,12 +91,87 @@ export function performTick(ctx: SimCtx): void {
   const o = h.perform;
   if (!o || world.t < o.nextAt - 1e-9) return;
   const ab = o.ability;
-  if (o.form === 'whirl')
+  if (o.form === 'whirl') {
     sweep(ctx, ab, o.hit, o.heft, ab.radius * o.size, 360, h.facing, o.struck === 0);
+  } else if (!dart(ctx, o)) {
+    endOnslaught(ctx, o);
+    return;
+  }
   o.struck++;
   o.left--;
   o.nextAt += o.every;
-  if (o.left <= 0) h.perform = null;
+  if (o.left <= 0) {
+    if (o.form === 'onslaught') endOnslaught(ctx, o);
+    else h.perform = null;
+  }
+}
+
+type Perform = NonNullable<HeroEntity['perform']>;
+
+/**
+ * One of Onslaught's darts: to the nearest living foe within the area's
+ * radius + 1 of its centre that the hero perceives, never the one struck last
+ * while another stands; the hero moves to its contact gap (walls stop it),
+ * faces it and strikes it once (a `dash` and a `slash` mark it; Detonate
+ * blasts round it; the first dart chains). False with no foe to dart at.
+ */
+function dart(ctx: SimCtx, o: Perform): boolean {
+  const { world, bal } = ctx;
+  const h = world.hero;
+  const ab = o.ability;
+  const near = alive(ctx)
+    .filter(
+      (m) =>
+        dist(o.at.x, o.at.y, m.x, m.y) - m.radius <= ab.radius + 1 && perceives(world.map, h, m),
+    )
+    .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
+  const m = near.find((f) => f.id !== o.lastId) ?? near[0];
+  if (!m) return false;
+  const from = { x: h.x, y: h.y };
+  const d = dirTo(h.x, h.y, m.x, m.y);
+  const gap = dist(h.x, h.y, m.x, m.y) - m.radius - h.radius - bal.feel.contactGap;
+  if (gap > 0 && (d.x !== 0 || d.y !== 0))
+    Object.assign(h, moveCircle(world.map, h, h.radius, d.x * gap, d.y * gap));
+  if (d.x !== 0 || d.y !== 0) h.facing = d;
+  const infusion = ab.elements[1] ?? null;
+  ctx.events.push({
+    kind: 'dash',
+    fromX: from.x,
+    fromY: from.y,
+    toX: h.x,
+    toY: h.y,
+    infusion,
+    ...lookOf(ab),
+  });
+  ctx.events.push({
+    kind: 'slash',
+    x: h.x,
+    y: h.y,
+    dir: h.facing,
+    range: 1.5,
+    arc: 90,
+    element: ab.element,
+    heft: o.heft,
+    infusion,
+    ...lookOf(ab),
+    ...(ab.replay ? { echo: true as const } : {}),
+  });
+  hitMonster(ctx, m, o.hit, ab.element, hitOpts(ab, from, false, true, o.heft));
+  detonate(ctx, ab, m, o.hit);
+  if (o.struck === 0) chainFrom(ctx, ab, m, o.hit, new Set([m.id]));
+  o.lastId = m.id;
+  return true;
+}
+
+/** The darts are over: the protection follows the untouchable spell (not an Echo's). */
+function endOnslaught(ctx: SimCtx, o: Perform): void {
+  const h = ctx.world.hero;
+  h.perform = null;
+  if (o.ability.replay) return;
+  h.onslaughtGuard = {
+    until: Math.max(ctx.world.t, h.invulnUntil) + ctx.bal.abilities.defend.onslaughtGuard,
+    reduce: o.ability.effect,
+  };
 }
 
 /**
@@ -385,11 +460,31 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x, h.y);
     }
 
-    // B1 replaces: in Phase A an Onslaught plays as a Nova.
-    case 'onslaught':
     case 'nova':
       impact(ctx, ab, h.x, h.y, ab.radius, hit, { noScatter: true, heft });
       return done(h.x, h.y);
+
+    case 'onslaught': {
+      // The darts (the constructs spec §2.2): `count` over `duration` between the foes in the
+      // area round `p` (`performTick`), the hero untouchable meanwhile, then protected
+      // (`onslaughtGuard`). An Echo replays one dart.
+      h.facing = dir;
+      h.perform = {
+        form: 'onslaught',
+        ability: ab,
+        hit,
+        heft,
+        size,
+        nextAt: t,
+        every: ab.duration / ab.count,
+        left: ab.replay ? 1 : ab.count,
+        struck: 0,
+        at: p,
+        lastId: null,
+      };
+      if (!ab.replay) h.invulnUntil = Math.max(h.invulnUntil, t + ab.duration);
+      return done(p.x, p.y);
+    }
 
     case 'barrage': {
       const spread = ab.radius * 1.6;

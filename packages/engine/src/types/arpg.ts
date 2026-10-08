@@ -588,6 +588,8 @@ export interface HeroEntity {
     at: Vec;
     lastId: number | null;
   } | null;
+  /** Onslaught's protection after its darts: damage taken × (1 − `reduce`) until `until`. */
+  onslaughtGuard?: { until: number; reduce: number };
   /**
    * The last dodge, kept after the dash ends so a perfect dodge can be judged
    * from its start. The hero is dashing while `t < until`.

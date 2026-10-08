@@ -361,6 +361,7 @@ const TARGETS: Record<string, number> = {
   nova: 3.5,
   barrage: 3,
   maelstrom: 3,
+  onslaught: 1,
   ward: 2.5,
   repel: 2.5,
   armor: 1,
@@ -368,7 +369,6 @@ const TARGETS: Record<string, number> = {
   blink: 1.5,
   // The constructs spec's forms, as their kin until B1 tunes them.
   whirl: 2,
-  onslaught: 3,
 };
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
