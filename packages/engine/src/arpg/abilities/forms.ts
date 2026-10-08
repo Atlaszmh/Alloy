@@ -16,6 +16,9 @@ export interface FormResult {
   ty: number;
 }
 
+/** Repel's knockback per point of its `effect` (Earth's knob is 1: an effect of 0.5 pushes as Earth does). */
+const REPEL_PUSH = 2;
+
 function rotate(d: Vec, a: number): Vec {
   return { x: d.x * Math.cos(a) - d.y * Math.sin(a), y: d.x * Math.sin(a) + d.y * Math.cos(a) };
 }
@@ -302,8 +305,6 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x, h.y);
     }
 
-    // B1 replaces: in Phase A a Repel plays as a Ward.
-    case 'repel':
     case 'ward':
       buff('ward', ab.duration);
       h.ward = { hp: h.stats.maxHp * ab.effect, max: h.stats.maxHp * ab.effect };
@@ -312,6 +313,37 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
     case 'armor':
       buff('armor', ab.duration);
       return done(h.x, h.y);
+
+    case 'repel': {
+      // A pulse (the constructs spec §2.2): the foes round the hero are hit, pushed `effect` ×
+      // REPEL_PUSH and chilled (the one slow). It ends the Defensive up, as Blink does, and
+      // leaves none.
+      h.ward = null;
+      h.defend = null;
+      const reach = ab.radius * size;
+      const hits = alive(ctx).filter(
+        (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= reach && sees(world.map, h, m),
+      );
+      ctx.events.push({
+        kind: 'explode',
+        x: h.x,
+        y: h.y,
+        radius: reach,
+        element: ab.element,
+        infusion: ab.elements[1] ?? null,
+        ...lookOf(ab),
+      });
+      const base = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
+      const applies = base.applies ?? [];
+      const opts = {
+        ...base,
+        knockback: (base.knockback ?? 0) + ab.effect * REPEL_PUSH,
+        applies: applies.includes('chill') ? applies : [...applies, 'chill' as const],
+      };
+      for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
+      if (hits.length > 0) chainFrom(ctx, ab, hits[0], hit, new Set(hits.map((m) => m.id)));
+      return done(h.x, h.y);
+    }
 
     case 'surge':
       buff('surge', ab.duration);

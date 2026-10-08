@@ -96,3 +96,32 @@ describe('Whirl (forms.ts performTick)', () => {
     expect(w.hero.perform?.struck).toBe(1);
   });
 });
+
+describe('Repel (forms.ts)', () => {
+  it('pulses: the foes round the hero are hit, knocked back and chilled; the Defensive up ends', () => {
+    const w = arena([dummy(13, 34), dummy(13, 24)], {
+      noBasic: true,
+      // A ranged form: on a staff (`ArenaOpts.weapon` comes with Task 5).
+      equipped: { weapon: gear('fire', 'weapon', 'staff') },
+      defensive: {
+        moves: [
+          { kind: 'medium', form: 'ward', elements: ['fire'] },
+          { kind: 'medium', form: 'repel', elements: ['fire'] },
+        ],
+      },
+    });
+    press(w, 1);
+    expect(w.hero.ward).not.toBeNull();
+    run(w, bal.chains.beat.medium * bal.chains.beatSlot.defensive + 0.1);
+    w.hero.cooldowns[1][1] = 0;
+    const events = press(w, 1);
+    const [near, far] = w.monsters;
+    expect(w.hero.ward).toBeNull();
+    expect(w.hero.defend).toBeNull();
+    expect(hits(events, near.id)).toHaveLength(1);
+    expect(damaged(far)).toBe(false);
+    expect(near.kby).toBeLessThan(0);
+    expect(near.status.stacks.frost).toBeGreaterThan(0);
+    expect(events.some((e) => e.kind === 'explode' && e.x === w.hero.x)).toBe(true);
+  });
+});
