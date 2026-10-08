@@ -5,7 +5,7 @@ import type { Buff } from '../src/types/boon.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import { registry } from './fixtures/arena.js';
 
-// See the boons spec, "4. The stop" (Save): version 13; any other version resets.
+// See the boons spec, "4. The stop" (Save): version 14 since the constructs; any other version resets.
 
 const KEEN: Buff = { boon: 'keen_edge', tier: 2, effect: { damage: 0.15 } };
 const ECHO: Buff = {
@@ -15,9 +15,9 @@ const ECHO: Buff = {
 };
 
 describe('save v13', () => {
-  it('a new save is version 13, and a dive with boons and a boons stop round-trips', () => {
+  it('a new save is version 14, and a dive with boons and a boons stop round-trips', () => {
     const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
-    expect(p0.version).toBe(13);
+    expect(p0.version).toBe(14);
     const diving = startDive(registry, p0, 1);
     const p: DelveProfile = {
       ...diving,

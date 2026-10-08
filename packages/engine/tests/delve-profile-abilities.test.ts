@@ -21,7 +21,7 @@ const bare = (x: unknown) =>
 describe('chains on the weapon', () => {
   it("a new profile's common sword holds its slot table's defaults in the weapon's element: the basic chain and a two-slot Primary, minted", () => {
     const p = createDelveProfile(registry, 1);
-    expect(p.version).toBe(13);
+    expect(p.version).toBe(14);
     const sword = p.equipped.weapon!;
     expect(bare(sword.moveset)).toEqual(defaultMoveset(registry, sword, 'fire'));
     expect(sword.moveset!.slots).toEqual({ basic: 3, primary: 2 });

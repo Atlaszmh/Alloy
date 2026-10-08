@@ -66,7 +66,7 @@ function clearDepth(p: DelveProfile): DelveProfile {
 describe('profile basics', () => {
   it('starts with a fire sword (its basic chain and a two-slot Primary) and an earth cuirass, and Fire chains', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.version).toBe(13);
+    expect(p.version).toBe(14);
     expect(p.links).toBe(0);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');

@@ -28,7 +28,7 @@ function guided(p: DelveProfile): DelveProfile {
 describe('save v11', () => {
   it('a new save has no tutorial; a dive starts with no entry', () => {
     const p = diving();
-    expect(p.version).toBe(13);
+    expect(p.version).toBe(14);
     expect(p.tutorial).toBeNull();
     expect(p.dive!.tutorialEntry).toBeNull();
     expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p });
