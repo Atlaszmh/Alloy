@@ -385,13 +385,12 @@ const PER_STACK = 0.05;
 
 type KnobSet = ResolvedAbility['knobs'];
 
-/** Impacts one use lands: a Barrage's count, a Maelstrom's ticks, else one. */
+/** Impacts one use lands: a Barrage's or Onslaught's count, a Maelstrom's or Whirl's ticks, else 1. */
 function repeatsOf(ab: ResolvedAbility): number {
-  return ab.form.id === 'barrage'
-    ? ab.count
-    : ab.form.id === 'maelstrom'
-      ? ab.duration / ab.tick
-      : 1;
+  const f = ab.form.id;
+  if (f === 'barrage' || f === 'onslaught') return ab.count;
+  if (f === 'maelstrom' || f === 'whirl') return ab.duration / ab.tick;
+  return 1;
 }
 
 /**

@@ -43,6 +43,7 @@ import {
 } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { echoTick } from './abilities/echo.js';
+import { performTick } from './abilities/forms.js';
 import { hitOpts, impact, knobHitOpts } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
@@ -245,6 +246,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   holdTick(ctx, input.holding, dt, burst);
   castTick(ctx);
   echoTick(ctx);
+  performTick(ctx);
 
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
@@ -264,7 +266,8 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const surge = surging(ctx);
   h.moving = speed > 0.05 && !dashing;
   const heading = h.moving ? { x: v.x / speed, y: v.y / speed } : null;
-  const acting = !!h.swing || !!h.windup || !!h.hold;
+  // A Whirl's spin acts too: the hero walks slowed and faces its way (the constructs spec §2.2).
+  const acting = !!h.swing || !!h.windup || !!h.hold || h.perform?.form === 'whirl';
   if (heading) {
     const slow = Math.min(
       acting ? bal.feel.actionMove : 1,
