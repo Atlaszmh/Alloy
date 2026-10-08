@@ -123,7 +123,11 @@ describe('ChainLane', () => {
     fireEvent.click(card); // the click that ends a drag picks nothing
     box.mockRestore();
     expect(onChange).toHaveBeenCalledOnce();
-    expect(onChange).toHaveBeenLastCalledWith('primary', expect.anything(), [1, 2, 0]);
+    // The first card dragged past the other two: the chain alone, no bag.
+    expect(onChange).toHaveBeenLastCalledWith('primary', {
+      moves: [bolt(), bolt({ kind: 'heavy' }), bolt({ kind: 'light' })],
+      payment: 'mana',
+    });
   });
 
   it('a dragged card lands where it is let go, a place a card-and-gap apart', () => {

@@ -137,7 +137,8 @@ export function useAnvilChains(): AnvilChains {
       locked: isDiveActive(profile) || !weapon,
       lockedText: weapon ? undefined : 'Equip a weapon to build your moves.',
       absentText: () => OPEN_SKILL_TEXT,
-      onChange: (skill, chain, map) => useDelveStore.getState().editDraft(skill, chain, map),
+      // The bag joins the draft in Task 2 (the store) and Task 3 (this hook).
+      onChange: (skill, chain) => useDelveStore.getState().editDraft(skill, chain),
       elements: elements.length > 0 ? elements : undefined,
       runes,
     },

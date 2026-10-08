@@ -3,11 +3,13 @@ import {
   runeFits,
   socketsOf,
   type AbilitySlot,
+  type Blow,
   type Chain,
   type ChainSkill,
   type DataRegistry,
   type HeroStats,
   type ManaType,
+  type Move,
   type MoveKind,
   type RunePouch,
   type RuneRef,
@@ -59,6 +61,27 @@ export function blowText(
   blow: { kind: MoveKind; element: ManaType },
 ): string {
   return `${KIND_LABEL[blow.kind]} ${manaStyle(registry, blow.element).name} blow`;
+}
+
+/**
+ * A construct's name as the bag and the Apply sheet say it, unresolved: "light Fire Bolt",
+ * "medium Fire+Nature Burst", "heavy Storm blow".
+ */
+export function constructText(registry: DataRegistry, c: Move | Blow): string {
+  if ('element' in c) return blowText(registry, c);
+  const els = c.elements.map((m) => manaStyle(registry, m).name).join('+');
+  return `${KIND_LABEL[c.kind]} ${els} ${registry.getForm(c.form).name}`;
+}
+
+/** `a` less `b`, rune by rune (id and tier): what left, or what came. */
+export function lessRunes(a: readonly RuneRef[], b: readonly RuneRef[]): RuneRef[] {
+  const left = [...b];
+  return a.filter((r) => {
+    const i = left.findIndex((x) => x.id === r.id && x.tier === r.tier);
+    if (i < 0) return true;
+    left.splice(i, 1);
+    return false;
+  });
 }
 
 /** "a", "a and b", "a, b and c". */
