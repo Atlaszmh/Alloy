@@ -404,6 +404,7 @@ describe('chain play', () => {
     const third = (form: FormId) => {
       const w = arena([dummy(13, 29)], {
         noBasic: true,
+        weapon: 'staff',
         primary: { moves: [0, 1, 2].map(() => m('medium', form)) },
       });
       for (let i = 0; i < 2; i++) {

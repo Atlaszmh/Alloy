@@ -398,6 +398,7 @@ describe('stacks per hit', () => {
 
     const zone = arena([dummy(13, 28)], {
       noBasic: true,
+      weapon: 'staff',
       ultimate: { form: 'maelstrom', payment: 'mana' },
     });
     press(zone, 2, { x: 13, y: 28 });

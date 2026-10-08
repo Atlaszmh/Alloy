@@ -194,6 +194,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
   let dir = dirTo(h.x, h.y, p.x, p.y);
   if (dir.x === 0 && dir.y === 0) dir = { ...h.facing };
   const done = (tx: number, ty: number): FormResult => ({ ok: true, tx, ty });
+  // A shared form's melee version plays on a melee weapon (the contract's `FormDef.melee`).
+  const melee = h.stats.weapon.class === 'melee' && ab.form.melee !== undefined;
   // A Defensive move replaces the one up: its Ward (without a burst), Surge or Blink trail,
   // for `seconds` × (1 + the boons' `defendDuration`).
   const buff = (form: 'ward' | 'armor' | 'surge' | 'blink', seconds: number) => {
@@ -273,6 +275,44 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       const len = ab.range * size;
       const width = ab.radius;
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
+      if (melee) {
+        // The lunge (the constructs spec §2.2): the hero drives the line to the first wall and
+        // strikes every foe within `width` of its way that either end sees, nearest first. No
+        // i-frames; Multi-shot's extra beams are one lunge.
+        const from = { x: h.x, y: h.y };
+        const far = clipSight(world.map, h, { x: h.x + dir.x * len, y: h.y + dir.y * len });
+        const k = dist(h.x, h.y, far.x, far.y);
+        Object.assign(h, moveCircle(world.map, h, h.radius, dir.x * k, dir.y * k));
+        const hits = alive(ctx)
+          .filter(
+            (m) =>
+              distToSegment(m.x, m.y, from.x, from.y, h.x, h.y) <= width + m.radius &&
+              (sees(world.map, from, m) || sees(world.map, h, m)),
+          )
+          .sort((a, b) => dist(from.x, from.y, a.x, a.y) - dist(from.x, from.y, b.x, b.y));
+        ctx.events.push({
+          kind: 'dash',
+          fromX: from.x,
+          fromY: from.y,
+          toX: h.x,
+          toY: h.y,
+          infusion: ab.elements[1] ?? null,
+          ...lookOf(ab),
+        });
+        const struck = new Set<number>();
+        for (const m of hits) {
+          struck.add(m.id);
+          hitMonster(ctx, m, hit, ab.element, opts);
+          detonate(ctx, ab, m, hit);
+        }
+        if (!ab.replay)
+          for (const obj of objectsOnBeam(world, from, h, width)) hitObject(ctx, obj, 'hero');
+        if (hits.length > 0) {
+          chainFrom(ctx, ab, hits[hits.length - 1], hit, struck);
+          leaveZone(ctx, ab, hits[0].x, hits[0].y, Math.max(1.2, width * 2), hit);
+        }
+        return done(h.x, h.y);
+      }
       // Multi-shot: 1 + its extra beams in a fan at Volley's spacing. They share one hit set, so
       // a foe is struck once a cast; each beam that hits jumps from its farthest foe and leaves
       // its zone at its first, as one Lance does. A beam ends at the first wall.
@@ -320,8 +360,13 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x + dir.x * len, h.y + dir.y * len);
     }
     case 'burst': {
-      // Thrown: the mana arcs to the aim point and bursts where it lands.
       h.facing = dir;
+      if (melee) {
+        // The eruption (the constructs spec §2.2): the ground erupts at the aim point at once.
+        impact(ctx, ab, p.x, p.y, ab.radius * size, hit, { heft });
+        return done(p.x, p.y);
+      }
+      // Thrown: the mana arcs to the aim point and bursts where it lands.
       const land = t + ctx.bal.feel.lobBase + dist(h.x, h.y, p.x, p.y) / Math.max(1, ab.speed);
       world.zones.push({
         id: world.nextId++,
@@ -519,13 +564,15 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
     }
 
     case 'maelstrom':
+      // A melee weapon's rides the hero (`follow`; the constructs spec §2.2).
       world.zones.push({
         id: world.nextId++,
         owner: 'hero',
         source: 'maelstrom',
         ability: ab,
-        x: p.x,
-        y: p.y,
+        x: melee ? h.x : p.x,
+        y: melee ? h.y : p.y,
+        ...(melee ? { follow: true } : {}),
         radius: ab.radius,
         born: t,
         until: t + ab.duration,
@@ -536,6 +583,6 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
         detonateAt: 0,
         dead: false,
       });
-      return done(p.x, p.y);
+      return done(melee ? h.x : p.x, melee ? h.y : p.y);
   }
 }

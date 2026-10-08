@@ -101,8 +101,7 @@ describe('Repel (forms.ts)', () => {
   it('pulses: the foes round the hero are hit, knocked back and chilled; the Defensive up ends', () => {
     const w = arena([dummy(13, 34), dummy(13, 24)], {
       noBasic: true,
-      // A ranged form: on a staff (`ArenaOpts.weapon` comes with Task 5).
-      equipped: { weapon: gear('fire', 'weapon', 'staff') },
+      weapon: 'staff',
       defensive: {
         moves: [
           { kind: 'medium', form: 'ward', elements: ['fire'] },
@@ -165,5 +164,66 @@ describe('Onslaught (forms.ts performTick, combat.ts hurtHero)', () => {
     hurtHero(ctx, 30, null, null, { unavoidable: true });
     const lost = (x: ArpgWorld) => x.hero.stats.maxHp - x.hero.hp;
     expect(lost(w)).toBeCloseTo(lost(plain) * (1 - moveOf(w, 2).effect), 6);
+  });
+});
+
+describe('the melee versions (forms.ts): a Lance lunge, a Burst eruption, a Maelstrom that follows', () => {
+  it('a melee Lance lunges the line, striking every foe it passes; a ranged one beams as before', () => {
+    // The lunge stops at 31; the beam reaches 28.5, so the foe at 29 tells them apart.
+    const foes = () => [dummy(13, 33), dummy(13, 31.5), dummy(13, 29), dummy(18, 31)];
+    const melee = arena(foes(), { noBasic: true, primary: { form: 'lance' } });
+    const events = press(melee, 0);
+    expect(melee.monsters.slice(0, 2).every(damaged)).toBe(true);
+    expect(damaged(melee.monsters[2])).toBe(false);
+    expect(damaged(melee.monsters[3])).toBe(false);
+    expect(events.some((e) => e.kind === 'dash')).toBe(true);
+    expect(events.some((e) => e.kind === 'beam')).toBe(false);
+    expect(36 - melee.hero.y).toBeCloseTo(registry.getForm('lance').melee!.range!, 0);
+    expect(melee.hero.invulnUntil).toBeLessThanOrEqual(melee.t);
+    const ranged = arena(foes(), { noBasic: true, weapon: 'staff', primary: { form: 'lance' } });
+    const beam = press(ranged, 0);
+    expect(ranged.monsters.slice(0, 3).every(damaged)).toBe(true);
+    expect(beam.some((e) => e.kind === 'beam')).toBe(true);
+    // Lance's own recoil (−0.3) is all that moves a ranged caster.
+    expect(ranged.hero.y).toBeCloseTo(36, 0);
+  });
+
+  it('a melee Burst erupts at the aim point at once, within its range; a ranged one is thrown', () => {
+    const melee = arena([dummy(13, 31)], { noBasic: true, primary: { form: 'burst' } });
+    press(melee, 0, { x: 13, y: 31 });
+    expect(damaged(melee.monsters[0])).toBe(true);
+    expect(melee.zones.some((z) => z.source === 'burst')).toBe(false);
+    const ranged = arena([dummy(13, 31)], {
+      noBasic: true,
+      weapon: 'staff',
+      primary: { form: 'burst' },
+    });
+    press(ranged, 0, { x: 13, y: 31 });
+    expect(damaged(ranged.monsters[0])).toBe(false);
+    expect(ranged.zones.some((z) => z.source === 'burst')).toBe(true);
+  });
+
+  it('a melee Maelstrom rides the hero; a ranged one stays where it was placed', () => {
+    // Off the hero's path, so no separation push shifts the hero after the zone has moved.
+    const melee = arena([dummy(15, 24)], {
+      noBasic: true,
+      ultimate: { form: 'maelstrom', payment: 'mana' },
+    });
+    press(melee, 2);
+    const z = melee.zones.find((q) => q.source === 'maelstrom')!;
+    expect(z.follow).toBe(true);
+    expect([z.x, z.y]).toEqual([melee.hero.x, melee.hero.y]);
+    const events = run(melee, 3, { x: 0, y: -1 });
+    expect(melee.hero.y).toBeLessThan(28);
+    expect(z.y).toBeCloseTo(melee.hero.y, 3);
+    expect(hits(events, melee.monsters[0].id).length).toBeGreaterThan(0);
+    const ranged = arena([dummy(13, 28)], {
+      noBasic: true,
+      weapon: 'staff',
+      ultimate: { form: 'maelstrom', payment: 'mana' },
+    });
+    press(ranged, 2);
+    run(ranged, 1, { x: 1, y: 0 });
+    expect(ranged.zones.find((q) => q.source === 'maelstrom')!.x).toBe(13);
   });
 });
