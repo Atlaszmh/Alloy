@@ -2,6 +2,7 @@ import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
 import type { RuneRef } from '../types/rune.js';
+import type { Construct } from '../types/ability.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
 import type { Buff } from '../types/boon.js';
 import type { Haul, SettleOutcome } from '../types/crafting.js';
@@ -166,6 +167,8 @@ export interface BankResult {
   dust: number;
   /** Links from weapons melted by auto-salvage or a full bag. */
   links: number;
+  /** Constructs of weapons melted by auto-salvage or a full bag, into the floor's haul (see the constructs spec §3.3). */
+  constructs: Construct[];
   /** Runes picked up, into the floor's haul (see the runes spec). */
   runes: RuneRef[];
   /** Patterns picked up and learned (see the crafting spec). */
@@ -258,6 +261,7 @@ export function bankWorld(
     scrap: scrap + bagged.scrap,
     dust: bagged.dust,
     links: bagged.links,
+    constructs: bagged.constructs,
     runes,
     patterns,
   };
@@ -362,7 +366,7 @@ export function failFloor(
   // A guided depth's death: Hesta pulls the hero back to the depth as it was entered, nothing lost.
   if (profile.tutorial && profile.dive?.tutorialEntry) {
     const retried = retryTutorialDepth(registry, profile);
-    return { profile: retried, kept: [], salvaged: [], bagFull: false, newCodex: [], newReactions: [], scrap: 0, dust: 0, links: 0, runes: [], patterns: [] };
+    return { profile: retried, kept: [], salvaged: [], bagFull: false, newCodex: [], newReactions: [], scrap: 0, dust: 0, links: 0, constructs: [], runes: [], patterns: [] };
   }
   const banked = bankWorld(registry, profile, world, opts);
   const dive = banked.profile.dive!;
