@@ -305,6 +305,8 @@ describe('balance: delve.runes', () => {
   it("loads the spec's numbers", () => {
     expect(bal.runes).toEqual({
       socketCap: { common: 1, uncommon: 1, magic: 2, rare: 2, epic: 3, legendary: 3 },
+      // The constructs spec §3.5: a drop's socketed rune (the switch task reads it).
+      runeChance: { common: 0, uncommon: 0, magic: 0.05, rare: 0.1, epic: 0.2, legendary: 0.35 },
       socketLinks: [1, 2, 3],
       socketScrap: [20, 40, 60],
       socketDrops: {
