@@ -37,13 +37,16 @@ describe('TakeSheet', () => {
     );
   });
 
-  it("Move all is the engine's op (B2 fills it): until then it refuses, and the sheet stays open", () => {
+  it('Move all wears the weapon with your constructs on it, the old one to the bag, and closes', () => {
     const onClose = vi.fn();
     const before = store().profile.equipped.weapon!;
+    const basic = before.moveset!.chains.basic!.map((b) => b.uid);
     render(<TakeSheet uid="w1" onClose={onClose} />);
     fireEvent.click(screen.getByTestId('take-transfer'));
-    expect(store().profile.equipped.weapon?.uid).toBe(before.uid);
-    expect(onClose).not.toHaveBeenCalled();
+    expect(store().profile.equipped.weapon?.uid).toBe('w1');
+    expect(store().profile.equipped.weapon?.moveset?.chains.basic!.map((b) => b.uid)).toEqual(basic);
+    expect(store().profile.bag.some((i) => i.uid === before.uid)).toBe(true);
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('Equip wears it as it is, its moveset its own', () => {

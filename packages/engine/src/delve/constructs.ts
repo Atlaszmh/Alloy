@@ -1,5 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
-import { constructSkill, formAllowed, isPlain, movesetOf } from '../loot/moveset.js';
+import { constructSkill, formAllowed, isPlain, moveAllPreview, movesetOf } from '../loot/moveset.js';
 import {
   CHAIN_SKILLS,
   type Blow,
@@ -12,8 +12,9 @@ import type { DelveProfile } from '../types/delve.js';
 import type { RuneRef } from '../types/rune.js';
 import { isDiveActive } from './dive.js';
 import { classRefusal, movesOf, setChains } from './moveset.js';
-import { withMoveset, type ProfileActionResult } from './profile.js';
+import { mintMoveset, withMoveset, type ProfileActionResult } from './profile.js';
 import type { SetChainsOptions } from './runes.js';
+import { applyTutorialEvents } from './tutorial.js';
 
 /**
  * The construct operations (the constructs spec §3.3): the Skills tab's draft
@@ -37,7 +38,7 @@ function refuse(profile: DelveProfile, reason: string): ProfileActionResult {
 }
 
 /** A moveset's constructs minted in chain order (Move all's refill, `chooseStartingMana`): Phase A's helper. */
-export { mintMoveset } from './profile.js';
+export { mintMoveset };
 
 /**
  * `constructs` into the bag, the one door into `profile.constructs` (the spec's
@@ -213,13 +214,35 @@ export function unsocketConstruct(
   });
 }
 
-/** Move all (the constructs spec §3.3): the worn weapon's constructs onto bag weapon `uid`, equipped (B2 fills it). */
-export function moveAll(
-  _registry: DataRegistry,
-  profile: DelveProfile,
-  _uid: string,
-): ProfileActionResult {
-  return refuse(profile, NOT_YET);
+/**
+ * Move all (the constructs spec §3.3): every construct on the worn weapon
+ * goes onto bag weapon `uid` slot for slot, each chain's payment with it
+ * (`moveAllPreview`); those past the target's slots and the target's own go
+ * to the bag (`intoBag`); those the target's class can't express stay,
+ * dormant. A target skill the worn weapon moves nothing into keeps its own.
+ * The old weapon goes to the bag refilled plain, its uids minted here
+ * (`mintMoveset`). No scrap; commits at once, then emits the tutorial's
+ * `moveAll`. Refuses mid-dive, unarmed and anything but a bag weapon.
+ */
+export function moveAll(registry: DataRegistry, profile: DelveProfile, uid: string): ProfileActionResult {
+  if (isDiveActive(profile)) return refuse(profile, 'Move your constructs between dives');
+  const worn = profile.equipped.weapon;
+  if (!worn) return refuse(profile, UNARMED_TEXT);
+  const target = profile.bag.find((i) => i.uid === uid && i.slot === 'weapon');
+  if (!target) return refuse(profile, 'Move onto a weapon in your bag');
+  const { moveset, toBag, old } = moveAllPreview(registry, worn, target);
+  const [refill, minted] = mintMoveset(profile, old);
+  const item = { ...target, moveset };
+  const moved: DelveProfile = {
+    ...minted,
+    equipped: { ...profile.equipped, weapon: item },
+    bag: [...profile.bag.filter((i) => i.uid !== uid), { ...worn, moveset: refill }],
+  };
+  return {
+    ok: true,
+    item,
+    profile: applyTutorialEvents(registry, intoBag(moved, toBag), [{ type: 'moveAll' }]),
+  };
 }
 
 /** Salvage bag construct `uid`: its runes to the pouch at the pull price, `salvageDust` Dust (B2 fills it). */
