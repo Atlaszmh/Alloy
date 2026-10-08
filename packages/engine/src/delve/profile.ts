@@ -78,7 +78,7 @@ export function createDelveProfile(
   Object.assign(materials.metals, kit.startingMaterials.metals);
   Object.assign(materials.flux, kit.startingMaterials.flux);
   const profile: DelveProfile = {
-    version: 13,
+    version: 14,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -291,15 +291,15 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
 }
 
 /**
- * Validate an unknown JSON blob as a save. A version 13 save is fitted to the
+ * Validate an unknown JSON blob as a save. A version 14 save is fitted to the
  * data (`fitMovesets`); a save of any other version, or one whose constructs
  * don't fit (a uid twice, a construct out of its skill, a chain past its
  * slots, an empty Basic), is `{ reset: true }`. Null when it isn't an object,
- * or a version 13 save doesn't fit the schema.
+ * or a version 14 save doesn't fit the schema (a saved construct without its uid).
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  if ((raw as { version?: unknown }).version !== 13) return { reset: true };
+  if ((raw as { version?: unknown }).version !== 14) return { reset: true };
   const parsed = DelveProfileSchema.safeParse(raw);
   if (!parsed.success) return null;
   const fitted = fitMovesets(registry, parsed.data as DelveProfile);

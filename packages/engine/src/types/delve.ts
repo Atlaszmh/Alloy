@@ -890,7 +890,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 13;
+  version: 14;
   seed: number;
   diveCount: number;
   forgeCount: number;

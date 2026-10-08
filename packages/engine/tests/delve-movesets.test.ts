@@ -31,6 +31,7 @@ import { bindSecondary, chooseStartingMana, reattuneItem } from '../src/delve/pa
 import {
   addLootToBag,
   createDelveProfile,
+  mintMoveset,
   equipBest,
   equipItem,
   parseDelveProfile,
@@ -320,7 +321,12 @@ describe('determinism', () => {
 });
 
 describe('save schema: a weapon moveset', () => {
-  const sword = weapon('uncommon', 1, 'sword');
+  // A saved construct carries its uid (save v14): the drop's moveset minted first.
+  const sword = (() => {
+    const w = weapon('uncommon', 1, 'sword');
+    const [moveset] = mintMoveset(createDelveProfile(registry, 1), w.moveset!);
+    return { ...w, moveset };
+  })();
 
   it('reads an item with a moveset, and one without; `bought` defaults to none', () => {
     expect(GearItemSchema.safeParse(sword).success).toBe(true);
@@ -452,10 +458,11 @@ describe('an absent skill (a null chain)', () => {
 describe('a save: fitting its weapons to the data at load', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 
-  it("gives a weapon without a moveset its defaults, minted; keeps a kept chain's slots; mints a missing uid", () => {
-    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+  it("gives a weapon without a moveset its defaults, minted; keeps a kept chain's slots; a missing uid is refused (save v14)", () => {
+    const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
     const { moveset: _m, ...bare } = weapon('magic', 6, 'bow');
-    const rare = weapon('rare', 5, 'axe');
+    const [rareMoveset, p] = mintMoveset(p0, weapon('rare', 5, 'axe').moveset!);
+    const rare = { ...weapon('rare', 5, 'axe'), moveset: rareMoveset };
     const [one, two] = rare.moveset!.chains.basic!;
     const bag = [
       bare, // no moveset: its defaults, minted
@@ -466,8 +473,10 @@ describe('a save: fitting its weapons to the data at load', () => {
           slots: { basic: 2, primary: rare.moveset!.slots.primary },
           bought: {},
         },
-      }, // two skills left out and a short basic string: kept as they are, uids minted
+      }, // two skills left out and a short basic string: kept as they are
     ];
+    // Unminted, the rare's constructs refuse the save.
+    expect(parseDelveProfile(registry, json({ ...p, bag: [weapon('rare', 5, 'axe')] }))).toBeNull();
     const loaded = parseDelveProfile(registry, json({ ...p, bag }))!;
     expect('profile' in loaded).toBe(true);
     const fitted = (loaded as { profile: DelveProfile }).profile.bag;

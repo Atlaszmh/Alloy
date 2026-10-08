@@ -331,11 +331,10 @@ describe('the bag, the haul and the load', () => {
     expect(parseDelveProfile(registry, json(overBought))).toEqual({ reset: true });
     const past = { ...p, equipped: { ...p.equipped, weapon: { ...sword, moveset: { ...m, slots: { ...m.slots, primary: 1 } } } } };
     expect(parseDelveProfile(registry, json(past))).toBeNull(); // the schema itself: a chain past its slots
-    // A save without uids loads: they are minted (v14 requires them).
+    // A saved construct without its uid is refused (save v14).
     const bare = json(p);
     for (const b of bare.equipped.weapon.moveset.chains.basic) delete b.uid;
-    const loaded = parseDelveProfile(registry, bare)!;
-    expect('profile' in loaded && loaded.profile.equipped.weapon!.moveset!.chains.basic!.every((b) => !!b.uid)).toBe(true);
+    expect(parseDelveProfile(registry, bare)).toBeNull();
   });
 
   it('the choice of mana replaces the constructs with plain ones in the primary, minted', () => {

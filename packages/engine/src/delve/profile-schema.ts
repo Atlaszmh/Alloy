@@ -13,7 +13,7 @@ import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import { CONTRACT_TIERS } from '../types/quests.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves (version 13 only) — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 14 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
@@ -58,7 +58,7 @@ export const RuneRefSchema = z.object({
 /** A move's or a blow's open sockets, each a rune or null (see the runes spec). */
 const SocketsSchema = z.array(RuneRefSchema.nullable()).max(MAX_SOCKETS).optional();
 
-/** A construct's id, `c<n>` (the constructs spec §3.1); optional until save v14 requires it. */
+/** A construct's id, `c<n>` (the constructs spec §3.1): optional on a chain outside a save (the Training Grounds' sandbox); a save requires it (`SavedMoveSchema`). */
 const UidSchema = z.string().min(1).optional();
 
 export const MoveSchema = z.object({
@@ -76,8 +76,12 @@ export const BlowSchema = z.object({
   runes: SocketsSchema,
 });
 
+/** A saved construct carries its uid (save v14): the weapon's chains, the bag and a haul. */
+const SavedMoveSchema = MoveSchema.extend({ uid: z.string().min(1) });
+const SavedBlowSchema = BlowSchema.extend({ uid: z.string().min(1) });
+
 /** A move or a blow in the bag or a haul (the constructs spec §3.1). */
-export const ConstructSchema = z.union([MoveSchema, BlowSchema]);
+export const ConstructSchema = z.union([SavedMoveSchema, SavedBlowSchema]);
 
 /** Loose runes: rune id → counts by tier. */
 export const RunePouchSchema = z.record(
@@ -115,9 +119,14 @@ export const ChainSchema = z.object({
   payment: PaymentSchema,
 });
 
-/** A chain whose every move is one of `slot`'s forms. */
+/** A saved chain: every move with its uid (save v14). */
+const SavedChainSchema = ChainSchema.extend({
+  moves: z.array(SavedMoveSchema).min(0).max(MAX_CHAIN),
+});
+
+/** A saved chain whose every move is one of `slot`'s forms. */
 function slotChain(slot: AbilitySlot) {
-  return ChainSchema.refine(
+  return SavedChainSchema.refine(
     (c) => c.moves.every((m) => SLOT_FORMS[slot].includes(m.form)),
     `every move must be a ${slot} form`,
   );
@@ -129,7 +138,7 @@ const CapSchema = z.number().int().min(1).max(MAX_CHAIN);
 export const MovesetSchema = z
   .object({
     chains: z.object({
-      basic: z.array(BlowSchema).min(1).max(MAX_CHAIN).optional(),
+      basic: z.array(SavedBlowSchema).min(1).max(MAX_CHAIN).optional(),
       primary: slotChain('primary').optional(),
       defensive: slotChain('defensive').optional(),
       ultimate: slotChain('ultimate').optional(),
@@ -317,7 +326,7 @@ const TutorialStateSchema = z.object({ step: z.string().min(1), count, misses: c
  * rebuild a different floor); older saves reset. Every field but the dive.
  */
 const ProfileSchema = z.object({
-  version: z.literal(13),
+  version: z.literal(14),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
