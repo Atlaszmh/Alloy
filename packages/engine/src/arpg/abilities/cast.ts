@@ -164,6 +164,7 @@ function fire(
     tx: res.tx,
     ty: res.ty,
     heft: stepHeft(ab),
+    ...(ab.look && { look: ab.look }),
   });
   if (ab.motion < 0) {
     const d = dirTo(h.x, h.y, res.tx, res.ty);

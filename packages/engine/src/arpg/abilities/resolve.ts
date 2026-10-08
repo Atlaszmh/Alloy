@@ -12,8 +12,10 @@ import {
   type MoveKind,
   type ResolvedAbility,
   type ResolvedChain,
+  type WeaponClass,
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
+import type { CastStyle, FormDef } from '../../types/arpg.js';
 import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
 import { extraShotPower, loadEase, runeFits, runeKnobs, runeLoad } from '../../loot/runes.js';
 import type { RuneRef } from '../../types/rune.js';
@@ -113,6 +115,35 @@ export function mergeKnobs(...parts: KnobsData[]): Knobs {
   return k;
 }
 
+/**
+ * A form as a weapon's cast style expresses it (the constructs spec §4.2): a
+ * melee weapon takes the form's `melee` overrides first, then the style's
+ * numbers scale the wind-up (B1 wires it), cooldown (B1), power, range, radius,
+ * speed and duration. With every factor 1 and no `melee` block (or no style:
+ * unarmed) the form comes back as it is.
+ */
+export function applyStyle(
+  form: FormDef,
+  cls: WeaponClass | null,
+  style: CastStyle | null,
+): FormDef {
+  const base = cls === 'melee' && form.melee ? { ...form, ...formOverrides(form.melee) } : form;
+  if (!style) return base;
+  const n = style.numbers;
+  const scaled = { ...base, power: base.power * n.power };
+  if (base.range !== undefined) scaled.range = base.range * n.range;
+  if (base.radius !== undefined) scaled.radius = base.radius * n.radius;
+  if (base.speed !== undefined) scaled.speed = base.speed * n.speed;
+  if (base.duration !== undefined) scaled.duration = base.duration * n.duration;
+  return scaled;
+}
+
+/** A `melee` block's numbers, its text left out (the text is the client's). */
+function formOverrides(melee: NonNullable<FormDef['melee']>): Partial<FormDef> {
+  const { text: _text, ...numbers } = melee;
+  return numbers;
+}
+
 /** The weight a move resolves at: its kind's (`chains.kindWeight`), a hold's by its stage. */
 export function moveWeight(bal: DelveBalance, kind: Move['kind'], stage = 0): number {
   const c = bal.chains;
@@ -135,7 +166,10 @@ export function resolveAbility(
   const data = registry.getArpgData();
   const bal = registry.getDelveBalance();
   const ab = bal.abilities;
-  const form = registry.getForm(move.form);
+  // The form as the weapon's cast style expresses it: the form's base, the melee block, the
+  // style's numbers (the constructs spec §4.2). In Phase A every style is inert.
+  const style = stats.weapon.style ?? null;
+  const form = applyStyle(registry.getForm(move.form), stats.weapon.class ?? null, style);
   if (form.slot !== slot) throw new Error(`${form.name} is not a ${slot} form`);
   const [element, second] = move.elements;
   const fusion =
@@ -150,8 +184,10 @@ export function resolveAbility(
   if (L.rimeheart && move.form === 'nova' && move.elements.includes('frost')) {
     legendary.push({ zone: { seconds: 3, tickPower: 0.15 } });
   }
-  // A dive's boons' knobs merge beside the legendaries' (see the boons spec's 2a).
+  // The style's trait merges first, like a built-in rune that costs nothing; a dive's boons'
+  // knobs merge beside the legendaries' (see the boons spec's 2a).
   const own = [
+    style?.trait ?? {},
     ...move.elements.map((e) => data.elementTraits[e].knobs),
     fusion?.knobs ?? {},
     ...legendary,
@@ -208,6 +244,7 @@ export function resolveAbility(
     index: 0,
     last: false,
     form,
+    look: style?.look ?? null,
     name: `${fusion ? fusion.name : data.mana[element].name} ${form.name}`,
     icon: form.icon,
     element,

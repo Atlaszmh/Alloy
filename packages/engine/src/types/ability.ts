@@ -1,5 +1,5 @@
 import type { ManaType } from './mana.js';
-import type { FormDef, FusionDef, StatusId, Vec } from './arpg.js';
+import type { FormDef, FusionDef, StatusId, StyleLook, Vec } from './arpg.js';
 import type { RuneRef } from './rune.js';
 
 /**
@@ -214,7 +214,10 @@ export interface ResolvedAbility {
   /** Its place in the chain (from 0), and whether it is the last move of a chain of 2 or more. */
   index: number;
   last: boolean;
+  /** The form as the weapon's cast style expresses it (`applyStyle`). */
   form: FormDef;
+  /** The casting weapon's style look (the constructs spec §4.2), drawn by the client; unarmed null. */
+  look: StyleLook | null;
   /** "Wildfire Burst", "Frost Ward". */
   name: string;
   icon: string;
