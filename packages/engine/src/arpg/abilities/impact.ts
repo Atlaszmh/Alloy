@@ -22,6 +22,43 @@ const EMBER_FORMS = new Set(['bolt', 'burst', 'barrage']);
 
 /** A Split shard's size: it hits what it touches. */
 const SHARD_RADIUS = 0.2;
+/** Detonate's blast round a foe a contact hit struck (the constructs spec §2.3). */
+const DETONATE_RADIUS = 1.5;
+
+/** The move's style look for an event (`ResolvedAbility.look`): nothing without one. */
+export function lookOf(ab: ResolvedAbility): { look?: NonNullable<ResolvedAbility['look']> } {
+  return ab.look ? { look: ab.look } : {};
+}
+
+/**
+ * Detonate (the constructs spec §2.3): a contact hit on `m` sets off a blast of
+ * `knobs.detonate` × `damage` round it, on every other foe the foe's point sees
+ * within `DETONATE_RADIUS`, as a non-direct skill hit (tick stacks; no chain,
+ * zone or shards of its own). The struck foe is not in its own blast. Nothing
+ * without the knob.
+ */
+export function detonate(ctx: SimCtx, ab: ResolvedAbility, m: MonsterEntity, damage: number): void {
+  const k = ab.knobs.detonate;
+  // Contact only: an Echo's replay sets nothing off.
+  if (k <= 0 || ab.replay) return;
+  const { world } = ctx;
+  const at = { x: m.x, y: m.y };
+  ctx.events.push({
+    kind: 'explode',
+    x: at.x,
+    y: at.y,
+    radius: DETONATE_RADIUS,
+    element: ab.element,
+    infusion: null,
+    ...lookOf(ab),
+  });
+  const opts = hitOpts(ab, at, false, false, 0);
+  for (const o of alive(ctx)) {
+    if (o === m || dist(at.x, at.y, o.x, o.y) > DETONATE_RADIUS + o.radius) continue;
+    if (!sees(world.map, at, o)) continue;
+    hitMonster(ctx, o, damage * k, ab.element, opts);
+  }
+}
 
 export function slotIndex(ab: ResolvedAbility): number {
   return ABILITY_SLOTS.indexOf(ab.slot);
@@ -272,6 +309,7 @@ export function impact(
       radius,
       element: ab.element,
       infusion: o.tick ? null : (ab.elements[1] ?? null),
+      ...lookOf(ab),
     });
 
   const hits = alive(ctx).filter(
@@ -279,6 +317,8 @@ export function impact(
   );
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
+  // Detonate: each foe a direct impact struck (a Volley dart's) blasts round itself.
+  if (!o.tick && !o.through) for (const m of hits) detonate(ctx, ab, m, damage);
   // Its area reaches props, hazards and crumbling cover; a tick's, an Echo's and a Pierce shot's
   // past its first foe never do (see the room objects spec).
   if (!o.tick && !ab.replay && !o.through) {
