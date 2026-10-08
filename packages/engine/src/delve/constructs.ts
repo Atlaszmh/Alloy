@@ -26,6 +26,20 @@ function refuse(profile: DelveProfile, reason: string): ProfileActionResult {
   return { ok: false, profile, reason };
 }
 
+/** A moveset's constructs minted in chain order (Move all's refill, `chooseStartingMana`): Phase A's helper. */
+export { mintMoveset } from './profile.js';
+
+/**
+ * `constructs` into the bag, the one door into `profile.constructs` (the spec's
+ * auto-salvage of plain constructs, §3.3): a plain one (no socket, no rune) is
+ * dropped when `autoSalvagePlain`. Nothing is copied: no op changes a construct in place.
+ */
+export function intoBag(profile: DelveProfile, constructs: readonly Construct[]): DelveProfile {
+  const kept = profile.autoSalvagePlain ? constructs.filter((c) => !isPlain(c)) : constructs;
+  if (kept.length === 0) return profile;
+  return { ...profile, constructs: [...profile.constructs, ...kept] };
+}
+
 /**
  * Why `draft` can't be applied, or null (the dry run the client's Apply reads):
  * a uid in both the chains and the bag; a saved uid (the worn weapon's chains'
