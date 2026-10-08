@@ -14,19 +14,27 @@ export type AbilitySlot = 'primary' | 'defensive' | 'ultimate';
 
 export const ABILITY_SLOTS: readonly AbilitySlot[] = ['primary', 'defensive', 'ultimate'] as const;
 
+/** A weapon's class (see the constructs spec §2.1): which forms it can express. */
+export type WeaponClass = 'melee' | 'ranged';
+/** A form's class: one weapon class, or both. */
+export type FormClass = WeaponClass | 'both';
+
 export type FormId =
   | 'bolt'
   | 'volley'
   | 'lance'
   | 'burst'
   | 'strike'
+  | 'whirl'
   | 'ward'
   | 'armor'
   | 'surge'
   | 'blink'
+  | 'repel'
   | 'nova'
   | 'barrage'
-  | 'maelstrom';
+  | 'maelstrom'
+  | 'onslaught';
 
 /** Swift, Quick, Balanced, Heavy, Crushing: the per-weight tables' index − 2 (a version 4 build's weight). */
 export type AbilityWeight = -2 | -1 | 0 | 1 | 2;
@@ -43,8 +51,13 @@ export const MOVE_KINDS: readonly MoveKind[] = ['light', 'medium', 'heavy', 'hol
 /** The kinds whose numbers a hold's three stages take (Volley's darts, a basic hold's rows). */
 export const HOLD_STAGE_KINDS: readonly MoveKind[] = ['medium', 'heavy', 'hold'] as const;
 
-/** One move of an ability chain: its kind, a form of the chain's slot, and one or two elements. */
+/**
+ * One move of an ability chain: its kind, a form of the chain's slot, and one or two elements.
+ * A construct (the constructs spec §3.1) once it has a `uid`.
+ */
 export interface Move {
+  /** Its construct id, `c<n>` from `profile.nextUid`; absent in a world drop and in the sandbox. */
+  uid?: string;
   kind: MoveKind;
   form: FormId;
   /** One element, or two distinct elements (a fusion). */
@@ -53,7 +66,10 @@ export interface Move {
   runes?: (RuneRef | null)[];
 }
 
-/** An ability slot's chain: each press casts its next move; one payment for every move. */
+/**
+ * An ability slot's chain: each press casts its next move; one payment for every move. It holds
+ * 0 to its slots' moves (an empty chain plays as an uncarried skill: the constructs spec §3.1).
+ */
 export interface Chain {
   moves: Move[];
   payment: AbilityPayment;
@@ -61,11 +77,16 @@ export interface Chain {
 
 /** One blow of the basic chain: the weapon's row for its kind, in its element. */
 export interface Blow {
+  /** Its construct id, as a move's. */
+  uid?: string;
   kind: MoveKind;
   element: ManaType;
   /** Its open sockets, as a move's. */
   runes?: (RuneRef | null)[];
 }
+
+/** A move or a blow: what the bag holds and a slot takes (the constructs spec §3.1). */
+export type Construct = Move | Blow;
 
 /** A skill that holds a chain: the basic attack or an ability slot. */
 export type ChainSkill = 'basic' | AbilitySlot;
@@ -153,6 +174,14 @@ export interface Knobs {
   guardOnLand: number;
   /** Stack duration × (1 + this), where a hit's stacks are applied (a boon's; see the boons spec). */
   stackTime: number;
+  /** Detonate (the constructs spec §2.3): each contact hit sets off a blast of this power around the foe (0: none). */
+  detonate: number;
+  /** A cast style's trait: crit chance added to the move's hits, 0–1 (the dagger's). Not the hero stat `critChance`. */
+  critBonus: number;
+  /** A cast style's trait: a single-target hit cleaves a small arc behind its first foe (the axe's; 0: none). */
+  cleave: number;
+  /** A cast style's trait: shots home toward foes, radians a second (the wand's; 0: none). */
+  homing: number;
 }
 
 /** Knobs as data sets them (elements, fusions, runes): partial, `pierce` true for all. */

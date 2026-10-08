@@ -1,8 +1,16 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, ChainSkill, FormId, Knobs, KnobsData, MoveKind } from './ability.js';
+import type {
+  AbilitySlot,
+  ChainSkill,
+  FormId,
+  Knobs,
+  KnobsData,
+  MoveKind,
+  WeaponClass,
+} from './ability.js';
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
-import type { MonsterKind } from './arpg.js';
+import type { CastStyle, MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
 import type { AiBalance, LayoutBalance, LayoutsData, TerrainBalance } from './floor-map.js';
@@ -91,6 +99,10 @@ export interface GearBaseDef {
   tempo?: number;
   /** Weapons only: the side a blow's side step takes when the steering doesn't pick one (default `alternate`). */
   sway?: WeaponSway;
+  /** Weapons only (every weapon has one): its class, which forms it can express (the constructs spec §2.1). */
+  class?: WeaponClass;
+  /** Weapons only (every weapon has one): its cast style (the constructs spec §4). */
+  style?: CastStyle;
   weight: number;
   implicits: ImplicitTemplate[];
 }

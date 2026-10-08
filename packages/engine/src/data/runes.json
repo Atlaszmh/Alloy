@@ -62,8 +62,11 @@
         "lance",
         "burst",
         "strike",
+        "whirl",
         "ward",
+        "repel",
         "nova",
+        "onslaught",
         "barrage",
         "maelstrom"
       ],
@@ -80,7 +83,7 @@
     "icon": "⭕",
     "family": "shape",
     "fits": {
-      "forms": ["burst", "nova", "maelstrom", "strike", "ward"],
+      "forms": ["burst", "nova", "onslaught", "maelstrom", "strike", "whirl", "ward", "repel"],
       "weapons": ["dagger", "sword", "axe", "maul"]
     },
     "tiers": [
@@ -106,11 +109,14 @@
         "lance",
         "burst",
         "strike",
+        "whirl",
         "ward",
+        "repel",
         "armor",
         "surge",
         "blink",
         "nova",
+        "onslaught",
         "barrage",
         "maelstrom"
       ],
@@ -133,7 +139,7 @@
     "icon": "🔁",
     "family": "tempo",
     "fits": {
-      "forms": ["bolt", "volley", "lance", "burst", "strike", "nova", "barrage", "maelstrom"],
+      "forms": ["bolt", "volley", "lance", "burst", "strike", "whirl", "nova", "onslaught", "barrage", "maelstrom"],
       "weapons": ["dagger", "sword", "axe", "maul", "staff", "wand", "bow"]
     },
     "tiers": [
@@ -153,7 +159,7 @@
     "icon": "🔨",
     "family": "tempo",
     "fits": {
-      "forms": ["bolt", "volley", "lance", "burst", "strike", "nova", "barrage", "maelstrom"],
+      "forms": ["bolt", "volley", "lance", "burst", "strike", "whirl", "nova", "onslaught", "barrage", "maelstrom"],
       "weapons": ["dagger", "sword", "axe", "maul", "staff", "wand", "bow"]
     },
     "tiers": [
@@ -179,9 +185,12 @@
         "lance",
         "burst",
         "strike",
+        "whirl",
         "ward",
+        "repel",
         "blink",
         "nova",
+        "onslaught",
         "barrage",
         "maelstrom"
       ],
@@ -204,7 +213,7 @@
     "icon": "☁️",
     "family": "elemental",
     "fits": {
-      "forms": ["bolt", "lance", "burst", "strike", "nova"],
+      "forms": ["bolt", "lance", "burst", "strike", "whirl", "nova", "onslaught"],
       "weapons": ["dagger", "sword", "axe", "maul", "staff", "wand", "bow"],
       "kinds": ["heavy", "hold"]
     },
@@ -231,10 +240,13 @@
         "lance",
         "burst",
         "strike",
+        "whirl",
         "ward",
+        "repel",
         "armor",
         "blink",
         "nova",
+        "onslaught",
         "barrage",
         "maelstrom"
       ],
@@ -263,10 +275,13 @@
         "lance",
         "burst",
         "strike",
+        "whirl",
         "ward",
+        "repel",
         "armor",
         "blink",
         "nova",
+        "onslaught",
         "barrage",
         "maelstrom"
       ],
@@ -295,10 +310,13 @@
         "lance",
         "burst",
         "strike",
+        "whirl",
         "ward",
+        "repel",
         "armor",
         "blink",
         "nova",
+        "onslaught",
         "barrage",
         "maelstrom"
       ],
@@ -327,11 +345,14 @@
         "lance",
         "burst",
         "strike",
+        "whirl",
         "ward",
+        "repel",
         "armor",
         "surge",
         "blink",
         "nova",
+        "onslaught",
         "barrage",
         "maelstrom"
       ],

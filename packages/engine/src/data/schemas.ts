@@ -186,6 +186,29 @@ export const DelveDataSchema = z.object({
         defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN).optional(),
         tempo: z.number().positive().optional(),
         sway: z.enum(['alternate', 'orbit']).optional(),
+        // Weapons only (every weapon has both): its class and its cast style (the constructs spec §2.1, §4.1).
+        class: z.enum(['melee', 'ranged']).optional(),
+        style: z
+          .object({
+            name: z.string().min(1),
+            numbers: z
+              .object({
+                windup: z.number().positive(),
+                cooldown: z.number().positive(),
+                power: z.number().positive(),
+                range: z.number().positive(),
+                radius: z.number().positive(),
+                speed: z.number().positive(),
+                duration: z.number().positive(),
+              })
+              .strict(),
+            motion: z.enum(['none', 'dart', 'step', 'wade', 'plant', 'sway', 'orbit', 'back']),
+            // `KnobsSchema` is declared below: lazy, so the file keeps its order.
+            trait: z.lazy(() => KnobsSchema),
+            look: z.enum(['blade', 'crescent', 'hatchet', 'stone', 'orb', 'spark', 'arrow']),
+          })
+          .strict()
+          .optional(),
         weight: z.number().positive(),
         implicits: z.array(
           z.object({
@@ -205,6 +228,13 @@ export const DelveDataSchema = z.object({
             path: [i, 'tempo'],
             message: `${b.id}: ${b.slot === 'weapon' ? 'a weapon base needs a tempo' : 'only a weapon base has a tempo'}`,
           });
+        for (const key of ['class', 'style'] as const)
+          if ((b.slot === 'weapon') !== (b[key] !== undefined))
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, key],
+              message: `${b.id}: ${b.slot === 'weapon' ? `a weapon base needs a ${key}` : `only a weapon base has a ${key}`}`,
+            });
       }),
     ),
   affixes: z
@@ -757,6 +787,11 @@ export const KnobsSchema = z
     manaOnHit: z.number().min(0),
     guardOnLand: z.number().min(0),
     stackTime: z.number().min(0),
+    // The constructs spec: Detonate's blast power (§2.3), and the cast styles' traits (§4.2).
+    detonate: z.number().min(0),
+    critBonus: z.number().min(0).max(1),
+    cleave: z.number().min(0),
+    homing: z.number().min(0),
   })
   .partial()
   .strict();
@@ -969,15 +1004,31 @@ export const ArpgDataSchema = z.object({
           'lance',
           'burst',
           'strike',
+          'whirl',
           'ward',
           'armor',
           'surge',
           'blink',
+          'repel',
           'nova',
           'barrage',
           'maelstrom',
+          'onslaught',
         ]),
         slot: z.enum(['primary', 'defensive', 'ultimate']),
+        // The weapon class that expresses it, or both (the constructs spec §2.1).
+        class: z.enum(['melee', 'ranged', 'both']),
+        // A shared form's melee version: what differs when a melee weapon casts it (B1 fills the rows).
+        melee: z
+          .object({
+            range: z.number().positive().optional(),
+            radius: z.number().positive().optional(),
+            motion: z.number().optional(),
+            speed: z.number().positive().optional(),
+            text: z.string().optional(),
+          })
+          .strict()
+          .optional(),
         name: z.string(),
         icon: z.string(),
         text: z.string(),
@@ -995,7 +1046,7 @@ export const ArpgDataSchema = z.object({
         countByKind: perKind(z.number().int().positive()).optional(),
       }),
     )
-    .length(12),
+    .length(15),
   elementTraits: perMana(z.object({ knobs: KnobsSchema, text: z.string(), defensive: z.string() })),
   fusions: z
     .array(

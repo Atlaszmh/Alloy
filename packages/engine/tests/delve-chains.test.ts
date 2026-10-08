@@ -275,6 +275,8 @@ describe('data: feel tables and default chains', () => {
       lance: [M, M, H],
       burst: [M, M, H],
       strike: [M, M, H, H],
+      // The constructs spec §2.2: a Whirl spins as a Lance strikes.
+      whirl: [M, M, H],
     };
     for (const form of registry.getArpgData().forms)
       expect(form.defaultChain, form.id).toEqual(want[form.id] ?? [M]);
