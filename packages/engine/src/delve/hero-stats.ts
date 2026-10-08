@@ -362,12 +362,12 @@ const TARGETS: Record<string, number> = {
   barrage: 3,
   maelstrom: 3,
   ward: 2.5,
+  repel: 2.5,
   armor: 1,
   surge: 0,
   blink: 1.5,
   // The constructs spec's forms, as their kin until B1 tunes them.
   whirl: 2,
-  repel: 2.5,
   onslaught: 3,
 };
 

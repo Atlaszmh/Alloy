@@ -53,7 +53,7 @@
     {
       "id": "repel", "slot": "defensive", "class": "ranged", "name": "Repel", "icon": "💢",
       "power": 0.6, "effect": 0.5, "radius": 3, "defaultChain": ["medium"],
-      "text": "A pulse that knocks nearby foes back and slows them."
+      "text": "A pulse that knocks the foes around you back and chills them."
     },
     {
       "id": "armor", "slot": "defensive", "class": "melee", "name": "Armor", "icon": "🦺",
