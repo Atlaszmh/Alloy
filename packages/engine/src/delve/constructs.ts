@@ -13,8 +13,9 @@ import type { RuneRef } from '../types/rune.js';
 import { isDiveActive } from './dive.js';
 import { classRefusal, movesOf, setChains } from './moveset.js';
 import { mintMoveset, withMoveset, type ProfileActionResult } from './profile.js';
-import type { SetChainsOptions } from './runes.js';
+import { settleParts, unsocketMode, type SetChainsOptions } from './runes.js';
 import { applyTutorialEvents } from './tutorial.js';
+import { socketsOf } from '../loot/runes.js';
 
 /**
  * The construct operations (the constructs spec §3.3): the Skills tab's draft
@@ -29,7 +30,6 @@ export interface ConstructDraft {
   bag: Construct[];
 }
 
-const NOT_YET = 'Not yet';
 const BETWEEN_DIVES = 'Chains can only change between dives';
 const UNARMED_TEXT = 'Equip a weapon to build your moves';
 
@@ -245,12 +245,39 @@ export function moveAll(registry: DataRegistry, profile: DelveProfile, uid: stri
   };
 }
 
-/** Salvage bag construct `uid`: its runes to the pouch at the pull price, `salvageDust` Dust (B2 fills it). */
+/**
+ * Salvage bag construct `uid` (the constructs spec §3.3): its runes back to
+ * the pouch at the pull price (`pullScrap` by tier in 'pay', `opts.unsocket`
+ * else the balance's; destroyed for nothing in 'destroy') and
+ * `movesets.salvageDust` Mana Dust; its sockets and the Dust spent on it are
+ * not refunded. Refuses mid-dive, a uid not in the bag, and short of the
+ * scrap. Commits at once (the client's Undo keeps the save from before).
+ */
 export function salvageConstruct(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
-  _uid: string,
-  _opts: SetChainsOptions = {},
-): ProfileActionResult & { runes?: RuneRef[] } {
-  return refuse(profile, NOT_YET);
+  uid: string,
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
+): ProfileActionResult {
+  if (isDiveActive(profile)) return refuse(profile, 'Salvage between dives');
+  const c = profile.constructs.find((x) => x.uid === uid);
+  if (!c) return refuse(profile, 'Not in your bag');
+  const bal = registry.getDelveBalance();
+  const runes = socketsOf(c).filter((r): r is RuneRef => r !== null);
+  const pay = unsocketMode(registry, opts.unsocket) === 'pay';
+  const scrap = pay ? runes.reduce((sum, r) => sum + bal.runes.pullScrap[r.tier - 1], 0) : 0;
+  if (profile.scrap < scrap) return refuse(profile, 'Not enough scrap to pull its runes');
+  const settled = settleParts(registry, profile.runes, runes, opts.unsocket);
+  return {
+    ok: true,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
+    profile: {
+      ...profile,
+      constructs: profile.constructs.filter((x) => x.uid !== uid),
+      scrap: profile.scrap - scrap,
+      manaDust: profile.manaDust + bal.movesets.salvageDust,
+      runes: settled.pouch,
+    },
+  };
 }
