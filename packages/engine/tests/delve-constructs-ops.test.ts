@@ -447,3 +447,65 @@ describe('placeConstruct and unsocketConstruct (constructs.ts)', () => {
     expect(out.profile.manaDust).toBe(500);
   });
 });
+
+describe('moveAll (constructs.ts)', () => {
+  /** A hero whose sword holds a bought third Primary slot and Quick I on its first Strike, a magic bow in the bag. */
+  function ready(): DelveProfile {
+    let p = banked(hero(), weapon('bow1', 'bow', 'magic', 7));
+    p = addSlot(registry, p, 'primary').profile;
+    p = openSocket(registry, p, 'primary', 0).profile;
+    return socketRune(registry, p, 'primary', 0, 0, { id: 'quick', tier: 1 }).profile;
+  }
+
+  it("every construct goes onto the target slot for slot, the target's own to the bag, its class-blind ones dormant; the old weapon refills plain, minted; no scrap", () => {
+    const p = ready();
+    const bow = p.bag.find((i) => i.uid === 'bow1')!;
+    const bowSet = movesetOf(registry, bow);
+    // The sword moves into the Basic and the Primary alone: the bow's own constructs there are displaced;
+    // a chain the sword moves nothing into (its Defensive, the Ward) keeps the bow's own.
+    const moved = CHAIN_SKILLS.filter((s) => worn(p).chains[s]);
+    const bowOwn = uids(moved.flatMap((s) => movesOf(bowSet.chains[s])));
+    const swordUids = uids(CHAIN_SKILLS.flatMap((s) => movesOf(worn(p).chains[s])));
+    const res = moveAll(registry, p, 'bow1');
+    expect(res.ok).toBe(true);
+    const q = res.profile;
+    expect(q.equipped.weapon!.uid).toBe('bow1');
+    expect(res.item).toBe(q.equipped.weapon);
+    // Slot for slot: the bow's Primary slots hold the sword's first Strikes (dormant: a bow can't express Strike), its Basic the sword's blows.
+    const onBow = CHAIN_SKILLS.flatMap((s) => movesOf(worn(q).chains[s]));
+    const dormant = dormantUids(registry, q.equipped.weapon!);
+    expect(uids(primary(q)).every((u) => swordUids.includes(u) && dormant.has(u))).toBe(true);
+    expect(uids(basic(q)).every((u) => swordUids.includes(u))).toBe(true);
+    expect(socketsOf(primary(q)[0])).toEqual([{ id: 'quick', tier: 1 }]);
+    // Past the bow's slots and the bow's own: in the bag (every plain construct kept here).
+    const bagUids = uids(q.constructs);
+    for (const u of bowOwn) expect(bagUids).toContain(u);
+    for (const u of swordUids) expect(bagUids.includes(u) || onBow.some((c) => c.uid === u)).toBe(true);
+    expect(moved).toEqual(['basic', 'primary']);
+    expect(worn(q).chains.defensive).toEqual(bowSet.chains.defensive);
+    expect(new Set(uidsOf(q)).size).toBe(uidsOf(q).length);
+    // The old sword: in the bag, its slots kept (the bought one too), each refilled plain with a fresh uid.
+    const old = q.bag.find((i) => i.uid === p.equipped.weapon!.uid)!;
+    const oldSet = movesetOf(registry, old);
+    expect(oldSet.slots).toEqual(worn(p).slots);
+    expect(oldSet.bought).toEqual(worn(p).bought);
+    const refill = CHAIN_SKILLS.flatMap((s) => movesOf(oldSet.chains[s]));
+    expect(refill.every((c) => isPlain(c) && !!c.uid && !swordUids.includes(c.uid))).toBe(true);
+    expect(q.nextConstructUid).toBe(p.nextConstructUid + refill.length);
+    expect([q.scrap, q.links, q.manaDust, q.runes]).toEqual([p.scrap, p.links, p.manaDust, p.runes]);
+  });
+
+  it('under autoSalvagePlain the displaced plain constructs are deleted, the socketed kept', () => {
+    const p = { ...ready(), autoSalvagePlain: true };
+    const q = moveAll(registry, p, 'bow1').profile;
+    expect(q.constructs.every((c) => !isPlain(c))).toBe(true);
+  });
+
+  it('refuses mid-dive, unarmed and anything but a bag weapon', () => {
+    const p = ready();
+    expect(moveAll(registry, startDive(registry, p, 1), 'bow1').reason).toBe('Move your constructs between dives');
+    expect(moveAll(registry, unequipSlot(registry, p, 'weapon'), 'bow1').reason).toBe('Equip a weapon to build your moves');
+    expect(moveAll(registry, p, 'nope').reason).toBe('Move onto a weapon in your bag');
+    expect(moveAll(registry, { ...p, bag: [...p.bag, ring('r1')] }, 'r1').reason).toBe('Move onto a weapon in your bag');
+  });
+});
