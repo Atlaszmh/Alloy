@@ -75,12 +75,13 @@ describe("the guided start's eight floors", () => {
   });
 
   it("set the beats: the uncommon weapon, the brute's slam, the den's elites, the rune, Grask's rare", () => {
+    // Its Primary starts at the table's two (the constructs spec §3.2); its Defensive slot is the
+    // stop's point, and it drops plain (no sockets: the lesson opens the first).
     expect(drop('d1-1', 'blade')).toEqual({
       kind: 'gear',
       base: 'sword',
       rarity: 'uncommon',
       element: 'primary',
-      slots: { primary: 2 },
     });
     expect(floor('d1-2').spawns.find((s) => s.id === 'brute')!.script).toBe('slamOnly');
     const shard = drop('d1-2', 'shard');

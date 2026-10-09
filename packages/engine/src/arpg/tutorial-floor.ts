@@ -124,8 +124,10 @@ const SOCKET_ORDER: readonly ChainSkill[] = ['primary', 'basic', 'ultimate', 'de
 /**
  * A set drop's gear: in the pair's element (`world.loot.pair`: its secondary, or the
  * primary while none is bound), its item level the depth, rolled on `rng`; a weapon
- * carries its rarity's skills at their base slots but the Primary's `slots.primary`,
- * every move its default, and `sockets` open, one a move, the Primary's first.
+ * holds plain constructs in its rarity's starting slots (the constructs spec §3.2) but
+ * the Primary's `slots.primary`, and `sockets` open one a construct in `SOCKET_ORDER`,
+ * round by round up to `MAX_SOCKETS` each, the Primary's first. No construct has a uid
+ * until the weapon banks.
  */
 function setGear(
   registry: DataRegistry,
