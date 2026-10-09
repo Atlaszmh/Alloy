@@ -5,6 +5,7 @@ import { DataRegistry } from '../src/data/registry.js';
 import { tutorialDataProblems } from '../src/data/tutorial-check.js';
 import { forge, hone, refine } from '../src/delve/crafting.js';
 import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
+import { moveAll } from '../src/delve/constructs.js';
 import { addSlot, setChains } from '../src/delve/moveset.js';
 import { bindSecondary } from '../src/delve/pair.js';
 import { createDelveProfile, equipItem, salvageItems } from '../src/delve/profile.js';
@@ -20,9 +21,9 @@ import {
 import { generateItem } from '../src/loot/item-generator.js';
 import { defaultMoveset, movesetOf } from '../src/loot/moveset.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import type { Chain, Move } from '../src/types/ability.js';
+import type { Blow, Chain, Move } from '../src/types/ability.js';
 import type { DelveProfile } from '../src/types/delve.js';
-import type { Rarity } from '../src/types/gear.js';
+import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import { MANA_TYPES } from '../src/types/mana.js';
 import type { TutorialStep } from '../src/types/tutorial.js';
 import { withChains } from './fixtures/arena.js';
@@ -39,6 +40,20 @@ const sword = (rarity: Rarity, uid: string) =>
     { uid, ilvl: 2, rarity, slot: 'weapon', baseId: 'sword', mana: 'fire' },
     new SeededRNG(9),
   );
+/** `item` with a uid on each of its constructs (`<uid>:<skill><i>`), as a banked weapon has. */
+function withUids(item: GearItem): GearItem {
+  const ms = movesetOf(registry, item);
+  const chains = Object.fromEntries(
+    Object.entries(ms.chains).map(([skill, chain]) => {
+      const tag = (m: Move | Blow, i: number) => ({ ...m, uid: `${item.uid}:${skill}${i}` });
+      return [
+        skill,
+        Array.isArray(chain) ? chain.map(tag) : { ...chain, moves: chain.moves.map(tag) },
+      ];
+    }),
+  ) as Moveset['chains'];
+  return { ...item, moveset: { ...ms, chains } };
+}
 /** Every quest and contract that waits, claimed. */
 function claimAll(p: DelveProfile): DelveProfile {
   for (const q of questStates(registry, p).filter((s) => s.status === 'complete'))
@@ -165,13 +180,19 @@ describe('the guided path', () => {
   });
 
   it('Anvil lesson 1, op by op: claim, forge, equip, bind, the Primary, salvage, refine, claim', () => {
-    const bolt = (elements: Move['elements']): Move => ({ kind: 'medium', form: 'strike', elements });
+    // The blade as the stop equips it: banked (uids), a sword's Strike in its two Primary slots.
+    const strike = (uid: string, elements: Move['elements']): Move => ({
+      uid,
+      kind: 'medium',
+      form: 'strike',
+      elements,
+    });
     let p = createDelveProfile(registry, 7, { primary: 'fire' });
     const old = p.equipped.weapon!;
     p = withChains(
-      { ...p, equipped: { ...p.equipped, weapon: sword('uncommon', 'b1') } },
+      { ...p, equipped: { ...p.equipped, weapon: withUids(sword('uncommon', 'b1')) } },
       {
-        primary: { moves: [bolt(['fire']), bolt(['fire'])], payment: 'mana' },
+        primary: { moves: [strike('b1:p0', ['fire']), strike('b1:p1', ['fire'])], payment: 'mana' },
       },
     );
     p = applyQuestEvents(registry, p, [
@@ -226,12 +247,11 @@ describe('the guided path', () => {
   });
 
   it('Anvil lesson 2: the compare beat, Move all, hone, claim, the board, the Training Grounds, farewell', () => {
-    // The blade as dive 1 drops it: its Primary at two slots. Move all is B2's op (D1 rewires the
-    // bot): here the rare arrives holding four Primary constructs, which is what the step reads.
-    const b1 = sword('uncommon', 'b1');
-    const blade = { ...b1, moveset: defaultMoveset(registry, b1, 'fire', { primary: 2 }) };
-    const r1 = sword('rare', 'r1');
-    const rare = { ...r1, moveset: defaultMoveset(registry, r1, 'fire', { primary: 4 }) };
+    // The blade as lesson 1 leaves it: its first construct socketed (what the Move all hold reads).
+    const blade = withUids(sword('uncommon', 'b1'));
+    const [first, ...rest] = blade.moveset!.chains.primary!.moves;
+    blade.moveset!.chains.primary!.moves = [{ ...first, runes: [null] }, ...rest];
+    const rare = withUids(sword('rare', 'r1'));
     let p = createDelveProfile(registry, 7, { primary: 'fire' });
     p = {
       ...p,
@@ -242,8 +262,13 @@ describe('the guided path', () => {
     };
     p = applyTutorialEvents(registry, p, [{ type: 'ack' }]);
     expect(p.tutorial).toEqual(st('l2-transfer'));
-    p = equipItem(registry, p, 'r1');
+    p = moveAll(registry, p, 'r1').profile;
     expect(p.tutorial).toEqual(st('l2-hone'));
+    // Every construct the blade held sits on the rare now, the socket with it.
+    expect(movesetOf(registry, p.equipped.weapon!).chains.primary!.moves[0]).toMatchObject({
+      uid: first.uid,
+      runes: [null],
+    });
     p = claimAll(hone(registry, p, 'r1', 0).profile);
     expect(p.tutorial).toEqual(st('l2-board'));
     p = applyTutorialEvents(registry, p, [{ type: 'ack' }]);
