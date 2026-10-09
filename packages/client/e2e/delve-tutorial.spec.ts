@@ -1,28 +1,23 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import {
-  addSlot,
   createDefaultRegistry,
   createDelveProfile,
   defaultMoveset,
   generateItem,
+  mintMoveset,
   SeededRNG,
+  type DelveProfile,
+  type GearItem,
 } from '@alloy/engine';
-import {
-  ARENA_READY,
-  SAVE_KEY,
-  armed,
-  seedProfile,
-  startDive,
-  stepTo,
-} from './fixtures/delve';
+import { ARENA_READY, SAVE_KEY, armed, seedProfile, startDive, stepTo } from './fixtures/delve';
 import { BUTTON, installPad, tap } from './fixtures/pad';
 
 /**
  * The guided start (see the tutorial spec): a new save chooses Guided start, the engine bot plays
  * dive 1's hand-built floors (it follows each floor step on its own), and the test answers what
  * the player would: Continue on reading beats, "Skip this step" when offered, the stops' power-ups
- * and roads, then Anvil lesson 1 op by op through the hub. And a Jump in save has only the Basic
- * until its first forge.
+ * and roads, then Anvil lesson 1 op by op through the hub. And a Jump in save's common sword holds
+ * two Primary constructs and no Defensive until its first forge (the constructs spec §3.2).
  */
 
 /**
@@ -67,6 +62,12 @@ async function step(page: Page): Promise<string | null> {
 
 const steps = (page: Page) =>
   page.evaluate(() => (window as unknown as { __steps: string[] }).__steps);
+
+/** `item` banked into `p`'s own uids: every construct of its moveset minted, as a bank does. */
+function minted(p: DelveProfile, item: GearItem): [DelveProfile, GearItem] {
+  const [moveset, profile] = mintMoveset(p, item.moveset!);
+  return [profile, { ...item, moveset }];
+}
 
 /**
  * What the Depart sheet says of a new dive (the footer's Delve opens it, Esc shuts it): while a
@@ -275,9 +276,9 @@ test.describe('Delve guided start', () => {
     await expect.poll(() => step(page)).toBe('l1-skills');
     await page.getByTestId('mana-back').click();
 
-    // The Primary: the marker leads through the editor, entry by entry: the slot, the new move
-    // in frost, the way out; the first move's socket and its rune, the way out; Apply, then the
-    // sheet's Apply.
+    // The Primary: the marker leads through the editor, entry by entry: the slot, its new
+    // construct in frost, the way out; the first construct's socket and its rune, the way out;
+    // Apply, then the sheet's Apply (the bag pane beside it holds nothing yet).
     await marked('skills.addSlot');
     await page.getByTestId('add-slot').click();
     await marked('skills.card:last');
@@ -365,29 +366,49 @@ test.describe('Delve guided start', () => {
     await expect(page.getByTestId('add-slot')).toBeFocused();
   });
 
-  test("TU04: lesson 2 by the pad: the rare's Transfer through the take sheet, then a Hone on Temper's list", async ({
+  test("TU04: lesson 2 by the pad: the rare's Move all through the take sheet, then a Hone on Temper's list", async ({
     page,
   }) => {
     const registry = createDefaultRegistry();
-    // Grask's set drop: a rare sword in the primary.
-    const rare = generateItem(
+    // The worn sword as lesson 1 left it: its first Primary construct socketed, so the step holds
+    // once the rare wears what the lessons built (a plain Equip of it would not).
+    const armedSave = armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' }));
+    const sword = armedSave.equipped.weapon!;
+    const ms = sword.moveset!;
+    const [first, ...rest] = ms.chains.primary!.moves;
+    const [p0, worn] = minted(armedSave, {
+      ...sword,
+      moveset: {
+        ...ms,
+        chains: {
+          ...ms.chains,
+          primary: { ...ms.chains.primary!, moves: [{ ...first, runes: [null] }, ...rest] },
+        },
+      },
+    });
+    // Grask's set drop: a rare sword in the primary, plain, banked (its constructs' uids).
+    const dropped = generateItem(
       registry,
-      { uid: 'grask-sword', ilvl: 5, rarity: 'rare', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      {
+        uid: 'grask-sword',
+        ilvl: 5,
+        rarity: 'rare',
+        slot: 'weapon',
+        baseId: 'sword',
+        mana: 'fire',
+      },
       new SeededRNG(5),
     );
-    // The worn sword as lesson 1 left it: a Primary past its base slots, so the Transfer has a
-    // moveset to move (the step holds once the rare is worn with more moves than its base).
-    const built = addSlot(
-      registry,
-      { ...armed(registry, createDelveProfile(registry, 4242, { primary: 'fire' })), links: 9, scrap: 2000 },
-      'primary',
-    );
-    expect(built.ok).toBe(true);
-    // A save at the lesson's Transfer, Grask's rare in the bag, the scrap for the move and a hone.
+    const [p, rare] = minted(p0, {
+      ...dropped,
+      moveset: defaultMoveset(registry, dropped, 'fire'),
+    });
+    // A save at the lesson's Move all, Grask's rare in the bag, the scrap for a hone.
     await seedProfile(page, 4242, false, 'frost', {
       scrap: 2000,
-      equipped: built.profile.equipped,
-      bag: [{ ...rare, moveset: defaultMoveset(registry, rare, 'fire') }],
+      nextConstructUid: p.nextConstructUid,
+      equipped: { ...p.equipped, weapon: worn },
+      bag: [rare],
       tutorial: { step: 'l2-transfer', count: 0, misses: 0 },
     });
     await installPad(page);
@@ -406,16 +427,14 @@ test.describe('Delve guided start', () => {
     // The rare's tile first: the marker's focus lands on it, which selects it under the pad.
     await expect(page.locator('[data-uid="grask-sword"]')).toBeFocused();
     await expect(page.getByTestId('item-verdict')).toBeVisible();
-    // Then the footer's A, which on this weapon is "Equip or transfer".
+    // Then the footer's A, which on a weapon that can take your constructs opens the take sheet.
     await marked('loadout.transfer');
-    await expect(page.locator('.k-prompt[data-tutorial="loadout.transfer"]')).toContainText(
-      'Equip or transfer',
-    );
+    await expect(page.locator('.k-prompt[data-tutorial="loadout.transfer"]')).toBeVisible();
     await tap(page, BUTTON.a);
     await expect(page.getByTestId('take-sheet')).toBeVisible();
-    // In the sheet, its Transfer: marked and focused.
+    // In the sheet, its Move all: marked and focused.
     await marked('loadout.transfer');
-    await expect(page.getByTestId('take-transfer')).toBeFocused();
+    await expect(page.getByTestId('take-move-all')).toBeFocused();
     await tap(page, BUTTON.a);
     await expect.poll(() => step(page)).toBe('l2-hone');
 
@@ -438,7 +457,7 @@ test.describe('Delve guided start', () => {
     await expect.poll(() => step(page)).toBe('l2-board');
   });
 
-  test('TU02: a Jump in save has only the Basic until its first forge gives it a Primary', async ({
+  test("TU02: a Jump in save's sword has a Primary from the start and no Defensive until its first forge", async ({
     page,
   }) => {
     await fresh(page, false);
@@ -452,16 +471,18 @@ test.describe('Delve guided start', () => {
     expect(await step(page)).toBeNull();
     await expect(page.getByTestId('tutorial-panel')).toHaveCount(0);
 
-    // The common sword carries the Basic alone: no Primary slot in the dive.
+    // The common sword holds two Primary constructs (the constructs spec §3.2) and no Defensive
+    // slot: Q has a slot in the dive, E none.
     await startDive(page);
     await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
     await expect(page.getByTestId('attack-button')).toBeVisible();
-    await expect(page.getByTestId('ability-0')).toHaveCount(0);
+    await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', /^Primary: /);
+    await expect(page.getByTestId('ability-1')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await page.getByTestId('pause-screen').getByTestId('pause-abandon').click();
     await page.getByTestId('return-camp').click();
 
-    // The kit forges an uncommon sword: worn, it carries the Primary.
+    // The kit forges an uncommon sword: worn, it adds a Defensive slot, plain-filled.
     await page.getByTestId('tab-forge').click();
     await page.getByTestId('pattern-sword').click();
     await stepTo(page, 'forge-flux', /^Uncommon/);
@@ -471,7 +492,7 @@ test.describe('Delve guided start', () => {
     await page.locator('[data-testid="bag-item"][aria-label*=", uncommon"]').first().click();
     await page.getByTestId('equip-button').click();
     await startDive(page);
-    await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', /^Primary: /, {
+    await expect(page.getByTestId('ability-1')).toHaveAttribute('aria-label', /^Defensive: /, {
       timeout: ARENA_READY,
     });
   });
