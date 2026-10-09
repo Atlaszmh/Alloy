@@ -262,7 +262,11 @@ describe('SkillsTab', () => {
     // Still one move changed: its kind and form together cost editDust once.
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply · 5 Mana Dust');
     apply();
-    expect(chains().primary.moves[0]).toMatchObject({ kind: 'heavy', form: 'burst', elements: ['fire'] });
+    expect(chains().primary.moves[0]).toMatchObject({
+      kind: 'heavy',
+      form: 'burst',
+      elements: ['fire'],
+    });
     expect(store().profile.manaDust).toBe(15);
   });
 
@@ -337,13 +341,13 @@ describe('SkillsTab', () => {
     expect(num('full')).toHaveTextContent(/^1\.3s: .+ mana, then a 1\.04s beat$/);
   });
 
-  it('adds, reorders and removes moves within the slots, never below one', () => {
+  it('adds, reorders and unsockets moves within the slots', () => {
     const bolt: Move = { kind: 'light', form: 'lance', elements: ['fire'] };
     roomy(5, { primary: { moves: [bolt], payment: 'mana' } });
     renderSkills();
     edit(0);
-    expect(screen.getByTestId('move-remove')).toBeDisabled();
-    expect(screen.getByTestId('move-remove')).toHaveAccessibleName('Remove light Fire Lance');
+    expect(screen.getByTestId('move-unsocket')).toBeEnabled(); // an ability chain may empty
+    expect(screen.getByTestId('move-unsocket')).toHaveAccessibleName('Unsocket light Fire Lance');
     fireEvent.click(screen.getByTestId('move-editor-back'));
     fireEvent.click(screen.getByTestId('move-add'));
     expect(document.activeElement).toBe(screen.getByTestId('move-1')); // the new card
@@ -357,11 +361,16 @@ describe('SkillsTab', () => {
     stepTo('move-position', 'Position 4 of 5');
     expect(screen.getByTestId('move-3')).toHaveAttribute('aria-pressed', 'true'); // the heavy
     edit(0);
-    fireEvent.click(screen.getByTestId('move-remove'));
+    fireEvent.click(screen.getByTestId('move-unsocket'));
     expect(screen.getByTestId('move-add')).toBeInTheDocument();
     expect(document.activeElement).toBe(screen.getByTestId('move-0'));
-    apply();
-    expect(chains().primary.moves.map((m) => m.kind)).toEqual(['light', 'light', 'heavy', 'light']);
+    // The draft holds the rest; Apply waits for B2's applyDraft (D2 applies it here).
+    expect(store().chainDraft!.chains.primary!.moves.map((m) => m.kind)).toEqual([
+      'light',
+      'light',
+      'heavy',
+      'light',
+    ]);
   });
 
   it('Position moves a card; the selection follows it', () => {
@@ -719,8 +728,9 @@ describe('SkillsTab: sockets and runes', () => {
     edit(0);
     fireEvent.click(screen.getByTestId('move-form'));
     expect(screen.getByTestId('form-burst')).toBeEnabled();
-    for (const f of ['lance', 'bolt', 'volley'])
-      expect(screen.getByTestId(`form-${f}`), f).toBeDisabled();
+    expect(screen.getByTestId('form-lance')).toBeDisabled();
+    // A sword's grid never offers the ranged forms.
+    for (const f of ['bolt', 'volley']) expect(screen.queryByTestId(`form-${f}`), f).toBeNull();
     // Each off form says why beside itself.
     expect(screen.getByTestId('form-lance')).toHaveTextContent("Widen doesn't fit a Lance");
     fireEvent.click(screen.getByTestId('form-picker-back'));
