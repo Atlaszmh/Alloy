@@ -352,7 +352,7 @@ describe('the compare pane', () => {
     expect(store().profile.equipped.helm).toBeUndefined();
   });
 
-  it('a bag weapon is valued as it is and with your constructs; Move all is offered, free (B2 fills the op)', () => {
+  it('a bag weapon is valued as it is and with your constructs; Move all is offered, free', () => {
     const p = store().profile;
     const sword = p.equipped.weapon!;
     const mine = { ...sword, moveset: defaultMoveset(registry, sword, 'fire', { primary: 2 }) };
@@ -378,10 +378,12 @@ describe('the compare pane', () => {
       `${toBag.length} constructs to your bag`,
     );
     expect(screen.queryByTestId('transfer-dormant')).toBeNull(); // a sword expresses a Strike
-    // The engine's op is B2's: until then it refuses, and the sword stays worn.
+    // Move all: the rare sword is worn with your constructs, the old one goes to the bag, free.
     fireEvent.click(screen.getByTestId('transfer-button'));
-    expect(screen.getByText('Not yet')).toBeInTheDocument();
-    expect(store().profile.equipped.weapon!.uid).toBe(mine.uid);
+    expect(screen.getByText(/^Your constructs moved onto /)).toBeInTheDocument();
+    expect(store().profile.equipped.weapon!.uid).toBe('w1');
+    expect(store().profile.bag.some((i) => i.uid === mine.uid)).toBe(true);
+    expect(store().profile.scrap).toBe(0);
   });
 
   it('each valuation shows its own delta: Equip is marked as it is, Move all as a home', () => {

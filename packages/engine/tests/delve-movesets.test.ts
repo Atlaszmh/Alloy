@@ -906,9 +906,20 @@ describe('Move all (the preview; B2 commits it)', () => {
     expect(prev.dormant.sort()).toEqual(strikes.slice(0, prev.moveset.slots.primary).sort());
   });
 
-  it("the op itself refuses 'Not yet' until B2 fills it", () => {
+  it("the op commits the preview: the bag weapon worn with the moveset, the old one to the bag refilled plain with new uids", () => {
     const p = holding(weapon('rare', 11, 'sword'), { ...weapon('rare', 12, 'axe'), uid: 'axe' });
-    expect(moveAll(registry, p, 'axe')).toMatchObject({ ok: false, profile: p, reason: 'Not yet' });
+    const prev = moveAllPreview(registry, p.equipped.weapon!, p.bag[0]);
+    const res = moveAll(registry, p, 'axe');
+    expect(res.ok).toBe(true);
+    const worn = res.profile.equipped.weapon!;
+    expect(worn.uid).toBe('axe');
+    expect(worn.moveset).toEqual(prev.moveset);
+    expect(uids(worn.moveset!.chains.primary)).toEqual(uids(p.equipped.weapon!.moveset!.chains.primary));
+    const old = res.profile.bag.find((i) => i.uid === p.equipped.weapon!.uid)!;
+    const oldUids = uids(old.moveset!.chains.primary);
+    expect(oldUids.every((u) => !!u && !uids(worn.moveset!.chains.primary).includes(u))).toBe(true);
+    expect(res.profile.bag.some((i) => i.uid === 'axe')).toBe(false);
+    expect(moveAll(registry, p, 'nope')).toMatchObject({ ok: false, profile: p, reason: 'Move onto a weapon in your bag' });
   });
 });
 

@@ -126,12 +126,12 @@ describe('salvageYield', () => {
   });
 
   it("lists a weapon's runes, and a Link for each bought slot: a forged weapon's free extras and its sockets give none", () => {
-    expect(salvageYield(registry, hero(), sword())).toMatchObject({
-      links: 0,
-      runes: [{ id: 'split', tier: 1 }],
-      pattern: null,
-      constructs: [],
-    });
+    const y = salvageYield(registry, hero(), sword());
+    expect(y).toMatchObject({ links: 0, runes: [{ id: 'split', tier: 1 }], pattern: null });
+    // Its constructs, the socketed Strike among them, go with it.
+    expect(y.constructs.filter((c) => c.runes?.some((r) => r))).toEqual([
+      sword().moveset!.chains.primary!.moves[0],
+    ]);
     const w = sword();
     const m = w.moveset!;
     m.slots.primary! += 1;
@@ -228,14 +228,17 @@ describe('applySalvage', () => {
     expect(res.profile.patterns).toContain('gauntlets');
   });
 
-  it("sends a weapon's runes by the parts rule, in the mode given ('pay' as shipped)", () => {
-    const gone = applySalvage(registry, hero(), sword(), new SeededRNG(1), { unsocket: 'destroy' });
-    expect(gone).toMatchObject({ runes: [], destroyed: [{ id: 'split', tier: 1 }] });
-    expect(gone.profile.runes).toEqual({});
-    const paid = applySalvage(registry, hero(), sword(), new SeededRNG(1));
-    expect(paid).toMatchObject({ runes: [{ id: 'split', tier: 1 }], destroyed: [] });
-    expect(paid.profile.runes).toEqual({ split: [1, 0, 0, 0, 0] });
-    expect(paid.profile.links).toBe(hero().links + paid.links);
+  it("sends a weapon's constructs to the bag, runes and all: none pulled, in either mode", () => {
+    const socketed = sword().moveset!.chains.primary!.moves[0];
+    for (const unsocket of ['pay', 'destroy'] as const) {
+      const res = applySalvage(registry, hero(), sword(), new SeededRNG(1), { unsocket });
+      expect(res).toMatchObject({ runes: [], destroyed: [] });
+      expect(res.constructs).toContainEqual(socketed);
+      expect(res.profile.runes).toEqual(hero().runes);
+      // A new save drops plain constructs (`autoSalvagePlain`): the socketed one reaches the bag.
+      expect(res.profile.constructs).toEqual([socketed]);
+      expect(res.profile.links).toBe(hero().links + res.links);
+    }
   });
 });
 
