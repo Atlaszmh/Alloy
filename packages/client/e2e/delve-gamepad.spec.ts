@@ -112,8 +112,8 @@ async function frames(page: Page, n: number): Promise<void> {
 
 /**
  * Press and release within the page, across one frame: the controller is read
- * once per frame, so it sees exactly one press (a longer hold can trigger the
- * D-pad's repeat when frames are slow under load).
+ * once per frame, so it sees exactly one press. One frame, not two: the D-pad repeats on
+ * wall-clock time (350 ms), and two software-rendered 1080 frames (~216 ms each) outlast it.
  */
 async function tap(page: Page, button: number): Promise<void> {
   await page.evaluate(
@@ -123,12 +123,10 @@ async function tap(page: Page, button: number): Promise<void> {
           window as unknown as { __pad: { buttons: { pressed: boolean; value: number }[] } }
         ).__pad;
         pad.buttons[i] = { pressed: true, value: 1 };
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            pad.buttons[i] = { pressed: false, value: 0 };
-            resolve();
-          }),
-        );
+        requestAnimationFrame(() => {
+          pad.buttons[i] = { pressed: false, value: 0 };
+          resolve();
+        });
       }),
     button,
   );
