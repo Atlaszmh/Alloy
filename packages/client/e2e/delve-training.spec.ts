@@ -152,9 +152,10 @@ test.describe('Delve Training Grounds', () => {
     await expect(page.getByTestId('training-bar')).toBeVisible({ timeout: ARENA_READY });
     const read = (key: string) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), key);
     expect((await read('alloy:delve:sandbox:v1')).chains.primary.moves[0].kind).toBe('heavy');
+    // The save keeps the sword's own: Strike, whose chain opens medium.
     expect(
       (await read('alloy:delve:v2')).equipped.weapon.moveset.chains.primary.moves[0].kind,
-    ).toBe('light');
+    ).toBe('medium');
     // The way back: the Skills tab on the Primary, one change still unapplied.
     await page.getByTestId('training-back').click();
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
