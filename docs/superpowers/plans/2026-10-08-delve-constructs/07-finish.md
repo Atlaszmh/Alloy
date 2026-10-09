@@ -482,7 +482,44 @@ The stage's final whole-feature review: everything green on the merged branch, t
 
 **Task 1 (un-skips):** files …; tests …
 
-**Task 2 (the style gate):** the table …; levers tried …
+**Task 2 (the style gate):** run on `43adebdc` (D2 Task 1's merge), `STYLE_GATE=1`, depth 10, eight seeds: 2 of 2 green in about 5 s; no tuning, so no levers tried and Steps 3–4 skipped. Only the pairs in the gate's `WAIVED` list (B1's, decided with the user) sit outside 0.85–1.2×, each at its waived value. The table (ratio to the form's class median; `*` waived):
+
+```
+one dummy
+lance      melee  dagger 1.08  sword 1.12  axe 0.92  maul 0.84*
+lance      ranged staff 1.00  wand 1.06  bow 0.91
+burst      melee  dagger 1.06  sword 1.07  axe 0.86  maul 0.94
+burst      ranged staff 1.00  wand 1.04  bow 0.90
+strike     melee  dagger 1.07  sword 1.11  axe 0.93  maul 0.91
+whirl      melee  dagger 0.98  sword 1.12  axe 0.88  maul 1.02
+nova       melee  dagger 1.20  sword 0.95  axe 0.78*  maul 1.05
+nova       ranged staff 1.02  wand 0.96  bow 1.00
+onslaught  melee  dagger 1.19  sword 0.88  axe 0.89  maul 1.11
+maelstrom  melee  dagger 0.83*  sword 0.93  axe 1.07  maul 1.19
+maelstrom  ranged staff 1.30*  wand 1.00  bow 0.84*
+bolt       ranged staff 1.00  wand 1.08  bow 0.86
+volley     ranged staff 1.00  wand 1.20  bow 0.80*
+barrage    ranged staff 0.86  wand 1.00  bow 1.18
+weapons: dagger 1.06  sword 1.03  axe 0.90  maul 1.01  staff 1.03  wand 1.05  bow 0.93
+pack
+lance      melee  dagger 1.00  sword 1.12  axe 1.00  maul 0.87
+lance      ranged staff 1.00  wand 1.07  bow 0.79*
+burst      melee  dagger 1.05  sword 1.07  axe 0.95  maul 0.95
+burst      ranged staff 1.00  wand 1.05  bow 0.88
+strike     melee  dagger 0.99  sword 1.08  axe 1.01  maul 0.93
+whirl      melee  dagger 0.91  sword 1.08  axe 1.00  maul 1.00
+nova       melee  dagger 0.90  sword 1.28*  axe 0.83*  maul 1.10
+nova       ranged staff 1.12  wand 0.87  bow 1.00
+onslaught  melee  dagger 1.12  sword 0.88  axe 1.14  maul 0.88
+maelstrom  melee  dagger 0.72*  sword 1.07  axe 0.93  maul 1.23*
+maelstrom  ranged staff 1.30*  wand 1.00  bow 0.89
+bolt       ranged staff 1.00  wand 0.93  bow 1.28*
+volley     ranged staff 0.84*  wand 1.00  bow 2.09*
+barrage    ranged staff 1.33*  wand 1.00  bow 0.93
+weapons: dagger 0.93  sword 1.05  axe 0.95  maul 0.97  staff 1.05  wand 0.96  bow 1.09
+```
+
+At the band's edge (watch after Task 3's trait changes): one dummy's nova dagger 1.20 and volley wand 1.20.
 
 **Task 3 (the rune gates):** two-build gate rows …; the Lab's maxima (single / set, one dummy / pack) …; levers tried …
 
