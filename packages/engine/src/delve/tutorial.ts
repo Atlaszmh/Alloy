@@ -4,7 +4,7 @@ import { nextMove } from '../arpg/abilities/cast.js';
 import { setDoor } from '../arpg/grid.js';
 import { honeCost, previewForge } from '../loot/forge.js';
 import { materialCount, refineCost } from '../loot/materials.js';
-import { movesetOf, slotRange } from '../loot/moveset.js';
+import { isPlain, movesetOf } from '../loot/moveset.js';
 import { socketsOf } from '../loot/runes.js';
 import type { Move } from '../types/ability.js';
 import type { ArpgWorld } from '../types/arpg.js';
@@ -205,10 +205,11 @@ function primaryMoves(registry: DataRegistry, profile: DelveProfile): Move[] {
  * better, worn or in the bag (the starting gear is common); `equip` one worn;
  * `bind` a secondary bound; `setChains` the Primary at `moves` moves, its last
  * in the secondary and a rune in its first; `salvage` no item of `slot` and
- * exactly `rarity` left; `refine` a bar of `metal`; `transfer` a weapon of
- * `rarity` or better equipped, its Primary past its base slots (the moveset
- * moved onto it); `hone` an item honed. Any other step has no
- * state: false (it waits for its event, or a floor's tallies).
+ * exactly `rarity` left; `refine` a bar of `metal`; `moveAll` a weapon of
+ * `rarity` or better worn whose Primary holds a construct the lessons built
+ * (`lessonBuilt`: a plain Equip leaves the rare's own plain constructs); `hone`
+ * an item honed. Any other step has no state: false (it waits for its event, or
+ * a floor's tallies).
  */
 export function tutorialHolds(
   registry: DataRegistry,
@@ -240,14 +241,8 @@ export function tutorialHolds(
       return !items.some((i) => i.slot === f.slot && i.rarity === f.rarity);
     case 'refine':
       return materialCount(profile.materials, { kind: 'metal', metal: f.metal as MetalId }) > 0;
-    case 'moveAll': {
-      // The constructs moved with it: a plain Equip leaves the Primary at its start (D1 rewrites).
-      const weapon = profile.equipped.weapon;
-      return (
-        atLeast(weapon, f.rarity) &&
-        primaryMoves(registry, profile).length > slotRange(registry, weapon!, 'primary')[0]
-      );
-    }
+    case 'moveAll':
+      return atLeast(profile.equipped.weapon, f.rarity) && lessonBuilt(registry, profile);
     case 'hone':
       return items.some((i) => i.hones > 0);
     default:
@@ -256,13 +251,26 @@ export function tutorialHolds(
 }
 
 /**
+ * Whether the worn weapon's Primary holds a construct the lessons built: one
+ * not plain (lesson 1 opens the first's socket) or not in the primary alone
+ * (its last is in the secondary). Grask's rare drops plain in the primary, so
+ * a plain Equip of it reads false and a Move all true.
+ */
+function lessonBuilt(registry: DataRegistry, profile: DelveProfile): boolean {
+  const primary = profile.pair.primary;
+  return primaryMoves(registry, profile).some(
+    (m) => !isPlain(m) || m.elements.some((e) => e !== primary),
+  );
+}
+
+/**
  * Whether the hero can't do an Anvil step's op as the lesson asks
  * (`tutorialSkippable`): a forge of the cheapest bar at the step's rarity (an
  * equip too, with nothing of the slot and rarity to wear); the Skills step on
  * a weapon that can't hold its moves, or its slot, socket, elements and a
- * pouch rune for what is left of it; the refine into `metal`; the transfer
- * onto a bag weapon of `rarity`; any hone. Generous by design: it only offers
- * "Skip this step".
+ * pouch rune for what is left of it; the refine into `metal`; a Move all with
+ * no bag weapon of `rarity` (it is free); any hone. Generous by design: it only
+ * offers "Skip this step".
  */
 function unaffordable(registry: DataRegistry, profile: DelveProfile, step: TutorialStep): boolean {
   const f = step.trigger.filter ?? {};
@@ -311,11 +319,8 @@ function unaffordable(registry: DataRegistry, profile: DelveProfile, step: Tutor
       const cost = refineCost(registry, ref)!;
       return materialCount(profile.materials, ref) < cost.count || profile.scrap < cost.scrap;
     }
-    case 'moveAll': {
-      // Move all is free; without a worn weapon or a target it can't be done. D1 rewires to B2's op.
-      const target = profile.bag.find((i) => i.slot === 'weapon' && atLeast(i, f.rarity));
-      return !weapon || !target;
-    }
+    case 'moveAll':
+      return !weapon || !profile.bag.some((i) => i.slot === 'weapon' && atLeast(i, f.rarity));
     case 'hone':
       return !itemsOf(profile).some(
         (i) => i.affixes.length > 0 && honeCost(registry, i) <= profile.scrap,
