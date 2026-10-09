@@ -29,7 +29,7 @@ import {
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { manaLine, manaRing } from './fx/mana-pixels';
-import { ManaFx, finisherRing, hitFxPicks } from './fx/mana-fx';
+import { ManaFx, arcPoints, finisherRing, hitFxPicks } from './fx/mana-fx';
 import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
@@ -563,6 +563,7 @@ export class ArenaRenderer {
             const dir = { x: e.tx - e.x, y: e.ty - e.y };
             this.fx.fling(e.x, e.y, dir, color, 14, 9);
           }
+          if (e.look) this.fx.look(e.look, color, { kind: 'ring', x: e.x, y: e.y, r: 0.9 });
           if (e.slot > 0)
             this.floatText(e.x, e.y - 1.4, e.name, lighten(MANA_HEX[e.element]), 15, {
               life: 1,
@@ -573,6 +574,16 @@ export class ArenaRenderer {
         case 'beam':
           this.fx.beam(e.x, e.y, e.tx, e.ty, e.width, MANA_HEX[e.element], e.infusion);
           this.fx.burst(e.tx, e.ty, MANA_HEX[e.element], 6, 3);
+          if (e.look)
+            this.fx.look(e.look, MANA_HEX[e.element], {
+              kind: 'path',
+              points: [
+                { x: e.x, y: e.y },
+                { x: e.tx, y: e.ty },
+              ],
+              width: e.width,
+              progress: 0,
+            });
           break;
         case 'slash':
           this.fx.swing(
@@ -586,6 +597,16 @@ export class ArenaRenderer {
           );
           // An echo's Strike swings again, but doesn't shake the camera (spec §8).
           if (e.arc >= 360 && !e.echo) this.addShake(0.12);
+          if (e.look) {
+            const angle = Math.atan2(e.dir.y, e.dir.x);
+            const arc = Math.min(360, e.arc) * (Math.PI / 180);
+            this.fx.look(e.look, MANA_HEX[e.element], {
+              kind: 'path',
+              points: arcPoints(e.x, e.y, e.range, angle - arc / 2, angle + arc / 2),
+              width: 0.3,
+              progress: 0,
+            });
+          }
           break;
         case 'buff':
           this.fx.ring(w.hero.x, w.hero.y, 1.6, MANA_HEX[e.element], true, 0.4);
@@ -631,6 +652,13 @@ export class ArenaRenderer {
           this.addShake(0.04 + e.radius * 0.02);
           if (e.infusion)
             this.fx.infuse('blast', e.infusion, { kind: 'ring', x: e.x, y: e.y, r: e.radius });
+          if (e.look)
+            this.fx.look(e.look, elemColor(e.element), {
+              kind: 'ring',
+              x: e.x,
+              y: e.y,
+              r: e.radius,
+            });
           break;
         case 'freeze':
           break;
@@ -667,6 +695,16 @@ export class ArenaRenderer {
           this.fx.burst(e.toX, e.toY, this.guardColor(w), 10, 4);
           if (e.infusion)
             this.fx.infuse('dash', e.infusion, {
+              kind: 'path',
+              points: [
+                { x: e.fromX, y: e.fromY },
+                { x: e.toX, y: e.toY },
+              ],
+              width: 0.4,
+              progress: 0,
+            });
+          if (e.look)
+            this.fx.look(e.look, this.guardColor(w), {
               kind: 'path',
               points: [
                 { x: e.fromX, y: e.fromY },
@@ -844,11 +882,13 @@ export class ArenaRenderer {
     drawGuard(air, w, this.time);
     drawAnticipation(air, this.fx, w, this.time, dt, this.aim?.point ?? null);
     // The effects, then the infusion pass (fx/infusion.ts), sharing one budget in priority order:
-    // ManaFx's transient carriers first, then the hero's aura, projectiles, lobs and zones.
+    // ManaFx's transient carriers first, then the hero's aura, projectiles, lobs and zones, then
+    // the weapons' look motifs.
     const layers = { air, ground };
     this.budget.left = INFUSION_BUDGET;
     this.fx.draw(layers, dt, this.time, this.budget);
     drawInfusions(layers, w, this.time, this.budget);
+    this.fx.drawLooks(layers, this.time, this.budget);
     // The aim marker stays on top.
     drawAim(air, w, this.aim, this.time);
     this.groundFx.render(view);

@@ -437,6 +437,72 @@ describe('hits under load', () => {
     r.handleEvents([slash]);
     expect(view.shake).toBeGreaterThan(0);
   });
+
+  it("draws the casting weapon's look motif on a cast, a beam, a slash, a blast and a dash", () => {
+    const { r } = stage(1920, 1080);
+    show(r, floor());
+    const fx = (r as unknown as { fx: ManaFx }).fx;
+    const look = vi.spyOn(fx, 'look');
+    r.handleEvents([
+      {
+        kind: 'cast',
+        slot: 0,
+        step: 0,
+        aimed: false,
+        name: 'Bolt',
+        form: 'bolt',
+        element: 'fire',
+        x: 1,
+        y: 1,
+        tx: 3,
+        ty: 1,
+        heft: 0.3,
+        look: 'arrow',
+      },
+      {
+        kind: 'beam',
+        x: 1,
+        y: 1,
+        tx: 5,
+        ty: 1,
+        width: 0.4,
+        element: 'fire',
+        infusion: null,
+        look: 'spark',
+      },
+      {
+        kind: 'slash',
+        x: 1,
+        y: 1,
+        dir: { x: 1, y: 0 },
+        range: 2,
+        arc: 90,
+        element: 'fire',
+        heft: 0.5,
+        infusion: null,
+        look: 'crescent',
+      },
+      { kind: 'explode', x: 2, y: 2, radius: 1.5, element: 'fire', infusion: null, look: 'stone' },
+      { kind: 'dash', fromX: 0, fromY: 0, toX: 3, toY: 0, infusion: null, look: 'blade' },
+    ]);
+    expect(look.mock.calls.map(([l]) => l)).toEqual([
+      'arrow',
+      'spark',
+      'crescent',
+      'stone',
+      'blade',
+    ]);
+    expect(look.mock.calls.map(([, , s]) => s.kind)).toEqual([
+      'ring',
+      'path',
+      'path',
+      'ring',
+      'path',
+    ]);
+    look.mockClear();
+    r.handleEvents([{ kind: 'explode', x: 2, y: 2, radius: 1.5, element: 'fire', infusion: null }]);
+    expect(look).not.toHaveBeenCalled();
+  });
 });
 
 describe('a slain foe', () => {
