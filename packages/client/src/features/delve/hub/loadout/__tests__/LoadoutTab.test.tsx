@@ -193,7 +193,7 @@ describe('LoadoutTab', () => {
       prompts(props)
         .filter((x) => x.binding.pad === 'a')
         .map((x) => [x.label, x.tutorial]),
-    ).toEqual([['Equip or transfer', 'loadout.transfer']]);
+    ).toEqual([['Equip or move all', 'loadout.transfer']]);
     // Under the keys no prompt carries a target: the pane's buttons do.
     act(() => useInputDeviceStore.getState().setDevice('keyboard'));
     expect(prompts(props).every((x) => x.tutorial === undefined)).toBe(true);

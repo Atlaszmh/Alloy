@@ -1,14 +1,18 @@
 import { useMemo, type ReactElement } from 'react';
 import {
+  CHAIN_SKILLS,
   moveAllPreview,
+  movesOf,
+  movesetOf,
   profileStats,
   salvageYield,
   unsocketMode,
+  type FormId,
   type GearItem,
   type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
-import { partsText, pullText, useDelveStore } from '@/stores/delveStore';
+import { pullText, useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -16,6 +20,7 @@ import { Button, Glyph, Panel, Price } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { useItemComparison } from '../../items/useItemComparison';
 import { ItemHeader } from '../../items/ItemHeader';
+import { frameText, slotPairs, slotsText } from '../../items/weapon-frame';
 import { PowerDelta } from '../../items/PowerDelta';
 import { CompareTable } from '../../items/CompareTable';
 import { ItemStatLines } from '../../items/ItemStatLines';
@@ -59,45 +64,63 @@ export function verdictOf(
   return mark === 'up' ? 'up' : mark === 'potential' ? 'home' : mark === 'down' ? 'worse' : 'same';
 }
 
+/** "a bow can't express Strike": the base's name and the form it can't. */
+function dormantReason(
+  registry: ReturnType<typeof getDelveRegistry>,
+  item: GearItem,
+  form: FormId,
+): string {
+  return `a ${registry.getGearBase(item.baseId).name.toLowerCase()} can't express ${registry.getForm(form).name}`;
+}
+
 /**
- * Move your moveset onto the bag weapon `item` (the store's `moveAll`), with its sound and its
- * toast, or say why not. True when it moved.
+ * Move every construct of the worn weapon onto the bag weapon `item` (the store's `moveAll`), with
+ * its sound and its toast, or say why not. True when they moved.
  */
-export function transferOnto(item: GearItem): boolean {
-  const res = useDelveStore.getState().moveAll(item.uid);
+export function moveAllOnto(item: GearItem): boolean {
+  const registry = getDelveRegistry();
+  const s = useDelveStore.getState();
+  const worn = s.profile.equipped.weapon;
+  const preview = worn ? moveAllPreview(registry, worn, item) : null;
+  const res = s.moveAll(item.uid);
   if (!res.ok) {
     playSound('combineFail');
-    showToast(res.reason ?? 'Cannot move');
+    showToast(res.reason ?? 'Cannot move them');
     return false;
   }
   playSound('combineMerge');
   vibrate('success');
-  const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
-  const moved = partsText(getDelveRegistry(), res.runes, res.destroyed);
-  showToast(`Your constructs moved onto ${item.name}${links}${moved ? ` · ${moved}` : ''}`);
+  const bag = preview && preview.toBag.length > 0 ? ` · ${preview.toBag.length} to your bag` : '';
+  const dormant =
+    preview && preview.dormant.length > 0 ? ` · ${preview.dormant.length} dormant` : '';
+  showToast(`Your constructs moved onto ${item.name}${bag}${dormant}`);
   return true;
 }
 
 /**
- * What Move all onto `item` leaves (the constructs spec §3.3, `moveAllPreview`): the constructs
- * that go to the bag (yours past its slots, and its own on the chains replaced) and those that
- * sit dormant there (its class can't express their form). The compare pane's Move all and the
- * pad's take sheet both show it.
+ * What Move all onto `item` leaves (spec §3.3): the constructs past its slots and its own, which
+ * go to your bag, and those its class can't express, which sleep in their slots. The compare
+ * pane's Move all and the pad's take sheet both show it.
  */
-export function TransferNotes({ worn, item }: { worn: GearItem; item: GearItem }): ReactElement {
+export function MoveAllNotes({ worn, item }: { worn: GearItem; item: GearItem }): ReactElement {
   const registry = getDelveRegistry();
-  const { toBag, dormant } = moveAllPreview(registry, worn, item);
-  const n = (k: number, what: string) => `${k} ${what}${k === 1 ? '' : 's'}`;
+  const preview = moveAllPreview(registry, worn, item);
+  const moves = movesetOf(registry, worn).chains;
+  const first = preview.dormant[0];
+  const form = first
+    ? CHAIN_SKILLS.flatMap((s) => movesOf(moves[s])).find((m) => m.uid === first)
+    : undefined;
   return (
     <>
-      {toBag.length > 0 && (
-        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-leaves">
-          {n(toBag.length, 'construct')} to your bag
+      {preview.toBag.length > 0 && (
+        <span className="text-[18px] text-[var(--k-text-2)]" data-testid="move-all-bag">
+          {preview.toBag.length} to your bag: no slot for{' '}
+          {preview.toBag.length === 1 ? 'it' : 'them'} there
         </span>
       )}
-      {dormant.length > 0 && (
-        <span className="text-[18px] text-[var(--k-hot)]" data-testid="transfer-dormant">
-          {n(dormant.length, 'construct')} dormant there: a {item.name} can't express {dormant.length === 1 ? 'its' : 'their'} form
+      {preview.dormant.length > 0 && form && 'form' in form && (
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="move-all-dormant">
+          {preview.dormant.length} dormant: {dormantReason(registry, item, form.form)}
         </span>
       )}
     </>
@@ -108,7 +131,7 @@ export function TransferNotes({ worn, item }: { worn: GearItem; item: GearItem }
  * The Loadout's right pane: the hovered (else selected, else worn) item against what's worn in
  * its slot: its Power change (a bag weapon's as it is and as a home for your moveset), the stat
  * table, the attunement it moves, the bind choice for gear outside the pair, a weapon's moveset
- * Transfer, and Equip, Salvage (what the engine's `salvageYield` says it gives: currency, a
+ * Move all (free: every construct onto it, what doesn't fit to your bag), and Equip, Salvage (what the engine's `salvageYield` says it gives: currency, a
  * shard, its pattern, its essence) and Lock with their gains; "Forge it ›" opens the Forge with it.
  * `full` (Full compare, R3 or Shift) adds its stat lines and a weapon's moveset. Mid-dive or
  * paused, the actions give way to a note. It leads with the verdict (`verdictOf`); its actions are
@@ -152,11 +175,11 @@ export function ComparePane({
     );
 
   const inBag = where === 'bag';
-  const transfer = worn && asIs ? moveAllPreview(registry, worn, item) : null;
-  // Equip takes a weapon as it is; Transfer is marked by its value as a home.
+  const twoWays = inBag && item.slot === 'weapon' && !!worn && !!asIs;
+  // Equip takes a weapon as it is; Move all is marked by its value as a home.
   const equipCmp = asIs ?? cmp;
   const isUpgrade = !!equipCmp && equipCmp.powerPct > UPGRADE_EPSILON;
-  const homeUpgrade = !!transfer && !!cmp && cmp.powerPct > UPGRADE_EPSILON;
+  const homeUpgrade = twoWays && !!cmp && cmp.powerPct > UPGRADE_EPSILON;
   // What salvage gives, as the engine reckons it: only a bag item salvages, and only between dives.
   const yields = inBag && !locked ? salvageYield(registry, profile, item) : null;
   // What becomes of a weapon's runes, by the pull rule: Salvage's label says it before the press.
@@ -172,7 +195,7 @@ export function ComparePane({
         ? `${source === 'hovered' ? 'Hovered' : 'Selected'} · compared with your ${slot}`
         : `Equipped · your ${slot}`;
 
-  const onTransfer = () => transferOnto(item);
+  const onMoveAll = () => moveAllOnto(item);
 
   const onUnequip = () => {
     try {
@@ -209,6 +232,11 @@ export function ComparePane({
         <div className="flex" data-pad-skip="">
           <ItemHeader item={item} size="lg" />
         </div>
+        {item.slot === 'weapon' && (
+          <p className="k-body-2 m-0" data-testid="weapon-frame">
+            {frameText(registry, item)} · {slotsText(slotPairs(registry, item))}
+          </p>
+        )}
 
         {cmp && (
           <div
@@ -217,15 +245,13 @@ export function ComparePane({
             data-tutorial="loadout.compare"
           >
             {!cmp.replaced && <span className="k-caption">Empty slot: pure gain</span>}
-            {asIs && transfer ? (
+            {twoWays ? (
               <>
                 <span className="k-label">As it is</span>
                 <div data-testid="compare-as-is">
                   <PowerDelta cmp={asIs} />
                 </div>
-                <span className="k-label">
-                  With your constructs moved here
-                </span>
+                <span className="k-label">After Move all</span>
                 <div data-testid="compare-home">
                   <PowerDelta cmp={cmp} />
                 </div>
@@ -260,18 +286,18 @@ export function ComparePane({
       </div>
 
       <div className="flex flex-none flex-col gap-2.5" data-testid="compare-actions" data-pad-skip>
-        {transfer && !locked && (
+        {twoWays && !locked && (
           <div className="flex flex-col gap-1.5">
             <Button
               variant={homeUpgrade ? 'go' : 'secondary'}
-              onClick={onTransfer}
+              onClick={onMoveAll}
               className="flex-wrap whitespace-normal"
               data-tutorial="loadout.transfer"
-              testId="transfer-button"
+              testId="move-all-button"
             >
-              {homeUpgrade ? '▲ ' : ''}Move all my constructs here
+              {homeUpgrade ? '▲ ' : ''}Move all here
             </Button>
-            {worn && <TransferNotes worn={worn} item={item} />}
+            {worn && <MoveAllNotes worn={worn} item={item} />}
           </div>
         )}
 
