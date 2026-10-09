@@ -389,7 +389,7 @@ export function moveNumbers(
   bal: DelveBalance,
   ab: ResolvedAbility,
 ): { hit: number; radius: number } {
-  const step = stepBonus(bal, ab.index);
+  const step = stepBonus(bal, ab.index, ab.knobs.stepBonus);
   const f = ab.form.id;
   const power = f === 'ward' || f === 'armor' ? 1 : step.power;
   return {

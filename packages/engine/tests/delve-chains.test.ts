@@ -384,7 +384,8 @@ describe('chain play', () => {
       run(w, 0.1);
     }
     expect(next).toEqual([0, 1, 2, 3, 0]);
-    const sb = bal.chains.stepBonus;
+    // The fixture's sword adds its style's trait to the step bonus (constructs B1 Task 10).
+    const sb = bal.chains.stepBonus + w.hero.chains[0]!.moves[0].knobs.stepBonus;
     [0, 1, 2, 3, 0].forEach((i, k) => {
       expect(shots[k].damage / shots[0].damage).toBeCloseTo(1 + sb * i);
       expect(shots[k].size / shots[0].size).toBeCloseTo(1 + (sb * i) / 2);
@@ -951,15 +952,16 @@ describe('basics', () => {
   it("estimateCombat values each weapon's default chain as it valued its string (v0.45.0)", () => {
     // A rare ilvl-12 Fire weapon on a Fire/Storm pair with Twin Fang 40, at depth 5; the
     // abilities one medium move each (a Volley's, a Ward's, a Nova's numbers are as they were).
-    // Re-pinned for the cast styles' numbers (constructs B1 Task 8).
+    // Re-pinned for the cast styles' numbers (constructs B1 Task 8) and traits (Task 10: the
+    // dagger's crit, the axe's cleave, the wand's homing).
     const today: Record<string, number> = {
       unarmed: 13.233961,
-      dagger: 176.921816,
+      dagger: 184.91344,
       sword: 195.522722,
-      axe: 223.15658,
+      axe: 235.071228,
       maul: 393.325829,
       staff: 144.600175,
-      wand: 107.933827,
+      wand: 114.895307,
       bow: 160.731032,
     };
     const one = (form: FormId, payment: 'mana' | 'charge') => ({

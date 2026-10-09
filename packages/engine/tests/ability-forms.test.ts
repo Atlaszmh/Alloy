@@ -37,7 +37,9 @@ describe('primary forms', () => {
       sizes.push(w.projectiles.at(-1)!.explodeRadius);
       run(w, 0.1);
     }
-    const step = (i: number) => 1 + (bal.chains.stepBonus * i) / 2;
+    // The fixture's sword adds its style's trait to the step bonus (constructs B1 Task 10).
+    const sb = bal.chains.stepBonus + moveOf(w, 0).knobs.stepBonus;
+    const step = (i: number) => 1 + (sb * i) / 2;
     expect(sizes).toEqual([0, 1, 2, 3, 0].map((i) => moveOf(w, 0, i).radius * step(i)));
     expect(sizes[3]).toBeGreaterThan(sizes[2]);
     expect(sizes[2]).toBeGreaterThan(sizes[1]);

@@ -3,7 +3,16 @@ import type { HeroEntity, MonsterEntity, Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
 import { angleBetween, dirTo, dist, distToSegment } from '../geometry.js';
 import { clipSight, moveCircle, perceives, sees, snapToWalkable } from '../grid.js';
-import { abilityHit, chainFrom, detonate, hitOpts, impact, leaveZone, lookOf } from './impact.js';
+import {
+  abilityHit,
+  chainFrom,
+  cleaveBehind,
+  detonate,
+  hitOpts,
+  impact,
+  leaveZone,
+  lookOf,
+} from './impact.js';
 import { stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, alive, muzzle, SHOT, spawnProjectile } from './targeting.js';
 import { hitObject, objectsIn, objectsOnBeam } from '../objects.js';
@@ -158,6 +167,7 @@ function dart(ctx: SimCtx, o: Perform): boolean {
   });
   hitMonster(ctx, m, o.hit, ab.element, hitOpts(ab, from, false, true, o.heft));
   detonate(ctx, ab, m, o.hit);
+  cleaveBehind(ctx, ab, m, o.hit);
   if (o.struck === 0) chainFrom(ctx, ab, m, o.hit, new Set([m.id]));
   o.lastId = m.id;
   return true;
@@ -188,7 +198,11 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
   const t = world.t;
   const p = aimPoint(ctx, ab, aim);
   if (!p) return { ok: false, tx: h.x, ty: h.y };
-  const { power, size } = stepBonus(ctx.bal, ab.index, h.boon.stepBonus);
+  const { power, size } = stepBonus(
+    ctx.bal,
+    ab.index,
+    (h.boon.stepBonus ?? 0) + ab.knobs.stepBonus,
+  );
   const hit = abilityHit(ctx, ab) * power;
   const heft = stepHeft(ab);
   let dir = dirTo(h.x, h.y, p.x, p.y);

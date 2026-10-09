@@ -60,6 +60,30 @@ export function detonate(ctx: SimCtx, ab: ResolvedAbility, m: MonsterEntity, dam
   }
 }
 
+/**
+ * The axe's cleave (the constructs spec §4.2): a hit that struck one foe, `m`,
+ * alone cleaves the foes within `knobs.cleave` of it and beyond it from the
+ * hero, each for half the hit, non-direct. Nothing without the knob.
+ */
+export function cleaveBehind(
+  ctx: SimCtx,
+  ab: ResolvedAbility,
+  m: MonsterEntity,
+  damage: number,
+): void {
+  const c = ab.knobs.cleave;
+  if (c <= 0) return;
+  const { world } = ctx;
+  const h = world.hero;
+  const way = dirTo(h.x, h.y, m.x, m.y);
+  const opts = hitOpts(ab, { x: m.x, y: m.y }, false, false, 0);
+  for (const o of alive(ctx)) {
+    if (o === m || dist(m.x, m.y, o.x, o.y) > c + o.radius) continue;
+    if ((o.x - m.x) * way.x + (o.y - m.y) * way.y <= 0 || !sees(world.map, m, o)) continue;
+    hitMonster(ctx, o, damage * 0.5, ab.element, opts);
+  }
+}
+
 export function slotIndex(ab: ResolvedAbility): number {
   return ABILITY_SLOTS.indexOf(ab.slot);
 }
@@ -100,6 +124,7 @@ export function hitOpts(
   return {
     source: 'skill',
     canCrit: !tick,
+    critBonus: k.critBonus,
     applies: stagger ? [...k.applies, 'stagger'] : k.applies,
     knockback: tick ? 0 : k.knockback + (direct ? ab.heavyKnockback : 0),
     kbFrom: from,
@@ -319,6 +344,8 @@ export function impact(
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
   // Detonate: each foe a direct impact struck (a Volley dart's) blasts round itself.
   if (!o.tick && !o.through) for (const m of hits) detonate(ctx, ab, m, damage);
+  // The axe's cleave: an impact that struck one foe alone cleaves the foes behind it.
+  if (!o.tick && !o.through && hits.length === 1) cleaveBehind(ctx, ab, hits[0], damage);
   // Its area reaches props, hazards and crumbling cover; a tick's, an Echo's and a Pierce shot's
   // past its first foe never do (see the room objects spec).
   if (!o.tick && !ab.replay && !o.through) {
