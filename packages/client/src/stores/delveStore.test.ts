@@ -5,6 +5,7 @@ import {
   movesetOf,
   generateItem,
   heroChains,
+  openSkillPrice,
   SeededRNG,
   pouchCount,
   type ChainFix,
@@ -28,6 +29,8 @@ import {
   UNSOCKET_KEY,
   UNDO_MS,
   SALVAGE_WAITS,
+  DRAFT_PENDING,
+  type ChainDraft,
   applyLabel,
   draftApply,
   partsText,
@@ -914,5 +917,119 @@ describe('salvage Undo', () => {
     expect(s().profile.tutorial).toEqual(before.tutorial);
     expect(s().profile.quests).toBe(before.quests);
     expect(s().profile.bag.map((i) => i.uid)).toEqual(['old']);
+  });
+});
+
+describe('constructs: Move all, salvaging a construct, Open a skill', () => {
+  const s = () => useDelveStore.getState();
+  const registry = getDelveRegistry();
+  const rareSword = (uid: string): GearItem =>
+    generateItem(
+      registry,
+      { uid, ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(4),
+    );
+  beforeEach(() => {
+    localStorage.clear();
+    s().resetProfile(1234, 'fire');
+    s().setProfile({ ...s().profile, bag: [rareSword('w1')], scrap: 500, links: 5 });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('Move all is refused while the Skills draft holds changes, before the engine is asked', () => {
+    const chains = heroChains(registry, s().profile.equipped, s().profile.pair);
+    const primary = chains.primary!;
+    useDelveStore.setState({
+      chainDraft: {
+        uid: s().profile.equipped.weapon!.uid,
+        pair: s().profile.pair,
+        chains: { primary: { ...primary, moves: primary.moves.slice(0, 1) } },
+      } as ChainDraft,
+    });
+    const res = s().moveAll('w1');
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe(DRAFT_PENDING);
+    expect(s().profile.equipped.weapon!.uid).not.toBe('w1');
+  });
+
+  // D2 un-skips: B2's moveAll.
+  it.skip('Move all wears the bag weapon with your constructs on it, and clears its NEW mark', () => {
+    s().markNew(['w1']);
+    const mine = movesetOf(registry, s().profile.equipped.weapon!).chains.primary!;
+    const res = s().moveAll('w1');
+    expect(res.ok).toBe(true);
+    const worn = s().profile.equipped.weapon!;
+    expect(worn.uid).toBe('w1');
+    expect(movesetOf(registry, worn).chains.primary!.moves.map((m) => m.uid)).toEqual(
+      mine.moves.map((m) => m.uid),
+    );
+    expect(s().newUids.w1).toBeUndefined();
+  });
+
+  // D2 un-skips: B2's salvageConstruct.
+  it.skip('salvaging a bag construct offers Undo for UNDO_MS, like a salvage', () => {
+    vi.useFakeTimers();
+    const [c] = movesetOf(registry, s().profile.bag[0]).chains.primary!.moves;
+    // One construct in the bag: unsocketed from the bag weapon by B2's op, stood here by hand.
+    s().setProfile({ ...s().profile, constructs: [c] });
+    const before = s().profile;
+    const res = s().salvageConstruct(c.uid!);
+    expect(res.ok).toBe(true);
+    expect(s().profile.constructs).toHaveLength(0);
+    expect(s().undo).toMatchObject({ before, after: s().profile });
+    expect(s().undoSalvage()).toBe(true);
+    expect(s().profile).toBe(before);
+    s().salvageConstruct(c.uid!);
+    vi.advanceTimersByTime(UNDO_MS);
+    expect(s().undo).toBeNull();
+  });
+
+  it('salvaging a construct is refused while the Skills draft holds changes', () => {
+    const chains = heroChains(registry, s().profile.equipped, s().profile.pair);
+    const primary = chains.primary!;
+    useDelveStore.setState({
+      chainDraft: {
+        uid: s().profile.equipped.weapon!.uid,
+        pair: s().profile.pair,
+        chains: { primary: { ...primary, moves: primary.moves.slice(0, 1) } },
+      } as ChainDraft,
+    });
+    expect(s().salvageConstruct('c1')).toMatchObject({ ok: false, reason: DRAFT_PENDING });
+  });
+
+  it('Equip is refused with the notice while the Skills draft holds changes (any item: the bind choice too)', () => {
+    const chains = heroChains(registry, s().profile.equipped, s().profile.pair);
+    const primary = chains.primary!;
+    useDelveStore.setState({
+      chainDraft: {
+        uid: s().profile.equipped.weapon!.uid,
+        pair: s().profile.pair,
+        chains: { primary: { ...primary, moves: primary.moves.slice(0, 1) } },
+      } as ChainDraft,
+    });
+    expect(s().equip('w1')).toBe(false);
+    expect(s().profile.equipped.weapon!.uid).not.toBe('w1');
+    expect(s().takeNotices()).toContain(DRAFT_PENDING);
+    useDelveStore.setState({ chainDraft: null });
+    expect(s().equip('w1')).toBe(true);
+    expect(s().profile.equipped.weapon!.uid).toBe('w1');
+  });
+
+  it("Open a skill opens a weapon's skill at 0 slots through the engine, for its price", () => {
+    const common = s().profile.equipped.weapon!;
+    const price = openSkillPrice(registry, common);
+    s().setProfile({
+      ...s().profile,
+      scrap: price.scrap,
+      links: price.links,
+      materials: {
+        ...s().profile.materials,
+        flux: { ...s().profile.materials.flux, ...price.flux },
+      },
+    });
+    const res = s().openSkill(common.uid, 'defensive');
+    expect(res.ok).toBe(true);
+    expect(movesetOf(registry, s().profile.equipped.weapon!).slots.defensive).toBe(1);
+    expect(s().profile.scrap).toBe(0);
   });
 });

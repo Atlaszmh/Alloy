@@ -292,7 +292,7 @@ export function draftOf(
   return { chains, bag: draft.bag };
 }
 
-/** Why a bag construct can't be salvaged while the draft holds changes (the constructs spec, 3.3). */
+/** Why a bag construct can't be salvaged while the draft holds changes: `DRAFT_PENDING`, C1's name. */
 export const SALVAGE_WAITS = 'Apply or discard your Skills changes first';
 
 /** More than any draft can spend: the copy Apply is priced on. */
@@ -530,6 +530,14 @@ export function pullText(
 /** How long Salvage's Undo is offered (the pad-first spec, 4). */
 export const UNDO_MS = 5000;
 
+/** Why Move all, a construct's salvage and any Equip wait: the Skills draft (spec §3.3). */
+export const DRAFT_PENDING = SALVAGE_WAITS;
+
+/** The Skills draft holds changes the save doesn't (the ops that commit at once wait on it). */
+export function draftPending(s: Pick<DelveStore, 'profile' | 'chainDraft'>): boolean {
+  return Object.keys(draftChanges(getDelveRegistry(), s.profile, s.chainDraft)).length > 0;
+}
+
 /** A salvage Undo can still take back: the save from before it, the one it made, and the NEW marks it cleared. */
 export interface SalvageUndo {
   before: DelveProfile;
@@ -593,7 +601,11 @@ interface DelveStore {
   declineBind: (mana: ManaType) => void;
   /** Hand over the waiting notices, and forget them. */
   takeNotices: () => string[];
-  equip: (uid: string) => void;
+  /**
+   * Wear a bag item; false, with the `DRAFT_PENDING` notice, while the Skills draft holds changes
+   * (spec §3.3: any equip waits, the bind choice's too).
+   */
+  equip: (uid: string) => boolean;
   unequip: (slot: GearSlot) => void;
   toggleLock: (uid: string) => void;
   /**
@@ -667,20 +679,22 @@ interface DelveStore {
   /**
    * Melt bag construct `uid` at once (the constructs spec, 3.3): its runes to the pouch at the pull
    * price; refused while the draft has unapplied changes. Undo for `UNDO_MS`, as a salvage
-   * (`undoSalvage` takes it back). C2's action: its thin body here keeps this branch typechecking
-   * (the bag pane calls it); at merge C2's body wins (see Needs routed).
+   * (`undoSalvage` takes it back).
    */
   salvageConstruct: (uid: string) => ProfileActionResult & { runes?: RuneRef[] };
   revertDraft: () => void;
   /** Add a slot to a chain of the equipped weapon, for Links and scrap (dropping its draft). */
   addSlot: (skill: ChainSkill) => ProfileActionResult;
-  /** Move all (the constructs spec §3.3): the worn weapon's constructs onto bag weapon `uid`, equipped. B2 fills the engine's op; until then it refuses. */
-  transfer: (uid: string) => ProfileActionResult;
   /** Take the stop's boon (`{ kind: 'boon', index }`) or a guided stop's power-up. */
   takeStop: (action: StopAction) => ProfileActionResult;
   setManualAttack: (on: boolean) => void;
   /** Dev builds: choose the pull rule, kept on this device. */
   setUnsocket: (mode: UnsocketMode) => void;
+  /**
+   * Move every construct of the worn weapon onto bag weapon `uid`, slot for slot, and wear it
+   * (spec §3.3 Move all): free; refused while the Skills draft holds changes.
+   */
+  moveAll: (uid: string) => ProfileActionResult;
 }
 
 function withoutUids(map: Record<string, true>, uids: string[]): Record<string, true> {
@@ -735,6 +749,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
   const notify = (text: string) => set({ notices: [...get().notices, text] });
   // The pull rule for the ops whose parts can return or destroy a rune.
   const pull = () => pullOpts(get());
+  /** Something melted: Undo may take it back for UNDO_MS (`cleared`: the NEW marks it took). */
+  const offerUndo = (before: DelveProfile, cleared: Record<string, true> = {}) => {
+    const undo: SalvageUndo = { before, after: get().profile, newUids: cleared };
+    set({ undo });
+    setTimeout(() => {
+      if (get().undo === undo) set({ undo: null });
+    }, UNDO_MS);
+  };
 
   const loaded = loadDelveProfile();
   // A save of another version starts afresh (no migrations), with a notice; either is written back at once.
@@ -827,10 +849,16 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     },
 
     equip: (uid) => {
+      // A dive locks the chains and so does an unapplied draft: Apply or discard it first.
+      if (draftPending(get())) {
+        notify(DRAFT_PENDING);
+        return false;
+      }
       commit(equipItem(registry(), get().profile, uid));
       set({ newUids: withoutUids(get().newUids, [uid]) });
       // The Loadout's onboarding hint is done, by whichever control equipped (features/delve/onboarding.ts).
       useUIStore.getState().markSeen('loadout');
+      return true;
     },
 
     unequip: (slot) => commit(unequipSlot(registry(), get().profile, slot)),
@@ -842,17 +870,11 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       const res = salvageItems(registry(), before, uids, pull());
       commit(res.profile);
       set({ newUids: withoutUids(get().newUids, uids) });
-      // Something melted: Undo may take it back for UNDO_MS.
-      if (res.profile.bag.length < before.bag.length) {
-        const cleared = Object.fromEntries(
-          uids.filter((u) => newUids[u]).map((u) => [u, true as const]),
+      if (res.profile.bag.length < before.bag.length)
+        offerUndo(
+          before,
+          Object.fromEntries(uids.filter((u) => newUids[u]).map((u) => [u, true as const])),
         );
-        const undo: SalvageUndo = { before, after: res.profile, newUids: cleared };
-        set({ undo });
-        setTimeout(() => {
-          if (get().undo === undo) set({ undo: null });
-        }, UNDO_MS);
-      }
       const { scrap, dust, links, runes, destroyed, shards, patterns, essences } = res;
       return { scrap, dust, links, runes, destroyed, shards, patterns, essences };
     },
@@ -898,8 +920,6 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     refine: (what) => applyResult(engineRefine(registry(), get().profile, what)),
 
     buyShard: (stat) => applyResult(engineBuyShard(registry(), get().profile, stat)),
-
-    openSkill: (uid, skill) => applyResult(engineOpenSkill(registry(), get().profile, uid, skill)),
 
     startTutorial: () => commit(engineStartTutorial(registry(), get().profile)),
 
@@ -1024,26 +1044,19 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       return res;
     },
 
-    salvageConstruct: (uid) => {
-      const before = get().profile;
-      // The engine can't see the draft: a salvage waits while it holds changes, as a dive does
-      // (the pane's Salvage is off then too, but the keys reach here).
-      if (Object.keys(draftChanges(registry(), before, get().chainDraft)).length > 0)
-        return { ok: false, profile: before, reason: SALVAGE_WAITS };
-      const res = applyResult(engineSalvageConstruct(registry(), before, uid, pull()));
-      if (res.ok) {
-        // Something melted: Undo may take it back for UNDO_MS.
-        const undo: SalvageUndo = { before, after: res.profile, newUids: {} };
-        set({ undo });
-        setTimeout(() => {
-          if (get().undo === undo) set({ undo: null });
-        }, UNDO_MS);
-      }
+    takeStop: (action) => {
+      const res = applyResult(engineTakeStop(registry(), get().profile, action));
+      if (res.ok && action.kind === 'equip')
+        set({ newUids: withoutUids(get().newUids, [action.uid]) });
       return res;
     },
 
-    transfer: (uid) => {
-      const res = applyResult(engineMoveAll(registry(), get().profile, uid));
+    // ── Constructs (the constructs spec §3.3): the ops that commit at once. C1 owns the draft above. ──
+
+    moveAll: (uid) => {
+      const { profile } = get();
+      if (draftPending(get())) return { ok: false, profile, reason: DRAFT_PENDING };
+      const res = applyResult(engineMoveAll(registry(), profile, uid));
       if (res.ok) {
         set({ newUids: withoutUids(get().newUids, [uid]) });
         useUIStore.getState().markSeen('loadout');
@@ -1051,11 +1064,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       return res;
     },
 
-    takeStop: (action) => {
-      const res = applyResult(engineTakeStop(registry(), get().profile, action));
-      if (res.ok && action.kind === 'equip')
-        set({ newUids: withoutUids(get().newUids, [action.uid]) });
+    salvageConstruct: (uid) => {
+      const { profile: before } = get();
+      if (draftPending(get())) return { ok: false, profile: before, reason: DRAFT_PENDING };
+      const res = applyResult(engineSalvageConstruct(registry(), before, uid, pull()));
+      if (res.ok) offerUndo(before);
       return res;
     },
+
+    openSkill: (uid, skill) => applyResult(engineOpenSkill(registry(), get().profile, uid, skill)),
   };
 });

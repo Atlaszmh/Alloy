@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, screen, fireEvent, within } from '@testing-library/react';
 import {
+  equipItem,
   movesetOf,
   socketsOf,
   type Blow,
@@ -204,7 +205,7 @@ describe('SkillsTab', () => {
     expect(store().chainDraft).toBeNull();
   });
 
-  it('equipping another weapon drops the draft', () => {
+  it('Equip waits on the draft; wearing another weapon by any other way drops it', () => {
     roomy();
     const p = store().profile;
     const sword = p.equipped.weapon!;
@@ -212,7 +213,12 @@ describe('SkillsTab', () => {
     renderSkills();
     edit(0);
     pickForm('lance');
-    act(() => store().equip('spare'));
+    // The constructs spec, 3.3: any equip is refused while the draft has unapplied changes.
+    act(() => void expect(store().equip('spare')).toBe(false));
+    expect(store().profile.equipped.weapon!.uid).toBe(sword.uid);
+    expect(priceLine()).toHaveTextContent('1 unapplied change');
+    // Another weapon worn by a path that doesn't ask the store (a stop's take): the draft goes.
+    act(() => store().setProfile(equipItem(registry, store().profile, 'spare')));
     expect(priceLine()).toHaveTextContent('No changes');
     act(() => store().equip(sword.uid));
     expect(priceLine()).toHaveTextContent('No changes'); // gone, not waiting on the sword

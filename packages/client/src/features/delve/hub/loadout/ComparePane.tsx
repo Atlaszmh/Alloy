@@ -60,11 +60,11 @@ export function verdictOf(
 }
 
 /**
- * Move your moveset onto the bag weapon `item` (the store's `transfer`), with its sound and its
+ * Move your moveset onto the bag weapon `item` (the store's `moveAll`), with its sound and its
  * toast, or say why not. True when it moved.
  */
 export function transferOnto(item: GearItem): boolean {
-  const res = useDelveStore.getState().transfer(item.uid);
+  const res = useDelveStore.getState().moveAll(item.uid);
   if (!res.ok) {
     playSound('combineFail');
     showToast(res.reason ?? 'Cannot move');
