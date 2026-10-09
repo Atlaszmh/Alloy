@@ -1,18 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { heroChains, type Chains } from '@alloy/engine';
+import { movesetOf, type Chains } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
 import { getDelveRegistry } from '../../../registry';
 import { ApplyBar } from '../ApplyBar';
+import { stamped } from './harness';
 
 const onDelve = vi.fn();
 const onApply = vi.fn();
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
-const chains = () => heroChains(registry, store().profile.equipped, store().profile.pair) as Chains;
+const chains = () => movesetOf(registry, store().profile.equipped.weapon!).chains as Chains;
 const price = () => screen.getByTestId('chain-price');
 const renderBar = () =>
   render(
@@ -20,7 +21,7 @@ const renderBar = () =>
       <ApplyBar onDelve={onDelve} onApply={onApply} />
     </MemoryRouter>,
   );
-/** The Primary's Bolt made a Lance: one unapplied change. */
+/** The Primary's Strike made a Lance: one unapplied change. */
 const draftLance = () => {
   const primary = chains().primary;
   act(() =>
@@ -32,7 +33,7 @@ describe('ApplyBar', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    store().setProfile(armed(store().profile)); // an uncommon sword: it carries the Primary
+    store().setProfile(stamped(armed(store().profile))); // an uncommon sword: it carries the Primary
     onDelve.mockClear();
     onApply.mockClear();
   });
@@ -49,8 +50,9 @@ describe('ApplyBar', () => {
   it('counts the unapplied changes with their price; Revert drops them and Apply opens the sheet', () => {
     renderBar();
     draftLance();
-    expect(price()).toHaveTextContent('1 unapplied change · free until your first dive');
-    expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply');
+    // Its price is B2's engine (D2 reads "free until your first dive" here); the count is the bar's.
+    expect(price()).toHaveTextContent('1 unapplied change');
+    expect(screen.getByTestId('chain-apply')).toHaveAccessibleName(/^Apply/);
     fireEvent.click(screen.getByTestId('chain-revert'));
     expect(price()).toHaveTextContent('No changes');
     draftLance();

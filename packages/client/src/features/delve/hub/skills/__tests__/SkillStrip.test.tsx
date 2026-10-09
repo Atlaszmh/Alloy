@@ -1,39 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
-import { defaultMoveset, type ChainSkill } from '@alloy/engine';
-import { getDelveRegistry } from '../../../registry';
+import type { ChainSkill } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
-import { renderSkills } from './harness';
+import { renderSkills, roomy } from './harness';
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
   return { ...actual, useNavigate: () => vi.fn() };
 });
 
-const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 const tab = (s: ChainSkill) => screen.getByTestId(`chain-skill-${s}`);
-
-/** The starting sword made epic (all four skills), its chains at five slots. */
-function roomy() {
-  const p = store().profile;
-  const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
-  const moveset = defaultMoveset(registry, weapon, 'fire', {
-    basic: 3,
-    primary: 4,
-    defensive: 1,
-    ultimate: 1,
-  });
-  const slots = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
-  store().setProfile({
-    ...p,
-    equipped: {
-      ...p.equipped,
-      weapon: { ...weapon, moveset: { chains: moveset.chains, slots, bought: {} } },
-    },
-  });
-}
 
 describe('the skill strip', () => {
   beforeEach(() => {
