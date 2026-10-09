@@ -2,7 +2,7 @@ import type { Knobs, ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity } from '../../types/arpg.js';
 import { applyStatus, hitMonster, type SimCtx } from '../combat.js';
 import { abilityHit, impact, knobHitOpts } from './impact.js';
-import { chainMove, chargeCap } from './resolve.js';
+import { chainMove, chargeCap, chargeUnit } from './resolve.js';
 
 const DEFENSIVE = 1;
 
@@ -35,6 +35,42 @@ export function guardLand(ctx: SimCtx, knobs: Knobs): void {
 /** The Surge while it is up, else null. */
 export function surging(ctx: SimCtx): ResolvedAbility | null {
   return ctx.world.hero.defend?.form === 'surge' ? defendingAbility(ctx) : null;
+}
+
+/** The Surge's multiplier on every timer the hero runs (the constructs spec §2.2): 1 + its effect; 1 without it. */
+export function surgeMult(ctx: SimCtx): number {
+  const surge = surging(ctx);
+  return surge ? 1 + surge.effect : 1;
+}
+
+/**
+ * The Surge runs every timer at `surgeMult`: each tick the running cooldowns
+ * (never the Surge move's own), the beats (and the restart window counted
+ * from one, while it runs), a wind-up and the dodge's recharge come forward
+ * by the extra share of `dt`. Attack speed, move speed, mana regen and charge
+ * gain read `surgeMult` where they are set.
+ */
+export function surgeTick(ctx: SimCtx, dt: number): void {
+  const h = ctx.world.hero;
+  const extra = dt * (surgeMult(ctx) - 1);
+  if (extra <= 0) return;
+  const t = ctx.world.t;
+  h.chains.forEach((chain, slot) => {
+    if (!chain) return;
+    chain.moves.forEach((m, i) => {
+      const own = slot === DEFENSIVE && m.form.id === 'surge';
+      if (!own && h.cooldowns[slot][i] > t) h.cooldowns[slot][i] -= extra;
+    });
+    if (h.beatUntil[slot] > t) {
+      h.beatUntil[slot] -= extra;
+      h.comboAt[slot] -= extra;
+    }
+  });
+  if (h.windup) {
+    h.windup.until -= extra;
+    h.windup.conjureUntil -= extra;
+  }
+  if (h.dodgeRechargeAt > 0) h.dodgeRechargeAt -= extra;
 }
 
 /** The Ward (the Defensive move `ab`) bursts with its element around the hero. */
@@ -123,14 +159,12 @@ export function defendTick(ctx: SimCtx, dt: number): void {
 }
 
 /**
- * Charge-paid chains bank one unit per weapon-hit worth of damage the hero
- * deals, up to their largest need; a chain never charges from its own hits,
- * nor while any of its moves cools down (its lockout).
+ * Charge-paid chains bank one unit per reference swing's worth of damage the
+ * hero deals (`chargeUnit`), up to their largest need; a chain never charges
+ * from its own hits, nor while any of its moves cools down (its lockout).
  */
 export function addCharge(ctx: SimCtx, amount: number, fromSlot: number | undefined): void {
-  const h = ctx.world.hero;
-  const unit = Math.max(1, h.stats.weaponDamage * h.stats.damageMult);
-  gainCharge(ctx, amount / unit, fromSlot);
+  gainCharge(ctx, amount / chargeUnit(ctx.registry, ctx.world.hero.stats), fromSlot);
 }
 
 export function gainCharge(ctx: SimCtx, units: number, fromSlot?: number): void {
@@ -138,6 +172,6 @@ export function gainCharge(ctx: SimCtx, units: number, fromSlot?: number): void 
   const t = ctx.world.t;
   h.chains.forEach((chain, i) => {
     if (chain?.payment !== 'charge' || i === fromSlot || h.cooldowns[i].some((c) => t < c)) return;
-    h.charge[i] = Math.min(chargeCap(chain), h.charge[i] + units);
+    h.charge[i] = Math.min(chargeCap(chain), h.charge[i] + units * surgeMult(ctx));
   });
 }

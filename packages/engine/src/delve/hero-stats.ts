@@ -17,6 +17,7 @@ import {
   defaultChains,
   holdFull,
   mergeKnobs,
+  chargeUnit,
   moveBeat,
   resolveChain,
   stepBonus,
@@ -361,14 +362,14 @@ const TARGETS: Record<string, number> = {
   nova: 3.5,
   barrage: 3,
   maelstrom: 3,
+  onslaught: 1,
   ward: 2.5,
+  repel: 2.5,
   armor: 1,
   surge: 0,
   blink: 1.5,
   // The constructs spec's forms, as their kin until B1 tunes them.
   whirl: 2,
-  repel: 2.5,
-  onslaught: 3,
 };
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -382,16 +383,18 @@ const EXTRA_SHOT = 0.5;
 const PIERCED_FOE = 0.25;
 const REACTION_SHARE = 0.2;
 const PER_STACK = 0.05;
+/** A cleave is worth a quarter of a hit, a homing shot finds its foe a tenth more often. */
+const CLEAVE = 0.25;
+const HOMING = 0.1;
 
 type KnobSet = ResolvedAbility['knobs'];
 
-/** Impacts one use lands: a Barrage's count, a Maelstrom's ticks, else one. */
+/** Impacts one use lands: a Barrage's or Onslaught's count, a Maelstrom's or Whirl's ticks, else 1. */
 function repeatsOf(ab: ResolvedAbility): number {
-  return ab.form.id === 'barrage'
-    ? ab.count
-    : ab.form.id === 'maelstrom'
-      ? ab.duration / ab.tick
-      : 1;
+  const f = ab.form.id;
+  if (f === 'barrage' || f === 'onslaught') return ab.count;
+  if (f === 'maelstrom' || f === 'whirl') return ab.duration / ab.tick;
+  return 1;
 }
 
 /**
@@ -405,7 +408,10 @@ function reach(k: KnobSet, targets: number, bal: DelveBalance): number {
   for (let i = 1; i <= k.chain; i++) jumps += Math.pow(bal.abilities.chainPower, i);
   const zone = k.zone ? (k.zone.seconds / 0.5) * k.zone.tickPower * targets : 0;
   const shards = k.split ? EXTRA_SHOT * k.split.count * k.split.power : 0;
-  return targets + pierced + jumps + zone + shards;
+  // Detonate: each foe struck blasts round itself, finding a foe half the time.
+  const blasts = EXTRA_SHOT * k.detonate * targets;
+  const cleave = k.cleave > 0 ? CLEAVE : 0;
+  return targets + pierced + jumps + zone + shards + blasts + cleave;
 }
 
 /** What scales a whole use: Echo's repeat, Volatile's reactions and Saturate's stacks (1 without). */
@@ -528,9 +534,16 @@ export function damagePerUse(
     valuedChain(chain, pool).map((ab) => {
       if (!ab) return 0;
       const k = ab.knobs;
-      const targets = TARGETS[ab.form.id] * (1 + (k.area - 1) * 0.5);
-      const step = stepBonus(bal, ab.index).power;
-      const perHit = hit * ab.power * step * (1 + stats.elementPower[ab.element]);
+      const targets =
+        TARGETS[ab.form.id] * (1 + (k.area - 1) * 0.5) * (k.homing > 0 ? 1 + HOMING : 1);
+      const step = stepBonus(bal, ab.index, k.stepBonus).power;
+      // The dagger's crit bonus is worth its share of the crit multiplier's extra.
+      const perHit =
+        hit *
+        ab.power *
+        step *
+        (1 + stats.elementPower[ab.element]) *
+        (1 + k.critBonus * (stats.critMultiplier - 1));
       return perHit * reach(k, targets, bal) * repeatsOf(ab) * shots(ab) * boost(k);
     }),
   );
@@ -740,7 +753,7 @@ export function estimateCombat(
     return chain ? resolveChain(registry, stats, slot, chain) : null;
   });
   const pool = manaPool(stats, registry);
-  const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
+  const unit = chargeUnit(registry, stats);
   // Each chain as the sim plays it against the pool (`valuedChain`).
   const every = (chain: ResolvedChain, income: number, rate: number) =>
     useInterval(bal, chain, stats.tempo, income, rate, pool.max);

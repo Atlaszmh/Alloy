@@ -24,12 +24,14 @@
     {
       "id": "lance", "slot": "primary", "class": "both", "name": "Lance", "icon": "🗡️",
       "power": 1.55, "range": 7.5, "radius": 0.55, "motion": -0.3,
+      "melee": { "range": 5, "radius": 0.8, "motion": 0, "text": "A lunge along the line, striking every foe you pass. Each later move of a chain hits harder." },
       "defaultChain": ["medium", "medium", "heavy"],
       "text": "An instant line that hits every foe along it. Each later move of a chain reaches further and hits harder."
     },
     {
       "id": "burst", "slot": "primary", "class": "both", "name": "Burst", "icon": "💥",
       "power": 1.7, "range": 8, "radius": 1.6, "motion": 0.2, "speed": 30,
+      "melee": { "range": 5, "motion": 0.3, "text": "You slam the ground and it erupts where you aim, within 5 units. Each later move of a chain is bigger." },
       "defaultChain": ["medium", "medium", "heavy"],
       "text": "An explosion where you aim. Each later move of a chain is bigger."
     },
@@ -53,7 +55,7 @@
     {
       "id": "repel", "slot": "defensive", "class": "ranged", "name": "Repel", "icon": "💢",
       "power": 0.6, "effect": 0.5, "radius": 3, "defaultChain": ["medium"],
-      "text": "A pulse that knocks nearby foes back and slows them."
+      "text": "A pulse that knocks the foes around you back and chills them."
     },
     {
       "id": "armor", "slot": "defensive", "class": "melee", "name": "Armor", "icon": "🦺",
@@ -63,12 +65,12 @@
     {
       "id": "surge", "slot": "defensive", "class": "both", "name": "Surge", "icon": "⚡",
       "power": 0, "effect": 0.3, "duration": 6, "defaultChain": ["medium"],
-      "text": "For 6 s: +30% attack speed, +20% move speed, and basic hits also apply the element's stacks."
+      "text": "For 6 s everything you do runs 30% faster: attacks, your step, cooldowns, beats, wind-ups, mana and charge, and your dodge coming back. Basic hits also apply the element's stacks."
     },
     {
       "id": "blink", "slot": "defensive", "class": "both", "name": "Blink", "icon": "💨",
-      "power": 0.9, "effect": 0.4, "range": 5, "radius": 0.9, "defaultChain": ["medium"],
-      "text": "Dash 5 units, untouchable for a moment, leaving a trail that hits foes."
+      "power": 0.9, "effect": 0.9, "range": 5, "radius": 0.9, "defaultChain": ["medium"],
+      "text": "Dash 5 units, untouchable through the dash and for a moment after you land, leaving a trail that hits foes."
     },
     {
       "id": "nova", "slot": "ultimate", "class": "both", "name": "Nova", "icon": "✴️",
@@ -77,7 +79,7 @@
     },
     {
       "id": "onslaught", "slot": "ultimate", "class": "melee", "name": "Onslaught", "icon": "⚡",
-      "power": 1.2, "range": 6, "radius": 3, "count": 5, "duration": 1.2, "defaultChain": ["medium"],
+      "power": 1.2, "range": 6, "radius": 3, "count": 5, "duration": 1.2, "effect": 0.3, "defaultChain": ["medium"],
       "text": "Dart between foes in the target area, striking several times; untouchable while darting, then 30% less damage taken for 2 s."
     },
     {
@@ -89,6 +91,7 @@
     {
       "id": "maelstrom", "slot": "ultimate", "class": "both", "name": "Maelstrom", "icon": "🌪️",
       "power": 0.5, "range": 9, "radius": 3.5, "duration": 6, "tick": 0.5, "motion": 0.2,
+      "melee": { "motion": 0, "text": "A storm round you that moves with you, hitting everything inside for 6 s." },
       "defaultChain": ["medium"],
       "text": "A lingering storm at the target that hits everything inside for 6 s."
     }

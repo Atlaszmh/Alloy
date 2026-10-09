@@ -4,6 +4,7 @@ import {
   dpsCombos,
   dpsKey,
   labHero,
+  referenceWeapons,
   runeComboSetups,
   simulateDps,
   type DpsOptions,
@@ -12,6 +13,7 @@ import {
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
+import type { FormId } from '../src/types/ability.js';
 import { valuedMove } from '../src/delve/hero-stats.js';
 
 /**
@@ -61,49 +63,50 @@ describe.skipIf(!process.env.RUNE_COST_GATE)('the rune costs gate (depth 10, eig
   const x = (n: number) => n.toFixed(2);
 
   for (const form of FORMS)
-    it(`${form}: supported at least ${FLOOR}× on the pack, the starved mana per press in ${BAND[0]}–${BAND[1]}×`, () => {
-      const full = (pack: boolean): DpsOptions => ({ depth: DEPTH, pack });
-      const sets = runeComboSetups(registry, form).map((s) => ({
-        s,
-        unloaded: ratio(unloaded, s, full(true)),
-      }));
-      sets.sort((a, b) => b.unloaded - a.unloaded);
-      const set = sets[0].s;
-      /** One layout's ratios: full mana, starved and supported, each loaded and unloaded. */
-      const layout = (pack: boolean) => {
-        const at = (sustained?: DpsOptions['sustained']) => {
-          const o = { ...full(pack), sustained };
-          return { loaded: ratio(registry, set, o), unloaded: ratio(unloaded, set, o) };
+    for (const weapon of referenceWeapons(registry, form as FormId))
+      it(`${form} on a ${weapon}: supported at least ${FLOOR}× on the pack, the starved mana per press in ${BAND[0]}–${BAND[1]}×`, () => {
+        const full = (pack: boolean): DpsOptions => ({ depth: DEPTH, pack });
+        const sets = runeComboSetups(registry, form, weapon).map((s) => ({
+          s,
+          unloaded: ratio(unloaded, s, full(true)),
+        }));
+        sets.sort((a, b) => b.unloaded - a.unloaded);
+        const set = sets[0].s;
+        /** One layout's ratios: full mana, starved and supported, each loaded and unloaded. */
+        const layout = (pack: boolean) => {
+          const at = (sustained?: DpsOptions['sustained']) => {
+            const o = { ...full(pack), sustained };
+            return { loaded: ratio(registry, set, o), unloaded: ratio(unloaded, set, o) };
+          };
+          return { full: at(), starved: at('starved'), supported: at('supported') };
         };
-        return { full: at(), starved: at('starved'), supported: at('supported') };
-      };
-      const [pack, one] = [layout(true), layout(false)];
-      const press = {
-        starved:
-          perPress(set, { ...full(true), sustained: 'starved' }) /
-          perPress(baseOf(set), { ...full(true), sustained: 'starved' }),
-        supported:
-          perPress(set, { ...full(true), sustained: 'supported' }) /
-          perPress(baseOf(set), { ...full(true), sustained: 'supported' }),
-      };
-      const row = (l: typeof pack) =>
-        `full ${x(l.full.unloaded)} → ${x(l.full.loaded)}, starved ${x(l.starved.loaded)} (${x(l.starved.unloaded)}), supported ${x(l.supported.loaded)} (${x(l.supported.unloaded)})`;
-      const bites = [pack, one].every(
-        (l) => l.starved.loaded < l.starved.unloaded && l.supported.loaded < l.supported.unloaded,
-      );
-      console.log(
-        [
-          `${form.padEnd(6)} ${set.dims.rune} (next: ${sets
-            .slice(1, 3)
-            .map((c) => `${c.s.dims.rune} ${x(c.unloaded)}`)
-            .join('; ')})`,
-          `  pack: ${row(pack)}`,
-          `  one:  ${row(one)}`,
-          `  mana per press ${x(press.starved)}× starved, ${x(press.supported)}× supported; the price ${bites ? 'bites' : 'DOES NOT BITE'}`,
-        ].join('\n'),
-      );
-      expect(pack.supported.loaded).toBeGreaterThanOrEqual(FLOOR);
-      expect(press.starved).toBeGreaterThanOrEqual(BAND[0]);
-      expect(press.starved).toBeLessThanOrEqual(BAND[1]);
-    }, 120_000);
+        const [pack, one] = [layout(true), layout(false)];
+        const press = {
+          starved:
+            perPress(set, { ...full(true), sustained: 'starved' }) /
+            perPress(baseOf(set), { ...full(true), sustained: 'starved' }),
+          supported:
+            perPress(set, { ...full(true), sustained: 'supported' }) /
+            perPress(baseOf(set), { ...full(true), sustained: 'supported' }),
+        };
+        const row = (l: typeof pack) =>
+          `full ${x(l.full.unloaded)} → ${x(l.full.loaded)}, starved ${x(l.starved.loaded)} (${x(l.starved.unloaded)}), supported ${x(l.supported.loaded)} (${x(l.supported.unloaded)})`;
+        const bites = [pack, one].every(
+          (l) => l.starved.loaded < l.starved.unloaded && l.supported.loaded < l.supported.unloaded,
+        );
+        console.log(
+          [
+            `${form.padEnd(6)} ${set.dims.rune} (next: ${sets
+              .slice(1, 3)
+              .map((c) => `${c.s.dims.rune} ${x(c.unloaded)}`)
+              .join('; ')})`,
+            `  pack: ${row(pack)}`,
+            `  one:  ${row(one)}`,
+            `  mana per press ${x(press.starved)}× starved, ${x(press.supported)}× supported; the price ${bites ? 'bites' : 'DOES NOT BITE'}`,
+          ].join('\n'),
+        );
+        expect(pack.supported.loaded).toBeGreaterThanOrEqual(FLOOR);
+        expect(press.starved).toBeGreaterThanOrEqual(BAND[0]);
+        expect(press.starved).toBeLessThanOrEqual(BAND[1]);
+      }, 120_000);
 });

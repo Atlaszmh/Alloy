@@ -384,7 +384,8 @@ describe('chain play', () => {
       run(w, 0.1);
     }
     expect(next).toEqual([0, 1, 2, 3, 0]);
-    const sb = bal.chains.stepBonus;
+    // The fixture's sword adds its style's trait to the step bonus (constructs B1 Task 10).
+    const sb = bal.chains.stepBonus + w.hero.chains[0]!.moves[0].knobs.stepBonus;
     [0, 1, 2, 3, 0].forEach((i, k) => {
       expect(shots[k].damage / shots[0].damage).toBeCloseTo(1 + sb * i);
       expect(shots[k].size / shots[0].size).toBeCloseTo(1 + (sb * i) / 2);
@@ -404,6 +405,7 @@ describe('chain play', () => {
     const third = (form: FormId) => {
       const w = arena([dummy(13, 29)], {
         noBasic: true,
+        weapon: 'staff',
         primary: { moves: [0, 1, 2].map(() => m('medium', form)) },
       });
       for (let i = 0; i < 2; i++) {
@@ -950,15 +952,18 @@ describe('basics', () => {
   it("estimateCombat values each weapon's default chain as it valued its string (v0.45.0)", () => {
     // A rare ilvl-12 Fire weapon on a Fire/Storm pair with Twin Fang 40, at depth 5; the
     // abilities one medium move each (a Volley's, a Ward's, a Nova's numbers are as they were).
+    // Re-pinned for the cast styles' numbers (constructs B1 Task 8) and traits (Task 10: the
+    // dagger's crit, the axe's cleave, the wand's homing), and for the style gate (Task 12: each
+    // base's abilities and charge read against the sword's, the styles retuned).
     const today: Record<string, number> = {
       unarmed: 13.233961,
-      dagger: 188.213808,
+      dagger: 179.482645,
       sword: 195.522722,
-      axe: 237.869592,
-      maul: 343.63993,
-      staff: 124.587614,
-      wand: 120.353622,
-      bow: 151.257273,
+      axe: 227.947159,
+      maul: 332.697117,
+      staff: 156.134066,
+      wand: 142.521192,
+      bow: 177.884799,
     };
     const one = (form: FormId, payment: 'mana' | 'charge') => ({
       moves: [m('medium', form)],

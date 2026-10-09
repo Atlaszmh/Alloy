@@ -51,13 +51,14 @@ describe('targets in sight', () => {
 
 describe('the aim point', () => {
   it('is clipped to the hero’s sight: a lob lands this side of the wall', () => {
-    const w = onMap(arena([dummy(2, 2)], { noBasic: true, primary: { form: 'burst' } }), WALL_30);
+    const lob = { noBasic: true, weapon: 'staff', primary: { form: 'burst' as const } };
+    const w = onMap(arena([dummy(2, 2)], lob), WALL_30);
     const p = aimPoint(makeCtx(registry, w, []), moveOf(w, 0), { x: 13, y: 26 })!;
     expect(p.x).toBeCloseTo(13, 9);
     expect(p.y).toBeGreaterThan(32);
     expect(p.y).toBeCloseTo(32, 5);
     // In the open room, as before: clamped to the move's range (8).
-    const open = arena([dummy(2, 2)], { noBasic: true, primary: { form: 'burst' } });
+    const open = arena([dummy(2, 2)], lob);
     expect(aimPoint(makeCtx(registry, open, []), moveOf(open, 0), { x: 13, y: 26 })).toEqual({
       x: 13,
       y: 28,
@@ -102,7 +103,11 @@ describe('Blink and beams', () => {
 
   it('a Lance beam ends at the wall and strikes nothing behind it', () => {
     const w = onMap(
-      arena([dummy(13, 32.9), dummy(13, 28)], { noBasic: true, primary: { form: 'lance' } }),
+      arena([dummy(13, 32.9), dummy(13, 28)], {
+        noBasic: true,
+        weapon: 'staff',
+        primary: { form: 'lance' },
+      }),
       WALL_30,
     );
     w.hero.y = 34;

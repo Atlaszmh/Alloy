@@ -82,31 +82,33 @@ describe('Power without runes', () => {
     // The starter sword made uncommon: its basic chain, two Strikes and a Ward (the slot table).
     const starter = (primary: ManaType) =>
       estimate(armed(registry, createDelveProfile(registry, 3, { primary })), DEPTH);
+    // The sword's second Strike steps 5% harder (its style's trait, constructs B1 Task 10).
     expect(starter('fire')).toEqual({
-      dps: 42.61095657127015,
+      dps: 43.10883233830644,
       ehp: 210.61412635492272,
-      power: 947,
+      power: 953,
     });
     expect(starter('earth')).toEqual({
-      dps: 39.590204171370964,
+      dps: 40.02313962096774,
       ehp: 239.33423449423037,
-      power: 973,
+      power: 979,
     });
     expect(starter('storm')).toEqual({
-      dps: 46.532077687802406,
+      dps: 47.11654054475806,
       ehp: 210.61412635492272,
-      power: 990,
+      power: 996,
     });
     expect(starter('shadow')).toEqual({
-      dps: 39.590204171370964,
+      dps: 40.02313962096774,
       ehp: 210.61412635492272,
-      power: 913,
+      power: 918,
     });
-    // The epic bow's drop rolls its moveset over the slot table (four Bolts, two Wards, a Nova).
+    // The epic bow's drop rolls its moveset over the slot table (four Bolts, two Wards, a Nova),
+    // its abilities read against the sword's damage (the style gate, constructs B1 Task 12).
     expect(estimate(archer(), 15)).toEqual({
-      dps: 378.9112929933396,
+      dps: 488.2055978829214,
       ehp: 198.09056273093927,
-      power: 2740,
+      power: 3110,
     });
   });
 
@@ -341,15 +343,16 @@ describe('the autopilot and runes', () => {
     expect(sockets(empty, 'primary')).toEqual([0, 0, 0, 0, 0]);
     expect(empty.links).toBe(16);
     // The first sockets (1 Link + 20 scrap each), then second ones (2 + 40), each filled as it
-    // opens: none on the third to fifth Wards, where neither rune adds Power (Guard's gain rounds
-    // away on a wand), so the Primary's and the basic chain's first moves take a second.
+    // opens: the Primary's and the basic chain's first moves take a second, and of the Wards only
+    // the first takes one (a wand's abilities read against the sword's damage since the style
+    // gate, constructs B1 Task 12, so a Guard there adds Power); one Link is left.
     const runes = { leech: [20, 0, 0, 0, 0], guard: [20, 0, 0, 0, 0] };
     const after = betweenDives(unloaded, { ...full, links: 16, scrap: 320, runes });
     expect(sockets(after, 'primary')).toEqual([2, 1, 1, 1, 1]);
     expect(sockets(after, 'basic')).toEqual([2, 1, 1, 1, 1]);
-    expect(sockets(after, 'defensive')).toEqual([1, 1, 0, 0, 0]);
-    expect(after).toMatchObject({ links: 0, scrap: 0 });
-    expect(after.runes.leech[0] + after.runes.guard[0]).toBe(40 - 14);
+    expect(sockets(after, 'defensive')).toEqual([1, 0, 0, 0, 0]);
+    expect(after).toMatchObject({ links: 1, scrap: 0 });
+    expect(after.runes.leech[0] + after.runes.guard[0]).toBe(40 - 16);
   });
 
   it('sockets the pouch rune that raises Power most, and keeps the rest', () => {
@@ -500,7 +503,7 @@ describe('Power and the pool (valuedChain; see the rune costs spec)', () => {
     });
     const at = (r: DataRegistry) =>
       estimateCombat(profileStats(r, runed), r, DEPTH, chainsOf(runed));
-    expect(at(unloaded)).toEqual({ dps: 134.34157473298708, ehp: 162.01086642686363, power: 1475 });
+    expect(at(unloaded)).toEqual({ dps: 142.15937899161085, ehp: 162.01086642686363, power: 1518 });
     expect(at(registry).dps).toBeLessThan(at(unloaded).dps);
     expect(at(registry).power).toBeLessThan(at(unloaded).power);
   });

@@ -241,6 +241,7 @@ describe('blending', () => {
     expect(s.hero.x).toBeGreaterThan(x0);
     // A Bolt fired up recoils down, against a hero steering up: none of it applies.
     const b = arena([dummy(13, 30)], { noBasic: true });
+    b.hero.stats.weapon.style = undefined; // the form's own recoil, not the sword's style step
     press(b, 0);
     const recoil = b.hero.pushes.find((p) => p.kind === 'step')!;
     const y1 = b.hero.y;
@@ -315,7 +316,7 @@ describe('no rooting', () => {
 describe('past the aim point', () => {
   /** A `form` Primary aimed 0.2 ahead, the hero steering on up through its wind-up. */
   const walkPast = (form: FormId) => {
-    const w = arena([dummy(13, 20)], { noBasic: true, primary: { form } });
+    const w = arena([dummy(13, 20)], { noBasic: true, weapon: 'staff', primary: { form } });
     pressOnly(w, 0, { x: 13, y: 35.8 });
     for (let i = 0; i < 60 && w.hero.windup; i++)
       stepWorld(registry, w, { move: { x: 0, y: -1 } }, STEP);
@@ -724,7 +725,8 @@ describe('determinism', () => {
         for (let k = 0; k < Math.round(6 / STEP); k++) {
           const move = k % 60 < 30 ? { x: 1, y: 0 } : { x: -0.6, y: 0.6 };
           const attack = k % 50 < 40;
-          const input = { move, attack, cast: k % 50 === 46 ? { slot: 0 } : null };
+          // The cast lands at 44 (46 before the maul's style lengthened its wind-up, B1 Task 8).
+          const input = { move, attack, cast: k % 50 === 44 ? { slot: 0 } : null };
           // The presses go on a tick's first frame; movement and the attack on every frame.
           for (let f = 0; f < frames; f++)
             out.push(...stepWorld(registry, w, f === 0 ? input : { move, attack }, STEP / frames));

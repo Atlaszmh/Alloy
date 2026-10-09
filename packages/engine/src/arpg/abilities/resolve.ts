@@ -140,6 +140,38 @@ export function applyStyle(
   return scaled;
 }
 
+/** The base an ability's damage is read against: the sword, the Balanced baseline (the constructs spec §4.4). */
+const REFERENCE_BASE = 'sword';
+
+/**
+ * An ability hits for the weapon's damage × its power, and each base's flat damage is set for its
+ * swing time, not for abilities (a maul's 13 to a wand's 4.2). Its abilities scale by the
+ * reference base's flat damage over its own, so the style's power alone sets the gap
+ * (the constructs spec §4.4). 1 unarmed and for the reference base.
+ */
+export function baseDamageScale(registry: DataRegistry, baseId: string | null): number {
+  if (!baseId) return 1;
+  const flat = (id: string) =>
+    registry.getGearBase(id).implicits.find((i) => i.stat === 'damage')?.base ?? 0;
+  const own = flat(baseId);
+  // ponytail: scales the whole weapon damage, flat damage affixes too; split the implicit out of
+  // `weaponDamage` if a flat-damage affix should keep its full worth on abilities.
+  return own > 0 ? flat(REFERENCE_BASE) / own : 1;
+}
+
+/**
+ * Charge's unit (`addCharge`): one reference swing's worth of the hero's damage, not one hit of
+ * whatever the weapon swings, so a fast dagger and a slow maul at the same damage a second
+ * charge alike (the constructs spec §4.4). The weapon's damage × the base's swing time over
+ * the reference base's.
+ */
+export function chargeUnit(registry: DataRegistry, stats: HeroStats): number {
+  const id = stats.weapon.baseId;
+  const interval = (base: string) => registry.getGearBase(base).attackInterval ?? 1;
+  const swing = id ? interval(REFERENCE_BASE) / interval(id) : 1;
+  return Math.max(1, stats.weaponDamage * stats.damageMult * swing);
+}
+
 /** A `melee` block's numbers, its text left out (the text is the client's). */
 function formOverrides(melee: NonNullable<FormDef['melee']>): Partial<FormDef> {
   const { text: _text, ...numbers } = melee;
@@ -234,8 +266,13 @@ export function resolveAbility(
   const wi = w + 2;
   // Quick and Heavy (`quick`): the wind-up and the cooldown scale here, the beat in `moveBeat`.
   const q = knobs.quick;
-  const conjure = F.conjure[wi] * F.conjureSlot[slot] * q.windup;
-  const channel = cast ? s.castTime * (1 + W.castTime * w) * q.windup * (1 + load * C.cast) : 0;
+  // The style's wind-up factor rides both parts (the constructs spec §4.2).
+  const sn = style?.numbers;
+  const sw = sn?.windup ?? 1;
+  const conjure = F.conjure[wi] * F.conjureSlot[slot] * q.windup * sw;
+  const channel = cast
+    ? s.castTime * (1 + W.castTime * w) * q.windup * sw * (1 + load * C.cast)
+    : 0;
 
   return {
     slot,
@@ -252,14 +289,22 @@ export function resolveAbility(
     element,
     elements: [...move.elements],
     fusion,
-    power: form.power * (1 + W.power * w) * payPower * knobs.power * attunePower * cut,
+    power:
+      form.power *
+      (1 + W.power * w) *
+      payPower *
+      knobs.power *
+      attunePower *
+      cut *
+      baseDamageScale(registry, stats.weapon.baseId),
     effect: (form.effect ?? 0) * (1 + W.power * w) * payPower,
     // Manaweaver, the cast's half and the load multiply, in that order.
     cost: payment === 'charge' ? 0 : (cast ? manaCost * ab.castManaMult : manaCost) * (1 + load),
     cooldown:
       (payment === 'charge'
         ? ab.chargeLockout
-        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult) * q.cooldown,
+        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult * (sn?.cooldown ?? 1)) *
+      q.cooldown,
     castTime: conjure + channel,
     conjure,
     recovery: slot === 'defensive' ? 0 : F.recovery[wi],
@@ -279,7 +324,8 @@ export function resolveAbility(
     count: (form.countByKind?.[countKind] ?? form.count ?? 1) + extra,
     duration: form.duration ?? 0,
     tick: form.tick ?? 0.5,
-    arc: form.arc ?? 360,
+    // The style's radius factor widens a melee arc too (the axe's "radius and arc"), to a full circle.
+    arc: form.arc !== undefined ? Math.min(360, form.arc * (sn?.radius ?? 1)) : 360,
     knobs,
     runes,
     load,
@@ -382,7 +428,7 @@ export function moveNumbers(
   bal: DelveBalance,
   ab: ResolvedAbility,
 ): { hit: number; radius: number } {
-  const step = stepBonus(bal, ab.index);
+  const step = stepBonus(bal, ab.index, ab.knobs.stepBonus);
   const f = ab.form.id;
   const power = f === 'ward' || f === 'armor' ? 1 : step.power;
   return {

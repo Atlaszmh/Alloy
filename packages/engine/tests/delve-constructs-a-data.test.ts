@@ -23,7 +23,15 @@ describe('forms by class', () => {
     const byClass = (cls: string) => forms.filter((f) => f.class === cls).map((f) => f.id);
     expect(byClass('melee')).toEqual(['strike', 'whirl', 'armor', 'onslaught']);
     expect(byClass('ranged')).toEqual(['bolt', 'volley', 'repel', 'barrage']);
-    expect(byClass('both')).toEqual(['lance', 'burst', 'ward', 'surge', 'blink', 'nova', 'maelstrom']);
+    expect(byClass('both')).toEqual([
+      'lance',
+      'burst',
+      'ward',
+      'surge',
+      'blink',
+      'nova',
+      'maelstrom',
+    ]);
   });
 
   it('the three new rows carry their first numbers and sit in their slots', () => {
@@ -95,20 +103,24 @@ describe('weapon classes and cast styles (inert)', () => {
     Marksman: 'Shots pierce one foe',
   };
 
-  it('every weapon base has its class and a style of every factor 1, no motion, no trait', () => {
+  it("every weapon base has its class and its style's name, text and look; the sword's numbers are all 1", () => {
     const weapons = registry.getGearBasesForSlot('weapon');
     expect(weapons.map((w) => w.id).sort()).toEqual(Object.keys(STYLES).sort());
     for (const w of weapons) {
       const [cls, name, look] = STYLES[w.id];
       expect(w.class, w.id).toBe(cls);
-      expect(w.style, w.id).toEqual({
-        name,
-        text: STYLE_TEXT[name],
-        numbers: { windup: 1, cooldown: 1, power: 1, range: 1, radius: 1, speed: 1, duration: 1 },
-        motion: 'none',
-        trait: {},
-        look,
-      });
+      expect(w.style, w.id).toMatchObject({ name, text: STYLE_TEXT[name], look });
+      // B1 Task 8 gave the styles their numbers; the sword stays the baseline.
+      if (w.id === 'sword')
+        expect(w.style!.numbers).toEqual({
+          windup: 1,
+          cooldown: 1,
+          power: 1,
+          range: 1,
+          radius: 1,
+          speed: 1,
+          duration: 1,
+        });
     }
     for (const b of registry.getDelveData().bases)
       if (b.slot !== 'weapon') expect([b.class, b.style]).toEqual([undefined, undefined]);
@@ -135,7 +147,10 @@ describe('weapon classes and cast styles (inert)', () => {
       false,
     );
     expect(
-      ok(DelveDataSchema, with_(sword, { style: { ...style, numbers: { ...style.numbers, power: 0 } } })),
+      ok(
+        DelveDataSchema,
+        with_(sword, { style: { ...style, numbers: { ...style.numbers, power: 0 } } }),
+      ),
     ).toBe(false);
   });
 });
@@ -143,7 +158,10 @@ describe('weapon classes and cast styles (inert)', () => {
 describe('the new knobs: detonate, critBonus, cleave, homing', () => {
   it('are neutral at 0, add on merge, and parse', () => {
     expect(NEUTRAL).toMatchObject({ detonate: 0, critBonus: 0, cleave: 0, homing: 0 });
-    const k = mergeKnobs({ detonate: 0.25, critBonus: 0.15 }, { detonate: 0.3, cleave: 1, homing: 2 });
+    const k = mergeKnobs(
+      { detonate: 0.25, critBonus: 0.15 },
+      { detonate: 0.3, cleave: 1, homing: 2 },
+    );
     expect(k).toMatchObject({ detonate: 0.55, critBonus: 0.15, cleave: 1, homing: 2 });
     expect(ok(KnobsSchema, { detonate: 0.25, critBonus: 0.15, cleave: 1, homing: 2 })).toBe(true);
     expect(ok(KnobsSchema, { detonate: -1 })).toBe(false);

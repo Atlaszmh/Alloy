@@ -686,12 +686,14 @@ describe('casting: conjure, motion, recovery', () => {
 
   it("a bolt recoils the hero after its release; a chain's later move by its step bonus's size", () => {
     const w = arena([dummy(13, 28)], { noBasic: true });
+    w.hero.stats.weapon.style = undefined; // the form's own recoil, not the sword's style step
     const y0 = w.hero.y;
     press(w, 0);
     run(w, bal.feel.recoilSeconds + STEP);
     expect(w.hero.y - y0).toBeCloseTo(-moveOf(w, 0).motion, 2);
     const bolt = DEFAULT_CHAINS.primary.moves[0];
     const c = arena([dummy(13, 28)], { noBasic: true, primary: { moves: [bolt, bolt] } });
+    c.hero.stats.weapon.style = undefined;
     press(c, 0);
     run(c, bal.feel.recoilSeconds + STEP);
     const y1 = c.hero.y;
@@ -876,6 +878,7 @@ describe('heavy payoff and heft', () => {
   it("a fully held (Crushing) Maelstrom's ticks and Surge's basic hits never stagger (guard test)", () => {
     const w = arena([dummy(13, 30)], {
       noBasic: true,
+      weapon: 'staff',
       ultimate: { form: 'maelstrom', kind: 'hold', payment: 'mana' },
     });
     w.hero.mana = w.hero.manaMax = 1e6;
@@ -898,7 +901,11 @@ describe('heavy payoff and heft', () => {
 
 describe('Burst is thrown', () => {
   it('nothing lands until the lob arrives, then it explodes at the aim point', () => {
-    const w = arena([dummy(13, 29)], { noBasic: true, primary: { form: 'burst' } });
+    const w = arena([dummy(13, 29)], {
+      noBasic: true,
+      weapon: 'staff',
+      primary: { form: 'burst' },
+    });
     press(w, 0, { x: 13, y: 29 });
     const z = w.zones.find((q) => q.source === 'burst')!;
     expect(z).toBeDefined();

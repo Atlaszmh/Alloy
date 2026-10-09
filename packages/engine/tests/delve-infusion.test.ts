@@ -26,6 +26,8 @@ function cast(c: (typeof CASES)[number], elements: ManaType[]): ArpgEvent[] {
   const build = { form: c.form, elements, payment: 'mana' as const };
   const w = arena([dummy(13, 34)], {
     noBasic: true,
+    // A ranged Lance beams (a melee one lunges: the constructs spec §2.2).
+    weapon: c.form === 'lance' ? 'staff' : undefined,
     primary: c.slot === 0 ? build : undefined,
     defensive: c.slot === 1 ? build : undefined,
     ultimate: c.slot === 2 ? build : undefined,

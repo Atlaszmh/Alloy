@@ -1383,8 +1383,8 @@ const DelveBalanceSchema = z.object({
       earthReduction: z.number().min(0).max(1),
       shadowLifesteal: z.number().min(0),
       natureRegen: z.number().min(0),
-      surgeMove: z.number().min(0),
       blinkSeconds: z.number().min(0),
+      onslaughtGuard: z.number().min(0),
     }),
   }),
   chains: z
@@ -1554,6 +1554,16 @@ const DelveBalanceSchema = z.object({
     buffer: z.number().min(0),
     heavyKnockback: z.number().min(0),
     lobBase: z.number().min(0),
+    styleMove: z.object({
+      none: z.number().min(0),
+      dart: z.number().min(0),
+      step: z.number().min(0),
+      wade: z.number().min(0),
+      plant: z.number().min(0),
+      sway: z.number().min(0),
+      orbit: z.number().min(0),
+      back: z.number().min(0),
+    }),
   }),
   sandbox: z.object({
     dummyLifeMult: z.number().positive(),

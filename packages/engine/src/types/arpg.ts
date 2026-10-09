@@ -349,6 +349,8 @@ export interface Zone {
   fromY?: number;
   /** How hard its landing hits (client feel). */
   heft?: number;
+  /** A melee Maelstrom's: moved to the hero each tick before it ticks (the constructs spec §2.2). */
+  follow?: boolean;
   dead: boolean;
 }
 
@@ -569,6 +571,27 @@ export interface HeroEntity {
   lastStandUsed?: boolean;
   /** Last Stand's damage cut runs until this time. */
   lastStandUntil?: number;
+  /**
+   * A move playing out over ticks (the constructs spec §2.2): a Whirl's spin or
+   * an Onslaught's darts, a beat every `every` seconds from `nextAt`, `left`
+   * to go, `struck` landed; `performTick` lands them. A new one replaces it.
+   */
+  perform?: {
+    form: 'whirl' | 'onslaught';
+    ability: ResolvedAbility;
+    hit: number;
+    heft: number;
+    size: number;
+    nextAt: number;
+    every: number;
+    left: number;
+    struck: number;
+    /** Onslaught: the target area's centre, and the foe struck last. */
+    at: Vec;
+    lastId: number | null;
+  } | null;
+  /** Onslaught's protection after its darts: damage taken × (1 − `reduce`) until `until`. */
+  onslaughtGuard?: { until: number; reduce: number };
   /**
    * The last dodge, kept after the dash ends so a perfect dodge can be judged
    * from its start. The hero is dashing while `t < until`.

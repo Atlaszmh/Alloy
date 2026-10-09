@@ -11,6 +11,8 @@ import type { ArpgEvent, ArpgInput } from '../types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { holdCharge, pressMove } from './abilities/cast.js';
 import { defaultBasic, defaultChains } from './abilities/resolve.js';
+import { defaultForm, formAllowed, weaponClass } from '../loot/moveset.js';
+import type { FormId } from '../types/ability.js';
 import { dist } from './geometry.js';
 import { createSandboxWorld, sandboxWeapon, spawnDummies } from './sandbox.js';
 import { stepWorld } from './step.js';
@@ -28,7 +30,7 @@ import type { RuneDef, RuneRef, RuneTier } from '../types/rune.js';
 
 /** One run: a whole loadout, labelled by the dimensions the lab filters and colours by. */
 export interface DpsSetup {
-  view: 'basic' | 'ability' | 'rune';
+  view: 'basic' | 'ability' | 'rune' | 'style';
   /**
    * Filterable dimensions in display order, e.g. { weapon, primary, secondary },
    * { form, first, second, kind, payment } (a kind, or 'default' for the form's default
@@ -105,7 +107,8 @@ export const RUNE_SEEDS = 8;
  * rune-view row averages `RUNE_SEEDS` combat seeds (`DpsResult.casts` their mean).
  */
 export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResult {
-  if (setup.view !== 'rune' || o.seed !== undefined) return runDps(registry, setup, o);
+  const averaged = setup.view === 'rune' || setup.view === 'style';
+  if (!averaged || o.seed !== undefined) return runDps(registry, setup, o);
   const runs = Array.from({ length: RUNE_SEEDS }, (_, seed) =>
     runDps(registry, setup, { ...o, seed }),
   );
@@ -257,6 +260,16 @@ function runDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResu
  * its default basics. Then the rune view (`runeRows`). With `runeSetup`, the
  * only code here that knows the chain model.
  */
+/**
+ * The weapons a form is measured on in the ability and rune views (the
+ * constructs spec §4.4): the sword for a melee form, the staff for a ranged
+ * one, both for a shared one, each playing the form its own class's way.
+ */
+export function referenceWeapons(registry: DataRegistry, form: FormId): string[] {
+  const cls = registry.getForm(form).class;
+  return cls === 'melee' ? ['sword'] : cls === 'ranged' ? ['staff'] : ['sword', 'staff'];
+}
+
 export function dpsCombos(registry: DataRegistry): DpsSetup[] {
   const out: DpsSetup[] = [];
   // The secondary outermost, so each dimension's values first appear in MANA_TYPES order.
@@ -283,28 +296,59 @@ export function dpsCombos(registry: DataRegistry): DpsSetup[] {
   );
   for (const form of registry.getArpgData().forms) {
     if (form.slot === 'defensive') continue;
-    for (const elements of sets)
-      for (const kind of [...MOVE_KINDS, 'default' as const])
-        for (const payment of ABILITY_PAYMENTS) {
-          const [first, second = null] = elements;
-          const kinds: MoveKind[] = kind === 'default' ? form.defaultChain : [kind];
-          out.push({
-            view: 'ability',
-            dims: { form: form.id, first, second: second ?? 'none', kind, payment },
-            weapon: { baseId: 'sword', primary: first, secondary: second },
-            chains: {
-              ...defaultChains(registry, first, 'sword'),
-              basic: defaultBasic(registry, 'sword', first, second),
-              [form.slot]: {
-                moves: kinds.map((k) => ({ kind: k, form: form.id, elements })),
-                payment,
+    for (const weapon of referenceWeapons(registry, form.id))
+      for (const elements of sets)
+        for (const kind of [...MOVE_KINDS, 'default' as const])
+          for (const payment of ABILITY_PAYMENTS) {
+            const [first, second = null] = elements;
+            const kinds: MoveKind[] = kind === 'default' ? form.defaultChain : [kind];
+            out.push({
+              view: 'ability',
+              dims: { form: form.id, weapon, first, second: second ?? 'none', kind, payment },
+              weapon: { baseId: weapon, primary: first, secondary: second },
+              chains: {
+                ...defaultChains(registry, first, weapon),
+                basic: defaultBasic(registry, weapon, first, second),
+                [form.slot]: {
+                  moves: kinds.map((k) => ({ kind: k, form: form.id, elements })),
+                  payment,
+                },
               },
-            },
-            hold: { slot: ABILITY_SLOTS.indexOf(form.slot) },
-          });
-        }
+              hold: { slot: ABILITY_SLOTS.indexOf(form.slot) },
+            });
+          }
   }
   out.push(...runeRows(registry));
+  out.push(...styleRows(registry));
+  return out;
+}
+
+/**
+ * The style view (the constructs spec §4.4): every weapon × attack form its
+ * class allows, in Fire, the form's default chain at its slot's default
+ * payment, no runes, the slot held. Each row averages `RUNE_SEEDS` seeds.
+ */
+function styleRows(registry: DataRegistry): DpsSetup[] {
+  const out: DpsSetup[] = [];
+  for (const base of registry.getGearBasesForSlot('weapon'))
+    for (const form of attackForms(registry)) {
+      if (!formAllowed(registry, base.id, form.id)) continue;
+      const payment = defaultForm(registry, form.slot, weaponClass(registry, base.id)).payment;
+      out.push({
+        view: 'style',
+        dims: { form: form.id, weapon: base.id },
+        weapon: { baseId: base.id, primary: 'fire', secondary: null },
+        chains: {
+          ...defaultChains(registry, 'fire', base.id),
+          basic: defaultBasic(registry, base.id, 'fire', null),
+          [form.slot]: {
+            moves: form.defaultChain.map((kind) => ({ kind, form: form.id, elements: FIRE })),
+            payment,
+          },
+        },
+        hold: { slot: ABILITY_SLOTS.indexOf(form.slot) },
+      });
+    }
   return out;
 }
 
@@ -352,11 +396,12 @@ function runeSetup(
   on: string,
   ids: readonly string[],
   elements: ManaType[],
+  weapon?: string,
 ): DpsSetup {
   const runes = ids.map((id) => ({ id, tier: RUNE_TIER }));
   const [first, second = null] = elements;
   const form = attackForms(registry).find((f) => f.id === on);
-  const baseId = form ? 'sword' : on;
+  const baseId = weapon ?? (form ? referenceWeapons(registry, form.id)[0] : on);
   const chains: Chains = {
     ...defaultChains(registry, first, baseId),
     basic: defaultBasic(registry, baseId, first, second),
@@ -378,10 +423,11 @@ function runeSetup(
     dims: {
       rune: socketed ? ids.join('+') : 'none',
       on,
+      weapon: baseId,
       elements: elements.join('+'),
       tier: socketed ? 'III' : 'none',
     },
-    ...(socketed ? { base: dpsKey(runeSetup(registry, on, [], elements)) } : {}),
+    ...(socketed ? { base: dpsKey(runeSetup(registry, on, [], elements, baseId)) } : {}),
     weapon: { baseId, primary: first, secondary: second },
     chains,
     hold: form ? { slot: ABILITY_SLOTS.indexOf(form.slot) } : 'attack',
@@ -394,20 +440,22 @@ function runeSetup(
  * on its elements (`runeElements`).
  */
 function runeRows(registry: DataRegistry): DpsSetup[] {
-  const ons = [
-    ...attackForms(registry).map((f) => f.id),
-    ...registry.getGearBasesForSlot('weapon').map((b) => b.id),
+  const ons: [string, string | undefined][] = [
+    ...attackForms(registry).flatMap((f) =>
+      referenceWeapons(registry, f.id).map((w): [string, string] => [f.id, w]),
+    ),
+    ...registry.getGearBasesForSlot('weapon').map((b): [string, undefined] => [b.id, undefined]),
   ];
   return [
     ...[FIRE, FIRE_FROST].flatMap((elements) =>
-      ons.map((on) => runeSetup(registry, on, [], elements)),
+      ons.map(([on, w]) => runeSetup(registry, on, [], elements, w)),
     ),
     ...registry
       .getRunes()
       .flatMap((def) =>
         ons
-          .filter((on) => fitsOn(registry, def, on))
-          .map((on) => runeSetup(registry, on, [def.id], runeElements(registry, [def.id]))),
+          .filter(([on]) => fitsOn(registry, def, on))
+          .map(([on, w]) => runeSetup(registry, on, [def.id], runeElements(registry, [def.id]), w)),
       ),
   ];
 }
@@ -415,11 +463,15 @@ function runeRows(registry: DataRegistry): DpsSetup[] {
 /**
  * The combo gate's setups (see the runes spec; wave 3 runs them): every set of
  * three runes that fit attack form or weapon `on`, in `runes.json` order, at
- * tier III on every move or blow, on Fire + Frost when the set feeds
+ * tier III on every move or blow (on `weapon`, the form's first reference weapon by default), on Fire + Frost when the set feeds
  * reactions, else Fire, each measured against its `base` in the rune view.
  * Not in the grid: up to 286 a form.
  */
-export function runeComboSetups(registry: DataRegistry, on: string): DpsSetup[] {
+export function runeComboSetups(
+  registry: DataRegistry,
+  on: string,
+  weapon?: string,
+): DpsSetup[] {
   const fit = registry
     .getRunes()
     .filter((def) => fitsOn(registry, def, on))
@@ -430,7 +482,7 @@ export function runeComboSetups(registry: DataRegistry, on: string): DpsSetup[] 
       .flatMap((b, j) =>
         fit
           .slice(i + j + 2)
-          .map((c) => runeSetup(registry, on, [a, b, c], runeElements(registry, [a, b, c]))),
+          .map((c) => runeSetup(registry, on, [a, b, c], runeElements(registry, [a, b, c]), weapon)),
       ),
   );
 }

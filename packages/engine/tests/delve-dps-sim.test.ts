@@ -11,11 +11,13 @@ import {
   RUNE_SEEDS,
   dpsCombos,
   dpsKey,
+  referenceWeapons,
   runeComboSetups,
   simulateDps,
   type DpsOptions,
   type DpsSetup,
 } from '../src/arpg/dps-sim.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
@@ -189,11 +191,11 @@ function windowDps(series: number[], from: number, to: number): number {
 }
 
 describe('dpsCombos', () => {
-  it('252 basic combos, 4,320 one-move chains and 1,080 default chains, each with its own key', () => {
+  it('252 basic combos, 6,048 one-move chains and 1,512 default chains, each with its own key', () => {
     expect(grid.filter((s) => s.view === 'basic')).toHaveLength(252);
     const abilities = grid.filter((s) => s.view === 'ability');
-    expect(abilities.filter((s) => s.dims.kind !== 'default')).toHaveLength(4320);
-    expect(abilities.filter((s) => s.dims.kind === 'default')).toHaveLength(1080);
+    expect(abilities.filter((s) => s.dims.kind !== 'default')).toHaveLength(6048);
+    expect(abilities.filter((s) => s.dims.kind === 'default')).toHaveLength(1512);
     // Primary and Ultimate forms only.
     expect([...new Set(abilities.map((s) => s.dims.form))]).toEqual([
       'bolt',
@@ -226,9 +228,9 @@ describe('dpsCombos', () => {
       ...defaultChains(registry, 'frost', 'sword'),
       basic: defaultBasic(registry, 'sword', 'frost', 'fire'),
     };
-    expect(setup('ability|nova|frost|fire|hold|charge')).toEqual({
+    expect(setup('ability|nova|sword|frost|fire|hold|charge')).toEqual({
       view: 'ability',
-      dims: { form: 'nova', first: 'frost', second: 'fire', kind: 'hold', payment: 'charge' },
+      dims: { form: 'nova', weapon: 'sword', first: 'frost', second: 'fire', kind: 'hold', payment: 'charge' },
       weapon: { baseId: 'sword', primary: 'frost', secondary: 'fire' },
       chains: {
         ...frostFire,
@@ -240,7 +242,7 @@ describe('dpsCombos', () => {
       hold: { slot: 2 },
     });
     // A form's default chain: what a held button plays.
-    expect(setup('ability|strike|frost|fire|default|mana').chains.primary).toEqual({
+    expect(setup('ability|strike|sword|frost|fire|default|mana').chains.primary).toEqual({
       moves: ['medium', 'medium', 'heavy', 'heavy'].map((kind) => ({
         kind,
         form: 'strike',
@@ -253,7 +255,7 @@ describe('dpsCombos', () => {
 
 describe('simulateDps', () => {
   it('gives the same result for the same setup', () => {
-    const s = setup('ability|barrage|storm|nature|heavy|cast');
+    const s = setup('ability|barrage|staff|storm|nature|heavy|cast');
     expect(simulateDps(registry, s, PACK)).toEqual(simulateDps(registry, s, PACK));
   });
 
@@ -277,7 +279,7 @@ describe('simulateDps', () => {
   });
 
   it("holds positions: an Earth Bolt's knockback never drives the dummy out of reach", () => {
-    const r = simulateDps(registry, setup('ability|bolt|earth|none|medium|mana'), ONE);
+    const r = simulateDps(registry, setup('ability|bolt|staff|earth|none|medium|mana'), ONE);
     const middle = windowDps(r.series, 10, 20);
     expect(middle).toBeGreaterThan(r.dps / 2);
     expect(Math.abs(windowDps(r.series, 20, 30) - middle)).toBeLessThan(middle * 0.25);
@@ -285,7 +287,7 @@ describe('simulateDps', () => {
 
   it('counts only the held ability: a mana-paid heavy Nova, dearer than the pool, never casts while basics swing', () => {
     const { out, events } = recorded(() =>
-      simulateDps(registry, setup('ability|nova|fire|none|heavy|mana'), ONE),
+      simulateDps(registry, setup('ability|nova|sword|fire|none|heavy|mana'), ONE),
     );
     expect(out).toMatchObject({ dps: 0, casts: 0 });
     expect(hitsFrom(events, 'basic').length).toBeGreaterThan(0);
@@ -293,7 +295,7 @@ describe('simulateDps', () => {
 
   it("counts the ability's reaction splash: a Fire+Storm Bolt's Overload in a pack", () => {
     const { out, events } = recorded(() =>
-      simulateDps(registry, setup('ability|bolt|fire|storm|medium|mana'), PACK),
+      simulateDps(registry, setup('ability|bolt|staff|fire|storm|medium|mana'), PACK),
     );
     expect(out.casts).toBe(events.filter((e) => e.kind === 'cast' && e.slot === 0).length);
     expect(hitsFrom(events, 'reaction').filter((e) => e.slot === 0).length).toBeGreaterThan(0);
@@ -304,14 +306,14 @@ describe('simulateDps', () => {
   it('a pack favours area: a Frost Nova gains more from five dummies than a Frost Bolt', () => {
     const gain = (key: string) =>
       simulateDps(registry, setup(key), PACK).dps / simulateDps(registry, setup(key), ONE).dps;
-    expect(gain('ability|nova|frost|none|medium|mana')).toBeGreaterThan(
-      gain('ability|bolt|frost|none|medium|mana'),
+    expect(gain('ability|nova|sword|frost|none|medium|mana')).toBeGreaterThan(
+      gain('ability|bolt|staff|frost|none|medium|mana'),
     );
   });
 
   it("the held button flows through a form's default chain, each move in turn", () => {
     const { out, events } = recorded(() =>
-      simulateDps(registry, setup('ability|bolt|fire|none|default|mana'), ONE),
+      simulateDps(registry, setup('ability|bolt|staff|fire|none|default|mana'), ONE),
     );
     const casts = events.filter((e) => e.kind === 'cast' && e.slot === 0);
     expect(out.casts).toBe(casts.length);
@@ -326,7 +328,7 @@ describe('simulateDps', () => {
   });
 
   it("presses early, marked a repeat: each move goes its beat after the last one's landing", () => {
-    const s = setup('ability|bolt|fire|none|default|mana');
+    const s = setup('ability|bolt|staff|fire|none|default|mana');
     const { steps } = recorded(() => simulateDps(registry, s, ONE));
     // Pressed during a wind-up, the press waits in the buffer.
     expect(steps.some((st) => st.windup && st.input.cast?.repeat)).toBe(true);
@@ -356,7 +358,7 @@ describe('simulateDps', () => {
 
   it('holds a hold move to full charge each press', () => {
     const { out, steps } = recorded(() =>
-      simulateDps(registry, setup('ability|bolt|fire|none|hold|mana'), ONE),
+      simulateDps(registry, setup('ability|bolt|staff|fire|none|hold|mana'), ONE),
     );
     expect(out.casts).toBeGreaterThan(0);
     expect(out.casts).toBeLessThanOrEqual(DPS_SECONDS / bal.chains.holdTime);
@@ -386,9 +388,9 @@ describe('the rune view (see the runes spec)', () => {
   const socketed = runeRows.filter((s) => s.dims.rune !== 'none');
   const echo = [{ id: 'echo', tier: 3 }];
 
-  it('197 rune rows (Detonate on its five forms since the constructs), each rune on every attack form and weapon it fits, and 34 baselines', () => {
-    expect(socketed).toHaveLength(197);
-    expect(runeRows.filter((s) => s.dims.rune === 'none')).toHaveLength(34);
+  it('241 rune rows (Detonate on its five forms since the constructs), each rune on every attack form and weapon it fits, and 42 baselines (2 element sets × (14 form-and-weapon pairs + 7 weapons))', () => {
+    expect(socketed).toHaveLength(241);
+    expect(runeRows.filter((s) => s.dims.rune === 'none')).toHaveLength(42);
     expect(socketed.filter((s) => s.dims.rune === 'split').map((s) => s.dims.on)).toEqual([
       'bolt',
       'volley',
@@ -403,14 +405,14 @@ describe('the rune view (see the runes spec)', () => {
   });
 
   it("a form's row: its default chain paid with mana, every move holding the rune at tier III", () => {
-    expect(setup('rune|echo|bolt|fire|III')).toEqual({
+    expect(setup('rune|echo|bolt|staff|fire|III')).toEqual({
       view: 'rune',
-      dims: { rune: 'echo', on: 'bolt', elements: 'fire', tier: 'III' },
-      base: 'rune|none|bolt|fire|none',
-      weapon: { baseId: 'sword', primary: 'fire', secondary: null },
+      dims: { rune: 'echo', on: 'bolt', weapon: 'staff', elements: 'fire', tier: 'III' },
+      base: 'rune|none|bolt|staff|fire|none',
+      weapon: { baseId: 'staff', primary: 'fire', secondary: null },
       chains: {
-        ...defaultChains(registry, 'fire', 'sword'),
-        basic: defaultBasic(registry, 'sword', 'fire'),
+        ...defaultChains(registry, 'fire', 'staff'),
+        basic: defaultBasic(registry, 'staff', 'fire'),
         primary: {
           moves: ['light', 'medium', 'medium', 'heavy'].map((kind) => ({
             kind,
@@ -424,8 +426,8 @@ describe('the rune view (see the runes spec)', () => {
       hold: { slot: 0 },
     });
     // An Ultimate form's row holds the Ultimate; Volatile runs on Fire + Frost.
-    expect(setup('rune|volatile|nova|fire+frost|III')).toMatchObject({
-      base: 'rune|none|nova|fire+frost|none',
+    expect(setup('rune|volatile|nova|sword|fire+frost|III')).toMatchObject({
+      base: 'rune|none|nova|sword|fire+frost|none',
       weapon: { baseId: 'sword', primary: 'fire', secondary: 'frost' },
       chains: {
         ultimate: {
@@ -445,9 +447,9 @@ describe('the rune view (see the runes spec)', () => {
   });
 
   it("a weapon's row: its default basic chain, every blow holding the rune; only Volatile and Saturate run on Fire + Frost", () => {
-    const s = setup('rune|saturate|bow|fire+frost|III');
+    const s = setup('rune|saturate|bow|bow|fire+frost|III');
     expect(s).toMatchObject({
-      base: 'rune|none|bow|fire+frost|none',
+      base: 'rune|none|bow|bow|fire+frost|none',
       weapon: { baseId: 'bow', primary: 'fire', secondary: 'frost' },
       hold: 'attack',
     });
@@ -463,14 +465,14 @@ describe('the rune view (see the runes spec)', () => {
   });
 
   it("a baseline plays as the ability view's default chain (its first seed)", () => {
-    expect(simulateDps(registry, setup('rune|none|bolt|fire|none'), { ...ONE, seed: 0 })).toEqual(
-      simulateDps(registry, setup('ability|bolt|fire|none|default|mana'), ONE),
+    expect(simulateDps(registry, setup('rune|none|bolt|staff|fire|none'), { ...ONE, seed: 0 })).toEqual(
+      simulateDps(registry, setup('ability|bolt|staff|fire|none|default|mana'), ONE),
     );
   });
 
   it('averages RUNE_SEEDS combat seeds: a Barrage rains its impacts at random', () => {
     // The baseline: a runed mana Ultimate costs more than the depth-10 pool (the rune costs spec).
-    const s = setup('rune|none|barrage|fire|none');
+    const s = setup('rune|none|barrage|staff|fire|none');
     const seeds = Array.from({ length: RUNE_SEEDS }, (_, seed) =>
       simulateDps(registry, s, { ...ONE, seed }),
     );
@@ -483,26 +485,26 @@ describe('the rune view (see the runes spec)', () => {
     // Heavy lifts a Barrage's burn above the sword's, so the burn the basics keep alive all
     // fight would be the Barrage's; counted while its own hits keep it, Heavy is its power.
     const ratio = (o: DpsOptions) =>
-      simulateDps(registry, setup('rune|heavy|barrage|fire|III'), o).dps /
-      simulateDps(registry, setup('rune|none|barrage|fire|none'), o).dps;
+      simulateDps(registry, setup('rune|heavy|barrage|staff|fire|III'), o).dps /
+      simulateDps(registry, setup('rune|none|barrage|staff|fire|none'), o).dps;
     expect(ratio(ONE)).toBeLessThan(1.6);
     expect(ratio(PACK)).toBeLessThan(1.6);
   });
 
   it('a rune changes what the held button deals: Echo III on a Bolt beats its baseline, and its price takes some back', () => {
     const ratio = (r: typeof registry) =>
-      simulateDps(r, setup('rune|echo|bolt|fire|III'), ONE).dps /
-      simulateDps(r, setup('rune|none|bolt|fire|none'), ONE).dps;
+      simulateDps(r, setup('rune|echo|bolt|staff|fire|III'), ONE).dps /
+      simulateDps(r, setup('rune|none|bolt|staff|fire|none'), ONE).dps;
     expect(ratio(unloaded)).toBeGreaterThan(1.2);
     expect(ratio(registry)).toBeLessThan(ratio(unloaded));
   });
 
   it('a rune-less row is the same with the loads zeroed', () => {
     for (const key of [
-      'ability|bolt|fire|none|default|mana',
-      'ability|nova|frost|fire|hold|charge',
-      'ability|lance|storm|none|heavy|cast',
-      'rune|none|volley|fire|none',
+      'ability|bolt|staff|fire|none|default|mana',
+      'ability|nova|sword|frost|fire|hold|charge',
+      'ability|lance|sword|storm|none|heavy|cast',
+      'rune|none|volley|staff|fire|none',
     ])
       expect(simulateDps(registry, setup(key), PACK)).toEqual(
         simulateDps(unloaded, setup(key), PACK),
@@ -523,6 +525,7 @@ describe('runeComboSetups', () => {
     expect(bolt[0].dims).toEqual({
       rune: `${a}+${b}+${c}`,
       on: 'bolt',
+      weapon: 'staff',
       elements: 'fire',
       tier: 'III',
     });
@@ -548,28 +551,28 @@ describe('the sustained mode (see the rune costs spec)', () => {
 
   it('starts the pool and every charge meter empty, starved or supported; full mana starts full', () => {
     for (const o of [STARVED, SUPPORTED])
-      expect(ran('ability|nova|fire|none|medium|charge', o).first).toMatchObject({
+      expect(ran('ability|nova|sword|fire|none|medium|charge', o).first).toMatchObject({
         mana: 0,
         charge: [0, 0, 0],
       });
-    const full = ran('ability|bolt|fire|none|medium|mana', PACK);
+    const full = ran('ability|bolt|staff|fire|none|medium|mana', PACK);
     expect(full.first.mana).toBe(full.hero.manaMax);
   });
 
   it("starved is the Lab's hero as built; supported has a pool of 120 regenerating 10.4, Drain III on every blow and a Fire move's runes eased 45%", () => {
-    const starved = ran('rune|echo|bolt|fire|III', STARVED).hero;
+    const starved = ran('rune|echo|bolt|staff|fire|III', STARVED).hero;
     expect(starved.manaMax).toBe(63);
-    expect(starved.manaRegen).toBeCloseTo(4.2);
+    expect(starved.manaRegen).toBeCloseTo(4.872);
     expect(starved.stats.weapon.blows.every((b) => b.runes.length === 0)).toBe(true);
     expect(starved.chains[0]!.moves[0].ease).toBeCloseTo(0.03);
-    const supported = ran('rune|echo|bolt|fire|III', SUPPORTED).hero;
+    const supported = ran('rune|echo|bolt|staff|fire|III', SUPPORTED).hero;
     expect(supported.manaMax).toBe(120);
     expect(supported.manaRegen).toBeCloseTo(10.4);
     for (const b of supported.stats.weapon.blows)
       expect(b.runes).toEqual([{ id: 'drain', tier: 3 }]);
     for (const m of supported.chains[0]!.moves) expect(m.ease).toBeCloseTo(0.45);
     // A Fire + Frost move eases by their mean attunement, 10.
-    const both = ran('rune|volatile|bolt|fire+frost|III', SUPPORTED).hero;
+    const both = ran('rune|volatile|bolt|staff|fire+frost|III', SUPPORTED).hero;
     expect(both.chains[0]!.moves[0].ease).toBeCloseTo(0.3);
   });
 
@@ -582,11 +585,48 @@ describe('the sustained mode (see the rune costs spec)', () => {
 
   it('a runed row casts less starved than at full mana, and less than its baseline starved', () => {
     const casts = (key: string, o: DpsOptions) => simulateDps(registry, setup(key), o).casts;
-    expect(casts('rune|echo|bolt|fire|III', STARVED)).toBeLessThan(
-      casts('rune|echo|bolt|fire|III', PACK),
+    expect(casts('rune|echo|bolt|staff|fire|III', STARVED)).toBeLessThan(
+      casts('rune|echo|bolt|staff|fire|III', PACK),
     );
-    expect(casts('rune|echo|bolt|fire|III', STARVED)).toBeLessThan(
-      casts('rune|none|bolt|fire|none', STARVED),
+    expect(casts('rune|echo|bolt|staff|fire|III', STARVED)).toBeLessThan(
+      casts('rune|none|bolt|staff|fire|none', STARVED),
     );
+  });
+});
+
+describe('the style view and the reference weapons (the constructs spec §4.4)', () => {
+  it('each form is measured on its reference weapon: the sword for melee, the staff for ranged, both for shared', () => {
+    expect(referenceWeapons(registry, 'strike')).toEqual(['sword']);
+    expect(referenceWeapons(registry, 'bolt')).toEqual(['staff']);
+    expect(referenceWeapons(registry, 'lance')).toEqual(['sword', 'staff']);
+    const abilities = grid.filter((s) => s.view === 'ability');
+    expect(
+      new Set(abilities.filter((s) => s.dims.form === 'lance').map((s) => s.dims.weapon)),
+    ).toEqual(new Set(['sword', 'staff']));
+    expect(
+      abilities.filter((s) => s.dims.form === 'bolt').every((s) => s.weapon.baseId === 'staff'),
+    ).toBe(true);
+    const runes = grid.filter(
+      (s) => s.view === 'rune' && s.dims.on === 'burst' && s.dims.rune === 'none',
+    );
+    expect(runes.map((s) => s.dims.weapon).sort()).toEqual(['staff', 'staff', 'sword', 'sword']);
+  });
+
+  it("the style view holds every weapon × attack form its class allows, Fire, the form's default chain", () => {
+    const styles = grid.filter((s) => s.view === 'style');
+    expect(styles).toHaveLength(49);
+    expect(styles.every((s) => Object.keys(s.dims).join() === 'form,weapon')).toBe(true);
+    expect(styles.some((s) => s.dims.weapon === 'bow' && s.dims.form === 'strike')).toBe(false);
+    const row = styles.find((s) => s.dims.weapon === 'maul' && s.dims.form === 'lance')!;
+    expect(row.chains.primary.moves.map((m) => m.kind)).toEqual(
+      registry.getForm('lance').defaultChain,
+    );
+    expect(row.chains.primary.moves.every((m) => m.elements.join() === 'fire')).toBe(true);
+    expect(row.hold).toEqual({ slot: 0 });
+    // Averaged over RUNE_SEEDS, as a rune row is: one combat fork a seed.
+    const spy = vi.spyOn(SeededRNG.prototype, 'fork');
+    simulateDps(registry, row, { depth: 10, pack: false });
+    expect(spy.mock.calls.length).toBeGreaterThanOrEqual(RUNE_SEEDS);
+    spy.mockRestore();
   });
 });

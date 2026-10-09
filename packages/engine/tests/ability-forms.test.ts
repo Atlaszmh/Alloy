@@ -37,7 +37,9 @@ describe('primary forms', () => {
       sizes.push(w.projectiles.at(-1)!.explodeRadius);
       run(w, 0.1);
     }
-    const step = (i: number) => 1 + (bal.chains.stepBonus * i) / 2;
+    // The fixture's sword adds its style's trait to the step bonus (constructs B1 Task 10).
+    const sb = bal.chains.stepBonus + moveOf(w, 0).knobs.stepBonus;
+    const step = (i: number) => 1 + (sb * i) / 2;
     expect(sizes).toEqual([0, 1, 2, 3, 0].map((i) => moveOf(w, 0, i).radius * step(i)));
     expect(sizes[3]).toBeGreaterThan(sizes[2]);
     expect(sizes[2]).toBeGreaterThan(sizes[1]);
@@ -60,6 +62,7 @@ describe('primary forms', () => {
   it('Lance hits every foe on its line at once', () => {
     const w = arena([dummy(13, 33), dummy(13, 31), dummy(13, 29.5), dummy(18, 31)], {
       noBasic: true,
+      weapon: 'staff',
       primary: { form: 'lance' },
     });
     const events = press(w, 0);
@@ -174,6 +177,7 @@ describe('ultimate forms', () => {
   it('Maelstrom leaves a zone that keeps hitting', () => {
     const w = arena([dummy(13, 28)], {
       noBasic: true,
+      weapon: 'staff',
       ultimate: { form: 'maelstrom', payment: 'mana' },
     });
     press(w, 2);
@@ -199,6 +203,7 @@ describe('knobs', () => {
   it('pull: Magnetism drags foes toward the impact', () => {
     const w = arena([dummy(13, 28), dummy(16, 28)], {
       noBasic: true,
+      weapon: 'staff',
       primary: { form: 'burst', elements: ['storm', 'earth'] },
     });
     press(w, 0, { x: 13, y: 28 });
@@ -220,6 +225,7 @@ describe('knobs', () => {
   it('spread: Plague passes hex on when a foe dies', () => {
     const w = arena([dummy(13, 29, { hp: 1, maxHp: 1e6 }), dummy(14.5, 29)], {
       noBasic: true,
+      weapon: 'staff',
       primary: { form: 'lance', elements: ['shadow', 'nature'] },
     });
     const ctx = makeCtx(registry, w, []);

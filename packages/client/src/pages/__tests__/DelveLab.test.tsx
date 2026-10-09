@@ -93,13 +93,13 @@ describe('DelveLab', () => {
   it("an unaffordable ability sits last, as can't afford", () => {
     renderLab();
     latest().reply([
-      result('ability|nova|fire|none|heavy|mana', 0, 0),
-      result('ability|bolt|fire|none|medium|mana', 40),
+      result('ability|nova|sword|fire|none|heavy|mana', 0, 0),
+      result('ability|bolt|staff|fire|none|medium|mana', 40),
     ]);
     fireEvent.click(screen.getByTestId('lab-tab-ability'));
     expect(rowKeys()).toEqual([
-      'ability|bolt|fire|none|medium|mana',
-      'ability|nova|fire|none|heavy|mana',
+      'ability|bolt|staff|fire|none|medium|mana',
+      'ability|nova|sword|fire|none|heavy|mana',
     ]);
     expect(screen.getAllByTestId('lab-row')[1]).toHaveTextContent("can't afford");
   });
@@ -107,13 +107,13 @@ describe('DelveLab', () => {
   it('the Runes view gives each row its ratio to its baseline (× none)', () => {
     renderLab();
     latest().reply([
-      result('rune|none|bolt|fire|none', 40),
-      result('rune|echo|bolt|fire|III', 58),
+      result('rune|none|bolt|staff|fire|none', 40),
+      result('rune|echo|bolt|staff|fire|III', 58),
       result('basic|sword|fire|none', 30),
     ]);
     expect(screen.queryByText('× none')).toBeNull();
     fireEvent.click(screen.getByTestId('lab-tab-rune'));
-    expect(rowKeys()).toEqual(['rune|echo|bolt|fire|III', 'rune|none|bolt|fire|none']);
+    expect(rowKeys()).toEqual(['rune|echo|bolt|staff|fire|III', 'rune|none|bolt|staff|fire|none']);
     expect(screen.getByText('× none')).toBeInTheDocument();
     const [echo, none] = screen.getAllByTestId('lab-row');
     expect(within(echo).getByTestId('lab-ratio')).toHaveTextContent('×1.45');

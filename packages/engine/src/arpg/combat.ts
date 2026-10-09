@@ -49,6 +49,8 @@ export interface HitOpts {
   canCrit?: boolean;
   /** Pre-rolled crit (e.g. one roll per melee swing). */
   crit?: boolean;
+  /** Added to the crit chance of this roll (a cast style's trait, the dagger's; see the constructs spec §4.2). */
+  critBonus?: number;
   applies?: StatusId[];
   knockback?: number;
   kbFrom?: Vec;
@@ -580,7 +582,8 @@ export function hitMonster(
 
   let amount = base;
   let crit = opts.crit ?? false;
-  if (opts.crit === undefined && opts.canCrit) crit = world.rng.next() < stats.critChance;
+  if (opts.crit === undefined && opts.canCrit)
+    crit = world.rng.next() < stats.critChance + (opts.critBonus ?? 0);
   // Riposte (after a perfect dodge): the next real hit crits and staggers.
   const real =
     (opts.source === 'basic' || opts.source === 'skill') &&
@@ -980,6 +983,8 @@ export function hurtHero(
   if (!opts.unavoidable) dmg *= 1 - armorReduction(bal, h.stats.armor, world.depth);
   // Last Stand (a boon): less damage while it runs.
   if (world.t < (h.lastStandUntil ?? 0)) dmg *= 1 - (h.boon.lastStand?.reduce ?? 0);
+  // Onslaught's protection after its darts (the constructs spec §2.2).
+  if (h.onslaughtGuard && world.t < h.onslaughtGuard.until) dmg *= 1 - h.onslaughtGuard.reduce;
   dmg = shieldHero(ctx, dmg, source, !!opts.melee);
   if (dmg <= 0) return;
   world.hurt = true;

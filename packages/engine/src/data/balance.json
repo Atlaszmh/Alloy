@@ -88,7 +88,7 @@
       "chargeRatio": 0.35, "lullCharge": 1.5, "lullRadius": 6, "chargeLockout": 1,
       "comboWindow": 1.2,
       "chainRange": 4, "chainPower": 0.7, "scatterReach": 1.5,
-      "defend": { "earthReduction": 0.2, "shadowLifesteal": 0.1, "natureRegen": 0.03, "surgeMove": 0.2, "blinkSeconds": 2 }
+      "defend": { "earthReduction": 0.2, "shadowLifesteal": 0.1, "natureRegen": 0.03, "blinkSeconds": 2, "onslaughtGuard": 2 }
     },
     "chains": {
       "cap": { "basic": 5, "primary": 5, "defensive": 5, "ultimate": 5 },
@@ -154,7 +154,8 @@
       "contactGap": 0.15,
       "buffer": 0.25,
       "heavyKnockback": 0.25,
-      "lobBase": 0.12
+      "lobBase": 0.12,
+      "styleMove": { "none": 0, "dart": 0.8, "step": 0.5, "wade": 0.6, "plant": 0.7, "sway": 0.6, "orbit": 0.6, "back": 0.6 }
     },
     "crafting": {
       "forgeScrap": { "common": 10, "uncommon": 20, "magic": 40, "rare": 80, "epic": 160, "legendary": 240 },

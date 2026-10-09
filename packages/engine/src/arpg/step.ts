@@ -41,8 +41,9 @@ import {
   pressStep,
   windupDir,
 } from './abilities/cast.js';
-import { defendTick, gainCharge, surging } from './abilities/defend.js';
+import { defendTick, gainCharge, surgeMult, surgeTick } from './abilities/defend.js';
 import { echoTick } from './abilities/echo.js';
+import { performTick } from './abilities/forms.js';
 import { hitOpts, impact, knobHitOpts } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
@@ -245,6 +246,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   holdTick(ctx, input.holding, dt, burst);
   castTick(ctx);
   echoTick(ctx);
+  performTick(ctx);
 
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
@@ -261,10 +263,10 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // Movement, once a tick (see the weapon flow spec): the steering at the hero's pace, slowed
   // while it acts or recovers (the slower wins); then each push's slice, less any part against
   // the steering. Acting, the hero faces its action (steering strafes); else its steering.
-  const surge = surging(ctx);
   h.moving = speed > 0.05 && !dashing;
   const heading = h.moving ? { x: v.x / speed, y: v.y / speed } : null;
-  const acting = !!h.swing || !!h.windup || !!h.hold;
+  // A Whirl's spin acts too: the hero walks slowed and faces its way (the constructs spec §2.2).
+  const acting = !!h.swing || !!h.windup || !!h.hold || h.perform?.form === 'whirl';
   if (heading) {
     const slow = Math.min(
       acting ? bal.feel.actionMove : 1,
@@ -275,7 +277,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     // Slow ground slows the walk (`groundSpeed`), whatever else does.
     const pace =
       h.stats.moveSpeed *
-      (surge ? 1 + bal.abilities.defend.surgeMove : 1) *
+      surgeMult(ctx) *
       quick *
       slow *
       groundSpeed(world, h);
@@ -321,7 +323,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   comboPauseTick(h, dt);
 
   // Infinite mana (Training Grounds) tops the pool up every tick.
-  h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
+  h.mana = world.sandbox?.infiniteMana
+    ? h.manaMax
+    : Math.min(h.manaMax, h.mana + h.manaRegen * surgeMult(ctx) * dt);
   // A blessing's life regen (see the floor maps spec).
   if (h.stats.lifeRegen)
     h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.maxHp * h.stats.lifeRegen * dt);
@@ -332,6 +336,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     });
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
+  surgeTick(ctx, dt);
   defendTick(ctx, dt);
 }
 
@@ -427,12 +432,37 @@ function steer(ctx: SimCtx, p: Projectile, dt: number): void {
   p.vy = (ny / len) * speed;
 }
 
+/**
+ * The wand's homing (the constructs spec §4.2): an ability's shot turns toward
+ * the nearest foe within 6 it perceives and hasn't hit, by at most `rate`
+ * radians a second. A Volley dart has its own steering; a shard and an ember none.
+ */
+function homingTick(ctx: SimCtx, p: Projectile, rate: number, dt: number): void {
+  const target = nearestMonster(ctx, p.x, p.y, 6, new Set(p.hitIds), p.radius);
+  if (!target) return;
+  const speed = Math.hypot(p.vx, p.vy);
+  if (speed <= 0) return;
+  const want = dirTo(p.x, p.y, target.x, target.y);
+  const dx = p.vx / speed;
+  const dy = p.vy / speed;
+  const a = Math.max(
+    -rate * dt,
+    Math.min(rate * dt, Math.atan2(dx * want.y - dy * want.x, dx * want.x + dy * want.y)),
+  );
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  p.vx = (dx * c - dy * s) * speed;
+  p.vy = (dx * s + dy * c) * speed;
+}
+
 function projectilesTick(ctx: SimCtx, dt: number): void {
   const { world } = ctx;
   const h = world.hero;
   for (const p of world.projectiles) {
     if (p.dead) continue;
     if (p.homingId !== null) steer(ctx, p, dt);
+    else if (p.ability && p.ability.knobs.homing > 0 && p.form !== 'shard' && p.form !== 'ember')
+      homingTick(ctx, p, p.ability.knobs.homing, dt);
     const before = { x: p.x, y: p.y };
     p.x += p.vx * dt;
     p.y += p.vy * dt;
@@ -554,6 +584,11 @@ function zonesTick(ctx: SimCtx): void {
           notePerfect(ctx);
       }
       continue;
+    }
+    // A melee Maelstrom rides the hero.
+    if (z.follow) {
+      z.x = h.x;
+      z.y = h.y;
     }
     // Barrage impacts and thrown Bursts land once.
     if (z.detonateAt > 0) {
