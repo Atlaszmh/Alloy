@@ -128,9 +128,10 @@ describe('FoundLog: what this floor found', () => {
   });
 
   /**
-   * Constructs built up on the worn (uncommon) sword make a forged-up dagger whose own Primary
-   * is one light Strike (and room for every construct) better only with them moved onto it: a
-   * potential upgrade.
+   * Constructs built up on the worn (uncommon) sword make a dagger whose own Primary is one light
+   * Strike (and room for every construct) better only with them moved onto it: a potential
+   * upgrade. Not upgraded: since the style gate a weapon's abilities read against the sword's
+   * damage, and an upgraded one is better as it is.
    */
   it('counts a weapon better only as a home for your constructs apart, as a potential upgrade', () => {
     const a = armed(store().profile);
@@ -152,7 +153,6 @@ describe('FoundLog: what this floor found', () => {
     weak.chains.primary!.moves = [{ kind: 'light', form: 'strike', elements: ['fire'] }];
     const dagger = {
       ...rolled,
-      upgrade: 1,
       moveset: { ...weak, slots: { ...weak.slots, basic: 4, primary: 5, defensive: 2 } },
     };
     store().setProfile({ ...store().profile, bag: [...store().profile.bag, dagger] });
