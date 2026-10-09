@@ -47,5 +47,7 @@ export default defineConfig({
   },
   use: {
     baseURL: 'http://localhost:5199',
+    // The container's /dev/shm is 64 MB: Chromium's renderer crashes at random without this.
+    launchOptions: { args: ['--disable-dev-shm-usage'] },
   },
 });

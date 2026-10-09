@@ -69,7 +69,8 @@ function neighborhood(
 }
 
 describe('pixel world generation', () => {
-  it('builds the same floor from the same seed', () => {
+  // Alone this takes 0.6 s; under the full suite's load in the container it passes 5 s (the two fire tests: 1.4 and 1.7 s alone).
+  it('builds the same floor from the same seed', { timeout: 15_000 }, () => {
     const a = make();
     const b = make();
     expect(Array.from(a.mat)).toEqual(Array.from(b.mat));
@@ -122,7 +123,7 @@ describe('pixel world physics', () => {
     expect(centroid()).toBeGreaterThan(before + 1);
   });
 
-  it('spreads fire through grass, leaves ash, and never burns stone', () => {
+  it('spreads fire through grass, leaves ash, and never burns stone', { timeout: 15_000 }, () => {
     const pw = make();
     pw.springs.length = 0;
     const spot = find(
@@ -137,7 +138,7 @@ describe('pixel world physics', () => {
     expect(count(pw, (i) => pw.mat[i] === MAT.STONE && pw.fire[i] > 120)).toBe(0);
   });
 
-  it('keeps gameplay fires to a patch when spread is low', () => {
+  it('keeps gameplay fires to a patch when spread is low', { timeout: 15_000 }, () => {
     const burnedArea = (extra: { fireSpread?: number; burnRate?: number }) => {
       const pw = make(PIXEL_THEMES.sunken_quarry, 7, false, extra);
       pw.springs.length = 0;
