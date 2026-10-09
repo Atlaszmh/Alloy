@@ -6,7 +6,7 @@ import { vibrate } from '@/shared/utils/haptics';
 import { Button, Dialog } from '../../kit';
 import { useItemComparison } from '../../items/useItemComparison';
 import { UPGRADE_EPSILON, formatDelta } from '../../format';
-import { TransferNotes, transferOnto } from './ComparePane';
+import { MoveAllNotes, moveAllOnto } from './ComparePane';
 import { needsBind } from './BindChoice';
 
 /**
@@ -29,8 +29,8 @@ export function canTake(
 
 /**
  * The pad's take sheet (the pad-first spec, 4, rule 1: a priced action gets a sheet): A on a bag
- * weapon that can take your constructs asks how to take it. Equip as it is, or Move all my
- * constructs here (free; what it leaves, `TransferNotes`); each with its Power change, the
+ * weapon that can take your constructs asks how to take it. Equip as it is, or Move all here
+ * (free; what a Move all leaves, `MoveAllNotes`); each with its Power change, the
  * better one focused first. The mouse has both in the compare pane.
  */
 export function TakeSheet({
@@ -45,13 +45,13 @@ export function TakeSheet({
   const homeFirst = cmp.powerPct > asIs.powerPct && cmp.powerPct > UPGRADE_EPSILON;
 
   const equip = () => {
-    useDelveStore.getState().equip(uid);
+    if (!useDelveStore.getState().equip(uid)) return;
     playSound('orbPlace');
     vibrate('medium');
     onClose();
   };
   const move = () => {
-    if (transferOnto(item)) onClose();
+    if (moveAllOnto(item)) onClose();
   };
 
   return (
@@ -71,11 +71,11 @@ export function TakeSheet({
           onClick={move}
           data-pad-first={homeFirst ? '' : undefined}
           data-tutorial="loadout.transfer"
-          testId="take-transfer"
+          testId="take-move-all"
         >
-          Move all my constructs here · {formatDelta(cmp.powerPct)} Power
+          Move all here · {formatDelta(cmp.powerPct)} Power
         </Button>
-        <TransferNotes worn={worn} item={item} />
+        <MoveAllNotes worn={worn} item={item} />
       </div>
     </Dialog>
   );

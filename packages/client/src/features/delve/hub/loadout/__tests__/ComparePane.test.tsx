@@ -6,19 +6,20 @@ import {
   generateItem,
   heroChains,
   moveAllPreview,
+  movesetOf,
   referenceDepth,
   salvageYield,
   SeededRNG,
   type GearItem,
   type ManaType,
-  type RuneRef,
   type SalvageYield,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { DRAFT_PENDING, useDelveStore, type ChainDraft } from '@/stores/delveStore';
 import { armed, wearing } from '../../../__tests__/armed';
 import { ToastContainer } from '@/components/Toast';
 import { ComparePane, VERDICT_TEXT, verdictOf } from '../ComparePane';
 import { getDelveRegistry } from '../../../registry';
+import { slotPairs, slotsText } from '../../../items/weapon-frame';
 import { UPGRADE_EPSILON, formatDelta } from '../../../format';
 
 // The engine's salvage preview (stage 4c's B2): each test says what it gives.
@@ -61,18 +62,6 @@ const rareSword = (uid: string, slots = {}): GearItem => {
   );
   return { ...w, moveset: defaultMoveset(registry, w, 'fire', slots) };
 };
-/** `w` with its Primary's first move holding `runes`. */
-const withRunes = (w: GearItem, runes: (RuneRef | null)[]): GearItem => {
-  const moveset = w.moveset!;
-  const primary = moveset.chains.primary!;
-  const moves = [{ ...primary.moves[0], runes }, ...primary.moves.slice(1)];
-  return {
-    ...w,
-    moveset: { ...moveset, chains: { ...moveset.chains, primary: { ...primary, moves } } },
-  };
-};
-const split = { id: 'split', tier: 3 } as const;
-const quick = { id: 'quick', tier: 1 } as const;
 
 /**
  * A built-up common sword worn against a plain uncommon one in the bag (`w2`): worse as it is,
@@ -352,38 +341,43 @@ describe('the compare pane', () => {
     expect(store().profile.equipped.helm).toBeUndefined();
   });
 
-  it('a bag weapon is valued as it is and with your constructs; Move all is offered, free', () => {
+  it('shows a bag weapon as a frame: its class and style, and its slots against the ceiling', () => {
+    put(rareSword('w1'));
+    show('w1');
+    expect(screen.getByTestId('weapon-frame')).toHaveTextContent('Melee · Balanced');
+    expect(screen.getByTestId('weapon-frame')).toHaveTextContent(
+      slotsText(slotPairs(registry, store().profile.bag[0])),
+    );
+  });
+
+  it('a bag weapon is valued as it is and after Move all; Move all is free and moves every construct onto it', () => {
     const p = store().profile;
     const sword = p.equipped.weapon!;
-    const mine = { ...sword, moveset: defaultMoveset(registry, sword, 'fire', { primary: 2 }) };
-    store().setProfile({
-      ...p,
-      equipped: { ...p.equipped, weapon: mine },
-      bag: [rareSword('w1', { primary: 2 })],
-      scrap: 0,
-    });
+    store().setProfile({ ...p, bag: [rareSword('w1')], scrap: 0 });
     show('w1');
     // The actions sit below the scrolling details, always in view.
-    for (const id of ['transfer-button', 'equip-button', 'salvage-button', 'lock-button'])
+    for (const id of ['move-all-button', 'equip-button', 'salvage-button', 'lock-button'])
       expect(screen.getByTestId(id).closest('.k-scroll'), id).toBeNull();
-    expect(screen.getByTestId('compare-as-is').closest('.k-scroll')).not.toBeNull();
     expect(screen.getByTestId('compare-as-is')).toHaveTextContent('Power');
+    expect(screen.getByTestId('item-compare')).toHaveTextContent('After Move all');
     expect(screen.getByTestId('compare-home')).toHaveTextContent('Power');
-    expect(screen.getByTestId('item-compare')).toHaveTextContent('With your constructs moved here');
-    expect(screen.getByTestId('transfer-button')).toHaveTextContent(/Move all my constructs here$/);
-    // The rare sword's own blows and Primary constructs give way to yours: they go to the bag.
-    const { toBag } = moveAllPreview(registry, mine, store().profile.bag[0]);
-    expect(toBag.length).toBeGreaterThan(0);
-    expect(screen.getByTestId('transfer-leaves')).toHaveTextContent(
-      `${toBag.length} constructs to your bag`,
-    );
-    expect(screen.queryByTestId('transfer-dormant')).toBeNull(); // a sword expresses a Strike
+    expect(screen.getByTestId('move-all-button')).toHaveTextContent(/Move all here$/); // a rare sword is also a stats upgrade, so ▲ leads
+    // The worn armed sword holds more constructs than a plain rare: the preview says how many go to the bag.
+    const { toBag } = moveAllPreview(registry, sword, store().profile.bag[0]);
+    if (toBag.length)
+      expect(screen.getByTestId('move-all-bag')).toHaveTextContent(`${toBag.length} to your bag`);
+    else expect(screen.queryByTestId('move-all-bag')).toBeNull();
+    expect(screen.queryByTestId('move-all-dormant')).toBeNull();
+    fireEvent.click(screen.getByTestId('move-all-button'));
     // Move all: the rare sword is worn with your constructs, the old one goes to the bag, free.
-    fireEvent.click(screen.getByTestId('transfer-button'));
+    const now = store().profile;
+    expect(now.equipped.weapon!.uid).toBe('w1');
+    expect(
+      movesetOf(registry, now.equipped.weapon!).chains.primary!.moves.map((m) => m.uid),
+    ).toEqual(movesetOf(registry, sword).chains.primary!.moves.map((m) => m.uid));
+    expect(now.bag.some((i) => i.uid === sword.uid)).toBe(true);
+    expect(now.scrap).toBe(0);
     expect(screen.getByText(/^Your constructs moved onto /)).toBeInTheDocument();
-    expect(store().profile.equipped.weapon!.uid).toBe('w1');
-    expect(store().profile.bag.some((i) => i.uid === mine.uid)).toBe(true);
-    expect(store().profile.scrap).toBe(0);
   });
 
   it('each valuation shows its own delta: Equip is marked as it is, Move all as a home', () => {
@@ -400,52 +394,51 @@ describe('the compare pane', () => {
       `Equip · ${formatDelta(asIs)} Power`,
     );
     expect(screen.getByTestId('equip-button')).not.toHaveClass('k-go');
-    expect(screen.getByTestId('transfer-button')).toHaveTextContent(
-      /^▲ Move all my constructs here$/,
-    );
-    expect(screen.getByTestId('transfer-button')).toHaveClass('k-go');
+    expect(screen.getByTestId('move-all-button')).toHaveTextContent(/^▲ Move all here$/);
+    expect(screen.getByTestId('move-all-button')).toHaveClass('k-go');
   });
 
   it('Move all onto a weapon with fewer slots says how many constructs go to your bag', () => {
-    const p = store().profile;
-    const epic = { ...p.equipped.weapon!, rarity: 'epic' as const };
-    const mine = { ...epic, moveset: defaultMoveset(registry, epic, 'fire') };
-    const plain = generateItem(
-      registry,
-      { uid: 'w2', ilvl: 2, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
-      new SeededRNG(4),
-    );
-    store().setProfile({ ...p, equipped: { ...p.equipped, weapon: mine }, bag: [plain] });
+    const { plain } = putHomeOnlyWeapon(); // five Primary and five basic constructs onto an uncommon
     show('w2');
-    // The epic's constructs past the uncommon's slots, and the uncommon's own replaced ones.
-    const { toBag } = moveAllPreview(registry, mine, plain);
-    expect(toBag.length).toBeGreaterThan(0);
-    expect(screen.getByTestId('transfer-leaves')).toHaveTextContent(
-      `${toBag.length} constructs to your bag`,
+    const preview = moveAllPreview(registry, store().profile.equipped.weapon!, plain);
+    expect(preview.toBag.length).toBeGreaterThan(0);
+    expect(screen.getByTestId('move-all-bag')).toHaveTextContent(
+      `${preview.toBag.length} to your bag`,
     );
   });
 
-  it("Move all onto a weapon of another class says which constructs sit dormant there; a construct's runes travel with it", () => {
+  it("Move all onto the other class says which constructs sleep: a bow can't express Strike", () => {
     const p = store().profile;
-    // A rare sword's Strikes onto a wand: a wand can't express a Strike.
-    const worn = withRunes(rareSword('w1'), [split, quick]);
-    const wand = generateItem(
+    const bow = generateItem(
       registry,
-      { uid: 'w2', ilvl: 2, rarity: 'rare', slot: 'weapon', baseId: 'wand', mana: 'fire' },
+      { uid: 'w3', ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'bow', mana: 'fire' },
       new SeededRNG(4),
     );
-    // Minted, as every worn construct is: the preview names the dormant ones by uid.
-    store().setProfile(wearing({ ...p, scrap: 999, bag: [wand] }, worn));
-    show('w2');
-    const minted = store().profile.equipped.weapon!;
-    const { dormant, moveset } = moveAllPreview(registry, minted, wand);
-    expect(dormant.length).toBeGreaterThan(0);
-    expect(screen.getByTestId('transfer-dormant')).toHaveTextContent(
-      `${dormant.length} constructs dormant there`,
+    store().setProfile({ ...p, bag: [bow] });
+    show('w3');
+    // A new save's sword holds Strike constructs (the melee default): dormant on a bow.
+    expect(screen.getByTestId('weapon-frame')).toHaveTextContent('Ranged · Marksman');
+    expect(screen.getByTestId('move-all-dormant')).toHaveTextContent(
+      /\d+ dormant: a bow can't express Strike/,
     );
-    // The sockets belong to the construct: the runes are on the preview's moveset, nothing destroyed.
-    expect(moveset.chains.primary!.moves[0].runes).toEqual([split, quick]);
-    expect(screen.queryByTestId('transfer-runes')).toBeNull();
+  });
+
+  it('Move all waits on the Skills draft (Equip does too, in the store: see delveStore.test.ts)', () => {
+    put(rareSword('w1'));
+    const chains = heroChains(registry, store().profile.equipped, store().profile.pair);
+    const primary = chains.primary!;
+    useDelveStore.setState({
+      chainDraft: {
+        uid: store().profile.equipped.weapon!.uid,
+        pair: store().profile.pair,
+        chains: { primary: { ...primary, moves: primary.moves.slice(0, 1) } },
+      } as ChainDraft,
+    });
+    show('w1');
+    fireEvent.click(screen.getByTestId('move-all-button'));
+    expect(screen.getByText(DRAFT_PENDING)).toBeInTheDocument();
+    expect(store().profile.equipped.weapon!.uid).not.toBe('w1');
   });
 
   it("full compare adds a bag item's stat lines and a weapon's moveset", () => {
@@ -467,7 +460,7 @@ describe('the compare pane', () => {
     put({ ...boots, legendary: { id: 'rimeheart', value: 30, roll: 0.5 } });
     show('b1');
     expect(screen.getByTestId('legendary-dead')).toHaveTextContent(
-      "Needs an Ultimate: your weapon doesn't carry one",
+      'Needs an Ultimate: your weapon has no Ultimate chain.',
     );
   });
 
@@ -481,6 +474,6 @@ describe('the compare pane', () => {
       expect(screen.queryByTestId(id)).toBeNull();
     view.unmount();
     show('w1', { locked: true });
-    expect(screen.queryByTestId('transfer-button')).toBeNull();
+    expect(screen.queryByTestId('move-all-button')).toBeNull();
   });
 });

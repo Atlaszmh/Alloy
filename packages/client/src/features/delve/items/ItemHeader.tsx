@@ -4,12 +4,14 @@ import {
   findItem,
   inPair,
   itemAffinityAttunement,
+  weaponClass,
   type GearItem,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { Glyph } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { ItemTile } from '../ItemTile';
+import { frameText } from './weapon-frame';
 import { RARITY_LABEL, RARITY_TEXT, SLOT_LABEL, manaStyle } from '../format';
 
 const SIZES = {
@@ -19,7 +21,7 @@ const SIZES = {
 
 /**
  * An item's tile, name, rarity, base and slot, then its tags: its mana and the
- * attunement it gives (marked when outside the pair), melee or ranged, a
+ * attunement it gives (marked when outside the pair), its class and cast style ("Melee · Balanced") and the style's trait, a
  * weapon's tempo, item level, forge level, and Equipped.
  */
 export function ItemHeader({
@@ -35,7 +37,8 @@ export function ItemHeader({
   const ownMana = inPair(profile, item.mana);
   const isEquipped = findItem(profile, item.uid)?.where === 'equipped';
   const base = registry.getDelveData().bases.find((b) => b.id === item.baseId);
-  const attack = base?.attack;
+  const cls = item.slot === 'weapon' ? weaponClass(registry, item.baseId) : null;
+  const styleText = cls ? registry.getGearBase(item.baseId).style?.text : undefined;
   return (
     <div className="flex min-w-0 flex-1 items-start gap-3">
       <ItemTile item={item} size={SIZES[size].tile} />
@@ -63,13 +66,18 @@ export function ItemHeader({
             <Glyph id={item.mana} size={14} /> {mana.name} +{itemAffinityAttunement(registry, item)}
             {!ownMana && ' · not your element'}
           </span>
-          {attack && (
+          {cls && (
             <span
               className="inline-flex items-center gap-1 rounded bg-white/5 px-1.5 py-0.5"
               data-testid="item-attack"
             >
-              <Glyph id={attack.kind === 'bolt' ? 'bolt' : 'attack'} size={14} />
-              {attack.kind === 'bolt' ? 'Ranged' : 'Melee'}
+              <Glyph id={cls === 'ranged' ? 'bolt' : 'attack'} size={14} />
+              {frameText(registry, item)}
+            </span>
+          )}
+          {styleText && (
+            <span className="rounded bg-white/5 px-1.5 py-0.5" data-testid="item-style">
+              {styleText}
             </span>
           )}
           {base?.tempo !== undefined && (

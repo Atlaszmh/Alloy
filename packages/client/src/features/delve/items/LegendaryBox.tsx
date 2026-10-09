@@ -1,8 +1,9 @@
 import type { ReactElement } from 'react';
-import { legendaryNeeds, movesetOf, type ChainSkill, type GearItem } from '@alloy/engine';
+import { heroChains, legendaryNeeds, type ChainSkill, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { legendaryText } from '../format';
+import { SKILL_NAME } from '../chains/chain-text';
 
 /** A legendary power's skill, missing from the weapon (`legendaryNeeds`): "Needs a Defensive". */
 const NEEDS_TEXT: Record<ChainSkill, string> = {
@@ -13,15 +14,17 @@ const NEEDS_TEXT: Record<ChainSkill, string> = {
 };
 
 /**
- * A legendary's power, and the skill it rides when the equipped weapon doesn't
- * carry it. Nothing for an item with no legendary power.
+ * A legendary's power, and the skill it rides when the equipped weapon plays
+ * no chain of it. Nothing for an item with no legendary power.
  */
 export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null {
   const registry = getDelveRegistry();
-  const weapon = useDelveStore((s) => s.profile.equipped.weapon);
+  const pair = useDelveStore((s) => s.profile.pair);
+  const equipped = useDelveStore((s) => s.profile.equipped);
   if (!item.legendary) return null;
   const needs = legendaryNeeds(item.legendary.id);
-  const dead = !!needs && !(weapon && (movesetOf(registry, weapon).slots[needs] ?? 0) > 0);
+  // The chain as it plays (`heroChains`: a chain of dormant constructs alone is dropped too).
+  const dead = !!needs && !heroChains(registry, equipped, pair)[needs];
   return (
     <div
       className="mt-2 rounded-lg px-3 py-2 text-[18px]"
@@ -37,7 +40,7 @@ export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null 
       {legendaryText(registry, item.legendary.id, item.legendary.value)}
       {dead && needs && (
         <div className="mt-1 text-[18px] font-semibold text-amber-200" data-testid="legendary-dead">
-          {NEEDS_TEXT[needs]}: your weapon doesn't carry one.
+          {NEEDS_TEXT[needs]}: your weapon has no {SKILL_NAME[needs]} chain.
         </div>
       )}
     </div>

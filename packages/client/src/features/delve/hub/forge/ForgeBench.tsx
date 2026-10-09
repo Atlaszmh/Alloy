@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  CHAIN_SKILLS,
   FLUX_GRADES,
   MANA_TYPES,
   METAL_IDS,
@@ -33,7 +34,7 @@ import {
   formatDelta,
   manaStyle,
 } from '../../format';
-import { SKILL_NAME } from '../../chains/chain-text';
+import { classText, slotsText, type SlotPair } from '../../items/weapon-frame';
 import { PatternList } from './PatternList';
 import { ShardPicker, heldShards } from './ShardPicker';
 import { useOnboarding } from '../../onboarding';
@@ -90,7 +91,7 @@ function PowerRange({ range, slot }: { range: ForgePowerRange; slot: GearSlot })
  * The Forge bench, in three columns: the patterns; the rows (Flux, Metal and Element steppers
  * over what the save holds, each with where what it lacks drops; with epic flux, Essence; a row
  * a line, opening the shard picker; Forge, Enter or A); and the preview (no stops): the engine's
- * `previewForge` (the lines' bands, the attunement floor, the implicits, a weapon's skills, slots
+ * `previewForge` (the lines' bands, the attunement floor, the implicits, a weapon's class, its slots against the ceiling
  * and sockets, what it uses) and its Power against what is worn as a range (`forgePowerRange`).
  * The chosen pattern is the tab's (`baseId`, `onBase`). A legendary plays the fanfare.
  */
@@ -252,12 +253,6 @@ export function ForgeBench({
         ...(req.essence ? [{ kind: 'essence' as const, essence: req.essence }] : []),
         ...shards.map((s) => ({ kind: 'shard' as const, ...s })),
       ]
-    : [];
-  // Each skill's slots against its ceiling (the constructs spec §3.1), the skills it starts with.
-  const extras = preview?.weapon
-    ? (Object.entries(preview.weapon.slots) as [keyof typeof SKILL_NAME, [number, number]][])
-        .filter(([, [n]]) => n > 0)
-        .map(([s, [n, ceiling]]) => `${SKILL_NAME[s]} ${n}/${ceiling}`)
     : [];
   // The guided start's trail: the Lines are done once one holds a shard, or at once when no
   // shard held fits the item, or it rolls no lines (the forge needs none), so the marker goes on
@@ -541,7 +536,8 @@ export function ForgeBench({
               )}
               {preview.weapon && (
                 <p className="k-note" data-testid="forge-weapon">
-                  {preview.weapon.class === 'melee' ? 'Melee' : 'Ranged'} · slots: {extras.join(', ')}
+                  {classText(preview.weapon.class)} ·{' '}
+                  {slotsText(CHAIN_SKILLS.map((s): SlotPair => [s, ...preview.weapon!.slots[s]]))}
                   {preview.weapon.sockets > 0 &&
                     ` · ${preview.weapon.sockets} open socket${preview.weapon.sockets === 1 ? '' : 's'}`}
                 </p>

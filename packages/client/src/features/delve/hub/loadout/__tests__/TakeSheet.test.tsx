@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { defaultMoveset, generateItem, SeededRNG, type GearItem } from '@alloy/engine';
+import { defaultMoveset, generateItem, movesetOf, SeededRNG, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
 import { getDelveRegistry } from '../../../registry';
@@ -25,27 +25,24 @@ describe('TakeSheet', () => {
     store().setProfile({ ...store().profile, bag: [rareSword('w1')] });
   });
 
-  it('offers Equip as it is and Move all with their Power, free; Move all carries the guided-start target', () => {
+  it('offers Equip as it is and Move all here with their Power; Move all carries the guided-start target', () => {
     render(<TakeSheet uid="w1" onClose={vi.fn()} />);
     expect(screen.getByTestId('take-equip')).toHaveTextContent(/Equip as it is · [+−±]\d/);
-    expect(screen.getByTestId('take-transfer')).toHaveTextContent(
-      /^Move all my constructs here · [+−±]\d.* Power$/,
-    );
-    expect(screen.getByTestId('take-transfer')).toHaveAttribute(
-      'data-tutorial',
-      'loadout.transfer',
-    );
+    expect(screen.getByTestId('take-move-all')).toHaveTextContent(/^Move all here · [+−±]\d.* Power$/);
+    expect(screen.getByTestId('take-move-all')).toHaveAttribute('data-tutorial', 'loadout.transfer');
   });
 
   it('Move all wears the weapon with your constructs on it, the old one to the bag, and closes', () => {
     const onClose = vi.fn();
-    const before = store().profile.equipped.weapon!;
-    const basic = before.moveset!.chains.basic!.map((b) => b.uid);
+    const old = store().profile.equipped.weapon!;
+    const before = movesetOf(registry, old).chains;
     render(<TakeSheet uid="w1" onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('take-transfer'));
+    fireEvent.click(screen.getByTestId('take-move-all'));
     expect(store().profile.equipped.weapon?.uid).toBe('w1');
-    expect(store().profile.equipped.weapon?.moveset?.chains.basic!.map((b) => b.uid)).toEqual(basic);
-    expect(store().profile.bag.some((i) => i.uid === before.uid)).toBe(true);
+    const after = movesetOf(registry, store().profile.equipped.weapon!).chains;
+    expect(after.primary!.moves.map((m) => m.uid)).toEqual(before.primary!.moves.map((m) => m.uid));
+    expect(after.basic!.map((b) => b.uid)).toEqual(before.basic!.map((b) => b.uid));
+    expect(store().profile.bag.some((i) => i.uid === old.uid)).toBe(true);
     expect(onClose).toHaveBeenCalled();
   });
 

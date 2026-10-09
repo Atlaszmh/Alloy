@@ -59,7 +59,7 @@ export function BindChoice({ item, ask }: { item: GearItem; ask: boolean }): Rea
         return;
       }
     } else store.declineBind(item.mana);
-    store.equip(item.uid);
+    if (!store.equip(item.uid)) return;
     playSound('orbPlace');
     vibrate('medium');
   };

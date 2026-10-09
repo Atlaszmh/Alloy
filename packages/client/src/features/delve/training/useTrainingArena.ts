@@ -8,10 +8,17 @@ import {
   setSandboxToggles,
   spawnDummies,
   spawnMonsters,
+  type AbilitySlot,
+  type Chains,
   type DummyLayout,
   type MonsterKind,
 } from '@alloy/engine';
-import { MAX_DUMMY_GROUPS, useSandboxStats, useSandboxStore } from '@/stores/sandboxStore';
+import {
+  MAX_DUMMY_GROUPS,
+  sandboxLiveChains,
+  useSandboxStats,
+  useSandboxStore,
+} from '@/stores/sandboxStore';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from '../arena/useArenaCore';
@@ -43,12 +50,18 @@ export function useTrainingArena(
   const registry = getDelveRegistry();
   const stats = useSandboxStats();
   const chains = useSandboxStore((s) => s.chains);
+  const baseId = useSandboxStore((s) => s.weapon?.baseId ?? null);
   const depth = useSandboxStore((s) => s.depth);
   const toggles = useSandboxStore((s) => s.toggles);
   const slowmo = useSandboxStore((s) => s.slowmo);
   const meterRef = useRef(new DamageMeter());
   const [meter, setMeter] = useState<MeterSummary>(() => meterRef.current.summary(0));
-  const loadout = useMemo(() => ({ stats, chains }), [stats, chains]);
+  // What the arena plays: a dormant move (the other class's form) is skipped, as on the Delve.
+  const live = useMemo(
+    () => sandboxLiveChains(registry, baseId, chains),
+    [registry, baseId, chains],
+  );
+  const loadout = useMemo(() => ({ stats, chains: live }), [stats, live]);
 
   const mode: ArenaMode = {
     // A new depth rebuilds the arena: dummy groups are replayed, spawned monsters go.
@@ -58,7 +71,8 @@ export function useTrainingArena(
       const world = createSandboxWorld(registry, {
         depth: s.depth,
         stats: loadout.stats,
-        chains: loadout.chains,
+        // ponytail: the engine's option type wants all three; `createFloorWorld` takes a Partial (an uncarried skill)
+        chains: loadout.chains as Pick<Chains, AbilitySlot>,
         toggles: s.toggles,
       });
       s.dummies.forEach((g, group) => spawnDummies(registry, world, { ...g, group }));
