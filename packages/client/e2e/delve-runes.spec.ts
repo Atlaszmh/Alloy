@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { applyDraft, armed, startDive as departAndDelve } from './fixtures/delve';
+import { applyDraft, armed, startDive as departAndDelve, withUids } from './fixtures/delve';
 import {
   baseCost,
   beginFloor,
@@ -73,7 +73,7 @@ async function seed(page: Page, profile: DelveProfile, autopilot = false): Promi
       localStorage.setItem('alloy:muted', 'true');
       sessionStorage.setItem('runes-e2e', '1');
     },
-    [SAVE_KEY, JSON.stringify(profile), autopilot] as const,
+    [SAVE_KEY, JSON.stringify(withUids(profile)), autopilot] as const,
   );
 }
 
