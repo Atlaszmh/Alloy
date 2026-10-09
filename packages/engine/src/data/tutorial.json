@@ -57,7 +57,7 @@
       "id": "s1-equip",
       "where": "stop",
       "floor": "d1-1",
-      "line": "Between depths you get one power-up. Better weapons carry more skills, and that blade carries a Primary. Put it on.",
+      "line": "Between depths you get one power-up. A better weapon has more slots for constructs, and that blade adds a Defensive. Put it on.",
       "objective": "Take Equip",
       "highlight": "stop.powerup",
       "trail": ["stop.card:equip", "stop.pick"],
@@ -78,7 +78,7 @@
       "id": "d1-cast",
       "where": "floor",
       "floor": "d1-2",
-      "line": "Your new blade carries {primarySkill}. Let's see it: cast it at a rat.",
+      "line": "Your blade's first construct casts {primarySkill}. Let's see it: cast it at a rat.",
       "objective": "Cast with {input:primary}",
       "highlight": "hud.primary",
       "gate": { "door": 0 },
@@ -98,7 +98,7 @@
       "id": "d1-aim",
       "where": "floor",
       "floor": "d1-2",
-      "line": "That slinger's keeping its distance. Hold {input:primary}, line it up with {input:aim}, and let go.",
+      "line": "That slinger's keeping its distance. Hold {input:primary}, line it up with {input:aim}, and let go: step in and strike it.",
       "objective": "Aim a cast at the slinger",
       "highlight": "hud.primary",
       "gate": { "door": 0 },
@@ -272,7 +272,7 @@
     {
       "id": "l1-skills",
       "where": "anvil",
-      "line": "Let's build your Primary. Add a slot, set the new move to {secondary}, open a socket on the first move, set the rune in it, then Apply.",
+      "line": "Let's build your Primary. Add a slot, set its new construct to {secondary}, open a socket on the first construct, set the rune in it, then Apply. A construct you pull out waits in your move bag.",
       "objective": "Add a slot, set {secondary}, socket the rune, Apply",
       "highlight": "skills.addSlot",
       "trail": [
@@ -288,7 +288,7 @@
     {
       "id": "l1-salvage",
       "where": "anvil",
-      "line": "That old sword's done its job. Salvage it: it melts down into scrap and parts.",
+      "line": "That old sword's done its job. Salvage it: it melts down into scrap and parts, and any construct worth keeping goes to your move bag.",
       "objective": "Salvage the old sword",
       "highlight": "loadout.salvage",
       "trail": ["loadout.bag:weapon.common", "loadout.salvage"],
@@ -468,7 +468,7 @@
       "id": "d2-rare",
       "where": "floor",
       "floor": "d2-5",
-      "line": "He dropped a rare weapon. Rares carry the Defensive skill too: grab it.",
+      "line": "He dropped a rare weapon. A rare has more slots, a Defensive's among them: grab it.",
       "objective": "Pick up the weapon",
       "gate": { "exit": true },
       "trigger": { "type": "pickup", "filter": { "dropKind": "item" }, "count": 1 }
@@ -494,7 +494,7 @@
     {
       "id": "l2-compare",
       "where": "anvil",
-      "line": "Look at Grask's weapon. As it comes it's no match for yours, but the ◇ says it's a better home for the moves you've built.",
+      "line": "Look at Grask's weapon. As it comes it's no match for yours, but the ◇ says it's a better home for the constructs you've built.",
       "objective": "Continue",
       "highlight": "loadout.compare",
       "trail": ["loadout.bag:weapon.rare"],
@@ -504,8 +504,8 @@
     {
       "id": "l2-transfer",
       "where": "anvil",
-      "line": "So move your moveset onto it. Your slots and your socket come along, for a little scrap.",
-      "objective": "Transfer your moveset",
+      "line": "So move them all onto it. Move all: every construct on your blade goes into the rare's slots, sockets and runes with them, free; what the rare held goes to your move bag.",
+      "objective": "Move all onto the rare",
       "highlight": "loadout.transfer",
       "trail": ["loadout.bag:weapon.rare", "loadout.transfer"],
       "trigger": { "type": "moveAll", "filter": { "rarity": "rare" }, "count": 1 }
@@ -540,7 +540,7 @@
     {
       "id": "l2-train",
       "where": "training",
-      "line": "Your rare carries a Defensive skill. Try it on my dummies in the Training Grounds.",
+      "line": "Your Ward came across into the rare's Defensive slot. Try it on my dummies in the Training Grounds.",
       "objective": "Cast your Defensive with {input:defensive}",
       "highlight": "hub.training",
       "trigger": { "type": "cast", "filter": { "slot": 1 }, "count": 1 }
@@ -548,7 +548,7 @@
     {
       "id": "l2-bye",
       "where": "anvil",
-      "line": "That's all I've got. Rares can be awakened to carry an Ultimate, and epics carry one already. Go find out. The Anvil's always here.",
+      "line": "That's all I've got. A rare has room for an Ultimate: open the skill on the Temper bench once you can pay, and epics come with one. Go find out. The Anvil's always here.",
       "objective": "Continue",
       "beat": true,
       "trigger": { "type": "ack", "count": 1 }
@@ -607,8 +607,7 @@
             "kind": "gear",
             "base": "sword",
             "rarity": "uncommon",
-            "element": "primary",
-            "slots": { "primary": 2 }
+            "element": "primary"
           }
         }
       ]

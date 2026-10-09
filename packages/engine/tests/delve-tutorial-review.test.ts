@@ -35,7 +35,9 @@ describe('auto-salvage waits for the tutorial', () => {
       new SeededRNG(1),
     );
     // Banked, the blade's constructs take their uids: the item is the same but for those.
-    expect(addLootToBag(registry, startTutorial(registry, p), [blade]).kept.map((i) => i.uid)).toEqual(['gB']);
+    expect(
+      addLootToBag(registry, startTutorial(registry, p), [blade]).kept.map((i) => i.uid),
+    ).toEqual(['gB']);
     expect(addLootToBag(registry, p, [blade]).salvaged.map((i) => i.uid)).toEqual(['gB']);
   });
 });
@@ -255,6 +257,6 @@ describe("every step's text, for every pair", () => {
     };
     const w = beginFloor(registry, armed);
     const [part] = tutorialText(registry, armed, 'd1-cast', w).line;
-    expect(part).toEqual({ text: expect.stringMatching(/carries \S+ \S+\. /) });
+    expect(part).toEqual({ text: expect.stringMatching(/casts \S+ \S+\. /) });
   });
 });
