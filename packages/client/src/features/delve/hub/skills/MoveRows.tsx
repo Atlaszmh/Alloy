@@ -44,7 +44,7 @@ export function elementSets(
  * chosen move. Kind, Elements, Position and the chain's Payment are steppers; Form and each socket
  * open a grid of what fits (`FormPicker`, the `RunePicker` as a grid), each option with what it
  * does to the chain's damage a second; Open a socket is a row with its price, off with the
- * engine's reason beside it. Every change is a draft edit. Back (B, Esc) and Remove (X, Del) are
+ * engine's reason beside it. Every change is a draft edit. Back (B, Esc) and Unsocket (X, Del) are
  * off the D-pad; Back closes it onto its card. Y or Ctrl+Enter opens the Apply sheet. The guided start's lesson marks the Primary's last move's
  * Elements and its first move's socket rows.
  */
@@ -68,19 +68,21 @@ export function MoveRows({
   const runes = anvil.editor.runes;
   const shape = !ed.fixedShape;
   const root = useRef<HTMLDivElement>(null);
-  /** X, Del or Remove: the move goes and the editor closes. */
-  const remove = () => {
+  /** X, Del or Unsocket: the construct goes to the bag and the editor closes. */
+  const unsocket = () => {
     onClose();
-    ed.remove(index);
+    ed.unsocket(index);
   };
+  // An ability chain may empty; the Basic keeps one blow.
+  const canUnsocket = shape && entries.length > (ed.skill === 'basic' ? 1 : 0);
   usePrompts(
     [
       {
-        id: 'remove',
-        label: 'Remove move',
+        id: 'unsocket',
+        label: 'Unsocket',
         binding: { key: 'Delete', pad: 'x' },
-        onPress: remove,
-        disabled: !shape || entries.length < 2,
+        onPress: unsocket,
+        disabled: !canUnsocket,
       },
       { id: 'apply', label: 'Apply', binding: APPLY_BINDING, onPress: onApply },
     ],
@@ -113,14 +115,14 @@ export function MoveRows({
           <Button
             variant="quiet"
             size="sm"
-            disabled={!shape || entries.length < 2}
-            onClick={remove}
+            disabled={!canUnsocket}
+            onClick={unsocket}
             binding={{ key: 'Delete', pad: 'x' }}
-            aria-label={`Remove ${ed.names[index]}`}
+            aria-label={`Unsocket ${ed.names[index]}`}
             data-pad-skip
-            testId="move-remove"
+            testId="move-unsocket"
           >
-            Remove
+            Unsocket
           </Button>
           <Button
             variant="quiet"
@@ -200,6 +202,12 @@ export function MoveRows({
         <span className="text-[18px] text-[var(--k-hot)]" data-testid="off-pair-note">
           {off.map(name).join(' and ')} off-pair: no attunement. Keep it, or pick from your two
           elements.
+        </span>
+      )}
+      {ed.dormantWhy(index) && (
+        <span className="text-[18px] text-[var(--k-hot)]" data-testid="dormant-note">
+          Dormant: {ed.dormantWhy(index)}. It keeps its slot and plays on a weapon of its class;
+          pick a form this weapon can express, or unsocket it.
         </span>
       )}
       {runes &&
