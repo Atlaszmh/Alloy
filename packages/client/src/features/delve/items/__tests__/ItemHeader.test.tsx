@@ -32,8 +32,11 @@ describe('ItemHeader', () => {
     });
     expect(document.body).toHaveTextContent(/Rare .+ · Weapon/);
     expect(screen.getByTestId('item-mana')).toHaveTextContent(/Frost \+\d+ · not your element$/);
-    expect(screen.getByTestId('item-attack')).toHaveTextContent(/^Ranged$/);
+    expect(screen.getByTestId('item-attack')).toHaveTextContent(/^Ranged · Marksman$/);
     expect(screen.getByTestId('item-attack').querySelector('[data-glyph="bolt"]')).not.toBeNull();
+    expect(screen.getByTestId('item-style')).toHaveTextContent(
+      registry.getGearBase('bow').style!.text,
+    );
     expect(screen.getByTestId('item-mana').querySelector('[data-glyph="frost"]')).not.toBeNull();
     expect(screen.getByTestId('item-tempo')).toHaveTextContent(/^Tempo [\d.]+×: /);
     expect(document.body).toHaveTextContent('iLvl 7');
@@ -49,7 +52,7 @@ describe('ItemHeader', () => {
       width: '72px',
     });
     expect(screen.getByTestId('item-mana')).toHaveTextContent(/^Fire \+1$/);
-    expect(screen.getByTestId('item-attack')).toHaveTextContent(/^Melee$/);
+    expect(screen.getByTestId('item-attack')).toHaveTextContent(/^Melee · Balanced$/);
     expect(screen.getByTestId('item-attack').querySelector('[data-glyph="attack"]')).not.toBeNull();
     expect(document.body).toHaveTextContent('Equipped');
   });
