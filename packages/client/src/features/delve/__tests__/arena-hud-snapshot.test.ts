@@ -7,8 +7,11 @@ import {
   createSandboxWorld,
   defaultChains,
   defaultMoveset,
+  generateItem,
+  movesetOf,
   hudMapOf,
   sandboxWeapon,
+  SeededRNG,
   startDive,
   stepWorld,
   type Chains,
@@ -186,6 +189,31 @@ describe('arena HUD snapshot', () => {
     expect(hud.abilities[0]).toMatchObject({ name: 'Fire Strike' });
     expect(hud.abilities[1]).toMatchObject({ name: 'Fire Ward' });
     expect(hud.abilities[2]).toBeNull();
+  });
+
+  it('a chain of dormant constructs alone has no HUD slot (heroChains decides)', () => {
+    // A bow wearing the sword's Strike constructs: its Primary chain is all dormant.
+    const p0 = createDelveProfile(registry, 4242, { primary: 'fire' });
+    const sword = p0.equipped.weapon!;
+    const bow = generateItem(
+      registry,
+      { uid: 'w1', ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'bow', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    const bowSet = movesetOf(registry, bow);
+    const worn = {
+      ...bow,
+      moveset: {
+        ...bowSet,
+        chains: { ...bowSet.chains, primary: movesetOf(registry, sword).chains.primary! },
+      },
+    };
+    const p1 = startDive(registry, { ...p0, equipped: { ...p0.equipped, weapon: worn } }, 1);
+    const w = beginFloor(registry, p1);
+    expect(w.hero.chains[0]).toBeNull();
+    const hud = snapshot(w, null);
+    expect(hud.abilities[0]).toBeNull();
+    expect(hud.abilities[1]).not.toBeNull(); // the bow's own Defensive plays
   });
 
   it("carries Obsidian's barrier and when Galvanize last fired", () => {
