@@ -288,6 +288,27 @@ export function readArenaFlags(): { autopilot: boolean; ask: boolean; timescale:
   }
 }
 
+/** The longest game step a frame takes. */
+const MAX_STEP = 0.1;
+/**
+ * The most real time a bot-played frame catches up, so a stall can't spiral: above the 1.2–1.4 s
+ * frames (p95) of two E2E workers at 1920×1080 on a software renderer, where 0.5 s held the game
+ * to 0.85× its speed. A step costs well under a millisecond, so the catch-up never slows a frame.
+ */
+const MAX_CATCH_UP = 1.5;
+
+/**
+ * The game steps a bot-played frame runs (`alloy:delve:autopilot`): the frame's real time, capped
+ * at `MAX_CATCH_UP`, times `gameScale` (hit-stop, slow motion, the mode's speed, the timescale),
+ * split into equal steps of at most `MAX_STEP`, so a slow renderer plays the bot's floor at real
+ * game speed. A human-played frame keeps one step of at most 0.1 s real time.
+ */
+export function catchUpSteps(frameSeconds: number, gameScale: number): number[] {
+  const total = Math.min(frameSeconds, MAX_CATCH_UP) * gameScale;
+  const n = Math.max(1, Math.ceil(total / MAX_STEP));
+  return Array<number>(n).fill(total / n);
+}
+
 /** A loot drop's colour on the minimap: its rarity's, or its rune family's; null for anything else. */
 function mapColor(d: Drop): string | null {
   if (d.item) return RARITY_COLOR[d.item.rarity];
@@ -602,32 +623,54 @@ export function useArenaCore(
           const paused = pausedRef.current;
           const pad = padFrame(paused);
           if (!paused && !finishedRef.current) {
-            const input = frameInput(registry, world, inputRef.current, pad, padMem, {
-              manual: manualRef.current,
-              aimReach: useControlsStore.getState().config.aimReach,
-              holdToggle: useControlsStore.getState().config.holdToggle,
-              toWorld: (p) => renderer.screenToWorld(p.x, p.y),
-              device: useInputDeviceStore.getState().device,
-            });
+            // The bot catches up a slow frame's real time in steps of at most 0.1 s (the E2E on a
+            // software renderer; `elapsedMS` is the raw frame, Pixi caps `deltaMS` at 100 ms); a
+            // player's frame is one step, clamped as ever.
+            const steps = flags.autopilot
+              ? catchUpSteps(ticker.elapsedMS / 1000, scale * mode.speed * flags.timescale)
+              : [dt * flags.timescale];
             const wasDead = world.heroDead;
-            const t0 = world.t;
-            const events = stepWorld(
-              registry,
-              world,
-              !flags.autopilot
-                ? input
-                : flags.ask
-                  ? { ...botInput(registry, world), interact: input.interact }
-                  : botInput(registry, world),
-              dt * flags.timescale,
-            );
-            promptRef.current = promptAfter(promptRef.current, events, world.t > t0);
-            if (events.length > 0) {
-              renderer.handleEvents(events);
-              // The bot-driven E2E runs would otherwise spend a large share of wall time frozen.
-              if (!flags.autopilot)
-                hitstopRef.current.onEvents(events, performance.now(), useUIStore.getState().hitstop);
-              handleEvents(world, events);
+            for (const [i, step] of steps.entries()) {
+              // The floor ended in an earlier step.
+              if (i > 0 && (world.heroDead || world.exited)) break;
+              // The frame's pad presses go to its first step only.
+              const input = frameInput(
+                registry,
+                world,
+                inputRef.current,
+                i === 0 ? pad : null,
+                padMem,
+                {
+                  manual: manualRef.current,
+                  aimReach: useControlsStore.getState().config.aimReach,
+                  holdToggle: useControlsStore.getState().config.holdToggle,
+                  toWorld: (p) => renderer.screenToWorld(p.x, p.y),
+                  device: useInputDeviceStore.getState().device,
+                },
+              );
+              const t0 = world.t;
+              const events = stepWorld(
+                registry,
+                world,
+                !flags.autopilot
+                  ? input
+                  : flags.ask
+                    ? { ...botInput(registry, world), interact: input.interact }
+                    : botInput(registry, world),
+                step,
+              );
+              promptRef.current = promptAfter(promptRef.current, events, world.t > t0);
+              if (events.length > 0) {
+                renderer.handleEvents(events);
+                // The bot-driven E2E runs would otherwise spend a large share of wall time frozen.
+                if (!flags.autopilot)
+                  hitstopRef.current.onEvents(
+                    events,
+                    performance.now(),
+                    useUIStore.getState().hitstop,
+                  );
+                handleEvents(world, events);
+              }
             }
             if (!wasDead && world.heroDead) mode.onHeroDead(world);
             if (mode.frame(world)) finishedRef.current = true;

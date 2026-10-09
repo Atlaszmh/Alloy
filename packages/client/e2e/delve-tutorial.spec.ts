@@ -116,7 +116,9 @@ test.describe('Delve guided start', () => {
   test('TU01: the bot plays dive 1 on the guided floors, then Anvil lesson 1 holds the Delve until done', async ({
     page,
   }) => {
-    test.setTimeout(420_000);
+    // About 2× its slowest, 92 s (desktop, one worker; 84–87 s the others), on the Linux
+    // software renderer.
+    test.setTimeout(210_000);
     await fresh(page, true);
     await page.goto('/delve');
 

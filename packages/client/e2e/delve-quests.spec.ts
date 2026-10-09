@@ -37,11 +37,11 @@ async function padToQuests(page: Page): Promise<void> {
   await expect(page.getByTestId('tab-quests')).toHaveAttribute('aria-selected', 'true');
 }
 test.describe('Delve quests', () => {
-  // A floor's clear may take most of the default two minutes under load.
-  test.describe.configure({ timeout: 240_000 });
   test('Q01: First Steps done in a dive, claimed at the Anvil, and the next main quest opens', async ({
     page,
   }) => {
+    // About 2× its slowest, 71 s (desktop-1080, one worker), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await page.goto('/delve');
     await startDive(page);

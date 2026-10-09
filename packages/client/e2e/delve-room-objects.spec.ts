@@ -4,7 +4,9 @@ import { ARENA_READY, FLOOR_CLEAR, seedProfile, startDive } from './fixtures/del
 // Room objects (see the room objects spec): a generated floor is furnished, and the minimap
 // shows the cover and the hazards the hero has seen (its canvas's data-cover, data-hazards).
 test.describe('Delve room objects', () => {
-  test.describe.configure({ timeout: 240_000 });
+  // O01 took 8 s on the Linux software renderer, but past 30 s with two workers on a loaded
+  // machine.
+  test.describe.configure({ timeout: 60_000 });
   test('O01: a furnished floor shows its cover and hazards on the minimap as the bot explores', async ({
     page,
   }) => {

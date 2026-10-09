@@ -115,7 +115,9 @@ test.describe('the type floor', () => {
     await expect(page.getByTestId('pause-screen')).toBeVisible();
     await measure(page, 'pause-list');
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 60_000 });
+    // About 2× the 60 s this wait took on the Linux software renderer, two workers (26 s
+    // with one).
+    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 120_000 });
     await measure(page, 'stop');
   });
 });
