@@ -1,10 +1,8 @@
-import { ABILITY_SLOTS, RARITY_ORDER, type ChainSkill, type Rarity } from '@alloy/engine';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import type { KeyAction } from '@/features/controls/controls';
 import { InputGlyph } from '@/features/delve/kit';
 import { getDelveRegistry } from '../../registry';
-import { SKILL_NAME } from '../../chains/chain-text';
 import { pct } from '../forge/materials-text';
 
 /** Help's topics (the pad-first spec, 4): How to delve, one topic a page. */
@@ -22,7 +20,7 @@ export const HELP_TOPICS: { id: HelpTopicId; title: string }[] = [
 
 /**
  * One Help topic's page: the controls in the glyphs of the device in hand from the player's own
- * bindings (and attacking and the dodge), what a weapon carries (the engine's words), the chains,
+ * bindings (and attacking and the dodge), what a construct is and how a weapon expresses it (the classes, the slots, Move all), the chains,
  * materials and the forge, the floor, and banking with what a death costs (the balance's share).
  */
 export function HelpPage({ topic }: { topic: HelpTopicId }) {
@@ -36,14 +34,8 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
     if (pad ? !button : !key) return null;
     return <InputGlyph size="sm" binding={{ key: key ?? undefined, pad: button ?? undefined }} />;
   };
-  // The least rarity whose weapons start with a slot of a skill (the slot table).
-  const slots = registry.getDelveBalance().movesets.slots;
-  const startsFrom = (s: ChainSkill): Rarity | null =>
-    RARITY_ORDER.find((r) => slots[r][s][0] > 0) ?? null;
-  const startsText = (s: ChainSkill) => {
-    const from = startsFrom(s);
-    return from === 'common' ? 'every weapon' : from ? `${from} weapons and better` : 'none';
-  };
+  // What a common weapon holds for your Primary: the slot table's first row (spec §3.2).
+  const commonPrimary = registry.getDelveBalance().movesets.slots.common.primary[0];
   const loss = pct(registry.getDelveBalance().crafting.deathLoss);
   return (
     <div
@@ -79,25 +71,24 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
         </>
       )}
       {topic === 'weapons' && (
-        <div data-testid="howto-carries">
+        <div data-testid="howto-constructs" className="flex flex-col gap-2">
           <p>
-            Your weapon holds your skills in slots: every weapon your Basic chain, and its rarity
-            sets how many slots each skill starts with and can grow to:
-          </p>
-          <ul className="flex flex-col gap-1 pl-4">
-            {ABILITY_SLOTS.map((s) => (
-              <li key={s} data-testid={`howto-carry-${s}`}>
-                {g(s)} <b className="text-[var(--k-text)]">{SKILL_NAME[s]}</b>: {startsText(s)}
-              </li>
-            ))}
-          </ul>
-          <p>
-            A skill your weapon has no slot for opens on the Forge's Temper bench, for flux, Links
-            and scrap.
+            A move is a <b className="text-[var(--k-text)]">construct</b>: a pattern that channels
+            your mana. Your weapon decides how it's expressed. Daggers, swords, axes and mauls are{' '}
+            <b className="text-[var(--k-text)]">melee</b> and staves, wands and bows{' '}
+            <b className="text-[var(--k-text)]">ranged</b>: each class has forms of its own (a
+            Strike, a Volley) and shares the rest, and each weapon casts in its own style (a sword's
+            Balanced, a bow's Marksman).
           </p>
           <p>
-            Forge your first weapon from your starting kit on the Forge tab: with{' '}
-            {startsFrom('defensive')} flux it holds a Defensive {g('defensive')} too.
+            A weapon holds constructs in slots, more by rarity: a common one holds {commonPrimary}{' '}
+            for your Primary {g('primary')} and none yet for your Defensive. Links buy slots up to
+            its ceiling; a skill with no slot opens on the Forge's Temper bench, for flux.
+          </p>
+          <p>
+            Taking a new weapon, <b className="text-[var(--k-text)]">Move all</b> moves every
+            construct onto it, free: what doesn't fit goes to your move bag on the Skills tab, and a
+            construct its class can't express sleeps in its slot until a weapon that can holds it.
           </p>
         </div>
       )}
@@ -106,8 +97,10 @@ export function HelpPage({ topic }: { topic: HelpTopicId }) {
           Each skill is a chain of moves: build them on the{' '}
           <b className="text-[var(--k-text)]">Skills</b> tab, each move a kind (light, medium,
           heavy, or a hold you charge), a form and one or two elements. Each press casts the chain's
-          next move, each harder than the last; a pause starts it over. Links buy more slots. Gear
-          attunes you to its element and powers those moves.
+          next move, each harder than the last; a pause starts it over. Links buy more slots. A
+          construct out of a slot waits in your move bag: place it in any slot of its skill, on any
+          weapon, with its sockets and runes. Gear attunes you to its element and powers those
+          moves.
         </p>
       )}
       {topic === 'forge' && (

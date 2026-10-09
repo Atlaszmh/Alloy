@@ -16,7 +16,7 @@ describe('HelpDialog', () => {
     expect(screen.getByTestId('delve-howto')).toHaveAttribute('data-topic', 'controls');
     fireEvent.click(screen.getByTestId('help-topic-weapons'));
     expect(screen.getByTestId('delve-howto')).toHaveAttribute('data-topic', 'weapons');
-    expect(screen.getByTestId('howto-carries')).toBeInTheDocument();
+    expect(screen.getByTestId('howto-constructs')).toBeInTheDocument();
   });
 
   it('opens on the topic asked for; its page scrolls on the right stick; Back closes it', () => {
