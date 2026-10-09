@@ -951,15 +951,16 @@ describe('basics', () => {
   it("estimateCombat values each weapon's default chain as it valued its string (v0.45.0)", () => {
     // A rare ilvl-12 Fire weapon on a Fire/Storm pair with Twin Fang 40, at depth 5; the
     // abilities one medium move each (a Volley's, a Ward's, a Nova's numbers are as they were).
+    // Re-pinned for the cast styles' numbers (constructs B1 Task 8).
     const today: Record<string, number> = {
       unarmed: 13.233961,
-      dagger: 188.213808,
+      dagger: 176.921816,
       sword: 195.522722,
-      axe: 237.869592,
-      maul: 343.63993,
-      staff: 124.587614,
-      wand: 120.353622,
-      bow: 151.257273,
+      axe: 223.15658,
+      maul: 393.325829,
+      staff: 144.600175,
+      wand: 107.933827,
+      bow: 160.731032,
     };
     const one = (form: FormId, payment: 'mana' | 'charge') => ({
       moves: [m('medium', form)],

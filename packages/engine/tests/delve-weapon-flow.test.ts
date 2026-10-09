@@ -724,7 +724,8 @@ describe('determinism', () => {
         for (let k = 0; k < Math.round(6 / STEP); k++) {
           const move = k % 60 < 30 ? { x: 1, y: 0 } : { x: -0.6, y: 0.6 };
           const attack = k % 50 < 40;
-          const input = { move, attack, cast: k % 50 === 46 ? { slot: 0 } : null };
+          // The cast lands at 44 (46 before the maul's style lengthened its wind-up, B1 Task 8).
+          const input = { move, attack, cast: k % 50 === 44 ? { slot: 0 } : null };
           // The presses go on a tick's first frame; movement and the attack on every frame.
           for (let f = 0; f < frames; f++)
             out.push(...stepWorld(registry, w, f === 0 ? input : { move, attack }, STEP / frames));
