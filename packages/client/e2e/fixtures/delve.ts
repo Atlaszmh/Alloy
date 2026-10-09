@@ -4,8 +4,10 @@ import {
   createDefaultRegistry,
   createDelveProfile,
   defaultMoveset,
+  mintMoveset,
   type DataRegistry,
   type DelveProfile,
+  type GearItem,
   type ManaType,
 } from '@alloy/engine';
 
@@ -16,14 +18,31 @@ export const ARENA_READY = 30_000;
 export const FLOOR_CLEAR = 120_000;
 
 /**
- * `p` with its equipped weapon made uncommon, holding that rarity's base moveset in its mana: a
- * new save's common sword carries the basic chain alone (see the tutorial spec's carries), so a
- * test of the Primary arms the hero first, as its first forge would.
+ * `p` with its equipped weapon made uncommon, holding that rarity's base moveset in its mana: an
+ * uncommon sword holds a Defensive slot beside its two Primary constructs (see the constructs
+ * spec's slot table), so a test of every skill arms the hero first, as its first forge would.
  */
 export function armed(registry: DataRegistry, p: DelveProfile): DelveProfile {
   const w = p.equipped.weapon!;
   const moveset = defaultMoveset(registry, { baseId: w.baseId, rarity: 'uncommon' }, w.mana);
   return { ...p, equipped: { ...p.equipped, weapon: { ...w, rarity: 'uncommon', moveset } } };
+}
+
+/**
+ * `p` with a uid minted (`mintMoveset`) for every construct of its worn and bag weapons that has
+ * none: save v14 requires them, and `defaultMoveset` makes plain constructs without.
+ */
+export function withUids(p: DelveProfile): DelveProfile {
+  let out = p;
+  const weapon = (w: GearItem): GearItem => {
+    if (!w.moveset) return w;
+    const [moveset, next] = mintMoveset(out, w.moveset);
+    out = next;
+    return { ...w, moveset };
+  };
+  const worn = out.equipped.weapon ? weapon(out.equipped.weapon) : out.equipped.weapon;
+  const bag = out.bag.map((i) => (i.slot === 'weapon' ? weapon(i) : i));
+  return { ...out, equipped: { ...out.equipped, weapon: worn }, bag };
 }
 
 /**
@@ -42,7 +61,7 @@ export async function seedProfile(
   const registry = createDefaultRegistry();
   let profile = armed(registry, createDelveProfile(registry, seed, { primary: 'fire' }));
   if (secondary) profile = bindSecondary(registry, profile, secondary).profile;
-  profile = { ...profile, ...over };
+  profile = withUids({ ...profile, ...over });
   const save = JSON.stringify(profile);
   await page.addInitScript(
     ([key, value, bot]) => {

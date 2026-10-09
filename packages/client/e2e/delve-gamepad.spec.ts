@@ -8,7 +8,7 @@ import {
   type GearItem,
   type Moveset,
 } from '@alloy/engine';
-import { startDive } from './fixtures/delve';
+import { startDive, withUids } from './fixtures/delve';
 
 /**
  * Controller support with a fake standard-mapping pad: Playwright has no real
@@ -44,7 +44,7 @@ function withSocket(moveset: Moveset): Moveset {
 }
 
 /**
- * A fire hero's save, its sword uncommon (a new save's common sword carries no Primary) with
+ * A fire hero's save, its sword uncommon (the slot table's uncommon row: a Defensive slot too) with
  * its Primary at `primarySlots` slots of default moves; with
  * `socket`, its first move has one open, empty socket and Quick III waits in the pouch; with
  * `bag`, the bag holds what `bag` makes.
@@ -60,15 +60,17 @@ async function setup(
   const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
   const sword = { ...profile.equipped.weapon!, rarity: 'uncommon' as const };
   const moveset = defaultMoveset(registry, sword, 'fire', { primary: primarySlots });
-  const save = JSON.stringify({
-    ...profile,
-    equipped: {
-      ...profile.equipped,
-      weapon: { ...sword, moveset: socket ? withSocket(moveset) : moveset },
-    },
-    runes: socket ? { quick: [0, 0, 1, 0, 0] } : profile.runes,
-    bag: [...profile.bag, ...bag(registry)],
-  });
+  const save = JSON.stringify(
+    withUids({
+      ...profile,
+      equipped: {
+        ...profile.equipped,
+        weapon: { ...sword, moveset: socket ? withSocket(moveset) : moveset },
+      },
+      runes: socket ? { quick: [0, 0, 1, 0, 0] } : profile.runes,
+      bag: [...profile.bag, ...bag(registry)],
+    }),
+  );
   await page.addInitScript(
     ([value, bot]) => {
       const w = window as unknown as { __pad: unknown };

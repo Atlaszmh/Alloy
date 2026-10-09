@@ -11,7 +11,7 @@ import {
   type DataRegistry,
   type GearItem,
 } from '@alloy/engine';
-import { SAVE_KEY } from './fixtures/delve';
+import { SAVE_KEY, withUids } from './fixtures/delve';
 
 /**
  * The D-pad's whole map on the hub's screens (see the pad navigation spec, §1 and §3): on a
@@ -129,7 +129,7 @@ async function seed(page: Page, atStop = false): Promise<void> {
     profile = startDive(registry, profile, 1);
     profile = completeFloor(registry, profile, beginFloor(registry, profile)).profile;
   }
-  const save = JSON.stringify(profile);
+  const save = JSON.stringify(withUids(profile));
   await page.addInitScript(
     ([key, value]) => {
       const w = window as unknown as { __pad: unknown };
