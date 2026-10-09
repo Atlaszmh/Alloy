@@ -5,21 +5,16 @@ import { manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import { RuneGlyph } from '../../runes/RuneGlyph';
 import { dormantText, runeName } from '../../runes/rune-style';
-import {
-  kindHint,
-  MoveNumbers,
-  NumberTable,
-  blowRows,
-  moveChoices,
-} from '../../chains/MoveEditor';
+import { kindHint, MoveNumbers, NumberTable, blowRows, moveChoices } from '../../chains/MoveEditor';
 import type { ChainEditorModel } from '../../chains/useChainEditor';
+import { EMPTY_CHAIN } from './ChainLane';
 import { MoveRows } from './MoveRows';
 import type { AnvilChains } from './useAnvilChains';
 
 /**
  * The Skills tab's move pane (`ability-readout`): the chosen move, "edited" while its chain has
  * unapplied changes. With the editor shut it is the move's detail and holds no control: its
- * kind's hint, its form's line, its element's effect (off-pair marked), its sockets as text, and
+ * kind's hint, its form's line, its element's effect (off-pair marked), why it is dormant when it is, its sockets as text, and
  * its numbers (`moveNumbers`, `moveBeat`). `editing`: the move's editor (`MoveRows`, a nested pad
  * scope) over the numbers.
  */
@@ -44,9 +39,9 @@ export function MoveInspector({
   const { stats, runes } = anvil.editor;
   if (ed.absent || !move)
     return (
-      <Panel as="aside" aria-label="Move inspector">
-        <p className="m-0 text-[18px] text-[var(--k-text-3)]">
-          This weapon doesn't carry this skill.
+      <Panel as="aside" aria-label="Move inspector" testId="ability-readout">
+        <p className="m-0 text-[18px] text-[var(--k-text-3)]" data-testid="inspector-empty">
+          {ed.absent ? anvil.editor.absentText?.(ed.skill) : EMPTY_CHAIN}
         </p>
       </Panel>
     );
@@ -106,6 +101,12 @@ export function MoveInspector({
               <span className="text-[var(--k-hot)]" data-testid="off-pair-note">
                 {off.map(name).join(' and ')} off-pair: no attunement. Keep it, or pick from your
                 two elements.
+              </span>
+            )}
+            {ed.dormantWhy(index) && (
+              <span className="text-[var(--k-hot)]" data-testid="dormant-note">
+                Dormant: {ed.dormantWhy(index)}. It keeps its slot and plays on a weapon of its
+                class.
               </span>
             )}
             {runes && runes.socketCap > 0 && (
