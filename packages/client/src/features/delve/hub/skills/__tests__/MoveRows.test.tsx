@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
-import { defaultMoveset, heroChains, type Chains, type ChainSkill } from '@alloy/engine';
+import { movesetOf, type Chains } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
-import { lancePrimary, wearing } from '../../../__tests__/armed';
-import { edit, renderSkills, stepTo, valuesOf } from './harness';
+import { edit, renderSkills, roomy, stepTo, strikes, valuesOf } from './harness';
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
@@ -14,35 +13,16 @@ vi.mock('react-router', async () => {
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 const draft = () => store().chainDraft?.chains.primary;
-const saved = () => heroChains(registry, store().profile.equipped, store().profile.pair) as Chains;
+const saved = () => movesetOf(registry, store().profile.equipped.weapon!).chains as Chains;
 const summary = () => screen.getByTestId('abilities-summary');
 const damage = () => screen.getByTestId('stat-damage').textContent;
-
-/** The starting sword made epic, every chain at five slots, the Primary four Lances. */
-function roomy() {
-  const p = store().profile;
-  const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
-  const moveset = defaultMoveset(registry, weapon, 'fire', {
-    basic: 3,
-    primary: 4,
-    defensive: 1,
-    ultimate: 1,
-  });
-  const slots: Record<ChainSkill, number> = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
-  const chains = { ...moveset.chains, primary: lancePrimary() };
-  store().setProfile(
-    wearing(
-      { ...p, pair: { primary: 'fire', secondary: 'nature' } },
-      { ...weapon, moveset: { chains, slots, bought: {} } },
-    ),
-  );
-}
 
 describe('the move editor', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
     roomy();
+    store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'nature' } });
   });
 
   it('a click (A) on a card opens its editor in the pane as a nested pad scope; with it shut the pane has no stops', () => {
@@ -71,7 +51,7 @@ describe('the move editor', () => {
     stepTo('move-kind', 'Heavy');
     expect(draft()!.moves[0].kind).toBe('heavy');
     expect(saved().primary.moves[0].kind).toBe('light'); // a draft until Apply
-    expect(summary()).toHaveTextContent('heavy Fire Lance · medium Fire Lance');
+    expect(summary()).toHaveTextContent('heavy Fire Strike · medium Fire Strike');
     expect(damage()).not.toBe(before);
   });
 
@@ -92,7 +72,7 @@ describe('the move editor', () => {
     expect(position).toHaveAttribute('aria-valuetext', 'Position 1 of 4');
     fireEvent.keyDown(position, { key: 'ArrowRight' });
     expect(summary()).toHaveTextContent(
-      'medium Fire Lance · light Fire Lance · medium Fire Lance · heavy Fire Lance',
+      'medium Fire Strike · light Fire Strike · medium Fire Strike · heavy Fire Strike',
     );
     expect(screen.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('move-position')).toHaveAttribute(
@@ -100,8 +80,8 @@ describe('the move editor', () => {
       'Position 2 of 4',
     );
     expect(document.activeElement).toBe(screen.getByTestId('move-position'));
-    // The moves keep their uids through the move: Apply's price sees a reorder, not two new moves.
-    expect(store().chainDraft!.chains.primary!.moves.every((m) => m.uid)).toBe(true);
+    // The constructs keep their uids: Apply's price sees a reorder (free), not two new moves.
+    expect(draft()!.moves.map((m) => m.uid)).toEqual(['p2', 'p1', 'p3', 'p4']);
   });
 
   it("Payment is the chain's: one stepper for every move", () => {
@@ -119,11 +99,14 @@ describe('the move editor', () => {
     fireEvent.click(screen.getByTestId('move-form'));
     const grid = screen.getByTestId('form-picker');
     expect(grid).toHaveAttribute('data-pad-scope');
-    expect(within(grid).getByTestId('form-lance')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(grid).getByTestId('form-strike')).toHaveAttribute('aria-pressed', 'true');
     expect(within(grid).getByTestId('form-damage-burst')).toHaveTextContent(
       /chain damage a second/,
     );
-    // A defensive form is no Primary's.
+    // Only the sword's class (the constructs spec, 2.1): never a ranged form, nor a Defensive one.
+    expect(within(grid).getByTestId('form-whirl')).toBeInTheDocument();
+    expect(within(grid).queryByTestId('form-bolt')).toBeNull();
+    expect(within(grid).queryByTestId('form-volley')).toBeNull();
     expect(within(grid).queryByTestId('form-ward')).toBeNull();
     fireEvent.click(within(grid).getByTestId('form-burst'));
     expect(screen.queryByTestId('form-picker')).toBeNull();
@@ -162,12 +145,52 @@ describe('the move editor', () => {
     expect(screen.queryByTestId('move-editor')).toBeNull();
   });
 
-  it('Remove (the mouse’s; X in plan 03) drops the move and closes the editor onto the next card', () => {
+  it("Unsocket (the mouse's; X) sends the move to the bag and closes the editor onto the next card", () => {
     renderSkills();
     edit(1);
-    fireEvent.click(screen.getByTestId('move-remove'));
+    fireEvent.click(screen.getByTestId('move-unsocket'));
     expect(screen.queryByTestId('move-editor')).toBeNull();
     expect(draft()!.moves.map((m) => m.kind)).toEqual(['light', 'medium', 'heavy']);
+    expect(store().chainDraft!.bag.map((c) => c.uid)).toEqual(['p2']);
     expect(document.activeElement).toBe(screen.getByTestId('move-0'));
+    expect(screen.getByTestId('bag-construct')).toHaveAttribute('data-construct', 'p2');
+  });
+
+  it("a dormant construct's detail and editor say why; an empty chain's pane says what to do", () => {
+    // A Bolt on the sword: its class can't express it.
+    roomy({
+      primary: {
+        moves: [
+          { uid: 'p1', kind: 'light', form: 'bolt', elements: ['fire'] },
+          ...strikes(['medium']).moves.map((m) => ({ ...m, uid: 'p2' })),
+        ],
+        payment: 'mana',
+      },
+    });
+    renderSkills();
+    expect(screen.getByTestId('move-0')).toHaveAttribute('data-dormant');
+    expect(screen.getByTestId('dormant-note')).toHaveTextContent("A sword can't express Bolt");
+    edit(0);
+    expect(
+      within(screen.getByTestId('move-editor')).getByTestId('dormant-note'),
+    ).toBeInTheDocument();
+    // Its form grid offers the sword's forms: picking one wakes it.
+    fireEvent.click(screen.getByTestId('move-form'));
+    fireEvent.click(screen.getByTestId('form-strike'));
+    expect(screen.queryByTestId('dormant-note')).toBeNull();
+    expect(screen.getByTestId('move-0')).not.toHaveAttribute('data-dormant');
+    // Every construct unsocketed: the pane says so, with no control.
+    fireEvent.click(screen.getByTestId('move-unsocket'));
+    edit(0);
+    fireEvent.click(screen.getByTestId('move-unsocket'));
+    expect(screen.getByTestId('inspector-empty')).toHaveTextContent(/No construct in this chain/);
+    expect(within(screen.getByTestId('ability-readout')).queryAllByRole('button')).toEqual([]);
+  });
+
+  it('the sockets count against MAX_SOCKETS whatever the weapon, and Open a socket shows while under it', () => {
+    renderSkills();
+    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets · 0 of 3');
+    edit(0);
+    expect(screen.getByTestId('socket-open')).toBeInTheDocument();
   });
 });
