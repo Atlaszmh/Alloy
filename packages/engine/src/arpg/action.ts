@@ -1,4 +1,4 @@
-import type { ArpgWorld, HeroEntity, Push, PushKind, Vec } from '../types/arpg.js';
+import type { ArpgWorld, HeroEntity, Push, PushKind, StyleMotion, Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
 import { groundAt, moveCircle } from './grid.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -42,6 +42,50 @@ export function startPush(
 /** End the hero's pushes of `kind`; the others keep running. */
 export function endPushes(h: HeroEntity, kind: PushKind): void {
   h.pushes = h.pushes.filter((p) => p.kind !== kind);
+}
+
+/**
+ * A cast style's motion (the constructs spec §4.2): a push of
+ * `feel.styleMove[motion]` units beside the form's own motion. At the press
+ * (`'press'`, over `seconds` of conjure) `dart` and `wade` step in toward the
+ * aim, a `stepIn` finished before the move lands and stopped at `stopId`'s
+ * contact gap; at the release (`'release'`, over `seconds`) `step` and `plant`
+ * step in, `back` steps back, and `sway` and `orbit` step square to the aim on
+ * the side the blows' `swaySide` takes (`sway` flips it first, `orbit` keeps
+ * it), each a `step`. A zero `dir` (a self-centred form) moves nothing.
+ */
+export function styleMotion(
+  ctx: SimCtx,
+  motion: StyleMotion,
+  dir: Vec,
+  phase: 'press' | 'release',
+  seconds: number,
+  stopId: number | null = null,
+): void {
+  const h = ctx.world.hero;
+  const units = ctx.bal.feel.styleMove[motion];
+  if (units <= 0 || (dir.x === 0 && dir.y === 0)) return;
+  switch (motion) {
+    case 'dart':
+    case 'wade':
+      if (phase === 'press') startPush(ctx, 'stepIn', dir, units, seconds, stopId);
+      return;
+    case 'step':
+    case 'plant':
+      if (phase === 'release') startPush(ctx, 'step', dir, units, seconds);
+      return;
+    case 'back':
+      if (phase === 'release') startPush(ctx, 'step', { x: -dir.x, y: -dir.y }, units, seconds);
+      return;
+    case 'sway':
+    case 'orbit':
+      if (phase !== 'release') return;
+      if (motion === 'sway') h.swaySide = -h.swaySide;
+      startPush(ctx, 'step', { x: -dir.y * h.swaySide, y: dir.x * h.swaySide }, units, seconds);
+      return;
+    case 'none':
+      return;
+  }
 }
 
 /**

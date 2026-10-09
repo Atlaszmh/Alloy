@@ -2,7 +2,7 @@ import type { AbilityCast, ResolvedAbility } from '../../types/ability.js';
 import type { ArpgWorld, HeroEntity, Vec } from '../../types/arpg.js';
 import type { DelveBalance } from '../../types/delve.js';
 import type { SimCtx } from '../combat.js';
-import { cancelSwing, finishPushes, startPush, swingStrikes } from '../action.js';
+import { cancelSwing, finishPushes, startPush, styleMotion, swingStrikes } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
 import { guardLand } from './defend.js';
 import { queueEcho } from './echo.js';
@@ -172,6 +172,12 @@ function fire(
     if (d.x !== 0 || d.y !== 0)
       startPush(ctx, 'step', { x: -d.x, y: -d.y }, -ab.motion * size, bal.feel.recoilSeconds);
   }
+  // The style's release motion, beside the recoil (the constructs spec §4.2).
+  const style = h.stats.weapon.style;
+  if (style) {
+    const d = dirTo(h.x, h.y, res.tx, res.ty);
+    styleMotion(ctx, style.motion, d, 'release', bal.feel.stepSeconds);
+  }
   if (ab.recovery > 0) h.recoverUntil = world.t + ab.recovery;
   guardLand(ctx, ab.knobs);
   // Echo: the move again, as it landed, toward where it landed.
@@ -263,8 +269,8 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     chargePaid,
     free,
   };
+  const stop = dir.x !== 0 || dir.y !== 0 ? nearestMonster(ctx, at.x, at.y, 1.5) : null;
   if (ab.motion > 0 && (dir.x !== 0 || dir.y !== 0)) {
-    const stop = nearestMonster(ctx, at.x, at.y, 1.5);
     // Never past the aim point, where the form would re-aim from and turn round.
     const reach = Math.min(
       ab.motion * stepBonus(bal, ab.index, h.boon.stepBonus).size,
@@ -272,6 +278,9 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     );
     startPush(ctx, 'stepIn', dir, reach, ab.conjure, stop?.id ?? null);
   }
+  // The style's press motion, beside the step-in (the constructs spec §4.2).
+  const style = h.stats.weapon.style;
+  if (style) styleMotion(ctx, style.motion, dir, 'press', ab.conjure, stop?.id ?? null);
   ctx.events.push({ kind: 'windup', slot, until: h.windup.until, heft: stepHeft(ab) });
   return true;
 }

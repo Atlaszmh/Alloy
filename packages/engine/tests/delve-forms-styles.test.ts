@@ -328,3 +328,39 @@ describe('the cast styles (delve.json, resolve.ts)', () => {
       expect(base.style!.text.length).toBeGreaterThan(0);
   });
 });
+
+describe('style motion (action.ts styleMotion)', () => {
+  /** Where the hero stands as its Bolt lands, and `stepSeconds` later, aimed up at a far foe. */
+  const path = (weapon: string) => {
+    const w = arena([dummy(13, 26)], { noBasic: true, weapon, primary: { moves: [{ ...BOLT }] } });
+    press(w, 0, { x: 13, y: 26 });
+    const landed = { x: w.hero.x, y: w.hero.y };
+    run(w, bal.feel.stepSeconds + STEP);
+    return { landed, after: { x: w.hero.x, y: w.hero.y } };
+  };
+
+  it('a dagger darts toward the aim as it winds up; a bow steps back on release; a staff sways aside; a wand circles', () => {
+    const dagger = path('dagger');
+    // The dart lands before the move does; Bolt's own recoil follows it.
+    expect(36 - dagger.landed.y).toBeGreaterThan(bal.feel.styleMove.dart * 0.5);
+    const bow = path('bow');
+    expect(bow.after.y - bow.landed.y).toBeGreaterThan(bal.feel.styleMove.back * 0.5);
+    const staff = path('staff');
+    expect(Math.abs(staff.after.x - 13)).toBeGreaterThan(bal.feel.styleMove.sway * 0.5);
+    const wand = path('wand');
+    expect(Math.abs(wand.after.x - 13)).toBeGreaterThan(bal.feel.styleMove.orbit * 0.5);
+  });
+
+  it('a sword steps in on release; a self-centred form moves nothing', () => {
+    const sword = path('sword');
+    expect(sword.landed.y - sword.after.y).toBeGreaterThan(bal.feel.styleMove.step * 0.5);
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
+      weapon: 'dagger',
+      ultimate: { payment: 'mana', moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }] },
+    });
+    press(w, 2);
+    run(w, bal.feel.stepSeconds + STEP);
+    expect([w.hero.x, w.hero.y]).toEqual([13, 36]);
+  });
+});
