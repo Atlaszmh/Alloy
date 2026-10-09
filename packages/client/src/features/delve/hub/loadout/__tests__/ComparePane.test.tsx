@@ -458,7 +458,7 @@ describe('the compare pane', () => {
     put({ ...boots, legendary: { id: 'rimeheart', value: 30, roll: 0.5 } });
     show('b1');
     expect(screen.getByTestId('legendary-dead')).toHaveTextContent(
-      "Needs an Ultimate: your weapon doesn't carry one",
+      'Needs an Ultimate: your weapon has no Ultimate chain.',
     );
   });
 
