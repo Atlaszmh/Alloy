@@ -1085,8 +1085,8 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
  * claim what waits; forge the slot's item (`planForge`, its best flux, the
  * highest bar it can pay for); wear it; bind `secondary` (else Hesta's
  * partner); the Skills lesson (`lessonChain`); salvage the slot's items of the
- * rarity; refine into the metal; transfer onto the bag weapon of the rarity;
- * hone the cheapest worn item's first line; a beat's Continue; the Training
+ * rarity; refine into the metal; move all onto the bag weapon of the rarity
+ * (the best home); hone the cheapest worn item's first line; a beat's Continue; the Training
  * Grounds' cast. A step whose state holds completes in the op it calls.
  */
 function lessonOp(
@@ -1129,9 +1129,8 @@ function lessonOp(
       return from ? refine(registry, p, { kind: 'metal', metal: from.id }).profile : p;
     }
     case 'moveAll': {
-      // D1 rewires to moveAll (B2's op): the step is skipped meanwhile.
       const uid = bestGain(registry, p, 'home', (i) => weapons.includes(i)) ?? weapons[0]?.uid;
-      return uid ? p : p;
+      return uid ? moveAll(registry, p, uid).profile : p;
     }
     case 'hone': {
       const worn = GEAR_SLOTS.flatMap((s) => p.equipped[s] ?? []).filter((i) => i.affixes.length);
