@@ -41,7 +41,7 @@ import {
   pressStep,
   windupDir,
 } from './abilities/cast.js';
-import { defendTick, gainCharge, surging } from './abilities/defend.js';
+import { defendTick, gainCharge, surgeMult, surgeTick } from './abilities/defend.js';
 import { echoTick } from './abilities/echo.js';
 import { performTick } from './abilities/forms.js';
 import { hitOpts, impact, knobHitOpts } from './abilities/impact.js';
@@ -263,7 +263,6 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // Movement, once a tick (see the weapon flow spec): the steering at the hero's pace, slowed
   // while it acts or recovers (the slower wins); then each push's slice, less any part against
   // the steering. Acting, the hero faces its action (steering strafes); else its steering.
-  const surge = surging(ctx);
   h.moving = speed > 0.05 && !dashing;
   const heading = h.moving ? { x: v.x / speed, y: v.y / speed } : null;
   // A Whirl's spin acts too: the hero walks slowed and faces its way (the constructs spec §2.2).
@@ -278,7 +277,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     // Slow ground slows the walk (`groundSpeed`), whatever else does.
     const pace =
       h.stats.moveSpeed *
-      (surge ? 1 + bal.abilities.defend.surgeMove : 1) *
+      surgeMult(ctx) *
       quick *
       slow *
       groundSpeed(world, h);
@@ -324,7 +323,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   comboPauseTick(h, dt);
 
   // Infinite mana (Training Grounds) tops the pool up every tick.
-  h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
+  h.mana = world.sandbox?.infiniteMana
+    ? h.manaMax
+    : Math.min(h.manaMax, h.mana + h.manaRegen * surgeMult(ctx) * dt);
   // A blessing's life regen (see the floor maps spec).
   if (h.stats.lifeRegen)
     h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.maxHp * h.stats.lifeRegen * dt);
@@ -335,6 +336,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     });
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
+  surgeTick(ctx, dt);
   defendTick(ctx, dt);
 }
 

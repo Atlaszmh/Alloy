@@ -1383,7 +1383,6 @@ const DelveBalanceSchema = z.object({
       earthReduction: z.number().min(0).max(1),
       shadowLifesteal: z.number().min(0),
       natureRegen: z.number().min(0),
-      surgeMove: z.number().min(0),
       blinkSeconds: z.number().min(0),
       onslaughtGuard: z.number().min(0),
     }),

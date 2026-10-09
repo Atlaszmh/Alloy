@@ -65,7 +65,7 @@
     {
       "id": "surge", "slot": "defensive", "class": "both", "name": "Surge", "icon": "⚡",
       "power": 0, "effect": 0.3, "duration": 6, "defaultChain": ["medium"],
-      "text": "For 6 s: +30% attack speed, +20% move speed, and basic hits also apply the element's stacks."
+      "text": "For 6 s everything you do runs 30% faster: attacks, your step, cooldowns, beats, wind-ups, mana and charge, and your dodge coming back. Basic hits also apply the element's stacks."
     },
     {
       "id": "blink", "slot": "defensive", "class": "both", "name": "Blink", "icon": "💨",
