@@ -1,4 +1,4 @@
-import type { ArpgEvent, ManaType, MoveKind, Vec } from '@alloy/engine';
+import type { ArpgEvent, ManaType, MoveKind, StyleLook, Vec } from '@alloy/engine';
 import { PX, manaArc, manaDust, manaLine, manaRing, px } from './mana-pixels';
 import {
   drawInfusion,
@@ -9,6 +9,7 @@ import {
   type PathShape,
   type RingShape,
 } from './infusion';
+import { drawLook } from './looks';
 
 /**
  * Short-lived combat effects, drawn as mana pixels into the air layer: sparks
@@ -95,6 +96,18 @@ interface Infused {
   age: number;
   life: number;
 }
+
+/** A look motif's carrier (fx/looks.ts): a cast's ring, a beam's or dash's path, a slash's arc, a blast's rim. */
+interface Looked {
+  look: StyleLook;
+  color: number;
+  shape: InfusionShape;
+  seed: number;
+  age: number;
+  life: number;
+}
+/** A look carrier's life by shape: a ring at the hand or a rim, a path, an orb. */
+const LOOK_LIFE: Record<InfusionShape['kind'], number> = { ring: 0.4, path: 0.35, orb: 0.25 };
 
 /** A rune's glyph flashing over its point (fx/runes.ts). */
 interface Glyph {
@@ -200,6 +213,7 @@ export class ManaFx {
   private swings: Swing[] = [];
   private beams: Beam[] = [];
   private infusions: Infused[] = [];
+  private looks: Looked[] = [];
   private glyphs: Glyph[] = [];
   /** Display seconds so far: seeds each transient motif by when it was made. */
   private now = 0;
@@ -211,6 +225,7 @@ export class ManaFx {
     this.swings = [];
     this.beams = [];
     this.infusions = [];
+    this.looks = [];
     this.glyphs = [];
   }
 
@@ -393,6 +408,23 @@ export class ManaFx {
   }
 
   /**
+   * The casting weapon's look motif on a carrier (the constructs spec §4.2): aged by `draw`,
+   * drawn by `drawLooks` after the whole infusion pass, fading over its shape's life. Seeded from
+   * where and when it was made.
+   */
+  look(look: StyleLook, color: number, shape: InfusionShape): void {
+    const at = shape.kind === 'path' ? shape.points[0] : shape;
+    this.looks.push({
+      look,
+      color,
+      shape,
+      seed: eventSeed(at.x, at.y, this.now),
+      age: 0,
+      life: LOOK_LIFE[shape.kind],
+    });
+  }
+
+  /**
    * A rune's glyph flashing at (x, y) for `GLYPH_LIFE`: `rows` of cells ('#'
    * lit), each a 2×2-pixel block, centred on the point; white at first, then
    * `color`, rising as it fades. It is drawn in the infusion pass, so its
@@ -407,8 +439,9 @@ export class ManaFx {
    * Advance and draw everything: the effects on the air layer, then the
    * infusion pass's first carriers (fx/infusion.ts) in priority order: the
    * runes' glyphs, heavy and hold blows' rings, blasts, beams and sweeps,
-   * then blink trails. Only blasts and blink trails lie on the ground, so
-   * only they get its layer.
+   * then blink trails (the weapons' look motifs wait for `drawLooks`).
+   * Only blasts and blink trails lie on the ground, so only they get its
+   * layer.
    */
   draw(layers: Required<InfusionLayers>, dt: number, time: number, budget: InfusionBudget): void {
     const g = layers.air;
@@ -543,6 +576,7 @@ export class ManaFx {
     }
     this.glyphs = this.glyphs.filter((gl) => gl.age < GLYPH_LIFE);
     for (const f of this.infusions) f.age += dt;
+    for (const l of this.looks) l.age += dt;
     const air = { air: g };
     const transient = (kind: InfusedKind, l: InfusionLayers) => {
       for (const f of this.infusions)
@@ -562,6 +596,25 @@ export class ManaFx {
     for (const q of paths) drawInfusion(air, q.element, q.shape, time, q.seed, q.strength, budget);
     transient('dash', layers);
     this.infusions = this.infusions.filter((f) => f.age < f.life);
+    this.looks = this.looks.filter((l) => l.age < l.life);
+  }
+
+  /**
+   * The weapons' look motifs (fx/looks.ts), drawn after the whole infusion pass (`draw`'s
+   * transient carriers, then the renderer's `drawInfusions`) on the same budget, so every
+   * infusion motif has it first. A ring grows like a blast's rim, a path runs with its age.
+   */
+  drawLooks(layers: InfusionLayers, time: number, budget: InfusionBudget): void {
+    for (const l of this.looks) {
+      const p = Math.min(1, l.age / l.life);
+      const shape: InfusionShape =
+        l.shape.kind === 'ring'
+          ? { ...l.shape, r: 0.1 + (l.shape.r - 0.1) * (1 - Math.pow(1 - p, 3)) }
+          : l.shape.kind === 'path'
+            ? { ...l.shape, progress: p }
+            : l.shape;
+      drawLook(layers, l.look, l.color, shape, time, l.seed, 1 - p, budget);
+    }
   }
 }
 
@@ -585,7 +638,7 @@ function jagged(points: Vec[]): Vec[] {
 }
 
 /** Points along an arc from `a0` to `a1`, about every 0.3 units (an infused sweep's path). */
-function arcPoints(x: number, y: number, r: number, a0: number, a1: number): Vec[] {
+export function arcPoints(x: number, y: number, r: number, a0: number, a1: number): Vec[] {
   const n = Math.max(1, Math.ceil((Math.abs(a1 - a0) * r) / 0.3));
   return Array.from({ length: n + 1 }, (_, i) => {
     const a = a0 + ((a1 - a0) * i) / n;
