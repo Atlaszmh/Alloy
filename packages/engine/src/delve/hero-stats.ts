@@ -382,6 +382,9 @@ const EXTRA_SHOT = 0.5;
 const PIERCED_FOE = 0.25;
 const REACTION_SHARE = 0.2;
 const PER_STACK = 0.05;
+/** A cleave is worth a quarter of a hit, a homing shot finds its foe a tenth more often. */
+const CLEAVE = 0.25;
+const HOMING = 0.1;
 
 type KnobSet = ResolvedAbility['knobs'];
 
@@ -406,7 +409,8 @@ function reach(k: KnobSet, targets: number, bal: DelveBalance): number {
   const shards = k.split ? EXTRA_SHOT * k.split.count * k.split.power : 0;
   // Detonate: each foe struck blasts round itself, finding a foe half the time.
   const blasts = EXTRA_SHOT * k.detonate * targets;
-  return targets + pierced + jumps + zone + shards + blasts;
+  const cleave = k.cleave > 0 ? CLEAVE : 0;
+  return targets + pierced + jumps + zone + shards + blasts + cleave;
 }
 
 /** What scales a whole use: Echo's repeat, Volatile's reactions and Saturate's stacks (1 without). */
@@ -529,9 +533,16 @@ export function damagePerUse(
     valuedChain(chain, pool).map((ab) => {
       if (!ab) return 0;
       const k = ab.knobs;
-      const targets = TARGETS[ab.form.id] * (1 + (k.area - 1) * 0.5);
-      const step = stepBonus(bal, ab.index).power;
-      const perHit = hit * ab.power * step * (1 + stats.elementPower[ab.element]);
+      const targets =
+        TARGETS[ab.form.id] * (1 + (k.area - 1) * 0.5) * (k.homing > 0 ? 1 + HOMING : 1);
+      const step = stepBonus(bal, ab.index, k.stepBonus).power;
+      // The dagger's crit bonus is worth its share of the crit multiplier's extra.
+      const perHit =
+        hit *
+        ab.power *
+        step *
+        (1 + stats.elementPower[ab.element]) *
+        (1 + k.critBonus * (stats.critMultiplier - 1));
       return perHit * reach(k, targets, bal) * repeatsOf(ab) * shots(ab) * boost(k);
     }),
   );

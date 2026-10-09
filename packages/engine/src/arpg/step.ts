@@ -432,12 +432,37 @@ function steer(ctx: SimCtx, p: Projectile, dt: number): void {
   p.vy = (ny / len) * speed;
 }
 
+/**
+ * The wand's homing (the constructs spec §4.2): an ability's shot turns toward
+ * the nearest foe within 6 it perceives and hasn't hit, by at most `rate`
+ * radians a second. A Volley dart has its own steering; a shard and an ember none.
+ */
+function homingTick(ctx: SimCtx, p: Projectile, rate: number, dt: number): void {
+  const target = nearestMonster(ctx, p.x, p.y, 6, new Set(p.hitIds), p.radius);
+  if (!target) return;
+  const speed = Math.hypot(p.vx, p.vy);
+  if (speed <= 0) return;
+  const want = dirTo(p.x, p.y, target.x, target.y);
+  const dx = p.vx / speed;
+  const dy = p.vy / speed;
+  const a = Math.max(
+    -rate * dt,
+    Math.min(rate * dt, Math.atan2(dx * want.y - dy * want.x, dx * want.x + dy * want.y)),
+  );
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  p.vx = (dx * c - dy * s) * speed;
+  p.vy = (dx * s + dy * c) * speed;
+}
+
 function projectilesTick(ctx: SimCtx, dt: number): void {
   const { world } = ctx;
   const h = world.hero;
   for (const p of world.projectiles) {
     if (p.dead) continue;
     if (p.homingId !== null) steer(ctx, p, dt);
+    else if (p.ability && p.ability.knobs.homing > 0 && p.form !== 'shard' && p.form !== 'ember')
+      homingTick(ctx, p, p.ability.knobs.homing, dt);
     const before = { x: p.x, y: p.y };
     p.x += p.vx * dt;
     p.y += p.vy * dt;

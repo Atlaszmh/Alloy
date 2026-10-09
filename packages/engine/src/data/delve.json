@@ -62,7 +62,7 @@
         "text": "Each chain step hits a little harder",
         "numbers": { "windup": 1, "cooldown": 1, "power": 1, "range": 1, "radius": 1, "speed": 1, "duration": 1 },
         "motion": "step",
-        "trait": {},
+        "trait": { "stepBonus": 0.05 },
         "look": "crescent"
       },
       "attack": {

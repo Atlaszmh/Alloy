@@ -397,10 +397,11 @@ describe('basicIncome and manaSupport', () => {
       },
     };
     const cases: [Partial<Record<AbilitySlot, Chain>> | undefined, number, number][] = [
-      [drained, 77.33972432955927, 1098],
-      [charged, 122.88517595614529, 1385],
+      // Re-pinned for the sword style's step bonus (constructs B1 Task 10).
+      [drained, 78.31440002533859, 1105],
+      [charged, 124.7664879691485, 1395],
       // No chains: the sword's class defaults (two Strikes, a Ward, a Nova) since the constructs spec.
-      [undefined, 177.7613550749895, 1665],
+      [undefined, 185.81946000826068, 1703],
     ];
     for (const [chains, dps, power] of cases) {
       // The chains are runed: v0.51.0's numbers are theirs with the loads zeroed.

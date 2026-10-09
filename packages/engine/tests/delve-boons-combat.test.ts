@@ -122,7 +122,8 @@ describe('the damage path: kind, first move, step bonus (impact.ts, resolve.ts)'
       w.hero.comboAt[0] = w.t;
       return firstHit([...press(w, 0), ...run(w, 1)], 'skill');
     };
-    const s = bal.chains.stepBonus;
+    // The fixture's sword adds its style's trait (constructs B1 Task 10).
+    const s = bal.chains.stepBonus + registry.getGearBase('sword').style!.trait.stepBonus!;
     expect(second(true)).toBeCloseTo((second(false) * (1 + s + 0.1)) / (1 + s), 6);
   });
 });

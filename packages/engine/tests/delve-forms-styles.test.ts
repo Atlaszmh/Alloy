@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { makeCtx, hurtHero } from '../src/arpg/combat.js';
+import { makeCtx, hurtHero, hitMonster } from '../src/arpg/combat.js';
 import { computeHeroStats, damagePerUse, expectedHit } from '../src/delve/hero-stats.js';
-import { resolveAbility, resolveChain } from '../src/arpg/abilities/resolve.js';
+import { hitOpts, cleaveBehind } from '../src/arpg/abilities/impact.js';
+import {
+  moveNumbers,
+  NEUTRAL,
+  mergeKnobs,
+  resolveAbility,
+  resolveChain,
+  stepBonus,
+} from '../src/arpg/abilities/resolve.js';
 import { surgeMult, surgeTick } from '../src/arpg/abilities/defend.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { Chain } from '../src/types/ability.js';
@@ -362,5 +370,66 @@ describe('style motion (action.ts styleMotion)', () => {
     press(w, 2);
     run(w, bal.feel.stepSeconds + STEP);
     expect([w.hero.x, w.hero.y]).toEqual([13, 36]);
+  });
+});
+
+describe('the traits (impact.ts, combat.ts, step.ts, resolve.ts)', () => {
+  it("critBonus: a dagger's hits roll crit with its bonus; a bonus of 1 always crits", () => {
+    const dagger = on('dagger', STRIKE);
+    expect(hitOpts(dagger, { x: 0, y: 0 }).critBonus).toBeCloseTo(0.15, 9);
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    w.hero.stats = { ...w.hero.stats, critChance: 0 };
+    const events: ArpgEvent[] = [];
+    const ctx = makeCtx(registry, w, events);
+    hitMonster(ctx, w.monsters[0], 10, 'fire', { source: 'skill', canCrit: true, critBonus: 1 });
+    expect(hits(events, w.monsters[0].id)[0].crit).toBe(true);
+  });
+
+  it('cleave: a single-target hit on an axe cleaves the foes just behind its foe for half', () => {
+    const w = arena([dummy(13, 30), dummy(13, 29), dummy(13, 26)], {
+      noBasic: true,
+      weapon: 'axe',
+    });
+    w.hero.stats = { ...w.hero.stats, critChance: 0 };
+    const events: ArpgEvent[] = [];
+    const ctx = makeCtx(registry, w, events);
+    const ab = moveOf(w, 0);
+    expect(ab.knobs.cleave).toBeGreaterThan(0);
+    hitMonster(ctx, w.monsters[0], 10, 'fire', { source: 'skill', crit: false, stacks: 0 });
+    const full = hits(events, w.monsters[0].id)[0].amount;
+    cleaveBehind(ctx, ab, w.monsters[0], 10);
+    // Half the hit, read as a ratio to the same hit on the struck foe (resists and stacks alike).
+    expect(hits(events, w.monsters[1].id)[0].amount / full).toBeCloseTo(0.5, 2);
+    expect(damaged(w.monsters[2])).toBe(false);
+    expect(hits(events, w.monsters[0].id)).toHaveLength(1);
+  });
+
+  it("homing: a wand's Bolt aimed a little beside a foe turns into it; a staff's misses", () => {
+    const flies = (weapon: string) => {
+      const w = arena([dummy(13, 28)], { noBasic: true, weapon, primary: { ...BOLT } });
+      press(w, 0, { x: 15.2, y: 20 });
+      run(w, 1.5);
+      return damaged(w.monsters[0]);
+    };
+    expect(flies('wand')).toBe(true);
+    expect(flies('staff')).toBe(false);
+  });
+
+  it("stepBonus: a sword's chain steps 5% harder; the knob merges by adding; the Anvil's numbers see it", () => {
+    expect(mergeKnobs({ stepBonus: 0.05 }, { stepBonus: 0.02 }).stepBonus).toBeCloseTo(0.07, 12);
+    expect(NEUTRAL.stepBonus).toBe(0);
+    expect(on('sword', STRIKE).knobs.stepBonus).toBeCloseTo(0.05, 9);
+    const stats = computeHeroStats({ weapon: gear('fire') }, registry, {
+      pair: { primary: 'fire', secondary: null },
+    });
+    const chain = resolveChain(registry, stats, 'primary', {
+      moves: [STRIKE, STRIKE],
+      payment: 'mana',
+    });
+    const second = chain.moves[1];
+    expect(moveNumbers(stats, bal, second).hit).toBeCloseTo(
+      stats.weaponDamage * stats.damageMult * second.power * stepBonus(bal, 1, 0.05).power,
+      6,
+    );
   });
 });
