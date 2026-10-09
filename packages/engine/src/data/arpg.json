@@ -69,8 +69,8 @@
     },
     {
       "id": "blink", "slot": "defensive", "class": "both", "name": "Blink", "icon": "💨",
-      "power": 0.9, "effect": 0.4, "range": 5, "radius": 0.9, "defaultChain": ["medium"],
-      "text": "Dash 5 units, untouchable for a moment, leaving a trail that hits foes."
+      "power": 0.9, "effect": 0.9, "range": 5, "radius": 0.9, "defaultChain": ["medium"],
+      "text": "Dash 5 units, untouchable through the dash and for a moment after you land, leaving a trail that hits foes."
     },
     {
       "id": "nova", "slot": "ultimate", "class": "both", "name": "Nova", "icon": "✴️",

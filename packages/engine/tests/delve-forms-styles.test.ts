@@ -279,3 +279,12 @@ describe('Surge (defend.ts surgeMult, surgeTick)', () => {
     expect(walked(true) / walked(false)).toBeCloseTo(1 + effect, 1);
   });
 });
+
+describe('Blink (arpg.json)', () => {
+  it('is untouchable through its dash and 0.5 s after landing', () => {
+    const w = arena([dummy(13, 20)], { noBasic: true, defensive: { form: 'blink' } });
+    press(w, 1, { x: 13, y: 20 });
+    expect(w.hero.invulnUntil - w.t).toBeGreaterThanOrEqual(0.9 - STEP);
+    expect(registry.getForm('blink').effect).toBe(0.9);
+  });
+});
