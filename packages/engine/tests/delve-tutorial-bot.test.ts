@@ -6,7 +6,7 @@ import { runAutopilot } from '../src/delve/autopilot.js';
 import { beginFloor, startDive } from '../src/delve/dive.js';
 import { createDelveProfile } from '../src/delve/profile.js';
 import { skipTutorial, startTutorial } from '../src/delve/tutorial.js';
-import { movesetOf } from '../src/loot/moveset.js';
+import { isPlain, movesetOf } from '../src/loot/moveset.js';
 import { socketsOf } from '../src/loot/runes.js';
 import { GEAR_SLOTS } from '../src/types/gear.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
@@ -52,12 +52,14 @@ describe.each(PAIRS)('the bot plays the guided start, %s with %s', (primary, sec
       ]);
       // Every guided stop offered a power-up where its step names one the hero could take.
       expect(run!.stops.map((o) => o.length > 0)).toEqual(STOP_KINDS.map((k) => k.length > 0));
-      // Grask's rare (one Primary slot as it drops), worn, holding the moveset the lessons built:
-      // three moves or more (a stop may add one), the rune in the first.
+      // Grask's rare (three plain Primary slots as it drops), worn, holding the constructs the
+      // lessons built in place of its own (Move all): three or more, the rune in the first; and
+      // nothing built left in the bag (the rare's plain ones were deleted as they were displaced).
       const weapon = p.equipped.weapon!;
       expect([weapon.rarity, weapon.mana]).toEqual(['rare', primary]);
       const moves = movesetOf(registry, weapon).chains.primary!.moves;
       expect([moves.length >= 3, socketsOf(moves[0])[0] !== null]).toEqual([true, true]);
+      expect(p.constructs.filter((c) => !isPlain(c))).toEqual([]);
       expect(p.pair).toEqual({ primary, secondary });
       const items = [...GEAR_SLOTS.flatMap((s) => p.equipped[s] ?? []), ...p.bag];
       expect(items.some((i) => i.rarity === 'legendary')).toBe(false);
