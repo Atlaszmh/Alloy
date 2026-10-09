@@ -6,7 +6,7 @@ import { vibrate } from '@/shared/utils/haptics';
 import { Button, Dialog } from '../../kit';
 import { useItemComparison } from '../../items/useItemComparison';
 import { UPGRADE_EPSILON, formatDelta } from '../../format';
-import { TransferNotes, transferOnto } from './ComparePane';
+import { MoveAllNotes, moveAllOnto } from './ComparePane';
 import { needsBind } from './BindChoice';
 
 /**
@@ -30,7 +30,7 @@ export function canTake(
 /**
  * The pad's take sheet (the pad-first spec, 4, rule 1: a priced action gets a sheet): A on a bag
  * weapon that can take your constructs asks how to take it. Equip as it is, or Move all my
- * constructs here (free; what it leaves, `TransferNotes`); each with its Power change, the
+ * constructs here (free; what it leaves, `MoveAllNotes`); each with its Power change, the
  * better one focused first. The mouse has both in the compare pane.
  */
 export function TakeSheet({
@@ -51,7 +51,7 @@ export function TakeSheet({
     onClose();
   };
   const move = () => {
-    if (transferOnto(item)) onClose();
+    if (moveAllOnto(item)) onClose();
   };
 
   return (
@@ -75,7 +75,7 @@ export function TakeSheet({
         >
           Move all my constructs here · {formatDelta(cmp.powerPct)} Power
         </Button>
-        <TransferNotes worn={worn} item={item} />
+        <MoveAllNotes worn={worn} item={item} />
       </div>
     </Dialog>
   );

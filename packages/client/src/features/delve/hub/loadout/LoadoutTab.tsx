@@ -23,7 +23,7 @@ import { useOnboarding } from '../../onboarding';
  * opens the take sheet; on a worn tile A only selects), X salvages a bag item and unequips a worn
  * one, Y locks, R3 or Shift toggles Full compare. Under the pad A and X carry the guided start's
  * targets (`Prompt.tutorial`). X salvages at once; for `UNDO_MS` after, B or Ctrl+Z takes it back
- * (`undoSalvage`). In `mode: 'pause'` the item actions give way to notes. Its tile and filter live
+ * (`undoSalvage`). Any Equip waits on the Skills draft (the store refuses). In `mode: 'pause'` the item actions give way to notes. Its tile and filter live
  * in the hub's memory.
  */
 export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps): ReactElement {
@@ -72,7 +72,7 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
         setAsked(uid);
         return;
       }
-      s.equip(uid);
+      if (!s.equip(uid)) return;
       playSound('orbPlace');
       vibrate('medium');
     },
@@ -152,7 +152,7 @@ export function LoadoutTab({ mode, setPrompts, go, link, memory }: HubTabProps):
     const a: Prompt = pad
       ? {
           id: 'equip',
-          label: worn ? 'Select' : takes ? 'Equip or transfer' : 'Equip',
+          label: worn ? 'Select' : takes ? 'Equip or move all' : 'Equip',
           binding: { mouse: 'rmb', pad: 'a' },
           tutorial: worn ? undefined : takes ? 'loadout.transfer' : 'loadout.equip',
           hint,
