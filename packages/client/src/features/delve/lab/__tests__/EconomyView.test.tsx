@@ -45,6 +45,7 @@ function report(seed: number, depths: number[]): EconomyReport {
         salvaged: { ...emptyHaul(), scrap: 5 },
         spent: { ...emptyHaul(), scrap: 10 },
         stops: emptyHaul(),
+        constructs: { placed: 0, salvaged: 0 },
         boons: { offense: seed, element: 0, defense: 1, tempo: 0, fortune: 0, pact: 0, floor: 0 },
         forged: { ...NONE, rare: seed },
         depth,
