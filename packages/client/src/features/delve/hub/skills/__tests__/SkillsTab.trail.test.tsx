@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
-import { defaultMoveset } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
@@ -19,14 +18,13 @@ vi.mock('react-router', async () => {
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 
-/** The hero at `l1-skills`: an uncommon sword whose Primary holds two moves, frost bound, Links, scrap and a rune in hand. */
+/**
+ * The hero at `l1-skills`: an uncommon sword whose Primary holds its two starting constructs
+ * (minted, as a forge makes them), frost bound, Links, scrap and a rune in hand.
+ */
 function lesson() {
-  const p = armed(store().profile);
-  const sword = p.equipped.weapon!;
-  const moveset = defaultMoveset(registry, sword, 'fire', { primary: 2 });
   store().setProfile({
-    ...p,
-    equipped: { ...p.equipped, weapon: { ...sword, moveset } },
+    ...armed(store().profile),
     pair: { primary: 'fire', secondary: 'frost' },
     links: 5,
     scrap: 500,
@@ -64,8 +62,7 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     ]);
   });
 
-  // D1 rewrites the lesson’s trail for the bag; D2 un-skips.
-  it.skip('leads through the editor in order: the slot, the last move in the secondary, out, the first move’s socket and rune, out, Apply, the sheet’s Apply', () => {
+  it('leads through the editor in order: the slot, the last move in the secondary, out, the first move’s socket and rune, out, Apply, the sheet’s Apply', () => {
     renderSkills({ scoped: true });
     // The Primary is the chosen skill: its tab is done, and Add slot is first.
     expect(screen.getByTestId('chain-skill-primary')).toHaveAttribute(
@@ -112,8 +109,7 @@ describe("the Skills tab under Hesta's lesson (l1-skills)", () => {
     expect(store().profile.tutorial?.step).not.toBe('l1-skills');
   });
 
-  // D1 rewrites the lesson’s trail for the bag; D2 un-skips.
-  it.skip("the editor's lesson targets sit on the Primary's moves only: another move's editor, or another skill's, carries none", () => {
+  it("the editor's lesson targets sit on the Primary's moves only: another move's editor, or another skill's, carries none", () => {
     renderSkills({ scoped: true });
     edit(0);
     expect(document.querySelector('[data-tutorial="skills.elements"]')).toBeNull(); // not the last move
