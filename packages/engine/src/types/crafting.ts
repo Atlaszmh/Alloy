@@ -157,9 +157,9 @@ export interface SalvageYield {
   pattern: string | null;
   /** A legendary's essence (its legendary id). */
   essence: string | null;
-  /** A weapon's socketed runes, which go by the pull rule. */
+  /** A weapon's socketed runes: they ride its constructs (none is pulled). */
   runes: RuneRef[];
-  /** A weapon's constructs, which go to the bag (the constructs spec §3.3; B2 fills it: empty in A). */
+  /** A weapon's constructs, runes and all: to the bag, or mid-dive the floor's haul (see the constructs spec §3.3). */
   constructs: Construct[];
 }
 
@@ -174,7 +174,7 @@ export interface SalvageResult {
   essence: string | null;
   runes: RuneRef[];
   destroyed: RuneRef[];
-  /** The constructs sent to the bag, or mid-dive the haul (B2 fills it: empty in A). */
+  /** Its constructs, into the bag or the haul. */
   constructs: Construct[];
 }
 

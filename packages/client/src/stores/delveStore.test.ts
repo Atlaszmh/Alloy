@@ -657,8 +657,8 @@ describe('delveStore: the draft and its bag', () => {
     const primary = saved().primary;
     const [a, b] = primary.moves;
     s().editDraft('primary', { ...primary, moves: [b] }); // the bag left as it is
-    expect(view().dry).toMatchObject({ ok: false, reason: `${a.uid} would be lost` });
-    expect(s().applyDraft()).toMatchObject({ ok: false, reason: `${a.uid} would be lost` });
+    expect(view().dry).toMatchObject({ ok: false, reason: 'Every construct is kept: unsocket it to the bag' });
+    expect(s().applyDraft()).toMatchObject({ ok: false, reason: 'Every construct is kept: unsocket it to the bag' });
     expect(saved().primary.moves).toEqual([a, b]);
   });
 
@@ -747,16 +747,20 @@ describe('delveStore: runes outside the draft', () => {
     expect(pouchCount(fresh.getState().profile.runes, quick)).toBe(1);
   });
 
-  it("salvage gives no Link for a socket (they belong to the construct); its rune follows the pull rule, 'pay' as shipped", () => {
+  it('salvage gives no Link for a socket (they belong to the construct); its rune rides the construct into the bag, in either pull mode', () => {
     s().setProfile({
       ...s().profile,
       bag: [swordWith([split], 'x5'), swordWith([split], 'x6', 600)],
     });
-    expect(s().salvage(['x5'])).toMatchObject({ links: 0, runes: [split], destroyed: [] });
-    expect(pouchCount(s().profile.runes, split)).toBe(1);
+    const inBag = () =>
+      s().profile.constructs.flatMap((c) => c.runes ?? []).filter((r) => r?.id === split.id);
+    expect(s().salvage(['x5'])).toMatchObject({ links: 0, runes: [], destroyed: [] });
+    expect(pouchCount(s().profile.runes, split)).toBe(0);
+    expect(inBag()).toEqual([split]);
     s().setUnsocket('destroy');
-    expect(s().salvage(['x6'])).toMatchObject({ links: 0, runes: [], destroyed: [split] });
-    expect(pouchCount(s().profile.runes, split)).toBe(1);
+    expect(s().salvage(['x6'])).toMatchObject({ links: 0, runes: [], destroyed: [] });
+    expect(pouchCount(s().profile.runes, split)).toBe(0);
+    expect(inBag()).toEqual([split, split]);
   });
 
   it("choosing the mana gives the weapon's runes back by the pull rule", () => {

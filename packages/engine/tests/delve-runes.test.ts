@@ -215,6 +215,10 @@ function socketedSword(uid = 'w'): GearItem {
   return { ...w, moveset };
 }
 
+/** The runes socketed on `cs`, in order. */
+const runesOn = (cs: readonly Construct[]): RuneRef[] =>
+  cs.flatMap((c) => (c.runes ?? []).filter((r): r is RuneRef => r !== null));
+
 describe('the parts rule', () => {
   const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
   /** The socketed sword's Links on salvage: its one bought slot. */
@@ -228,15 +232,18 @@ describe('the parts rule', () => {
     expect(unsocketMode(registry, 'destroy')).toBe('destroy');
   });
 
-  it('salvage: a Link for each bought slot; the runes back to the pouch, or destroyed in destroy mode', () => {
+  it('salvage: a Link for each bought slot; the runes ride its constructs into the bag, in either pull mode', () => {
     const p = { ...hero(), bag: [socketedSword()] };
-    const paid = salvageItems(registry, p, ['w']);
-    expect(paid).toMatchObject({ links, count: 1, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
-    expect(paid.profile.links).toBe(links);
-    expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
-    const gone = salvageItems(registry, p, ['w'], { unsocket: 'destroy' });
-    expect(gone).toMatchObject({ links, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
-    expect(gone.profile.runes).toEqual({});
+    for (const unsocket of ['pay', 'destroy'] as const) {
+      const res = salvageItems(registry, p, ['w'], { unsocket });
+      expect(res).toMatchObject({ links, count: 1, runes: [], destroyed: [] });
+      expect(res.profile.links).toBe(links);
+      expect(res.profile.runes).toEqual(p.runes);
+      expect(runesOn(res.constructs)).toEqual([CHAIN_II, SPLIT_I]);
+      // A new save drops plain constructs (`autoSalvagePlain`): the two socketed ones reach the bag.
+      expect(res.profile.constructs).toHaveLength(2);
+      expect(runesOn(res.profile.constructs)).toEqual([CHAIN_II, SPLIT_I]);
+    }
     // Nothing melts mid-dive, so nothing comes back.
     const diving = startDive(registry, p, 1);
     expect(salvageItems(registry, diving, ['w'])).toMatchObject({
@@ -249,22 +256,23 @@ describe('the parts rule', () => {
 
   it('auto-salvage and a full bag melt a socketed weapon the same way', () => {
     const auto = setAutoSalvage(hero(), 'rare', true);
-    const paid = addLootToBag(registry, auto, [socketedSword()]);
-    expect(paid).toMatchObject({ links, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
-    expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
-    const melted = addLootToBag(registry, auto, [socketedSword()], { unsocket: 'destroy' });
-    expect(melted).toMatchObject({ links, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
+    for (const unsocket of ['pay', 'destroy'] as const) {
+      const melted = addLootToBag(registry, auto, [socketedSword()], { unsocket });
+      expect(melted).toMatchObject({ links, runes: [], destroyed: [] });
+      expect(melted.profile.runes).toEqual(auto.runes);
+      expect(runesOn(melted.profile.constructs)).toEqual([CHAIN_II, SPLIT_I]);
+      expect(melted.profile.constructs.every((c) => /^c\d+$/.test(c.uid!))).toBe(true);
+    }
     const full = { ...hero(), bag: Array(bal.loot.bagSize).fill(socketedSword('x')) };
-    expect(addLootToBag(registry, full, [socketedSword()])).toMatchObject({
-      bagFull: true,
-      links,
-      runes: [CHAIN_II, SPLIT_I],
-    });
+    const over = addLootToBag(registry, full, [socketedSword()]);
+    expect(over).toMatchObject({ bagFull: true, links, runes: [], destroyed: [] });
+    expect(runesOn(over.profile.constructs)).toEqual([CHAIN_II, SPLIT_I]);
     // Kept loot gives nothing back.
     expect(addLootToBag(registry, hero(), [socketedSword()])).toMatchObject({
       links: 0,
       runes: [],
       destroyed: [],
+      constructs: [],
     });
   });
 
@@ -289,14 +297,17 @@ describe('the parts rule', () => {
     expect(salvageCandidates(registry, wield(plain), 'epic')).toEqual(['w']);
   });
 
-  it('the choice of mana rebuilds the weapon plain: its bought slots back as Links, its runes by the rule', () => {
+  it('the choice of mana refills the weapon plain: its slots kept, no Links, its runes by the rule', () => {
     const unchosen = createDelveProfile(registry, 3);
     const p = { ...unchosen, equipped: { ...unchosen.equipped, weapon: socketedSword() } };
     const res = chooseStartingMana(registry, p, 'fire');
-    expect(res).toMatchObject({ ok: true, links: 1, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
-    expect(res.profile.links).toBe(1);
+    expect(res).toMatchObject({ ok: true, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect([res.links, res.profile.links]).toEqual([undefined, 0]);
     const sword = res.profile.equipped.weapon!;
-    expect(bareUids(sword.moveset)).toEqual(defaultMoveset(registry, sword, 'fire'));
+    expect(bareUids(sword.moveset)).toEqual({
+      ...defaultMoveset(registry, sword, 'fire', { basic: 4, primary: 1, defensive: 1 }),
+      bought: { basic: 1 },
+    });
     expect(allMoves(sword.moveset!).every((m) => /^c\d+$/.test(m.uid!))).toBe(true);
     expect(res.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
     const gone = chooseStartingMana(registry, p, 'fire', { unsocket: 'destroy' });
@@ -909,19 +920,16 @@ describe('rune drops in the world', () => {
     expect(again.profile.dive!.runesEarned).toBe(3);
   });
 
-  it("mid-dive an auto-salvaged weapon's runes go to the floor's haul by the pull mode given, never the pouch", () => {
+  it("mid-dive an auto-salvaged weapon's runes ride its constructs into the floor's haul, in either pull mode, never the pouch", () => {
     const { p, w } = floor();
     const auto = setAutoSalvage(p, 'rare', true);
-    const paid = addLootToBag(registry, auto, [socketedSword()], { unsocket: 'pay' });
-    expect(paid.profile.dive!.haul.runes).toEqual({
-      chain: [0, 1, 0, 0, 0],
-      split: [1, 0, 0, 0, 0],
-    });
-    expect(paid.profile.runes).toEqual({});
-    expect(
-      addLootToBag(registry, auto, [socketedSword()], { unsocket: 'destroy' }).profile.dive!.haul
-        .runes,
-    ).toEqual({});
+    for (const unsocket of ['pay', 'destroy'] as const) {
+      const melted = addLootToBag(registry, auto, [socketedSword()], { unsocket });
+      expect(melted.profile.dive!.haul.runes).toEqual({});
+      expect(runesOn(melted.profile.dive!.haul.constructs)).toEqual([CHAIN_II, SPLIT_I]);
+      expect(melted.profile.runes).toEqual({});
+      expect(melted.profile.constructs).toEqual([]);
+    }
     w.pending.items = [socketedSword()];
     expect(bankWorld(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({});
     w.pending.items = [socketedSword()];

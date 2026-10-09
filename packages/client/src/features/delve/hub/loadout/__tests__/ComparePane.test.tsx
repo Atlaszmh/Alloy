@@ -369,13 +369,15 @@ describe('the compare pane', () => {
     else expect(screen.queryByTestId('move-all-bag')).toBeNull();
     expect(screen.queryByTestId('move-all-dormant')).toBeNull();
     fireEvent.click(screen.getByTestId('move-all-button'));
-    // D2 un-skips the rest of this test: B2's moveAll (A's stub refuses "Not yet").
-    if (store().profile.equipped.weapon!.uid !== 'w1') return;
+    // Move all: the rare sword is worn with your constructs, the old one goes to the bag, free.
     const now = store().profile;
+    expect(now.equipped.weapon!.uid).toBe('w1');
     expect(
       movesetOf(registry, now.equipped.weapon!).chains.primary!.moves.map((m) => m.uid),
     ).toEqual(movesetOf(registry, sword).chains.primary!.moves.map((m) => m.uid));
-    expect(screen.getByText(/Your constructs moved onto /)).toBeInTheDocument();
+    expect(now.bag.some((i) => i.uid === sword.uid)).toBe(true);
+    expect(now.scrap).toBe(0);
+    expect(screen.getByText(/^Your constructs moved onto /)).toBeInTheDocument();
   });
 
   it('each valuation shows its own delta: Equip is marked as it is, Move all as a home', () => {
