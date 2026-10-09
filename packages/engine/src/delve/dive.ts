@@ -2,6 +2,7 @@ import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
 import type { RuneRef } from '../types/rune.js';
+import type { Construct } from '../types/ability.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
 import type { Buff } from '../types/boon.js';
 import type { Haul, SettleOutcome } from '../types/crafting.js';
@@ -15,6 +16,7 @@ import { rollStop } from './stops.js';
 import { buffSum } from './boons.js';
 import { applyBuffs, pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
+import { intoBag } from './constructs.js';
 import { addToPouch } from '../loot/runes.js';
 import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
 import { stochasticRound } from '../loot/drops.js';
@@ -166,6 +168,8 @@ export interface BankResult {
   dust: number;
   /** Links from weapons melted by auto-salvage or a full bag. */
   links: number;
+  /** Constructs of weapons melted by auto-salvage or a full bag, into the floor's haul (see the constructs spec §3.3). */
+  constructs: Construct[];
   /** Runes picked up, into the floor's haul (see the runes spec). */
   runes: RuneRef[];
   /** Patterns picked up and learned (see the crafting spec). */
@@ -258,6 +262,7 @@ export function bankWorld(
     scrap: scrap + bagged.scrap,
     dust: bagged.dust,
     links: bagged.links,
+    constructs: bagged.constructs,
     runes,
     patterns,
   };
@@ -362,7 +367,7 @@ export function failFloor(
   // A guided depth's death: Hesta pulls the hero back to the depth as it was entered, nothing lost.
   if (profile.tutorial && profile.dive?.tutorialEntry) {
     const retried = retryTutorialDepth(registry, profile);
-    return { profile: retried, kept: [], salvaged: [], bagFull: false, newCodex: [], newReactions: [], scrap: 0, dust: 0, links: 0, runes: [], patterns: [] };
+    return { profile: retried, kept: [], salvaged: [], bagFull: false, newCodex: [], newReactions: [], scrap: 0, dust: 0, links: 0, constructs: [], runes: [], patterns: [] };
   }
   const banked = bankWorld(registry, profile, world, opts);
   const dive = banked.profile.dive!;
@@ -458,7 +463,10 @@ function mapCounts(haul: Haul, f: (n: number) => number): Haul {
  * (`dive.settled`; see the crafting spec's banking): an extract keeps it all; a
  * death or an abandon loses the floor's haul and `crafting.deathLoss` of
  * `banked` (each entry rounded stochastically on `death:${seed}`, banked
- * essences exempt), recorded in `dive.lost`; `banked` keeps what reached the
+ * essences exempt), and its banked constructs one by one at the same share
+ * after the counts, the haul's outright (see the constructs spec §3.3),
+ * recorded in `dive.lost`; what it keeps goes to the bag, a plain construct
+ * dropped under `autoSalvagePlain`; `banked` keeps what reached the
  * stockpile. `extractDive`, `failFloor` and `closeDive` call it; it leaves the
  * dive's phase alone.
  */
@@ -474,10 +482,15 @@ export function settleDive(registry: DataRegistry, profile: DelveProfile, outcom
     const share = mapCounts(dive.banked, (n) => stochasticRound(n * loss, rng));
     kept = addHaul(dive.banked, mapCounts(share, (n) => -n));
     lost = addHaul(dive.haul, share);
+    // Each banked construct is lost at `loss` too, one draw each after the counts (the constructs spec §3.3); the haul's go outright.
+    const gone = dive.banked.constructs.map(() => rng.next() < loss);
+    kept = { ...kept, constructs: dive.banked.constructs.filter((_, i) => !gone[i]) };
+    lost = { ...lost, constructs: [...dive.haul.constructs, ...dive.banked.constructs.filter((_, i) => gone[i])] };
   }
   // The dive's quest events applied as it banked and extracted: its dive-scoped objectives start afresh.
+  // What it kept goes to the stockpile, its constructs to the bag (`intoBag`: a plain one dropped under `autoSalvagePlain`).
   const settled = resetDiveQuests(registry, {
-    ...stockHaul(profile, kept),
+    ...intoBag(stockHaul(profile, { ...kept, constructs: [] }), kept.constructs),
     dive: { ...dive, haul: emptyHaul(), banked: kept, lost, settled: true },
   });
   // A dive that cleared a depth refills the Contract board (the quests spec's S2), once there are templates.

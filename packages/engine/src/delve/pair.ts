@@ -170,10 +170,9 @@ function attuneTo(item: GearItem, mana: ManaType): GearItem {
 /**
  * The one-time choice: `mana` becomes the primary, every equipped item is
  * re-attuned to it for free (the bag is left alone), and the equipped
- * weapon's constructs are replaced with plain ones in it at its starts, minted
- * (the constructs spec §3.4; B2 sends the old ones to the bag). Its bought
- * slots come back as Links and its runes by the parts rule (`opts.unsocket`).
- * Allowed mid-dive (a migrated save may be).
+ * weapon's constructs are replaced by plain ones in it, every slot refilled,
+ * minted (see the constructs spec §3.4); their runes leave by the parts rule
+ * (`opts.unsocket`); no Links. Allowed mid-dive (a migrated save may be).
  */
 export function chooseStartingMana(
   registry: DataRegistry,
@@ -190,17 +189,21 @@ export function chooseStartingMana(
   const pair = { primary: mana, secondary: null };
   const weapon = equipped.weapon;
   if (!weapon) return { ok: true, profile: { ...profile, equipped, pair } };
-  const parts = weaponParts(registry, weapon);
-  const links = parts.links;
-  const settled = settleParts(registry, profile.runes, parts.runes, opts.unsocket);
-  const [moveset, minted] = mintMoveset(profile, defaultMoveset(registry, weapon, mana));
+  // Its constructs are replaced by plain ones in `mana` (the constructs spec §3.4): every slot,
+  // bought or free, stays and is refilled (`bought` kept), the old constructs' runes leave by
+  // the parts rule, and no Links come back (a socket never refunds; bought slots stay on the weapon).
+  const set = movesetOf(registry, weapon);
+  const settled = settleParts(registry, profile.runes, weaponParts(registry, weapon).runes, opts.unsocket);
+  const [moveset, minted] = mintMoveset(profile, {
+    ...defaultMoveset(registry, weapon, mana, set.slots),
+    bought: set.bought,
+  });
   equipped.weapon = { ...weapon, moveset };
   return {
     ok: true,
-    links,
     runes: settled.runes,
     destroyed: settled.destroyed,
-    profile: { ...minted, equipped, pair, links: profile.links + links, runes: settled.pouch },
+    profile: { ...minted, equipped, pair, runes: settled.pouch },
   };
 }
 
