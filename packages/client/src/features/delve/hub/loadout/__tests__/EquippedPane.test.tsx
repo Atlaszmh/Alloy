@@ -95,14 +95,19 @@ describe('the equipped pane', () => {
     expect(props.go).toHaveBeenCalledWith({ tab: 'skills', view: 'mana' });
   });
 
-  it("counts the weapon's slots of each skill's cap, and opens Skills", () => {
+  it("counts the weapon's slots of each skill's ceiling, a skill it can't hold as —, and opens Skills", () => {
+    const p = store().profile;
+    // The fixture's sword is made common: a Defensive held at its ceiling of one, no Ultimate to hold.
+    store().setProfile({
+      ...p,
+      equipped: { ...p.equipped, weapon: { ...p.equipped.weapon!, rarity: 'common' } },
+    });
     const props = open();
     const box = screen.getByTestId('loadout-moveset');
     expect(box).toHaveTextContent(`Moveset · ${store().profile.equipped.weapon!.name}`);
-    // The uncommon sword: its Basic, a two-slot Primary and a Defensive; no Ultimate.
-    expect(screen.getByTestId('loadout-moveset-basic')).toHaveTextContent('Basic 3/5');
-    expect(screen.getByTestId('loadout-moveset-primary')).toHaveTextContent('Primary 2/5');
-    expect(screen.getByTestId('loadout-moveset-defensive')).toHaveTextContent('Defensive 1/5');
+    expect(screen.getByTestId('loadout-moveset-basic')).toHaveTextContent('Basic 3 / 3');
+    expect(screen.getByTestId('loadout-moveset-primary')).toHaveTextContent('Primary 2 / 3');
+    expect(screen.getByTestId('loadout-moveset-defensive')).toHaveTextContent('Defensive 1 / 1');
     expect(screen.getByTestId('loadout-moveset-ultimate')).toHaveTextContent('Ultimate —');
     fireEvent.click(within(box).getByRole('button', { name: 'Skills ›' }));
     expect(props.go).toHaveBeenCalledWith({ tab: 'skills' });
