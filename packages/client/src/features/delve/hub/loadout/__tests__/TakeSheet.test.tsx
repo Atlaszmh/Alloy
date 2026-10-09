@@ -32,16 +32,17 @@ describe('TakeSheet', () => {
     expect(screen.getByTestId('take-move-all')).toHaveAttribute('data-tutorial', 'loadout.transfer');
   });
 
-  // D2 un-skips: B2's moveAll.
-  it.skip('Move all moves your constructs onto it and wears it; each closes the sheet', () => {
+  it('Move all wears the weapon with your constructs on it, the old one to the bag, and closes', () => {
     const onClose = vi.fn();
-    const before = movesetOf(registry, store().profile.equipped.weapon!).chains.primary!;
+    const old = store().profile.equipped.weapon!;
+    const before = movesetOf(registry, old).chains;
     render(<TakeSheet uid="w1" onClose={onClose} />);
     fireEvent.click(screen.getByTestId('take-move-all'));
     expect(store().profile.equipped.weapon?.uid).toBe('w1');
-    expect(movesetOf(registry, store().profile.equipped.weapon!).chains.primary!.moves.map((m) => m.uid)).toEqual(
-      before.moves.map((m) => m.uid),
-    );
+    const after = movesetOf(registry, store().profile.equipped.weapon!).chains;
+    expect(after.primary!.moves.map((m) => m.uid)).toEqual(before.primary!.moves.map((m) => m.uid));
+    expect(after.basic!.map((b) => b.uid)).toEqual(before.basic!.map((b) => b.uid));
+    expect(store().profile.bag.some((i) => i.uid === old.uid)).toBe(true);
     expect(onClose).toHaveBeenCalled();
   });
 

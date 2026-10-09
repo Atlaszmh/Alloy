@@ -6,7 +6,8 @@ import type { GearItem, HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from '../delve/dive.js';
 import { salvageDust } from '../delve/pair.js';
 import { applyQuestEvents } from '../delve/quests.js';
-import { settleParts, type SetChainsOptions } from '../delve/runes.js';
+import { intoBag } from '../delve/constructs.js';
+import type { SetChainsOptions } from '../delve/runes.js';
 import { addHaul, addMaterial, emptyHaul, shardTiersOf, stockHaul } from './materials.js';
 import { weaponParts } from './moveset.js';
 import { salvageValue } from './smithing.js';
@@ -56,8 +57,7 @@ export function salvageYield(
     pattern: profile.patterns.includes(item.baseId) ? null : item.baseId,
     essence,
     runes: parts.runes,
-    // B2 sends them to the bag; in Phase A they leave with the weapon as before.
-    constructs: [],
+    constructs: parts.constructs,
   };
 }
 
@@ -75,10 +75,14 @@ export function salvageRng(profile: DelveProfile, item: GearItem): SeededRNG {
 /**
  * Salvage one item, drawing on `rng` (keyed on the item: `salvageRng`): scrap,
  * one of its lines' shards and maybe a second (a legendary its essence
- * instead), Mana Dust off the pair, a weapon's Links and its runes by the parts
- * rule (`opts.unsocket`, else the balance's). Mid-dive the yield goes to the
- * floor's haul (`dive.haul`), at the Anvil to the stockpile; its pattern is
- * learned and its essence seen at once. The item itself is the caller's to remove.
+ * instead), Mana Dust off the pair, a weapon's Links (one per bought slot) and
+ * its constructs, runes and all (see the constructs spec §3.3: no rune is
+ * pulled, so `runes` and `destroyed` are empty). Mid-dive the yield goes to
+ * the floor's haul (`dive.haul`), the constructs with it; at the Anvil to the
+ * stockpile and the bag (`intoBag`: a plain construct is dropped under
+ * `autoSalvagePlain`). Its pattern is learned and its essence seen at once.
+ * The item itself is the caller's to remove. `opts` is unused since the
+ * constructs (the pull rule no longer meets a salvaged weapon).
  */
 export function applySalvage(
   registry: DataRegistry,
@@ -87,6 +91,7 @@ export function applySalvage(
   rng: SeededRNG,
   opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): SalvageResult {
+  void opts;
   const y = salvageYield(registry, profile, item);
   const shards: ShardRef[] = [];
   if (y.shards.length > 0) {
@@ -97,8 +102,7 @@ export function applySalvage(
       shards.push(rest[rng.nextInt(0, rest.length - 1)]);
     }
   }
-  const settled = settleParts(registry, {}, y.runes, opts.unsocket);
-  let haul = { ...emptyHaul(), scrap: y.scrap, dust: y.dust, links: y.links, runes: settled.pouch };
+  let haul = { ...emptyHaul(), scrap: y.scrap, dust: y.dust, links: y.links };
   for (const s of shards) haul = addMaterial(haul, { kind: 'shard', ...s });
   if (y.essence) haul = addMaterial(haul, { kind: 'essence', essence: y.essence });
   let learned = y.pattern ? { ...profile, patterns: [...profile.patterns, y.pattern] } : profile;
@@ -107,19 +111,20 @@ export function applySalvage(
   // A pattern learned is a quest state (`knowPatterns`): read it again.
   if (y.pattern) learned = applyQuestEvents(registry, learned, []);
   const dive = profile.dive;
+  const stocked =
+    dive && isDiveActive(profile)
+      ? { ...learned, dive: { ...dive, haul: addHaul(dive.haul, { ...haul, constructs: y.constructs }) } }
+      : intoBag(stockHaul(learned, haul), y.constructs);
   return {
-    profile:
-      dive && isDiveActive(profile)
-        ? { ...learned, dive: { ...dive, haul: addHaul(dive.haul, haul) } }
-        : stockHaul(learned, haul),
+    profile: stocked,
     scrap: y.scrap,
     dust: y.dust,
     links: y.links,
     shards,
     pattern: y.pattern,
     essence: y.essence,
-    runes: settled.runes,
-    destroyed: settled.destroyed,
-    constructs: [],
+    runes: [],
+    destroyed: [],
+    constructs: y.constructs,
   };
 }
