@@ -38,6 +38,7 @@ function dive(n: number, over: Partial<EconomyRow> = {}): EconomyRow {
     salvaged: haul(),
     spent: haul(),
     stops: haul(),
+    constructs: { placed: 0, salvaged: 0 },
     boons: NO_BOONS,
     forged: NONE,
     depth: n,
