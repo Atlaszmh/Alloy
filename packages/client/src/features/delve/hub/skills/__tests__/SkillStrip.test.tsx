@@ -1,39 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
-import { OPEN_SKILL_TEXT, defaultMoveset, type ChainSkill } from '@alloy/engine';
-import { getDelveRegistry } from '../../../registry';
+import type { ChainSkill } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
-import { renderSkills } from './harness';
+import { renderSkills, roomy } from './harness';
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
   return { ...actual, useNavigate: () => vi.fn() };
 });
 
-const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 const tab = (s: ChainSkill) => screen.getByTestId(`chain-skill-${s}`);
-
-/** The starting sword made epic (all four skills), its chains at five slots. */
-function roomy() {
-  const p = store().profile;
-  const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
-  const moveset = defaultMoveset(registry, weapon, 'fire', {
-    basic: 3,
-    primary: 4,
-    defensive: 1,
-    ultimate: 1,
-  });
-  const slots = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
-  store().setProfile({
-    ...p,
-    equipped: {
-      ...p.equipped,
-      weapon: { ...weapon, moveset: { chains: moveset.chains, slots, bought: {} } },
-    },
-  });
-}
 
 describe('the skill strip', () => {
   beforeEach(() => {
@@ -63,15 +41,18 @@ describe('the skill strip', () => {
     expect(tab('basic').textContent).toMatch(/^Basic\s*3 of 5 · free$/);
   });
 
-  it('a skill with no slot is a dimmed tab whose line says where it opens; it can still be chosen', () => {
-    renderSkills(); // the new save's common sword: its Basic and a two-slot Primary
-    for (const s of ['defensive', 'ultimate'] as const) {
-      const line = within(tab(s)).getByText(OPEN_SKILL_TEXT);
+  it('a skill the weapon has no slot for is a dimmed tab whose line says why; it can still be chosen', () => {
+    renderSkills(); // the new save's common sword: no Defensive or Ultimate slot
+    for (const [s, text] of [
+      ['defensive', "No Defensive slot yet: Open a skill on the Forge's Temper bench"],
+      ['ultimate', 'No Ultimate slot on a common weapon'],
+    ] as const) {
+      const line = within(tab(s)).getByText(text);
       expect(line).toHaveAttribute('data-absent');
       expect(tab(s)).toBeEnabled();
       fireEvent.click(tab(s));
       expect(tab(s)).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(OPEN_SKILL_TEXT);
+      expect(screen.getByTestId('abilities-summary')).toHaveTextContent(text);
     }
   });
 

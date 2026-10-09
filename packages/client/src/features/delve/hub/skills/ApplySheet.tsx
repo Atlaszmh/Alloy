@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { heroChains, type ChainSkill } from '@alloy/engine';
+import type { ChainSkill } from '@alloy/engine';
 import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { useSandboxStore } from '@/stores/sandboxStore';
 import { Button, Dialog } from '@/features/delve/kit';
@@ -13,7 +13,7 @@ import { draftEquipped, useAnvilChains } from './useAnvilChains';
 
 /**
  * The Apply sheet (the pad-first spec, 5; rule 1: a priced action gets a sheet): each skill the
- * draft changes, its chain before and after and its notes; the price and what it destroys; and,
+ * draft changes, its chain before and after, its free moves (to and from the bag, reorders) and its priced notes; the price and what it destroys; and,
  * when the engine would refuse it, why. Apply (A; the first focus when it can) applies it, all or
  * nothing; Back (B) returns with the draft as it was; Discard changes reverts it. Y, Ctrl+Enter
  * and the footer's Apply open it, for every device. Try in Training loads the draft, unapplied,
@@ -25,10 +25,9 @@ export function ApplySheet({ skill, onClose: close }: { skill: ChainSkill; onClo
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const view = useDelveStore(selectDraftApply);
-  const { editor } = useAnvilChains();
+  const { editor, saved, bag } = useAnvilChains();
   const id = useId();
-  const saved = heroChains(registry, profile.equipped, profile.pair);
-  const lines = draftLines(registry, editor.stats, saved, view.changes);
+  const lines = draftLines(registry, editor.stats, saved, view.changes, bag, profile.constructs);
   const empty = lines.length === 0;
   // Closes once, whether by its own buttons or the draft emptying under it.
   const closed = useRef(false);
@@ -56,6 +55,15 @@ export function ApplySheet({ skill, onClose: close }: { skill: ChainSkill; onClo
               <span className="k-label">{SKILL_NAME[l.skill]}</span>
               {l.before && <span className="text-[var(--k-text-3)] line-through">{l.before}</span>}
               <span>{l.after}</span>
+              {l.free.map((n) => (
+                <span
+                  key={n}
+                  className="text-[18px] text-[var(--k-text-3)]"
+                  data-testid="apply-free"
+                >
+                  {n} · free
+                </span>
+              ))}
               {l.notes.map((n) => (
                 <span key={n} className="text-[18px] text-[var(--k-text-3)]">
                   {n}
@@ -71,7 +79,11 @@ export function ApplySheet({ skill, onClose: close }: { skill: ChainSkill; onClo
           </p>
         )}
         {why && (
-          <p id={`${id}-why`} className="m-0 text-[var(--k-bad-text)]" data-testid="apply-sheet-why">
+          <p
+            id={`${id}-why`}
+            className="m-0 text-[var(--k-bad-text)]"
+            data-testid="apply-sheet-why"
+          >
             {why}
           </p>
         )}
