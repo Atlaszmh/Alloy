@@ -98,7 +98,7 @@ describe('LegendaryBox', () => {
     expect(document.body).toHaveTextContent(`★ ${registry.getLegendary('nightstalker').name}`);
     expect(document.body).toHaveTextContent('+30% Shadow damage');
     expect(screen.getByTestId('legendary-dead')).toHaveTextContent(
-      "Needs a Defensive: your weapon doesn't carry one.",
+      'Needs a Defensive: your weapon has no Defensive chain.',
     );
     expect(document.body.innerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
   });
