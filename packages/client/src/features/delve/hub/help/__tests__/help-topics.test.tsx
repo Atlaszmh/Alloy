@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { ABILITY_SLOTS, RARITY_ORDER, type ChainSkill } from '@alloy/engine';
 import { HELP_TOPICS, HelpPage } from '../help-topics';
 import { getDelveRegistry } from '../../../registry';
-import { SKILL_NAME } from '../../../chains/chain-text';
 import { useControlsStore } from '@/stores/controlsStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 
@@ -61,21 +59,26 @@ describe('HelpPage', () => {
     expect(screen.getByTestId('delve-howto')).toHaveTextContent('Z dodges');
   });
 
-  it("names each skill's least rarity from the slot table, and where a skill opens", () => {
+  it('tells the constructs frame: what a construct is, the classes, the slots by rarity, Open a skill and Move all', () => {
     render(<HelpPage topic="weapons" />);
-    const slots = registry.getDelveBalance().movesets.slots;
-    const from = (s: ChainSkill) => RARITY_ORDER.find((r) => slots[r][s][0] > 0)!;
-    const carries = screen.getByTestId('howto-carries');
-    expect(carries).toHaveTextContent('every weapon your Basic chain');
-    for (const s of ABILITY_SLOTS)
-      expect(screen.getByTestId(`howto-carry-${s}`)).toHaveTextContent(
-        `${SKILL_NAME[s]}: ${from(s) === 'common' ? 'every weapon' : `${from(s)} weapons and better`}`,
-      );
-    expect(carries).toHaveTextContent("opens on the Forge's Temper bench");
-    // A Jump in save's first forge: the kit's flux at the rarity that starts a Defensive.
-    expect(carries).toHaveTextContent(
-      `Forge your first weapon from your starting kit on the Forge tab: with ${from('defensive')} flux it holds a Defensive E too`,
+    const page = screen.getByTestId('howto-constructs');
+    expect(page).toHaveTextContent(
+      "A move is a construct: a pattern that channels your mana. Your weapon decides how it's expressed.",
     );
+    expect(page).toHaveTextContent(
+      'Daggers, swords, axes and mauls are melee and staves, wands and bows ranged',
+    );
+    const common = registry.getDelveBalance().movesets.slots.common.primary[0];
+    expect(page).toHaveTextContent(`a common one holds ${common} for your Primary Q`);
+    expect(page).toHaveTextContent("a skill with no slot opens on the Forge's Temper bench");
+    expect(page).toHaveTextContent('Move all moves every construct onto it');
+    expect(page).not.toHaveTextContent('Awaken');
+    expect(page).not.toHaveTextContent('carries');
+  });
+
+  it('the skills topic names the move bag', () => {
+    render(<HelpPage topic="skills" />);
+    expect(screen.getByTestId('delve-howto')).toHaveTextContent('waits in your move bag');
   });
 
   it('tells of materials, the forge, the floor and what a death costs, from the balance', () => {
