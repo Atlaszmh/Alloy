@@ -11,7 +11,9 @@ installBrowserLockdown();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    {/* No navigation in a transition: the arena's HUD refresh (an ordinary update each frame
+        on a slow machine) outranks one, so leaving the Training Grounds or a dive could wait forever. */}
+    <BrowserRouter basename={import.meta.env.BASE_URL} unstable_useTransitions={false}>
       <App />
     </BrowserRouter>
   </StrictMode>,
