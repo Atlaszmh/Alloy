@@ -12,6 +12,7 @@ import {
   slotRange,
   reforgeCost,
   upgradeCost,
+  type AbilitySlot,
   type FluxGrade,
   type GearItem,
   type ManaType,
@@ -47,12 +48,29 @@ interface Op {
   price: ReactNode;
   why: ReactNode | null;
   run: () => void;
+  testId?: string;
   tutorial?: TutorialTarget;
+}
+
+/** "2 Uncommon flux · 1 Link · 40 scrap": Open a skill's price (`openSkillPrice`). */
+function OpenPrice({ price }: { price: ReturnType<typeof openSkillPrice> }) {
+  const registry = getDelveRegistry();
+  const flux = (Object.entries(price.flux) as [FluxGrade, number][]).filter(([, n]) => n > 0);
+  return (
+    <>
+      {flux
+        .map(([grade, n]) => `${n} ${materialLabel(registry, { kind: 'flux', grade })}`)
+        .join(' · ')}
+      {flux.length > 0 && ' · '}
+      <Price links={price.links} scrap={price.scrap} />
+    </>
+  );
 }
 
 /**
  * The Temper bench on the picked item: one list of its six operations (Upgrade +1, Reforge,
- * Hone and Imprint a line, Re-attune to the pair's other element, Open a skill on a weapon),
+ * Hone and Imprint a line, Re-attune to the pair's other element, Open a skill the weapon holds
+ * none of (its first slot, for flux, Links and scrap)),
  * each row with the engine's price and, when it can't be done, why on the same row; Reforge,
  * Hone and Imprint open a line pick in its own pad scope. Beside it, the item's detail (no
  * stops). Two panels, for the bench's second and third columns.
@@ -86,19 +104,20 @@ export function Temper({ item }: { item: GearItem }) {
   const upShort = upCost !== null && upCost > scrap;
   const ready = line !== null && (op !== 'imprint' || shard !== null);
   const opShort = ready && opCost > scrap;
-  // Open a skill (the constructs spec §3.2, Awaken's heir): the weapon's first skill at 0 slots
-  // with a ceiling, its price, and the engine's dry run.
-  const closed =
+  // Open a skill (spec §3.2): each ability skill the weapon holds at 0 slots with a ceiling, and
+  // the engine's dry run for each. An item that isn't a weapon, or holds all it can, gets one row.
+  const openable: AbilitySlot[] =
     item.slot === 'weapon'
-      ? (ABILITY_SLOTS.find(
+      ? ABILITY_SLOTS.filter(
           (s) =>
             (movesetOf(registry, item).slots[s] ?? 0) === 0 && slotRange(registry, item, s)[1] > 0,
-        ) ?? null)
-      : null;
-  const openCost = closed ? openSkillPrice(registry, item) : null;
-  const openTry = useMemo(
-    () => (closed ? openSkill(registry, profile, item.uid, closed) : null),
-    [closed, registry, profile, item.uid],
+        )
+      : [];
+  const openCost = item.slot === 'weapon' ? openSkillPrice(registry, item) : null;
+  const openTries = useMemo(
+    () => new Map(openable.map((s) => [s, openSkill(registry, profile, item.uid, s)])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [openable.join(), registry, profile, item.uid],
   );
 
   const say = (text: string, good: boolean) => {
@@ -154,11 +173,10 @@ export function Temper({ item }: { item: GearItem }) {
     if (res.ok) playSound('combineMerge');
     done(res.ok, `Attuned to ${manaStyle(registry, to).name}`, res.reason, 'Cannot re-attune');
   };
-  const onOpenSkill = () => {
-    if (!closed) return;
-    const res = store().openSkill(item.uid, closed);
+  const onOpenSkill = (skill: AbilitySlot) => {
+    const res = store().openSkill(item.uid, skill);
     if (res.ok) playSound('upgradeTier');
-    done(res.ok, `${SKILL_NAME[closed]} opened!`, res.reason, 'Cannot open');
+    done(res.ok, `${SKILL_NAME[skill]} opened!`, res.reason, 'Cannot open it');
   };
 
   const shardFits = heldShards(registry, profile.materials.shards, item.slot, []).length > 0;
@@ -236,27 +254,30 @@ export function Temper({ item }: { item: GearItem }) {
             run: () => {},
           },
         ]),
-    {
-      id: 'open-skill',
-      label: closed ? `Open ${SKILL_NAME[closed]}` : 'Open a skill',
-      price: openCost && (
-        <>
-          {(Object.entries(openCost.flux) as [FluxGrade, number][])
-            .map(([grade, n]) => `${n} ${materialLabel(registry, { kind: 'flux', grade })}`)
-            .join(' · ')}{' '}
-          · <Price links={openCost.links} scrap={openCost.scrap} />
-        </>
-      ),
-      why:
-        item.slot !== 'weapon'
-          ? 'Only a weapon opens a skill'
-          : !closed
-            ? 'Every skill it can hold is open'
-            : openTry && !openTry.ok
-              ? (openTry.reason ?? 'Cannot open')
-              : null,
-      run: onOpenSkill,
-    },
+    ...(openable.length > 0
+      ? openable.map(
+          (s, i): Op => ({
+            id: `open-${s}`,
+            testId: i === 0 ? 'temper-open-skill' : `temper-open-skill-${s}`,
+            label: `Open ${SKILL_NAME[s]}`,
+            price: openCost && <OpenPrice price={openCost} />,
+            why: openTries.get(s)?.ok ? null : (openTries.get(s)?.reason ?? 'Cannot open it'),
+            run: () => onOpenSkill(s),
+          }),
+        )
+      : [
+          {
+            id: 'open-skill',
+            testId: 'temper-open-skill',
+            label: 'Open a skill',
+            price: null,
+            why:
+              item.slot === 'weapon'
+                ? 'Every skill this weapon can hold is open'
+                : 'Only a weapon holds skills',
+            run: () => {},
+          },
+        ]),
   ];
 
   return (
@@ -363,7 +384,7 @@ export function Temper({ item }: { item: GearItem }) {
                     aria-describedby={o.why !== null ? `${id}-${o.id}` : undefined}
                     onClick={o.run}
                     data-tutorial={o.tutorial}
-                    testId={`temper-op-${o.id}`}
+                    testId={o.testId ?? `temper-op-${o.id}`}
                   >
                     <span>{o.label}</span>
                     {o.price && <span>{o.price}</span>}
@@ -385,7 +406,11 @@ export function Temper({ item }: { item: GearItem }) {
       </Panel>
       <Panel aria-label="Item" testId="temper-detail" scroll={false}>
         {/* No stops: the header's tile is a picture here; the right stick scrolls it. */}
-        <div className="k-scroll flex min-h-0 flex-1 flex-col gap-3" data-pad-scroll data-pad-skip="">
+        <div
+          className="k-scroll flex min-h-0 flex-1 flex-col gap-3"
+          data-pad-scroll
+          data-pad-skip=""
+        >
           <ItemHeader item={item} size="lg" />
           <div ref={statsRef}>
             <ItemStatLines item={item} />

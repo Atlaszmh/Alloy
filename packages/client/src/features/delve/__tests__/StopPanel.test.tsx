@@ -5,6 +5,7 @@ import {
   heroChains,
   movesetOf,
   pouchCount,
+  slotPrice,
   SeededRNG,
   upgradeCost,
   type Chains,
@@ -151,20 +152,49 @@ describe('StopPanel (the stop between depths)', () => {
   it("adds a slot to a chain at its price; one it can't pay for is off", () => {
     atStop(['slot'], { links: 2, scrap: 40 });
     fireEvent.click(screen.getByTestId('stop-slot'));
-    // The uncommon sword's 3rd Primary slot: 2 Links and 40 scrap (its ceiling).
-    expect(screen.getByTestId('stop-slot-primary')).toHaveTextContent(
-      'Primary 2/5 · + a slot · 2 Links · 40 scrap',
-    );
+    // The uncommon sword's 3rd Primary slot (its ceiling), at the engine's price.
+    const price = slotPrice(registry, store().profile.equipped.weapon!, 'primary')!;
+    const primaryRow = screen.getByTestId('stop-slot-primary');
+    expect(primaryRow).toHaveTextContent('Primary 2 / 3 · + a slot · ');
+    expect(primaryRow).toHaveTextContent(`${price.scrap} scrap`);
     const basic = screen.getByTestId('stop-slot-basic');
     expect(basic).toBeDisabled(); // at its ceiling of 3: nothing to buy, no price, no reason
     expect(basic).not.toHaveAttribute('aria-describedby');
     expect(screen.getByTestId('stop-slot-primary')).not.toHaveAttribute('aria-describedby');
-    // An uncommon sword starts with a Defensive slot: its 2nd is on offer too.
-    expect(screen.getByTestId('stop-slot-defensive')).toHaveTextContent('Defensive 1/5');
+    // An uncommon sword holds one Defensive slot, so its row shows; no Ultimate slot, none.
+    expect(screen.getByTestId('stop-slot-defensive')).toHaveTextContent('Defensive 1 / ');
+    expect(screen.queryByTestId('stop-slot-ultimate')).toBeNull(); // 0 slots: opens at the Anvil
     fireEvent.click(screen.getByTestId('stop-slot-primary'));
     expect(chains().primary.moves).toHaveLength(3);
     expect(store().profile).toMatchObject({ links: 0, scrap: 0 });
     expect(store().profile.equipped.weapon!.moveset!.bought).toEqual({ primary: 1 });
+  });
+
+  it("lists a construct the weapon can't express, dormant, in the move and rune pickers", () => {
+    const p = store().profile;
+    const bow = generateItem(
+      registry,
+      { uid: 'w1', ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'bow', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    // The sword's Strike constructs on a bow: dormant there, still in their slot.
+    const m = movesetOf(registry, bow);
+    const strikes = movesetOf(registry, p.equipped.weapon!).chains.primary!;
+    const moves = strikes.moves.map((mv, i) => (i === 0 ? { ...mv, runes: [null] } : mv));
+    const weapon = {
+      ...bow,
+      moveset: { ...m, chains: { ...m.chains, primary: { ...strikes, moves } } },
+    };
+    atStop(['move', 'rune'], {
+      equipped: { ...p.equipped, weapon },
+      runes: { split: [1, 0, 0, 0, 0] },
+    });
+    fireEvent.click(screen.getByTestId('stop-move'));
+    fireEvent.click(screen.getByTestId('chain-skill-primary'));
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Strike');
+    fireEvent.click(back());
+    fireEvent.click(screen.getByTestId('stop-rune'));
+    expect(screen.getByTestId('stop-rune-move-primary-0')).toBeInTheDocument();
   });
 
   it('adjusts one move: a later change replaces an earlier one, at its price', () => {

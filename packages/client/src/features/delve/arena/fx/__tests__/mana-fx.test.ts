@@ -212,6 +212,24 @@ describe('infused transient carriers', () => {
     expect(layers.air.rects).toBeGreaterThan(0);
     expect(layers.ground.rects).toBe(0); // the trail's dark smoke was left out
   });
+
+  it('a look carrier is drawn by drawLooks (after the whole infusion pass), not by draw, and dies with its life', () => {
+    const fx = new ManaFx();
+    fx.look('crescent', 0xff8844, { kind: 'ring', x: 3, y: 3, r: 1 });
+    const during = L();
+    fx.draw(during, 1 / 60, 0.1, B());
+    expect(during.air.rects).toBe(0); // draw() ages it; the renderer draws it after drawInfusions
+    const looks = L();
+    fx.drawLooks(looks, 0.1, B());
+    expect(looks.air.rects).toBeGreaterThan(0);
+    const spent = B();
+    fx.drawLooks(L(), 0.1, spent);
+    expect(spent.left).toBeLessThan(INFUSION_BUDGET);
+    fx.draw(L(), 2, 2.1, B()); // past its life
+    const later = L();
+    fx.drawLooks(later, 2.1, B());
+    expect(later.air.rects).toBe(0);
+  });
 });
 
 describe('the infusion pass: persistent carriers', () => {

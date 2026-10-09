@@ -1,10 +1,8 @@
 import { useMemo, type ReactElement } from 'react';
 import {
-  CHAIN_SKILLS,
   estimateCombat,
   heroChains,
   manaPool,
-  movesetOf,
   pairElements,
   profileStats,
   referenceDepth,
@@ -18,7 +16,7 @@ import { getDelveRegistry } from '../../registry';
 import { ItemTile } from '../../ItemTile';
 import { ItemTooltip } from '../../items/ItemTooltip';
 import { AttunementBars } from '../../items/AttunementBars';
-import { SKILL_NAME } from '../../chains/chain-text';
+import { slotPairs, slotsText, type SlotPair } from '../../items/weapon-frame';
 import { SLOT_LABEL, formatNumber, manaStyle } from '../../format';
 import type { HubLink } from '../types';
 
@@ -41,7 +39,7 @@ const GLOW =
  * The Loadout's left pane: the paper doll round the hero on the anvil (each worn item's card on
  * hover or focus, a click shows it in the compare pane; under the pad focus selects it and no card
  * shows), the hero's stats, the pair's attunement (to the Mana view on Skills) and the weapon's
- * moveset (slots used of each skill's cap). The attunement strip and the moveset's "Skills ›" are
+ * moveset (slots held of each skill's ceiling). The attunement strip and the moveset's "Skills ›" are
  * the mouse's (`data-pad-skip`): LB/RB reach Skills.
  */
 export function EquippedPane({
@@ -71,10 +69,7 @@ export function EquippedPane({
   const speed = 1 / strikeInterval(stats);
   const elements = pairElements(pair);
   const weapon = equipped.weapon;
-  const cap = registry.getDelveBalance().chains.cap;
-  const slots = weapon ? movesetOf(registry, weapon).slots : null;
-  // A skill with a slot has a chain (the constructs spec §3.1).
-  const carried = slots ? CHAIN_SKILLS.filter((s) => (slots[s] ?? 0) > 0) : [];
+  const pairs = weapon ? slotPairs(registry, weapon) : null;
 
   const rows: [string, string, boolean?][] = [
     ['Damage', formatNumber(dps)],
@@ -163,7 +158,7 @@ export function EquippedPane({
         <AttunementBars stats={stats} elements={elements} compact />
       </button>
 
-      {weapon && slots && (
+      {weapon && pairs && (
         <div className="k-well mt-auto flex flex-col gap-1 p-3" data-testid="loadout-moveset">
           <div className="flex items-baseline justify-between gap-3">
             <span className="k-disp truncate text-[18px]">Moveset · {weapon.name}</span>
@@ -177,9 +172,9 @@ export function EquippedPane({
             </button>
           </div>
           <div className="grid grid-cols-2 gap-x-2 gap-y-1 whitespace-nowrap text-[16px] text-[var(--k-text-2)]">
-            {CHAIN_SKILLS.map((s) => (
-              <span key={s} data-testid={`loadout-moveset-${s}`}>
-                {SKILL_NAME[s]} {carried.includes(s) ? `${slots[s]}/${cap[s]}` : '—'}
+            {pairs.map((pair: SlotPair) => (
+              <span key={pair[0]} data-testid={`loadout-moveset-${pair[0]}`}>
+                {slotsText([pair])}
               </span>
             ))}
           </div>

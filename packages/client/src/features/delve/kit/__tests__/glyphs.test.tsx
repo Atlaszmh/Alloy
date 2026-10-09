@@ -68,6 +68,15 @@ describe('the kit glyphs', () => {
     expect(container.querySelector('svg')).toHaveAttribute('height', '24');
   });
 
+  it('has art for every form, the new three too, 7 px wide at least', () => {
+    for (const id of ['whirl', 'repel', 'onslaught'] as const) {
+      const art = GLYPH_ART[id];
+      expect(art.rows.length).toBeGreaterThanOrEqual(7);
+      expect(art.rows.join('')).toMatch(/#/);
+      expect(new Set(art.rows.map((r) => r.length)).size).toBe(1);
+    }
+  });
+
   it('merges a row into runs of one colour', () => {
     expect(pixelRuns(['.##a', '#..#'])).toEqual([
       { x: 1, y: 0, w: 2, ch: '#' },

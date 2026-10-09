@@ -7,6 +7,7 @@ import {
   SeededRNG,
   type Blow,
   mintMoveset,
+  movesetOf,
 } from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { armed } from '@/features/delve/__tests__/armed';
@@ -16,6 +17,7 @@ import {
   SANDBOX_KEY,
   parseSandbox,
   sandboxEquipped,
+  sandboxLiveChains,
   sandboxStats,
   useSandboxStore,
 } from './sandboxStore';
@@ -159,17 +161,46 @@ describe('sandboxStore', () => {
     expect(sandboxEquipped(registry, store()).weapon?.legendary).toBeUndefined();
   });
 
-  it("Load my build keeps the sandbox's chains for the skills the weapon doesn't carry", () => {
+  it("Load my build copies every construct of the weapon, uids stripped, and keeps the sandbox's chains for the skills it has no slots of", () => {
     const profile = createDelveProfile(registry, 7, { primary: 'frost' });
     const before = store().chains;
-    store().loadMyBuild(profile); // a common sword: its Basic and a two-slot Primary
-    const sword = profile.equipped.weapon!.moveset!.chains;
+    store().loadMyBuild(profile); // a common sword: Basic and two Primary constructs, no Defensive slot
+    const sword = movesetOf(registry, profile.equipped.weapon!).chains;
+    const strip = <T extends { uid?: string }>(m: T) => {
+      const { uid: _uid, ...rest } = m;
+      return rest;
+    };
     expect(store().chains).toEqual({
-      basic: sword.basic,
-      primary: sword.primary,
+      basic: sword.basic!.map(strip),
+      primary: { ...sword.primary!, moves: sword.primary!.moves.map(strip) },
       defensive: before.defensive,
       ultimate: before.ultimate,
     });
+    expect(JSON.stringify(store().chains)).not.toContain('"uid"');
+  });
+
+  it("the default Primary follows the weapon's class: a sword's Strike becomes a bow's Bolt; a built one stays", () => {
+    store().reset();
+    expect(store().chains.primary.moves[0].form).toBe('strike');
+    store().setWeapon({ baseId: 'bow', mana: 'fire', rarity: 'rare' });
+    expect(store().chains.primary.moves[0].form).toBe('bolt');
+    store().setChain('primary', {
+      payment: 'mana',
+      moves: [{ kind: 'heavy', form: 'lance', elements: ['fire'] }],
+    });
+    store().setWeapon({ baseId: 'sword', mana: 'fire', rarity: 'rare' });
+    expect(store().chains.primary.moves[0].form).toBe('lance');
+  });
+
+  it("sandboxLiveChains drops the moves the weapon's class can't express and a chain that empties, keeping the basic", () => {
+    store().reset(); // a sword: its Primary is Strike
+    const chains = store().chains;
+    const live = sandboxLiveChains(registry, 'bow', chains);
+    expect(live.basic).toBe(chains.basic);
+    expect(live.primary).toBeUndefined();
+    expect(live.defensive).toEqual(chains.defensive); // Ward is shared
+    expect(sandboxLiveChains(registry, 'sword', chains).primary).toEqual(chains.primary);
+    expect(sandboxLiveChains(registry, null, chains).primary).toBeUndefined(); // unarmed expresses no form
   });
 
   it('Load my build without a weapon leaves the hero unarmed', () => {
