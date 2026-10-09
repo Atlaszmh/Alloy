@@ -156,8 +156,7 @@ describe('pixel world physics', () => {
     const calm = burnedArea({ fireSpread: 0.12, burnRate: 2 });
     expect(calm).toBeGreaterThan(5);
     expect(calm).toBeLessThan(wild / 3);
-    // Two 600-step floors: 1.6–2.1 s alone, 3.1 s in the full suite, past 5 s under a loaded machine.
-  }, 15_000);
+  });
 
   it('puts fire out with water', () => {
     const pw = make();

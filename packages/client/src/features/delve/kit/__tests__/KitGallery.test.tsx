@@ -19,6 +19,5 @@ describe('the kit gallery (dev)', () => {
     ).toBeInTheDocument();
     // A boon card at each tier.
     expect(screen.getAllByTestId('boon-card').map((c) => c.dataset.tier)).toEqual(['1', '2', '3']);
-    // Every piece at once: 0.5 s alone, 1.2 s in the full suite, past 5 s under a loaded machine.
-  }, 15_000);
+  });
 });
