@@ -154,7 +154,8 @@
       "contactGap": 0.15,
       "buffer": 0.25,
       "heavyKnockback": 0.25,
-      "lobBase": 0.12
+      "lobBase": 0.12,
+      "styleMove": { "none": 0, "dart": 0.8, "step": 0.5, "wade": 0.6, "plant": 0.7, "sway": 0.6, "orbit": 0.6, "back": 0.6 }
     },
     "crafting": {
       "forgeScrap": { "common": 10, "uncommon": 20, "magic": 40, "rare": 80, "epic": 160, "legendary": 240 },

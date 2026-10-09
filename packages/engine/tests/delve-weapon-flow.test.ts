@@ -241,6 +241,7 @@ describe('blending', () => {
     expect(s.hero.x).toBeGreaterThan(x0);
     // A Bolt fired up recoils down, against a hero steering up: none of it applies.
     const b = arena([dummy(13, 30)], { noBasic: true });
+    b.hero.stats.weapon.style = undefined; // the form's own recoil, not the sword's style step
     press(b, 0);
     const recoil = b.hero.pushes.find((p) => p.kind === 'step')!;
     const y1 = b.hero.y;

@@ -11,7 +11,7 @@ import type {
   WeaponClass,
 } from './ability.js';
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
-import type { CastStyle, MonsterKind } from './arpg.js';
+import type { CastStyle, MonsterKind, StyleMotion } from './arpg.js';
 import type {
   CraftingBalance,
   DropsBalance,
@@ -300,6 +300,8 @@ export interface FeelBalance {
   heavyKnockback: number;
   /** A thrown Burst's minimum flight in seconds. */
   lobBase: number;
+  /** Units a cast style's motion moves the hero (the constructs spec §4.2), by motion. */
+  styleMove: Record<StyleMotion, number>;
 }
 
 /** The Training Grounds (`delve.sandbox`): where the hero stands, and where dummies and spawns go. */
