@@ -363,7 +363,9 @@ async function back(page: Page, dir: Dir, name: string, max = 6): Promise<void> 
 
 test.describe('Delve pad navigation', () => {
   test('PN01: every hub screen is walkable: all reachable, none clipped, panes reverse', async ({ page }) => {
-    test.setTimeout(240_000);
+    // Its walk took 10 s on the Linux software renderer, one worker; the like hub walks (PN02,
+    // PN05) ran up to 6× slower with two workers on a loaded machine.
+    test.setTimeout(60_000);
     await seed(page);
     await page.goto('/delve');
     await expect(page.getByTestId('depart-button')).toBeVisible();
@@ -548,7 +550,8 @@ test.describe('Delve pad navigation', () => {
     await expect(page).toHaveURL(/\/delve\/run$/);
   });
   test('PN06: the stop by the pad: the boon cards, X to the road, B back; Menu opens the pause list on Resume, B resumes', async ({ page }) => {
-    test.setTimeout(120_000);
+    // About 2× its slowest, 15 s (desktop, one worker), on the Linux software renderer.
+    test.setTimeout(30_000);
     await seed(page, true);
     await page.goto('/delve/run');
     const stop = page.getByTestId('door-choice');
@@ -591,6 +594,7 @@ test.describe('Delve pad navigation', () => {
   });
 
   test("PN07: the press budgets: equip an upgrade, salvage an item, forge an item and change a move's element and apply, each in six D-pad presses or fewer", async ({ page }) => {
+    // Unmeasured: it fails its first budget at constructs v0.76.0 and then runs to the limit.
     test.setTimeout(120_000);
     await seed(page);
     await page.goto('/delve');

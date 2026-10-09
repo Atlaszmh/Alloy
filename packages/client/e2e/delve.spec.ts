@@ -12,8 +12,8 @@ import {
 } from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
-  // A floor's clear may take most of the default two minutes under load.
-  test.describe.configure({ timeout: 240_000 });
+  // The default 120 s is about 2× the rest at their slowest on the Linux software renderer,
+  // one or two workers: D05 54 s, D01 53 s (desktop-1080).
   test('D01: menu → anvil → dive → clear depth → extract → back to the anvil', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/');
@@ -83,8 +83,9 @@ test.describe('Delve loot loop', () => {
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
     page,
   }) => {
-    // A floor and a half on a loaded machine.
-    test.setTimeout(360_000);
+    // About 2× its slowest, 86 s (desktop-1080, two workers; 44 s with one), on the Linux
+    // software renderer.
+    test.setTimeout(180_000);
     // Only elites and bosses drop gear: seed 8's first floor, played by the bot to the exit,
     // drops gear at every steady step (pinned in the engine's delve-banking test).
     await seedProfile(page, 8);
@@ -135,6 +136,8 @@ test.describe('Delve loot loop', () => {
   test('D03: the stop offers three boons, then a road; the boon taken shows in the HUD on the next depth', async ({
     page,
   }) => {
+    // About 2× its slowest, 74 s (desktop-1080, one worker), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await page.goto('/delve');
     await startDive(page);
@@ -182,6 +185,8 @@ test.describe('Delve loot loop', () => {
   });
 
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
+    // About 2× its slowest, 64 s (desktop-1080, one worker), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await page.goto('/delve');
     await startDive(page);
@@ -200,6 +205,8 @@ test.describe('Delve loot loop', () => {
   test("D11: materials ride the floor's haul, bank at the stop, and an abandon loses a share", async ({
     page,
   }) => {
+    // About 2× its slowest, 74 s (desktop-1080, two workers), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await useFullHud(page);
     await page.goto('/delve');
@@ -390,6 +397,8 @@ test.describe('Delve loot loop', () => {
   test("D12: a generated floor's vault opens on the interact key, and the gate asks before leaving", async ({
     page,
   }) => {
+    // About 2× its slowest, 96 s (desktop-1080, two workers), on the Linux software renderer.
+    test.setTimeout(210_000);
     // Seed 4's first floor holds a vault. The bot walks the floor, but stands at each
     // interactable until C is pressed, and the gate and an alcove open their dialogs.
     await seedProfile(page, 4, 'ask');
