@@ -234,8 +234,13 @@ export function resolveAbility(
   const wi = w + 2;
   // Quick and Heavy (`quick`): the wind-up and the cooldown scale here, the beat in `moveBeat`.
   const q = knobs.quick;
-  const conjure = F.conjure[wi] * F.conjureSlot[slot] * q.windup;
-  const channel = cast ? s.castTime * (1 + W.castTime * w) * q.windup * (1 + load * C.cast) : 0;
+  // The style's wind-up factor rides both parts (the constructs spec §4.2).
+  const sn = style?.numbers;
+  const sw = sn?.windup ?? 1;
+  const conjure = F.conjure[wi] * F.conjureSlot[slot] * q.windup * sw;
+  const channel = cast
+    ? s.castTime * (1 + W.castTime * w) * q.windup * sw * (1 + load * C.cast)
+    : 0;
 
   return {
     slot,
@@ -259,7 +264,8 @@ export function resolveAbility(
     cooldown:
       (payment === 'charge'
         ? ab.chargeLockout
-        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult) * q.cooldown,
+        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult * (sn?.cooldown ?? 1)) *
+      q.cooldown,
     castTime: conjure + channel,
     conjure,
     recovery: slot === 'defensive' ? 0 : F.recovery[wi],
@@ -279,7 +285,8 @@ export function resolveAbility(
     count: (form.countByKind?.[countKind] ?? form.count ?? 1) + extra,
     duration: form.duration ?? 0,
     tick: form.tick ?? 0.5,
-    arc: form.arc ?? 360,
+    // The style's radius factor widens a melee arc too (the axe's "radius and arc"), to a full circle.
+    arc: form.arc !== undefined ? Math.min(360, form.arc * (sn?.radius ?? 1)) : 360,
     knobs,
     runes,
     load,

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeCtx, hurtHero } from '../src/arpg/combat.js';
-import { damagePerUse, expectedHit } from '../src/delve/hero-stats.js';
-import { resolveChain } from '../src/arpg/abilities/resolve.js';
+import { computeHeroStats, damagePerUse, expectedHit } from '../src/delve/hero-stats.js';
+import { resolveAbility, resolveChain } from '../src/arpg/abilities/resolve.js';
 import { surgeMult, surgeTick } from '../src/arpg/abilities/defend.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { Chain } from '../src/types/ability.js';
@@ -286,5 +286,45 @@ describe('Blink (arpg.json)', () => {
     press(w, 1, { x: 13, y: 20 });
     expect(w.hero.invulnUntil - w.t).toBeGreaterThanOrEqual(0.9 - STEP);
     expect(registry.getForm('blink').effect).toBe(0.9);
+  });
+});
+
+/** A move resolved on a plain Fire weapon of `baseId`. */
+function on(baseId: string, move: { kind: 'medium'; form: 'bolt' | 'strike'; elements: ['fire'] }) {
+  const stats = computeHeroStats({ weapon: gear('fire', 'weapon', baseId) }, registry, {
+    pair: { primary: 'fire', secondary: null },
+  });
+  return resolveAbility(registry, registry.getForm(move.form).slot, move, 'mana', stats);
+}
+const BOLT = { kind: 'medium', form: 'bolt', elements: ['fire'] } as const;
+const STRIKE = { kind: 'medium', form: 'strike', elements: ['fire'] } as const;
+
+describe('the cast styles (delve.json, resolve.ts)', () => {
+  it("a dagger's Bolt is quicker, shorter and weaker than a staff's; a bow's flies further and faster", () => {
+    const [dagger, staff, bow] = ['dagger', 'staff', 'bow'].map((b) => on(b, BOLT));
+    const dn = registry.getGearBase('dagger').style!.numbers;
+    const sn = registry.getGearBase('staff').style!.numbers;
+    expect(dagger.conjure / staff.conjure).toBeCloseTo(dn.windup / sn.windup, 9);
+    expect(dagger.cooldown / staff.cooldown).toBeCloseTo(dn.cooldown / sn.cooldown, 9);
+    expect(dagger.power / staff.power).toBeCloseTo(dn.power / sn.power, 9);
+    expect(dagger.range / staff.range).toBeCloseTo(dn.range / sn.range, 9);
+    expect(bow.range).toBeGreaterThan(staff.range);
+    expect(bow.speed).toBeGreaterThan(staff.speed);
+    expect(dagger.look).toBe('blade');
+    expect(bow.look).toBe('arrow');
+  });
+
+  it("an axe's Strike sweeps a wider arc and radius; a maul's lands harder, later", () => {
+    const [sword, axe, maul] = ['sword', 'axe', 'maul'].map((b) => on(b, STRIKE));
+    expect(axe.arc).toBeCloseTo(Math.min(360, sword.arc * 1.2), 9);
+    expect(axe.radius / sword.radius).toBeCloseTo(1.2, 9);
+    expect(maul.power / sword.power).toBeCloseTo(1.25, 9);
+    expect(maul.conjure / sword.conjure).toBeCloseTo(1.3, 9);
+    expect(maul.knobs.applies).toContain('stagger');
+  });
+
+  it('every weapon base names its trait for the item header', () => {
+    for (const base of registry.getGearBasesForSlot('weapon'))
+      expect(base.style!.text.length).toBeGreaterThan(0);
   });
 });
