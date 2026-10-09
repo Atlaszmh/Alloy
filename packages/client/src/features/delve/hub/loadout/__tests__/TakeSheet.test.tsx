@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { defaultMoveset, generateItem, SeededRNG, type GearItem } from '@alloy/engine';
+import { defaultMoveset, generateItem, movesetOf, SeededRNG, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { armed } from '../../../__tests__/armed';
 import { getDelveRegistry } from '../../../registry';
@@ -25,25 +25,24 @@ describe('TakeSheet', () => {
     store().setProfile({ ...store().profile, bag: [rareSword('w1')] });
   });
 
-  it('offers Equip as it is and Move all with their Power, free; Move all carries the guided-start target', () => {
+  it('offers Equip as it is and Move all here with their Power; Move all carries the guided-start target', () => {
     render(<TakeSheet uid="w1" onClose={vi.fn()} />);
     expect(screen.getByTestId('take-equip')).toHaveTextContent(/Equip as it is · [+−±]\d/);
-    expect(screen.getByTestId('take-transfer')).toHaveTextContent(
-      /^Move all my constructs here · [+−±]\d.* Power$/,
-    );
-    expect(screen.getByTestId('take-transfer')).toHaveAttribute(
-      'data-tutorial',
-      'loadout.transfer',
-    );
+    expect(screen.getByTestId('take-move-all')).toHaveTextContent(/^Move all here · [+−±]\d.* Power$/);
+    expect(screen.getByTestId('take-move-all')).toHaveAttribute('data-tutorial', 'loadout.transfer');
   });
 
-  it("Move all is the engine's op (B2 fills it): until then it refuses, and the sheet stays open", () => {
+  // D2 un-skips: B2's moveAll.
+  it.skip('Move all moves your constructs onto it and wears it; each closes the sheet', () => {
     const onClose = vi.fn();
-    const before = store().profile.equipped.weapon!;
+    const before = movesetOf(registry, store().profile.equipped.weapon!).chains.primary!;
     render(<TakeSheet uid="w1" onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('take-transfer'));
-    expect(store().profile.equipped.weapon?.uid).toBe(before.uid);
-    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('take-move-all'));
+    expect(store().profile.equipped.weapon?.uid).toBe('w1');
+    expect(movesetOf(registry, store().profile.equipped.weapon!).chains.primary!.moves.map((m) => m.uid)).toEqual(
+      before.moves.map((m) => m.uid),
+    );
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('Equip wears it as it is, its moveset its own', () => {
