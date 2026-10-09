@@ -238,10 +238,11 @@ function runStop(
         return { ok: false, profile, reason: `Not a ${action.skill} move` };
       if (moveKey(move) === moveKey(moves[index]))
         return { ok: false, profile, reason: 'Change the move' };
-      // The saved move's sockets and runes stay; any the client sent are ignored.
-      const { runes: _sent, ...shape } = move;
-      const saved = moves[index].runes;
-      const next = (saved ? { ...shape, runes: saved } : shape) as Move | Blow;
+      // The saved construct is adjusted in place (the constructs spec §3.3): its uid, sockets and
+      // runes stay; any the client sent are ignored (a uid-less construct would be new to `setChains`).
+      const { runes: _sent, uid: _uid, ...shape } = move;
+      const saved = moves[index];
+      const next = { ...shape, uid: saved.uid, ...(saved.runes && { runes: saved.runes }) } as Move | Blow;
       return setChain(registry, profile, action.skill, withMove(chain, index, next));
     }
     case 'upgrade':
