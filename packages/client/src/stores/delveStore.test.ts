@@ -654,8 +654,8 @@ describe('delveStore: the draft and its bag', () => {
     const primary = saved().primary;
     const [a, b] = primary.moves;
     s().editDraft('primary', { ...primary, moves: [b] }); // the bag left as it is
-    expect(view().dry).toMatchObject({ ok: false, reason: `${a.uid} would be lost` });
-    expect(s().applyDraft()).toMatchObject({ ok: false, reason: `${a.uid} would be lost` });
+    expect(view().dry).toMatchObject({ ok: false, reason: 'Every construct is kept: unsocket it to the bag' });
+    expect(s().applyDraft()).toMatchObject({ ok: false, reason: 'Every construct is kept: unsocket it to the bag' });
     expect(saved().primary.moves).toEqual([a, b]);
   });
 
