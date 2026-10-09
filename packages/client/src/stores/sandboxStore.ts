@@ -12,7 +12,8 @@ import {
   defaultBasic,
   defaultChains,
   followBasic,
-  heroChains,
+  formAllowed,
+  movesetOf,
   sandboxWeapon,
   type AbilitySlot,
   type Chain,
@@ -26,6 +27,8 @@ import {
   type HeroStats,
   type ManaMap,
   type ManaType,
+  type Move,
+  type Moveset,
   type MonsterKind,
   type Rarity,
   type RuneRef,
@@ -278,8 +281,9 @@ interface SandboxStore extends SandboxLoadout {
   /** Pick the secondary (null = none; the primary is ignored); the basic chain follows the pair. */
   setSecondary: (mana: ManaType | null) => void;
   /**
-   * Copy the save's gear, its weapon's chains and its pair in (its powers and attunement then
-   * come from the items); a skill the weapon doesn't carry keeps the sandbox's chain.
+   * Copy the save's gear, its weapon's constructs (uids stripped: the sandbox's chains are not
+   * constructs) and its pair in (its powers and attunement then come from the items); a skill
+   * the weapon has no slots of keeps the sandbox's chain.
    */
   loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'pair'>) => void;
   reset: () => void;
@@ -289,8 +293,67 @@ const FIELDS = Object.keys(SANDBOX_DEFAULTS) as (keyof SandboxLoadout)[];
 
 type Loadout = Pick<SandboxLoadout, 'weapon' | 'primary' | 'secondary'>;
 
+/** A construct without its uid: the sandbox's chains are not constructs (the constructs spec §6). */
+function stripUid<T extends { uid?: string }>(m: T): T {
+  const { uid: _uid, ...rest } = m;
+  return rest as T;
+}
+
+/** The Primary chain the sandbox starts with on `weaponBaseId` in `primary`: its class's default form. */
+function defaultPrimary(
+  registry: DataRegistry,
+  primary: ManaType,
+  weaponBaseId: string | null,
+): Chain {
+  return defaultChains(registry, primary, weaponBaseId).primary;
+}
+
+/** `chain` is the default Primary on `on` (its moves' kinds, forms and elements; runes aside). */
+function isDefaultPrimary(registry: DataRegistry, chain: Chain, on: Loadout): boolean {
+  const def = defaultPrimary(registry, on.primary, on.weapon?.baseId ?? null);
+  return (
+    def.moves.length === chain.moves.length &&
+    def.moves.every(
+      (m, i) =>
+        m.kind === chain.moves[i].kind &&
+        m.form === chain.moves[i].form &&
+        m.elements.join() === chain.moves[i].elements.join(),
+    )
+  );
+}
+
+/** `chains` with every skill `moveset` holds a construct of copied over it, uids stripped. */
+function withConstructs(chains: Chains, moveset: Moveset): Chains {
+  const out = { ...chains };
+  const { basic, ...abilities } = moveset.chains;
+  if (basic?.length) out.basic = basic.map(stripUid);
+  for (const s of ['primary', 'defensive', 'ultimate'] as const) {
+    const c = abilities[s];
+    if (c?.moves.length) out[s] = { ...c, moves: c.moves.map(stripUid) };
+  }
+  return out;
+}
+
+/**
+ * The chains the sandbox arena plays: a move whose form the weapon's class can't express is
+ * dormant and dropped, an ability chain that empties with it; the basic chain is never (its
+ * blows have no form). The sandbox's one place for dormancy, as `heroChains` is the Delve's.
+ */
+export function sandboxLiveChains(
+  registry: DataRegistry,
+  weaponBaseId: string | null,
+  chains: Chains,
+): Partial<Chains> {
+  const out: Partial<Chains> = { basic: chains.basic };
+  for (const s of ['primary', 'defensive', 'ultimate'] as const) {
+    const moves = chains[s].moves.filter((m: Move) => formAllowed(registry, weaponBaseId, m.form));
+    if (moves.length > 0) out[s] = { ...chains[s], moves };
+  }
+  return out;
+}
+
 export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set, get) => {
-  /** The chains with the basic one following the weapon and pair to `next` (the engine's rule). */
+  /** The chains with the basic one following the weapon and pair, and a default Primary following the weapon's class, to `next`. */
   const follow = (next: Partial<Loadout>): Chains => {
     const s = get();
     const at = (l: Loadout) => ({
@@ -299,7 +362,11 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
       secondary: l.secondary,
     });
     const basic = followBasic(getDelveRegistry(), s.chains.basic, at(s), at({ ...s, ...next }));
-    return { ...s.chains, basic };
+    const to = { ...s, ...next };
+    const primary = isDefaultPrimary(getDelveRegistry(), s.chains.primary, s)
+      ? defaultPrimary(getDelveRegistry(), to.primary, to.weapon?.baseId ?? null)
+      : s.chains.primary;
+    return { ...s.chains, basic, primary };
   };
   const commit = (patch: Partial<SandboxLoadout>) => {
     set(patch);
@@ -359,10 +426,11 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
         weapon: weapon ? choiceOf(weapon) : null,
         loadedWeapon: weapon ?? null,
         gear,
-        chains: {
-          ...get().chains,
-          ...heroChains(getDelveRegistry(), profile.equipped, profile.pair),
-        },
+        // Every construct on the weapon, dormant ones too, as the Anvil shows it; no uids here.
+        // A skill the weapon has no moves of keeps the sandbox's chain.
+        chains: weapon
+          ? withConstructs(get().chains, movesetOf(getDelveRegistry(), weapon))
+          : get().chains,
         legendaries: {},
         attunement: {},
         // Your pair: the loaded weapon keeps its real mana (the weapon check relies on it).
