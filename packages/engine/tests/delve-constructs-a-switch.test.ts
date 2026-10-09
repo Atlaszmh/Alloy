@@ -382,7 +382,7 @@ describe('moveAllPreview and the draft dry run', () => {
     expect(prev.old.chains.basic).toHaveLength(3);
   });
 
-  it("draftRefusal: a lost non-plain construct, a uid in two places, the wrong skill; moveAll refuses 'Not yet'", () => {
+  it("draftRefusal: a lost non-plain construct, a uid in two places, the wrong skill; moveAll refuses a uid not in the bag", () => {
     const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
     const [uid, p1] = mintUid(p0);
     const socketed: Move = { uid, kind: 'medium', form: 'strike', elements: ['fire'], runes: [null] };
@@ -395,7 +395,7 @@ describe('moveAllPreview and the draft dry run', () => {
     expect(draftRefusal(registry, { ...p, constructs: [ward] }, { chains: { primary: { ...chains.primary!, moves: [chains.primary!.moves[0], ward] } }, bag: [] })).toBe('Not a primary construct');
     expect(draftRefusal(registry, p, { chains: { primary: { ...chains.primary!, moves: [] } }, bag: [socketed, ...chains.primary!.moves] })).toBeNull();
     expect(draftRefusal(registry, p, { chains: { basic: [] }, bag: [socketed, ...chains.basic!] })).toBe('A chain holds 1 to 3 moves');
-    expect(moveAll(registry, p, 'x').reason).toBe('Not yet');
+    expect(moveAll(registry, p, 'x')).toMatchObject({ ok: false, profile: p, reason: 'Move onto a weapon in your bag' });
     expect(applyDraft(registry, p, { chains: {}, bag: [socketed] }).ok).toBe(true);
     expect(draftPrice(registry, p, chains)).toMatchObject({ dust: 0, links: 0 });
     expect(equipItem(registry, { ...p, bag: [weapon('rare', 'bow', 'bow')] }, 'bow').equipped.weapon!.uid).toBe('bow');
