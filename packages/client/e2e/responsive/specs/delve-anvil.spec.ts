@@ -6,8 +6,11 @@ import {
   claimQuest,
   createDefaultRegistry,
   createDelveProfile,
+  defaultMoveset,
   generateItem,
   SeededRNG,
+  type DataRegistry,
+  type DelveProfile,
   type Rarity,
 } from '@alloy/engine';
 
@@ -32,6 +35,19 @@ const JUNK = {
     helm: helm('epic', 0),
   },
   bag: [helm('common', 1), helm('common', 2)],
+};
+
+// A rare bag axe (a frame to compare and Move all onto) and two loose constructs in the bag.
+const CONSTRUCTS = (registry: DataRegistry) => {
+  const axe = generateItem(registry, { uid: 'bag-axe', ilvl: 4, rarity: 'rare', slot: 'weapon', baseId: 'axe', mana: 'fire' }, new SeededRNG(7));
+  return {
+    bag: [{ ...axe, moveset: defaultMoveset(registry, axe, 'fire') }],
+    constructs: [
+      { uid: 'c9001', kind: 'medium', form: 'strike', elements: ['fire'], runes: [null] },
+      { uid: 'c9002', kind: 'light', form: 'bolt', elements: ['fire'] },
+    ],
+    nextConstructUid: 9100,
+  } satisfies Partial<DelveProfile>;
 };
 
 const TABS = ['loadout', 'skills', 'forge', 'codex', 'quests'] as const;
@@ -75,6 +91,24 @@ for (const vp of [...PC_VIEWPORTS, ...TEXT_VIEWPORTS]) {
         await expect(page.getByTestId('forge-title')).toHaveText('Uncommon Cuirass');
       }
       await runProbes(`delve-anvil-${bench}`, vp, { delve: {} });
+    });
+  }
+
+  // The Skills tab's bag pane with constructs in it, and the Loadout's compare pane on a bag weapon.
+  for (const view of ['skills-bag', 'loadout-weapon'] as const) {
+    test(`Delve Anvil ${view} @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await seedProfile(page, 4242, false, undefined, CONSTRUCTS(registry));
+      await textSizeFor(page, vp);
+      await page.goto('/delve');
+      if (view === 'skills-bag') {
+        await page.getByTestId('tab-skills').click();
+        await expect(page.getByTestId('construct-bag').locator('[data-construct]')).toHaveCount(2);
+      } else {
+        await page.locator('[data-uid="bag-axe"]').click();
+        await expect(page.getByTestId('weapon-frame')).toBeVisible();
+      }
+      await runProbes(`delve-anvil-${view}`, vp, { delve: {} });
     });
   }
 
