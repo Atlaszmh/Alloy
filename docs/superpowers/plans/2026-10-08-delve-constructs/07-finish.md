@@ -523,7 +523,28 @@ At the band's edge (watch after Task 3's trait changes): one dummy's nova dagger
 
 **Task 2, the structural failures (decided with the user, 2026-10-09):** the charge-paid Ultimates (their cast count set by the unstyled basic's charge and `chargeLockout`, which no style scales) and the bow's `pierce: 1` on the clump keep B1 Task 12's answer as it is: Ultimates read per cast, pierce with its ×0.95 power trade-off, the rest in `WAIVED`. Not taken: a fixed-charge read, charge gain normalised over the foes a basic hits, and a new bow trait (pierce off Volley would bring its pack 2.09× in; without pierce the pack Bolt reads about 0.61×). The gate re-run on `2cb2674a`: 2 of 2 green, the table as above; on `95a671f0` (no engine file changed between them) `delve-pacing.test.ts` 11 of 11 (the "legendaries arrive" rail B1 Task 12 had flipped passes again) and `delve-pacing-pairs.test.ts` green. No tuning.
 
-**Task 3 (the rune gates):** two-build gate rows …; the Lab's maxima (single / set, one dummy / pack) …; levers tried …
+**Task 3 (the rune gates):** run on `2cb2674a` (D2 Task 2's merge), depth 10, eight seeds; both hold, no tuning, so Step 3 skipped and no levers tried.
+
+Step 1, the two-build gate (`RUNE_COST_GATE=1`): 7 of 7 green in about 89 s (vitest's "Timeout calling onTaskUpdate" printed once: the file has no yielding `afterEach`; every test passed). Each form's best set (loads zeroed), then the pack and one dummy as `full unloaded → loaded, starved loaded (unloaded), supported loaded (unloaded)`:
+
+```
+bolt   staff echo+heavy+linger         pack 2.39 → 1.12, starved 1.03 (2.40), supported 1.51 (2.05)   one 2.47 → 1.12, starved 1.06, supported 1.46   per press 2.89× / 2.07×
+volley staff pierce+echo+heavy         pack 3.92 → 1.56, starved 1.53 (3.96), supported 2.15 (2.95)   one 1.17 → 0.43, starved 0.42, supported 0.63   per press 2.89× / 2.07×
+lance  sword detonate+heavy+linger     pack 2.46 → 1.14, starved 1.12 (2.38), supported 1.71 (2.35)   one 1.77 → 0.88, starved 0.83, supported 1.20   per press 2.84× / 2.04×
+lance  staff echo+heavy+volatile       pack 2.60 → 1.65, starved 1.19 (1.23), supported 1.64 (2.75)   one 2.69 → 1.06, starved 0.72, supported 1.64   per press 2.23× / 1.88×
+burst  sword echo+heavy+linger         pack 2.57 → 1.19, starved 1.13 (2.61), supported 1.75 (2.26)   one 2.59 → 1.19, starved 1.09, supported 1.75   per press 2.89× / 2.07×
+burst  staff echo+heavy+volatile       pack 2.41 → 1.57, starved 1.15 (1.21), supported 1.67 (2.58)   one 1.57 → 1.18, starved 0.64, supported 1.76   per press 2.23× / 1.88×
+strike sword echo+heavy+linger         pack 2.58 → 1.21, starved 1.17 (2.62), supported 1.88 (2.32)   one 2.47 → 1.19, starved 1.13, supported 1.82   per press 2.89× / 2.07×
+```
+
+Supported 1.51–2.15× on the pack (lowest the staff's Bolt, 0.01 over the floor), starved 1.03–1.19× (Volley 1.53×), per press 2.23–2.89× starved and 1.88–2.07× supported (the staff's Lance and Burst lowest). Against v0.52.0 (supported 1.62–2.07×, starved 1.01–1.18×, Volley 1.34×): Bolt now sits at the floor's edge, so a later change that trims the staff's Bolt or raises its load fails this gate first.
+
+Step 2, the rune balance gate: read headlessly instead of in the browser (the Lab's rune view holds only single-rune rows; the three-rune sets come from `runeComboSetups`, which the Lab doesn't run). A scratch script (`$HOME/tmp/constructs/d2t3/sweep.mjs`, never committed) ran the rune view's 241 single rows and all 4068 sets of `runeComboSetups` over every attack form × its reference weapons and every weapon's blows, through `simulateDps` (eight seeds a row) on one dummy and on the pack, with the loads zeroed (`delve.runes.load.bySlot` all 0, the gate's measure since v0.52.0; with the loads in, every rune on the Ultimate's Nova and Maelstrom reads 0×, since a loaded Ultimate costs more than the pool). The maxima:
+
+- single, one dummy: **1.79×** Linger on the sword's Nova (ceiling 2.0×);
+- single, pack: **2.11×** Pierce on the staff's Volley (ceiling 2.5×); Detonate's highest 1.85× (Volley), 1.80× (Onslaught), 1.72× (Whirl), 1.56× (Strike);
+- set, one dummy: **5.97×** Heavy + Linger + Volatile on the sword's Nova (ceiling 3.0×, the known Nova + Linger exception). Nine sets read over 3.0×, all a Nova with Linger: the old five on the sword (3.04–5.97×, as at v0.52.0) and four on the staff, the new reference weapon (3.13–4.35×); on the pack they read 3.04–3.35×. The highest set without Nova + Linger is 2.95× (Echo + Saturate + Volatile on the maul's blows);
+- set, pack: **3.92×** Pierce + Echo + Heavy on the staff's Volley (ceiling 4.0×); Detonate's highest set 3.28× (Detonate + Chain + Heavy on Volley), the staff's Linger sets at most 3.17× (its Nova).
 
 **Task 4 (pacing):** the rails (seeds as they run): …; known failures carried from main: `delve-pacing-robust` × 2 (…names…); the first-forge rail: held / retired (Step 3); 16 seeds: Fire …; beeline …; Frost (8) …; economy …; bag at dive 12 …; Links held …; worn rarity …; levers tried: …
 
