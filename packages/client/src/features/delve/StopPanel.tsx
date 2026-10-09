@@ -4,10 +4,8 @@ import {
   CHAIN_SKILLS,
   GEAR_SLOTS,
   MAX_SOCKETS,
-  OPEN_SKILL_TEXT,
   compareItem,
   editPrice,
-  heroChains,
   moveKey,
   movesOf,
   movesetOf,
@@ -17,6 +15,7 @@ import {
   resolveChain,
   runeTargetOf,
   slotPrice,
+  slotRange,
   socketsOf,
   takeStop,
   upgradeCost,
@@ -40,6 +39,7 @@ import { vibrate } from '@/shared/utils/haptics';
 import { Button, Glyph, Price, type GlyphId } from './kit';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
+import { slotsText } from './items/weapon-frame';
 import { SKILL_NAME, blowText, markIdle, moveText, runeCandidates } from './chains/chain-text';
 import { ChainEditor } from './chains/ChainEditor';
 import { RunePicker } from './runes/RunePicker';
@@ -60,7 +60,7 @@ export const STOP_TEXT: Record<
   slot: {
     glyph: 'link',
     name: 'Add a slot',
-    text: 'One more slot on a chain.',
+    text: 'One more slot on a chain, up to its ceiling.',
     price: 'Links and scrap',
   },
   move: {
@@ -326,10 +326,9 @@ function SlotPick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
   const weapon = profile.equipped.weapon;
   if (!weapon) return null;
   const { slots } = movesetOf(registry, weapon);
-  const cap = registry.getDelveBalance().chains.cap;
   return (
     <div className="flex flex-col gap-3">
-      {CHAIN_SKILLS.filter((s) => slots[s] !== undefined).map((s) => {
+      {CHAIN_SKILLS.filter((s) => (slots[s] ?? 0) > 0).map((s) => {
         const price = slotPrice(registry, weapon, s);
         // The engine's own op as a dry run: whether it goes through, and why not.
         const dry = dryRun(profile, { kind: 'slot', skill: s });
@@ -344,7 +343,7 @@ function SlotPick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
               aria-describedby={why ? `${id}-${s}` : undefined}
               testId={`stop-slot-${s}`}
             >
-              {SKILL_NAME[s]} {slots[s]}/{cap[s]}
+              {slotsText([[s, slots[s]!, slotRange(registry, weapon, s)[1]]])}
               {price ? (
                 <>
                   {' · + a slot · '}
@@ -377,7 +376,11 @@ function MovePick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
   const [edit, setEdit] = useState<{ skill: ChainSkill; index: number; move: Move | Blow } | null>(
     null,
   );
-  const saved = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
+  // Every construct, dormant ones too: `heroChains` drops them and would offset the pick's index.
+  const saved = useMemo(
+    () => (weapon ? movesetOf(registry, weapon).chains : {}),
+    [registry, weapon],
+  );
   const chains = useMemo(
     () =>
       edit
@@ -414,7 +417,8 @@ function MovePick({ take, dryRun }: { take: Take; dryRun: DryRun }) {
         stats={stats}
         locked={false}
         fixedShape
-        absentText={() => OPEN_SKILL_TEXT}
+        absentText={(s) => `No ${SKILL_NAME[s]} slot on this weapon: open it at the Anvil`}
+        weaponBaseId={weapon.baseId}
         onChange={(skill, chain) => {
           const now = movesOf(chain);
           const shown = movesOf(chains[skill]);
@@ -509,7 +513,10 @@ function RunePick({ take }: { take: Take }) {
     setChosen(null);
     take(chosen);
   }, [chosen, take]);
-  const chains = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
+  const chains = useMemo(
+    () => (equipped.weapon ? movesetOf(registry, equipped.weapon).chains : {}),
+    [registry, equipped.weapon],
+  );
   const stats = useMemo(
     () => profileStats(registry, { equipped, pair }),
     [registry, equipped, pair],
