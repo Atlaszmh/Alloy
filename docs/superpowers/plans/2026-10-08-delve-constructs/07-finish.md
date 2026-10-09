@@ -521,6 +521,8 @@ weapons: dagger 0.93  sword 1.05  axe 0.95  maul 0.97  staff 1.05  wand 0.96  bo
 
 At the band's edge (watch after Task 3's trait changes): one dummy's nova dagger 1.20 and volley wand 1.20.
 
+**Task 2, the structural failures (decided with the user, 2026-10-09):** the charge-paid Ultimates (their cast count set by the unstyled basic's charge and `chargeLockout`, which no style scales) and the bow's `pierce: 1` on the clump keep B1 Task 12's answer as it is: Ultimates read per cast, pierce with its ×0.95 power trade-off, the rest in `WAIVED`. Not taken: a fixed-charge read, charge gain normalised over the foes a basic hits, and a new bow trait (pierce off Volley would bring its pack 2.09× in; without pierce the pack Bolt reads about 0.61×). The gate re-run on `2cb2674a`: 2 of 2 green, the table as above; on `95a671f0` (no engine file changed between them) `delve-pacing.test.ts` 11 of 11 (the "legendaries arrive" rail B1 Task 12 had flipped passes again) and `delve-pacing-pairs.test.ts` green. No tuning.
+
 **Task 3 (the rune gates):** two-build gate rows …; the Lab's maxima (single / set, one dummy / pack) …; levers tried …
 
 **Task 4 (pacing):** the rails (seeds as they run): …; known failures carried from main: `delve-pacing-robust` × 2 (…names…); the first-forge rail: held / retired (Step 3); 16 seeds: Fire …; beeline …; Frost (8) …; economy …; bag at dive 12 …; Links held …; worn rarity …; levers tried: …
