@@ -374,8 +374,10 @@ export interface Melted {
   links: number;
   /** Runes back to the pouch (or mid-dive the haul) from melted weapons' sockets (see the runes spec). */
   runes: RuneRef[];
-  /** Runes the melted weapons' sockets destroyed. */
+  /** Runes the melted weapons' sockets destroyed (none since the constructs spec: a weapon's runes ride its constructs). */
   destroyed: RuneRef[];
+  /** The melted weapons' constructs, runes and all: into the bag, or mid-dive the floor's haul (see the constructs spec §3.3). */
+  constructs: Construct[];
   /** The shards, the patterns learned and the essences they gave (see the crafting spec's Salvage). */
   shards: ShardRef[];
   patterns: string[];
@@ -399,6 +401,7 @@ function melt(
     links: 0,
     runes: [],
     destroyed: [],
+    constructs: [],
     shards: [],
     patterns: [],
     essences: [],
@@ -412,6 +415,7 @@ function melt(
     out.links += r.links;
     out.runes.push(...r.runes);
     out.destroyed.push(...r.destroyed);
+    out.constructs.push(...r.constructs);
     out.shards.push(...r.shards);
     if (r.pattern) out.patterns.push(r.pattern);
     if (r.essence) out.essences.push(r.essence);
