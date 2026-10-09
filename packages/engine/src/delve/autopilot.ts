@@ -31,7 +31,7 @@ import {
   startDive,
 } from './dive.js';
 import { compareItem, type WeaponValue } from './hero-stats.js';
-import { heroChains, movesetOf } from '../loot/moveset.js';
+import { constructSkill, movesetOf, plainConstruct } from '../loot/moveset.js';
 import { bindSecondary, resolveOvertake } from './pair.js';
 import {
   createDelveProfile,
@@ -45,16 +45,18 @@ import {
 } from './profile.js';
 import { buyShard, forge, hone, openSkill, refine } from './crafting.js';
 import { addSlot, movesOf, setChain, setChains, withMove } from './moveset.js';
+import { moveAll, placeConstruct, salvageConstruct } from './constructs.js';
 import { fuseRunes, openSocket } from './runes.js';
 import { pouchCount, runeFits, socketsOf } from '../loot/runes.js';
 import { MAX_SOCKETS } from '../types/rune.js';
 import { alcoveOffers, takeAlcove, takeStop, type StopAction } from './stops.js';
 import { claimQuest, questStates } from './quests.js';
 import {
-  ABILITY_SLOTS,
   MAX_CHAIN,
   MOVE_KINDS,
+  type AbilitySlot,
   type Blow,
+  type Chains,
   type ChainSkill,
   type Move,
 } from '../types/ability.js';
@@ -262,8 +264,10 @@ function bindPair(registry: DataRegistry, profile: DelveProfile): DelveProfile {
  */
 function fusePrimary(registry: DataRegistry, p: DelveProfile): DelveProfile {
   const { primary, secondary } = p.pair;
-  const chain = heroChains(registry, p.equipped, p.pair).primary;
-  if (!primary || !secondary || !chain) return p;
+  // Every construct, a dormant one too (`heroChains` drops those: an edit would price them as removed).
+  const weapon = p.equipped.weapon;
+  const chain = weapon && movesetOf(registry, weapon).chains.primary;
+  if (!primary || !secondary || !chain || chain.moves.length === 0) return p;
   const moves = chain.moves.map((m) => ({ ...m, elements: [primary, secondary] }));
   const res = setChain(registry, p, 'primary', { ...chain, moves });
   return res.ok ? res.profile : p;
@@ -329,13 +333,85 @@ function cheapestUpgrade(
 }
 
 /**
- * Wear the bag weapon that raises Power most as it is (its own constructs;
- * `equipBest` leaves weapons alone). D1 rewires to moveAll (B2's op): until
- * then the old weapon's bought slots and runes stay on it in the bag.
+ * Move every construct onto the bag weapon that makes the best home (valued
+ * with them moved: `compareItem`'s default), when that raises Power (`moveAll`,
+ * free; the old weapon goes to the bag refilled plain).
  */
-function transferBest(registry: DataRegistry, p: DelveProfile): DelveProfile {
-  const uid = bestGain(registry, p, 'asIs', (item) => item.slot === 'weapon');
-  return uid ? equipItem(registry, p, uid) : p;
+function moveAllBest(registry: DataRegistry, p: DelveProfile): DelveProfile {
+  const uid = bestGain(registry, p, 'home', (item) => item.slot === 'weapon');
+  if (!uid) return p;
+  const res = moveAll(registry, p, uid);
+  return res.ok ? res.profile : p;
+}
+
+/**
+ * Place the bag's constructs where they raise Power most (`placeConstruct`,
+ * free): each round every bag construct is tried in every slot of its skill on
+ * the worn weapon (an empty one, or a full chain's, whose construct goes to the
+ * bag), the best gain taken, until none gains. A dormant placement is refused
+ * by the op (the wrong class), so it never tries to play one.
+ */
+function placeBag(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  for (;;) {
+    const weapon = p.equipped.weapon;
+    if (!weapon || p.constructs.length === 0) return p;
+    const { slots } = movesetOf(registry, weapon);
+    const now = profilePower(registry, p);
+    let best: { profile: DelveProfile; power: number } | null = null;
+    for (const c of p.constructs) {
+      const skill = constructSkill(registry, c);
+      for (let index = 0; index < (slots[skill] ?? 0); index++) {
+        const res = placeConstruct(registry, p, c.uid!, skill, index);
+        const power = res.ok ? profilePower(registry, res.profile) : 0;
+        if (res.ok && power > (best?.power ?? now)) best = { profile: res.profile, power };
+      }
+    }
+    if (!best) return p;
+    p = best.profile;
+  }
+}
+
+/**
+ * Fill the worn weapon's empty slots (a chain shorter than its slots: the
+ * target's own went to the bag in a Move all) with plain constructs in the
+ * primary (`plainConstruct`, `editDust` each through `setChain`), a skill at a
+ * time in `SLOT_ORDER`, when it can pay and Power rises.
+ */
+function fillEmpty(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  const primary = p.pair.primary;
+  if (!p.equipped.weapon || !primary) return p;
+  for (const skill of SLOT_ORDER) {
+    const weapon = p.equipped.weapon!;
+    const { chains, slots } = movesetOf(registry, weapon);
+    const chain = chains[skill];
+    const moves = movesOf(chain);
+    const n = slots[skill] ?? 0;
+    if (!chain || moves.length >= n) continue;
+    const added = Array.from({ length: n - moves.length }, (_, i) =>
+      plainConstruct(registry, weapon, skill, moves.length + i, primary),
+    );
+    const next = (
+      Array.isArray(chain) ? [...chain, ...added] : { ...chain, moves: [...chain.moves, ...added] }
+    ) as Chains[ChainSkill];
+    const res = setChain(registry, p, skill, next);
+    if (res.ok && profilePower(registry, res.profile) > profilePower(registry, p)) p = res.profile;
+  }
+  return p;
+}
+
+/**
+ * Melt every construct left in the bag (`salvageConstruct`: its runes back to
+ * the pouch at the pull price; refused while the scrap for them isn't there).
+ */
+function salvageBag(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  for (const c of profile.constructs) {
+    const res = salvageConstruct(registry, p, c.uid!);
+    if (res.ok) p = res.profile;
+  }
+  return p;
 }
 
 /**
@@ -643,13 +719,18 @@ function takeGuidedStop(registry: DataRegistry, profile: DelveProfile): DelvePro
   return best?.profile ?? profile;
 }
 
-/** Open a skill on the weapon it wields (the constructs spec §3.2, Awaken generalised): each ability slot in order, when it can pay and Power rises. */
-function awakenWeapon(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+/**
+ * Open each ability skill the worn weapon has no slot for (`openSkill`, in
+ * `SLOT_ORDER`: the Primary, the Ultimate, then the Defensive) when it can pay
+ * and Power rises (see the constructs spec §7); the slot arrives plain-filled.
+ */
+function openSkills(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   let p = profile;
-  for (const skill of ABILITY_SLOTS) {
+  for (const skill of SLOT_ORDER.filter((s): s is AbilitySlot => s !== 'basic')) {
     const weapon = p.equipped.weapon;
-    const res = weapon && openSkill(registry, p, weapon.uid, skill);
-    if (res?.ok && profilePower(registry, res.profile) > profilePower(registry, p)) p = res.profile;
+    if (!weapon || (movesetOf(registry, weapon).slots[skill] ?? 0) > 0) continue;
+    const res = openSkill(registry, p, weapon.uid, skill);
+    if (res.ok && profilePower(registry, res.profile) > profilePower(registry, p)) p = res.profile;
   }
   return p;
 }
@@ -932,6 +1013,8 @@ interface AnvilVisit {
   /** Each step's net outflow from the stockpile, summed (salvage gives; it spends nothing). */
   spent: Haul;
   forged: GearItem[];
+  /** The bag's constructs it placed on the worn weapon, and those it melted. */
+  constructs: { placed: number; salvaged: number };
 }
 
 /**
@@ -940,11 +1023,13 @@ interface AnvilVisit {
  * every completed quest and contract (`claimAll`), so their rewards feed what
  * follows; it melts
  * the gear it doesn't wear, refines flux and bars up, forges (a legendary
- * first), moves its moveset to a better weapon and equips upgrades, melts
- * what they replaced; awakens a rare weapon it wields (`awakenWeapon`);
- * spends Links on slots up to `SOCKETS_AFTER` a chain,
- * then on sockets for the pouch's runes (each filled as it opens), then on the
- * rest of the slots; sockets the best runes and fuses the copies left over;
+ * first), moves every construct to a better weapon (`moveAllBest`) and equips
+ * upgrades, melts what they replaced; opens the skills it can pay for
+ * (`openSkills`); places the bag's constructs where they gain (`placeBag`) and
+ * melts the rest (`salvageBag`); fills the slots left empty (`fillEmpty`);
+ * spends Links on slots up to `SOCKETS_AFTER` a chain (each under its
+ * ceiling), then on sockets for the pouch's runes (each filled as it opens),
+ * then on the rest of the slots; sockets the best runes and fuses the copies left over;
  * buys and refines shards; hones and pours the rest of the scrap into
  * upgrades (all of that waits while it holds an essence it can't yet pay to
  * forge); and builds the Primary of whatever weapon it wields from both elements.
@@ -966,10 +1051,19 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
   const before = new Set(p.bag.map((i) => i.uid));
   pay(forgeGear(registry, p));
   const forged = p.bag.filter((i) => !before.has(i.uid));
-  pay(equipBest(registry, transferBest(registry, p)).profile);
+  pay(equipBest(registry, moveAllBest(registry, p)).profile);
   melt();
+  if (!legendaryWaits(registry, p)) pay(openSkills(registry, p));
+  // The bag's constructs (a melted weapon's, a Move all's): placed where they gain, free; the
+  // rest melted, their runes back in the pouch before the sockets fill.
+  const bagged = p.constructs.length;
+  p = placeBag(registry, p);
+  const placed = bagged - p.constructs.length;
+  const left = p.constructs.length;
+  pay(salvageBag(registry, p));
+  const salvaged = left - p.constructs.length;
   if (!legendaryWaits(registry, p)) {
-    pay(awakenWeapon(registry, p));
+    pay(fillEmpty(registry, p));
     // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
     // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left
     // over and socket again (a fused tier can beat a socketed one).
@@ -983,7 +1077,7 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
     pay(upgradeAll(registry, p));
   }
   pay(fusePrimary(registry, p));
-  return { profile: p, quests, spent, forged };
+  return { profile: p, quests, spent, forged, constructs: { placed, salvaged } };
 }
 
 /**
@@ -991,8 +1085,8 @@ function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
  * claim what waits; forge the slot's item (`planForge`, its best flux, the
  * highest bar it can pay for); wear it; bind `secondary` (else Hesta's
  * partner); the Skills lesson (`lessonChain`); salvage the slot's items of the
- * rarity; refine into the metal; transfer onto the bag weapon of the rarity;
- * hone the cheapest worn item's first line; a beat's Continue; the Training
+ * rarity; refine into the metal; move all onto the bag weapon of the rarity
+ * (the best home); hone the cheapest worn item's first line; a beat's Continue; the Training
  * Grounds' cast. A step whose state holds completes in the op it calls.
  */
 function lessonOp(
@@ -1035,9 +1129,8 @@ function lessonOp(
       return from ? refine(registry, p, { kind: 'metal', metal: from.id }).profile : p;
     }
     case 'moveAll': {
-      // D1 rewires to moveAll (B2's op): the step is skipped meanwhile.
       const uid = bestGain(registry, p, 'home', (i) => weapons.includes(i)) ?? weapons[0]?.uid;
-      return uid ? p : p;
+      return uid ? moveAll(registry, p, uid).profile : p;
     }
     case 'hone': {
       const worn = GEAR_SLOTS.flatMap((s) => p.equipped[s] ?? []).filter((i) => i.affixes.length);
@@ -1117,7 +1210,13 @@ function lessonVisit(
       p = skipTutorial(p);
     }
   }
-  return { profile: p, quests, spent, forged: held(p).filter((i) => !before.has(i.uid)) };
+  return {
+    profile: p,
+    quests,
+    spent,
+    forged: held(p).filter((i) => !before.has(i.uid)),
+    constructs: { placed: 0, salvaged: 0 },
+  };
 }
 /** What a dive brought into the stockpile: what it banked and kept, and an extract's bounty. */
 function diveIncome(p: DelveProfile): Haul {
@@ -1235,6 +1334,7 @@ export function runAutopilot(
       boons,
       lost: dive.lost,
       forged,
+      constructs: visit.constructs,
       depth: dive.depth,
       died: dive.phase === 'dead',
     });

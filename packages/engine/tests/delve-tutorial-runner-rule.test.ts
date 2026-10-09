@@ -140,7 +140,7 @@ const equipChest = lesson('equip', { slot: 'chest', rarity: 'uncommon' });
 const skills = lesson('setChains', { moves: 3 });
 const salvage = lesson('salvage', { slot: 'weapon', rarity: 'common' });
 const refine = lesson('refine', { metal: 'iron' });
-const moveAll = lesson('moveAll', { rarity: 'rare' });
+const moved = lesson('moveAll', { rarity: 'rare' });
 const hone = lesson('hone');
 
 describe('tutorialHolds', () => {
@@ -192,7 +192,7 @@ describe('tutorialHolds', () => {
     );
   });
 
-  it('salvage, refine, Move all and hone: the old sword gone, a bar made, a rare worn with its constructs moved, a line honed', () => {
+  it("salvage, refine, Move all and hone: the old sword gone, a bar made, a rare worn with the lessons' constructs, a line honed", () => {
     const p = onStep('bind');
     const blade = weapon('uncommon');
     const swapped = equipItem(script, { ...p, bag: [blade] }, blade.uid);
@@ -205,15 +205,36 @@ describe('tutorialHolds', () => {
       materials: { ...p.materials, metals: { ...p.materials.metals, iron: 1 } },
     };
     expect(tutorialHolds(script, iron, refine)).toBe(true);
-    expect(tutorialHolds(script, swapped, moveAll)).toBe(false);
-    // A rare worn with the constructs moved onto it: its Primary past its start (3).
-    const rare = (primary: number) => {
+    expect(tutorialHolds(script, swapped, moved)).toBe(false);
+    // A rare worn holding what the lessons built (a socket, or the secondary), not its own plain
+    // constructs: a plain Equip leaves it current.
+    const rare = (build: (m: Move) => Move) => {
       const w = weapon('rare');
-      const moveset = defaultMoveset(script, w, 'fire', { primary });
+      const moveset = defaultMoveset(script, w, 'fire');
+      moveset.chains.primary!.moves = moveset.chains.primary!.moves.map(build);
       return { ...p, equipped: { ...p.equipped, weapon: { ...w, moveset } } };
     };
-    expect(tutorialHolds(script, rare(3), moveAll)).toBe(false);
-    expect(tutorialHolds(script, rare(4), moveAll)).toBe(true);
+    expect(
+      tutorialHolds(
+        script,
+        rare((m) => m),
+        moved,
+      ),
+    ).toBe(false);
+    expect(
+      tutorialHolds(
+        script,
+        rare((m) => ({ ...m, runes: [null] })),
+        moved,
+      ),
+    ).toBe(true);
+    expect(
+      tutorialHolds(
+        script,
+        rare((m) => ({ ...m, elements: ['frost'] })),
+        moved,
+      ),
+    ).toBe(true);
     expect(tutorialHolds(script, p, hone)).toBe(false);
     expect(tutorialHolds(script, replaceItem(p, { ...p.equipped.chest!, hones: 1 }), hone)).toBe(
       true,

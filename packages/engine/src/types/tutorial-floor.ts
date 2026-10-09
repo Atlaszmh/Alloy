@@ -59,10 +59,11 @@ export interface TutorialMarker {
 }
 
 /**
- * What a set drop gives: gear in the pair's primary or secondary (its Primary
- * chain at `slots.primary` moves, `sockets` open), on the fork
- * `tutorial:<dropId>`; a rune that fits the Primary's first move at drop time;
- * a material (Mana Dust and Links included) or scrap, by count.
+ * What a set drop gives: gear in the pair's primary or secondary (its Primary at
+ * `slots.primary` slots, within its rarity's ceiling, plain-filled; `sockets` open
+ * on its constructs, one each), on the fork `tutorial:<dropId>`; a rune that fits
+ * the Primary's first move at drop time; a material (Mana Dust and Links included)
+ * or scrap, by count.
  */
 export type TutorialDrop =
   | {

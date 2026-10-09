@@ -7,12 +7,13 @@ import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
 import { beginFloor, startDive } from '../src/delve/dive.js';
+import { moveAll } from '../src/delve/constructs.js';
 import { addSlot } from '../src/delve/moveset.js';
 import { addLootToBag, createDelveProfile, equipItem } from '../src/delve/profile.js';
 import { startTutorial, tutorialSkippable, tutorialText } from '../src/delve/tutorial.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
 import { generateItem } from '../src/loot/item-generator.js';
-import { defaultMoveset } from '../src/loot/moveset.js';
+import { defaultMoveset, movesetOf } from '../src/loot/moveset.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
@@ -35,7 +36,9 @@ describe('auto-salvage waits for the tutorial', () => {
       new SeededRNG(1),
     );
     // Banked, the blade's constructs take their uids: the item is the same but for those.
-    expect(addLootToBag(registry, startTutorial(registry, p), [blade]).kept.map((i) => i.uid)).toEqual(['gB']);
+    expect(
+      addLootToBag(registry, startTutorial(registry, p), [blade]).kept.map((i) => i.uid),
+    ).toEqual(['gB']);
     expect(addLootToBag(registry, p, [blade]).salvaged.map((i) => i.uid)).toEqual(['gB']);
   });
 });
@@ -66,6 +69,16 @@ describe('no legendary gear below essenceMinDepth', () => {
   });
 });
 
+/** `item` with a uid on each of its constructs, as a banked weapon has. */
+function withUids(item: GearItem): GearItem {
+  const ms = movesetOf(registry, item);
+  for (const [skill, chain] of Object.entries(ms.chains))
+    (Array.isArray(chain) ? chain : chain.moves).forEach(
+      (m, i) => (m.uid = `${item.uid}:${skill}${i}`),
+    );
+  return { ...item, moveset: ms };
+}
+
 /** An uncommon fire sword whose Primary holds `elements`' moves, the first socketed with a rune. */
 function blade(elements: ManaType[][], rune = true): GearItem {
   const item = generateItem(
@@ -76,7 +89,7 @@ function blade(elements: ManaType[][], rune = true): GearItem {
   const ms = defaultMoveset(registry, item, 'fire', { primary: elements.length });
   ms.chains.primary!.moves.forEach((m, i) => (m.elements = elements[i]));
   if (rune) ms.chains.primary!.moves[0].runes = [{ id: 'quick', tier: 1 }];
-  return { ...item, moveset: ms };
+  return withUids({ ...item, moveset: ms });
 }
 
 /** A lesson's profile: fire and frost bound, well off, at step `step`. */
@@ -90,10 +103,12 @@ const atStep = (step: string, p = fresh()): DelveProfile => ({
 });
 
 describe('impossible Anvil steps offer "Skip this step"', () => {
-  it('the Skills step unarmed, but not with a sword whose Primary can grow to the lesson (the common one starts with two slots)', () => {
+  it('the Skills step unarmed, or without the Links for the slot it asks; not with a sword that can grow', () => {
     const p = { ...atStep('l1-skills'), runes: { quick: [1, 0, 0, 0, 0] } };
+    // A new save's common sword holds two Primary constructs under a ceiling of three: it can.
     expect(p.equipped.weapon!.rarity).toBe('common');
     expect(tutorialSkippable(registry, p, p.tutorial!)).toBe(false);
+    expect(tutorialSkippable(registry, { ...p, links: 0 }, p.tutorial!)).toBe(true);
     const unarmed = { ...p, equipped: { ...p.equipped, weapon: null } };
     expect(tutorialSkippable(registry, unarmed, p.tutorial!)).toBe(true);
     const armed = { ...p, equipped: { ...p.equipped, weapon: blade([['fire'], ['fire']]) } };
@@ -109,23 +124,24 @@ describe('impossible Anvil steps offer "Skip this step"', () => {
 });
 
 describe('the Move all step', () => {
-  const rare = (primary?: number) => {
+  const rare = () => {
     const item = generateItem(
       registry,
       { uid: 'gRare', ilvl: 5, rarity: 'rare', baseId: 'sword', mana: 'fire' },
       new SeededRNG(1),
     );
-    return { ...item, moveset: defaultMoveset(registry, item, 'fire', primary ? { primary } : {}) };
+    return withUids({ ...item, moveset: defaultMoveset(registry, item, 'fire') });
   };
-  it('a plain Equip of the rare leaves it current; the rare worn holding more than its start completes it (B2 fills Move all; D1 rewires)', () => {
+  it('a plain Equip of the rare leaves it current; a Move all completes it', () => {
     const p = {
       ...atStep('l2-transfer'),
       equipped: { ...fresh().equipped, weapon: blade([['fire'], ['fire'], ['frost']]) },
       bag: [rare()],
     };
     expect(equipItem(registry, p, 'gRare').tutorial!.step).toBe('l2-transfer');
-    const moved = equipItem(registry, { ...p, bag: [rare(4)] }, 'gRare');
-    expect(moved.tutorial!.step).not.toBe('l2-transfer');
+    const moved = moveAll(registry, p, 'gRare');
+    expect(moved.ok).toBe(true);
+    expect(moved.profile.tutorial!.step).not.toBe('l2-transfer');
   });
 });
 
@@ -255,6 +271,6 @@ describe("every step's text, for every pair", () => {
     };
     const w = beginFloor(registry, armed);
     const [part] = tutorialText(registry, armed, 'd1-cast', w).line;
-    expect(part).toEqual({ text: expect.stringMatching(/carries \S+ \S+\. /) });
+    expect(part).toEqual({ text: expect.stringMatching(/casts \S+ \S+\. /) });
   });
 });

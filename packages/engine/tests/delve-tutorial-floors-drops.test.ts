@@ -24,7 +24,7 @@ const FLOOR: TutorialFloorDef = {
         base: 'sword',
         rarity: 'uncommon',
         element: 'primary',
-        slots: { primary: 2 },
+        slots: { primary: 3 },
       },
     },
     {
@@ -67,15 +67,20 @@ describe("a hand-built floor's set drops", () => {
       mana: 'fire',
       ilvl: 3,
     });
-    const { chains, slots } = blade.item!.moveset!;
+    const { chains, slots, bought } = blade.item!.moveset!;
+    // The table's starts (the constructs spec §3.2), but the Primary at the data's 3 (an
+    // uncommon's ceiling), none of them bought.
     expect(slots).toEqual({
       basic: slotRange(registry, blade.item!, 'basic')[0],
-      primary: 2,
-      defensive: slotRange(registry, blade.item!, 'defensive')[0],
+      primary: 3,
+      defensive: 1,
     });
-    expect(chains.primary!.moves.map((m) => [m.form, m.elements, m.runes])).toEqual([
-      ['strike', ['fire'], undefined],
-      ['strike', ['fire'], undefined],
+    expect(Object.values(bought).every((n) => n === 0)).toBe(true);
+    // A sword's default Primary form is Strike (melee); a world drop's constructs have no uid.
+    expect(chains.primary!.moves.map((m) => [m.form, m.elements, m.runes, m.uid])).toEqual([
+      ['strike', ['fire'], undefined, undefined],
+      ['strike', ['fire'], undefined, undefined],
+      ['strike', ['fire'], undefined, undefined],
     ]);
     expect([blade.roomId, w.loot.nextUid, w.loot.dropsGiven]).toEqual([1, 101, [1]]);
     const ore = w.drops.filter((d) => d.material?.kind === 'metal' && d.amount === 2);
@@ -122,9 +127,11 @@ describe("a hand-built floor's set drops", () => {
     const w = builtWorld(registry, 't-2');
     const events = kill(w, 'grask');
     expect(set(w).map((d) => [d.item?.rarity, d.item?.mana])).toEqual([['rare', 'frost']]);
+    // Two sockets, one a construct, the Primary's first (a rare's Primary starts at three), so
+    // the blows get none.
     const { chains } = set(w)[0].item!.moveset!;
-    // Two sockets, one a construct, the Primary's first: its first two moves (a rare's Primary starts at 3).
-    expect([chains.primary!.moves[0].runes, chains.primary!.moves[1].runes]).toEqual([[null], [null]]);
+    const sockets = chains.primary!.moves.map((m) => m.runes);
+    expect([sockets, chains.basic![0].runes]).toEqual([[[null], [null], undefined], undefined]);
     expect(events.filter((e) => e.kind === 'drop' && e.dropKind === 'item').length).toBe(1);
   });
 

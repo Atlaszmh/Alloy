@@ -23,6 +23,8 @@ export interface EconomyDive {
   lost: Haul | null;
   /** Items forged on the Anvil visit after it, by rarity (every rarity, 0 where none). */
   forged: Record<Rarity, number>;
+  /** The bag's constructs that visit placed on the worn weapon, and those it melted (the constructs spec §7). */
+  constructs: { placed: number; salvaged: number };
   /** The deepest depth reached. */
   depth: number;
   died: boolean;
@@ -46,7 +48,14 @@ export interface EconomyReport {
 
 /** The stockpile as a haul: materials, scrap, Mana Dust, Links and runes. */
 function stockOf(p: DelveProfile): Haul {
-  return { ...p.materials, scrap: p.scrap, dust: p.manaDust, links: p.links, runes: p.runes, constructs: [] };
+  return {
+    ...p.materials,
+    scrap: p.scrap,
+    dust: p.manaDust,
+    links: p.links,
+    runes: p.runes,
+    constructs: [],
+  };
 }
 
 /** `h` with every count passed through `f`. */
@@ -88,10 +97,16 @@ export function economySim(
     const run = runAutopilot(registry, { seed, dives: 1, profile });
     const [row] = run.economy;
     // The stockpile's change, less the income and the claims, plus what the Anvil and the stops spent: the Anvil's gains.
-    const delta = addHaul(stockOf(run.profile), mapHaul(stockOf(profile), (x) => -x));
+    const delta = addHaul(
+      stockOf(run.profile),
+      mapHaul(stockOf(profile), (x) => -x),
+    );
     const came = addHaul(row.income, row.quests);
     const salvaged = addHaul(
-      addHaul(delta, mapHaul(came, (x) => -x)),
+      addHaul(
+        delta,
+        mapHaul(came, (x) => -x),
+      ),
       addHaul(row.spent, row.stops),
     );
     out.push({ ...row, dive: n + 1, salvaged, spent: addHaul(row.spent, row.stops) });
