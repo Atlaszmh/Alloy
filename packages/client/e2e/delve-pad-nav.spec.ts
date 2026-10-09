@@ -30,14 +30,16 @@ type Dir = 'up' | 'down' | 'left' | 'right';
  * without reading the new moves (run with NAV_REPORT=1 to print them).
  */
 const ALLOW: Record<string, [number, number]> = {
-  loadout: [11, 7],
-  'loadout-item': [11, 7],
+  // The bag grid's ragged rows (bag-sort, the end tiles and the buttons under them), read: 13 at
+  // 1280×800 and 7 at 1920×1080 on the audit save (Equip best is live: its bag holds an upgrade).
+  loadout: [13, 7],
+  'loadout-item': [13, 7],
   'junk-sheet': [0, 0],
   help: [0, 0],
   skills: [0, 0],
   'skills-editor': [0, 0],
-  // The form grid's short last row: Strike, alone under Lance and Burst.
-  'skills-forms': [2, 2],
+  // The form grid's four forms reverse everywhere (a 2 × 2 grid, no short row).
+  'skills-forms': [0, 0],
   'apply-sheet': [0, 0],
   forge: [0, 0],
   'forge-pattern': [0, 0],
@@ -68,14 +70,15 @@ const CEILING: Record<string, number> = {
   'junk-sheet': 10,
   // Help's Back: its topics are a kit tab list, off the D-pad.
   help: 1,
-  // The strip's Realign, the Primary's three cards and Delve (the strip's tabs are LT/RT's, the
-  // footer's Revert and Apply the mouse's; no slot to buy on the audit save).
-  skills: 5,
-  // The move editor: Kind, Form, Elements, Position and Payment, and its move's one socket (the
-  // audit save's first Primary move holds a Guard rune since the boons; Back and Remove are B's and X's).
-  'skills-editor': 6,
-  // The Primary's five forms (Back is B's).
-  'skills-forms': 5,
+  // The strip's Realign, the Primary's cards, the bag pane's rows for it (the audit save's
+  // constructs after three dives) and Delve (the strip's tabs are LT/RT's, the footer's Revert
+  // and Apply the mouse's; no slot to buy on the audit save).
+  skills: 7,
+  // The move editor: Kind, Form, Elements, Position and Payment (the audit save's first Primary
+  // construct holds no socket now; a second socket would add one; Back and Remove are B's and X's).
+  'skills-editor': 5,
+  // The Primary's four forms on a melee weapon: Strike, Whirl, Lance and Burst (Back is B's).
+  'skills-forms': 4,
   // The Apply sheet: its Back, Apply, Try in Training and Discard changes.
   'apply-sheet': 4,
   // The 13 learned patterns (all of them, three dives in since the boons) and Delve; with a
@@ -85,9 +88,10 @@ const CEILING: Record<string, number> = {
   'forge-pattern': 17,
   // The 19 gear rows, the one operation the worn weapon can take, and Delve (one stop a gear row).
   temper: 21,
-  // The audit's save: the shard bench's stepper and Buy, its Refines (one more since the boons),
+  // The audit's save: the shard bench's stepper and Buy, its Refines (one more since the boons, and
+  // each metal's live now that the save holds the scrap for the Forge button),
   // and Delve.
-  materials: 6,
+  materials: 8,
   'stop-powerup': 4,
   // The finds line and the three boon cards.
   'stop-boon': 4,
@@ -123,8 +127,13 @@ function bagOf(registry: DataRegistry): GearItem[] {
 async function seed(page: Page, atStop = false): Promise<void> {
   const registry = createDefaultRegistry();
   const sim = economySim(registry, 1, 3).profile;
-  // Mana Dust for PN07's element edit (three dives in, an edit is no longer free).
-  let profile = { ...sim, manaDust: sim.manaDust + 500, bag: [...sim.bag, ...bagOf(registry)] };
+  // Mana Dust for PN07's element edit (three dives in, an edit is no longer free), and scrap so the
+  // Forge bench's Forge button is live (the bot now spends its scrap on constructs: a disabled button
+  // leaves the bench a dead end for the D-pad).
+  // The ring slot is left empty: the sim hero's gear outranks the bag's (item level 4), and PN07's equip
+  // budget needs a ▲ that isn't a weapon, which a bag ring is over an empty slot.
+  const { ring: _ring, ...equipped } = sim.equipped;
+  let profile = { ...sim, equipped, manaDust: sim.manaDust + 500, scrap: sim.scrap + 60, bag: [...sim.bag, ...bagOf(registry)] };
   if (atStop) {
     profile = startDive(registry, profile, 1);
     profile = completeFloor(registry, profile, beginFloor(registry, profile)).profile;
