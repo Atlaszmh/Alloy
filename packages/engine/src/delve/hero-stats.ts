@@ -17,6 +17,7 @@ import {
   defaultChains,
   holdFull,
   mergeKnobs,
+  chargeUnit,
   moveBeat,
   resolveChain,
   stepBonus,
@@ -752,7 +753,7 @@ export function estimateCombat(
     return chain ? resolveChain(registry, stats, slot, chain) : null;
   });
   const pool = manaPool(stats, registry);
-  const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
+  const unit = chargeUnit(registry, stats);
   // Each chain as the sim plays it against the pool (`valuedChain`).
   const every = (chain: ResolvedChain, income: number, rate: number) =>
     useInterval(bal, chain, stats.tempo, income, rate, pool.max);

@@ -953,16 +953,17 @@ describe('basics', () => {
     // A rare ilvl-12 Fire weapon on a Fire/Storm pair with Twin Fang 40, at depth 5; the
     // abilities one medium move each (a Volley's, a Ward's, a Nova's numbers are as they were).
     // Re-pinned for the cast styles' numbers (constructs B1 Task 8) and traits (Task 10: the
-    // dagger's crit, the axe's cleave, the wand's homing).
+    // dagger's crit, the axe's cleave, the wand's homing), and for the style gate (Task 12: each
+    // base's abilities and charge read against the sword's, the styles retuned).
     const today: Record<string, number> = {
       unarmed: 13.233961,
-      dagger: 184.91344,
+      dagger: 179.482645,
       sword: 195.522722,
-      axe: 235.071228,
-      maul: 393.325829,
-      staff: 144.600175,
-      wand: 114.895307,
-      bow: 160.731032,
+      axe: 227.947159,
+      maul: 332.697117,
+      staff: 156.134066,
+      wand: 142.521192,
+      bow: 177.884799,
     };
     const one = (form: FormId, payment: 'mana' | 'charge') => ({
       moves: [m('medium', form)],

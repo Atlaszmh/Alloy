@@ -2,7 +2,7 @@ import type { Knobs, ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity } from '../../types/arpg.js';
 import { applyStatus, hitMonster, type SimCtx } from '../combat.js';
 import { abilityHit, impact, knobHitOpts } from './impact.js';
-import { chainMove, chargeCap } from './resolve.js';
+import { chainMove, chargeCap, chargeUnit } from './resolve.js';
 
 const DEFENSIVE = 1;
 
@@ -159,14 +159,12 @@ export function defendTick(ctx: SimCtx, dt: number): void {
 }
 
 /**
- * Charge-paid chains bank one unit per weapon-hit worth of damage the hero
- * deals, up to their largest need; a chain never charges from its own hits,
- * nor while any of its moves cools down (its lockout).
+ * Charge-paid chains bank one unit per reference swing's worth of damage the
+ * hero deals (`chargeUnit`), up to their largest need; a chain never charges
+ * from its own hits, nor while any of its moves cools down (its lockout).
  */
 export function addCharge(ctx: SimCtx, amount: number, fromSlot: number | undefined): void {
-  const h = ctx.world.hero;
-  const unit = Math.max(1, h.stats.weaponDamage * h.stats.damageMult);
-  gainCharge(ctx, amount / unit, fromSlot);
+  gainCharge(ctx, amount / chargeUnit(ctx.registry, ctx.world.hero.stats), fromSlot);
 }
 
 export function gainCharge(ctx: SimCtx, units: number, fromSlot?: number): void {

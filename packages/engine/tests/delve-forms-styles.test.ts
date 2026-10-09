@@ -9,6 +9,8 @@ import {
   resolveAbility,
   resolveChain,
   stepBonus,
+  baseDamageScale,
+  chargeUnit,
 } from '../src/arpg/abilities/resolve.js';
 import { surgeMult, surgeTick } from '../src/arpg/abilities/defend.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
@@ -297,15 +299,41 @@ describe('Blink (arpg.json)', () => {
   });
 });
 
-/** A move resolved on a plain Fire weapon of `baseId`. */
-function on(baseId: string, move: { kind: 'medium'; form: 'bolt' | 'strike'; elements: ['fire'] }) {
-  const stats = computeHeroStats({ weapon: gear('fire', 'weapon', baseId) }, registry, {
+/** A plain Fire weapon of `baseId`'s stats. */
+const statsOn = (baseId: string) =>
+  computeHeroStats({ weapon: gear('fire', 'weapon', baseId) }, registry, {
     pair: { primary: 'fire', secondary: null },
   });
-  return resolveAbility(registry, registry.getForm(move.form).slot, move, 'mana', stats);
+/** A move resolved on a plain Fire weapon of `baseId`. */
+function on(baseId: string, move: { kind: 'medium'; form: 'bolt' | 'strike'; elements: ['fire'] }) {
+  return resolveAbility(registry, registry.getForm(move.form).slot, move, 'mana', statsOn(baseId));
 }
 const BOLT = { kind: 'medium', form: 'bolt', elements: ['fire'] } as const;
 const STRIKE = { kind: 'medium', form: 'strike', elements: ['fire'] } as const;
+
+describe("each base's numbers read against the reference sword's (resolve.ts, the style gate)", () => {
+  const flat = (id: string) =>
+    registry.getGearBase(id).implicits.find((i) => i.stat === 'damage')!.base;
+
+  it("an ability's power scales by the sword's flat damage over the base's own; 1 unarmed", () => {
+    expect(baseDamageScale(registry, 'sword')).toBe(1);
+    expect(baseDamageScale(registry, 'maul')).toBeCloseTo(flat('sword') / flat('maul'), 12);
+    expect(baseDamageScale(registry, 'wand')).toBeCloseTo(flat('sword') / flat('wand'), 12);
+    expect(baseDamageScale(registry, null)).toBe(1);
+  });
+
+  it("charge's unit is one sword swing's worth of damage: a dagger's and a maul's alike for the same damage a second", () => {
+    const sword = statsOn('sword');
+    expect(chargeUnit(registry, sword)).toBeCloseTo(sword.weaponDamage * sword.damageMult, 12);
+    const swing = (id: string) => registry.getGearBase(id).attackInterval!;
+    for (const id of ['dagger', 'maul']) {
+      const s = statsOn(id);
+      // Units a second from the basic's damage a second: the base's damage over its swing.
+      const perSecond = (s.weaponDamage * s.damageMult) / swing(id) / chargeUnit(registry, s);
+      expect(perSecond).toBeCloseTo(1 / swing('sword'), 12);
+    }
+  });
+});
 
 describe('the cast styles (delve.json, resolve.ts)', () => {
   it("a dagger's Bolt is quicker, shorter and weaker than a staff's; a bow's flies further and faster", () => {
@@ -314,7 +342,12 @@ describe('the cast styles (delve.json, resolve.ts)', () => {
     const sn = registry.getGearBase('staff').style!.numbers;
     expect(dagger.conjure / staff.conjure).toBeCloseTo(dn.windup / sn.windup, 9);
     expect(dagger.cooldown / staff.cooldown).toBeCloseTo(dn.cooldown / sn.cooldown, 9);
-    expect(dagger.power / staff.power).toBeCloseTo(dn.power / sn.power, 9);
+    // Each base's damage is read against the reference's (`baseDamageScale`), then the style's.
+    expect(dagger.power / staff.power).toBeCloseTo(
+      (dn.power / sn.power) *
+        (baseDamageScale(registry, 'dagger') / baseDamageScale(registry, 'staff')),
+      9,
+    );
     expect(dagger.range / staff.range).toBeCloseTo(dn.range / sn.range, 9);
     expect(bow.range).toBeGreaterThan(staff.range);
     expect(bow.speed).toBeGreaterThan(staff.speed);
@@ -326,7 +359,12 @@ describe('the cast styles (delve.json, resolve.ts)', () => {
     const [sword, axe, maul] = ['sword', 'axe', 'maul'].map((b) => on(b, STRIKE));
     expect(axe.arc).toBeCloseTo(Math.min(360, sword.arc * 1.2), 9);
     expect(axe.radius / sword.radius).toBeCloseTo(1.2, 9);
-    expect(maul.power / sword.power).toBeCloseTo(1.25, 9);
+    const power = (b: string) => registry.getGearBase(b).style!.numbers.power;
+    expect(power('maul')).toBeGreaterThan(power('sword'));
+    expect(maul.power / sword.power).toBeCloseTo(
+      (power('maul') / power('sword')) * baseDamageScale(registry, 'maul'),
+      9,
+    );
     expect(maul.conjure / sword.conjure).toBeCloseTo(1.3, 9);
     expect(maul.knobs.applies).toContain('stagger');
   });

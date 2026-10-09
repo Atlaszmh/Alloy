@@ -103,11 +103,12 @@ describe('Power without runes', () => {
       ehp: 210.61412635492272,
       power: 918,
     });
-    // The epic bow's drop rolls its moveset over the slot table (four Bolts, two Wards, a Nova).
+    // The epic bow's drop rolls its moveset over the slot table (four Bolts, two Wards, a Nova),
+    // its abilities read against the sword's damage (the style gate, constructs B1 Task 12).
     expect(estimate(archer(), 15)).toEqual({
-      dps: 414.6442228785797,
+      dps: 488.2055978829214,
       ehp: 198.09056273093927,
-      power: 2866,
+      power: 3110,
     });
   });
 
@@ -342,16 +343,16 @@ describe('the autopilot and runes', () => {
     expect(sockets(empty, 'primary')).toEqual([0, 0, 0, 0, 0]);
     expect(empty.links).toBe(16);
     // The first sockets (1 Link + 20 scrap each), then second ones (2 + 40), each filled as it
-    // opens: none on the Wards, where neither rune adds Power (Guard's gain rounds away on a
-    // wand, its homing Bolts worth more: constructs B1 Task 10; two Links are left), so the
-    // Primary's and the basic chain's first moves take a second.
+    // opens: the Primary's and the basic chain's first moves take a second, and of the Wards only
+    // the first takes one (a wand's abilities read against the sword's damage since the style
+    // gate, constructs B1 Task 12, so a Guard there adds Power); one Link is left.
     const runes = { leech: [20, 0, 0, 0, 0], guard: [20, 0, 0, 0, 0] };
     const after = betweenDives(unloaded, { ...full, links: 16, scrap: 320, runes });
     expect(sockets(after, 'primary')).toEqual([2, 1, 1, 1, 1]);
     expect(sockets(after, 'basic')).toEqual([2, 1, 1, 1, 1]);
-    expect(sockets(after, 'defensive')).toEqual([0, 0, 0, 0, 0]);
-    expect(after).toMatchObject({ links: 2, scrap: 0 });
-    expect(after.runes.leech[0] + after.runes.guard[0]).toBe(40 - 18);
+    expect(sockets(after, 'defensive')).toEqual([1, 0, 0, 0, 0]);
+    expect(after).toMatchObject({ links: 1, scrap: 0 });
+    expect(after.runes.leech[0] + after.runes.guard[0]).toBe(40 - 16);
   });
 
   it('sockets the pouch rune that raises Power most, and keeps the rest', () => {
