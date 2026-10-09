@@ -43,8 +43,7 @@ describe('the Apply sheet', () => {
     mockNavigate.mockClear();
   });
 
-  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
-  it.skip('lists each change, the price and nothing destroyed; Apply is the first focus', () => {
+  it('lists each change, the price and nothing destroyed; Apply is the first focus', () => {
     draftLance();
     renderSheet();
     const sheet = screen.getByTestId('apply-sheet');
@@ -60,8 +59,7 @@ describe('the Apply sheet', () => {
     expect(confirm).toHaveFocus();
   });
 
-  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
-  it.skip('A (its Apply) applies the draft and closes it', () => {
+  it('A (its Apply) applies the draft and closes it', () => {
     draftLance();
     renderSheet();
     fireEvent.click(screen.getByTestId('apply-sheet-confirm'));
@@ -89,8 +87,7 @@ describe('the Apply sheet', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
-  it.skip('a draft the engine refuses: Apply is off, the reason beside it, and the first focus leaves it', () => {
+  it('a draft the engine refuses: Apply is off, the reason beside it, and the first focus leaves it', () => {
     // A rune the pouch doesn't hold, socketed in the draft.
     const primary = chains().primary;
     act(() =>
@@ -142,8 +139,7 @@ describe('the Apply sheet', () => {
     ]);
   });
 
-  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
-  it.skip('names what Apply destroys', () => {
+  it('names what Apply destroys', () => {
     // A socketed rune pulled under the 'destroy' rule (the dev override): the price says so.
     act(() => store().setUnsocket('destroy'));
     const runed = { ...chains().primary.moves[0], runes: [{ id: 'quick', tier: 3 as const }] };
