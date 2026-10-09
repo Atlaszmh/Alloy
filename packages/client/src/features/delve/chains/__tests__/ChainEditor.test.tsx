@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { computeHeroStats, defaultChains } from '@alloy/engine';
+import { computeHeroStats, defaultChains, type Move } from '@alloy/engine';
 import { ChainEditor } from '../ChainEditor';
 import { getDelveRegistry } from '../../registry';
 
@@ -20,11 +20,10 @@ describe('ChainEditor', () => {
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Storm Bolt');
     fireEvent.click(screen.getByTestId('form-lance'));
     const [first, ...rest] = given.primary.moves;
-    expect(onChange).toHaveBeenCalledWith(
-      'primary',
-      { ...given.primary, moves: [{ ...first, form: 'lance' }, ...rest] },
-      given.primary.moves.map((_, i) => i), // an edit keeps every move where it was
-    );
+    expect(onChange).toHaveBeenCalledWith('primary', {
+      ...given.primary,
+      moves: [{ ...first, form: 'lance' }, ...rest],
+    });
     expect(screen.queryByTestId('reaction-unknown')).toBeNull(); // the reactions live on the Codex
     expect(screen.getAllByTestId(/^attune-/)).toHaveLength(6);
   });
@@ -54,7 +53,7 @@ describe('ChainEditor', () => {
     expect(screen.queryByTestId('payment-mana')).toBeNull();
   });
 
-  it('reports where each move came from: ◂ ▸ move it, × drops it, + is new, an edit keeps it', () => {
+  it('◂ ▸ move a move, × drops it, + adds a copy with no sockets and no uid, an edit keeps the rest', () => {
     const onChange = vi.fn();
     const [m] = given.primary.moves;
     const three = {
@@ -62,9 +61,9 @@ describe('ChainEditor', () => {
       primary: {
         ...given.primary,
         moves: [
-          m,
-          { ...m, kind: 'medium' as const },
-          { ...m, kind: 'heavy' as const, runes: [split] },
+          { ...m, uid: 'c1' },
+          { ...m, uid: 'c2', kind: 'medium' as const },
+          { ...m, uid: 'c3', kind: 'heavy' as const, runes: [split] },
         ],
       },
     };
@@ -73,15 +72,15 @@ describe('ChainEditor', () => {
     );
     const last = () => onChange.mock.lastCall!;
     fireEvent.click(screen.getByTestId('move-right-0'));
-    expect(last()[2]).toEqual([1, 0, 2]);
-    fireEvent.click(screen.getByTestId('move-remove-1'));
-    expect(last()[2]).toEqual([0, 2]);
+    expect(last()[1].moves.map((x: Move) => x.uid)).toEqual(['c2', 'c1', 'c3']);
+    fireEvent.click(screen.getByTestId('move-remove-1')); // against the chain handed in
+    expect(last()[1].moves.map((x: Move) => x.uid)).toEqual(['c1', 'c3']);
     fireEvent.click(screen.getByTestId('move-2'));
     fireEvent.click(screen.getByTestId('move-add')); // a copy of the heavy, with no sockets
-    expect(last()[2]).toEqual([0, 1, 2, null]);
     expect(last()[1].moves[3]).toEqual({ kind: 'heavy', form: m.form, elements: m.elements });
     fireEvent.click(screen.getByTestId('kind-light'));
-    expect(last()[2]).toEqual([0, 1, 2]);
+    expect(last()[1].moves).toHaveLength(3); // an edit to the chain handed in
+    expect(last()[2]).toBeUndefined(); // no bag in the one-column builder
   });
 
   it('wears kit glyphs, not emoji, and no text under 14 px, on every skill and a fusion', () => {

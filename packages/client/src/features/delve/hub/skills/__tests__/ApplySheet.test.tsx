@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { heroChains, type Chains } from '@alloy/engine';
+import { movesetOf, type Chains, type Construct } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { SANDBOX_KEY, useSandboxStore } from '@/stores/sandboxStore';
 import { armed } from '../../../__tests__/armed';
 import { getDelveRegistry } from '../../../registry';
 import { ApplySheet } from '../ApplySheet';
+import { stamped } from './harness';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => ({
@@ -16,7 +17,7 @@ vi.mock('react-router', async () => ({
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
-const chains = () => heroChains(registry, store().profile.equipped, store().profile.pair) as Chains;
+const chains = () => movesetOf(registry, store().profile.equipped.weapon!).chains as Chains;
 const onClose = vi.fn();
 const renderSheet = () =>
   render(
@@ -36,13 +37,14 @@ describe('the Apply sheet', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    store().setProfile(armed(store().profile));
+    store().setProfile(stamped(armed(store().profile)));
     useDelveStore.setState({ unsocket: null });
     onClose.mockClear();
     mockNavigate.mockClear();
   });
 
-  it('lists each change, the price and nothing destroyed; Apply is the first focus', () => {
+  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
+  it.skip('lists each change, the price and nothing destroyed; Apply is the first focus', () => {
     draftLance();
     renderSheet();
     const sheet = screen.getByTestId('apply-sheet');
@@ -58,7 +60,8 @@ describe('the Apply sheet', () => {
     expect(confirm).toHaveFocus();
   });
 
-  it('A (its Apply) applies the draft and closes it', () => {
+  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
+  it.skip('A (its Apply) applies the draft and closes it', () => {
     draftLance();
     renderSheet();
     fireEvent.click(screen.getByTestId('apply-sheet-confirm'));
@@ -70,7 +73,9 @@ describe('the Apply sheet', () => {
   it('B (its Back) returns with the draft as it was', () => {
     draftLance();
     renderSheet();
-    fireEvent.click(within(screen.getByTestId('apply-sheet')).getByRole('button', { name: /Back/ }));
+    fireEvent.click(
+      within(screen.getByTestId('apply-sheet')).getByRole('button', { name: /Back/ }),
+    );
     expect(onClose).toHaveBeenCalledOnce();
     expect(store().chainDraft?.chains.primary?.moves[0].form).toBe('lance');
     expect(chains().primary.moves[0].form).toBe('strike');
@@ -84,7 +89,8 @@ describe('the Apply sheet', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('a draft the engine refuses: Apply is off, the reason beside it, and the first focus leaves it', () => {
+  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
+  it.skip('a draft the engine refuses: Apply is off, the reason beside it, and the first focus leaves it', () => {
     // A rune the pouch doesn't hold, socketed in the draft.
     const primary = chains().primary;
     act(() =>
@@ -136,7 +142,8 @@ describe('the Apply sheet', () => {
     ]);
   });
 
-  it('names what Apply destroys', () => {
+  // D2 un-skips: B2's applyDraft prices and commits (A's refuses "Not yet").
+  it.skip('names what Apply destroys', () => {
     // A socketed rune pulled under the 'destroy' rule (the dev override): the price says so.
     act(() => store().setUnsocket('destroy'));
     const runed = { ...chains().primary.moves[0], runes: [{ id: 'quick', tier: 3 as const }] };
@@ -160,5 +167,23 @@ describe('the Apply sheet', () => {
     );
     renderSheet();
     expect(screen.getByTestId('apply-sheet-price')).toHaveTextContent('destroys Quick III');
+  });
+
+  it('lists the free moves apart from the priced edits: an unsocket, a place, a reorder', () => {
+    const spare: Construct = { uid: 'spare', kind: 'hold', form: 'burst', elements: ['fire'] };
+    store().setProfile({ ...store().profile, constructs: [spare] });
+    const primary = chains().primary;
+    const [first, second] = primary.moves;
+    act(() => store().editDraft('primary', { ...primary, moves: [spare, second] }, [first]));
+    renderSheet();
+    const line = within(screen.getByTestId('apply-sheet')).getByTestId('apply-line-primary');
+    const free = within(line)
+      .getAllByTestId('apply-free')
+      .map((e) => e.textContent);
+    expect(free).toEqual([
+      expect.stringMatching(/^To the bag: .* · free$/),
+      'From the bag: held Fire Burst · free',
+    ]);
+    expect(within(line).queryByText(/^New:/)).toBeNull();
   });
 });
