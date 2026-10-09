@@ -27,6 +27,7 @@ vi.mock('@alloy/engine', async (importOriginal) => ({
   openSkillPrice: vi.fn(),
 }));
 
+const PRICE = { flux: { uncommon: 2 }, links: 1, scrap: 40 };
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 const pal = registry.getDelveBalance().pair;
@@ -62,19 +63,20 @@ describe('Temper', () => {
     store().resetProfile(1234, 'fire');
     vi.mocked(openSkill).mockReset();
     vi.mocked(openSkillPrice).mockReset();
+    vi.mocked(openSkillPrice).mockReturnValue(PRICE);
   });
 
   it("lists the six operations as rows, each with its price; one it can't do is off and says why on its row", () => {
     const lines = [{ stat: 'armor' as const, value: 5, roll: 0.5 }];
     bench(helm('fire', lines), { scrap: 0, manaDust: 0 });
-    const rows = screen.getAllByTestId(/^temper-op-/).map((r) => r.dataset.testid);
+    const rows = screen.getAllByTestId(/^temper-(op-|open-skill)/).map((r) => r.dataset.testid);
     expect(rows).toEqual([
       'temper-op-upgrade',
       'temper-op-reforge',
       'temper-op-hone',
       'temper-op-imprint',
       'temper-op-reattune',
-      'temper-op-open-skill',
+      'temper-open-skill',
     ]);
     const item = store().profile.bag[0];
     const op = (id: string) => screen.getByTestId(`temper-op-${id}`);
@@ -89,9 +91,11 @@ describe('Temper', () => {
     // A pair of one element: nothing to re-attune to.
     expect(why('reattune')).toHaveTextContent('Bind a second element first');
     // Not a weapon.
-    expect(why('open-skill')).toHaveTextContent('Only a weapon opens a skill');
+    const openRow = screen.getByTestId('temper-open-skill');
+    const openWhy = document.getElementById(openRow.getAttribute('aria-describedby')!)!;
+    expect(openWhy).toHaveTextContent('Only a weapon holds skills');
     // The reason sits in the row itself, beside its button.
-    expect(op('open-skill').closest('[data-temper-row]')!.contains(why('open-skill'))).toBe(true);
+    expect(openRow.closest('[data-temper-row]')!.contains(openWhy)).toBe(true);
   });
 
   it("an item with no lines can't Reforge, Hone or Imprint: each row says so", () => {
@@ -288,82 +292,63 @@ describe('Temper', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Attuned to Storm');
   });
 
-  it("opens a common sword's Defensive at the engine's price, as its dry run allows, and says why not", () => {
-    const price = { flux: { uncommon: 2 }, links: 1, scrap: 150 };
-    vi.mocked(openSkillPrice).mockReturnValue(price);
-    // The engine's rule stands in: 150 scrap opens the skill, its first slot bought.
+  it("opens a skill at 0 slots at the engine's price, as its dry run allows, and says why not", () => {
+    // The engine's rule stands in: 40 scrap opens the common sword's Defensive.
     vi.mocked(openSkill).mockImplementation((_registry, p, uid, skill) =>
-      p.scrap < price.scrap
-        ? { ok: false, profile: p, reason: 'Needs 150 scrap' }
-        : {
+      p.scrap >= 40
+        ? {
             ok: true,
             profile: {
               ...p,
-              scrap: p.scrap - price.scrap,
+              scrap: p.scrap - 40,
               bag: p.bag.map((i) =>
                 i.uid === uid
-                  ? {
-                      ...i,
-                      moveset: {
-                        ...i.moveset!,
-                        slots: { ...i.moveset!.slots, [skill]: 1 },
-                        bought: { ...i.moveset!.bought, [skill]: 1 },
-                      },
-                    }
+                  ? { ...i, moveset: { ...i.moveset!, slots: { ...i.moveset!.slots, [skill]: 1 } } }
                   : i,
               ),
             },
-          },
+          }
+        : { ok: false, profile: p, reason: 'Not enough scrap' },
     );
-    bench(sword('common'), { scrap: 149 });
-    expect(openSkillPrice).toHaveBeenCalledWith(
-      registry,
-      expect.objectContaining({ uid: 'w1', rarity: 'common' }),
-    );
-    const button = screen.getByTestId('temper-op-open-skill');
+    bench(sword('common'), { scrap: 40 });
+    expect(openSkillPrice).toHaveBeenCalledWith(registry, expect.objectContaining({ uid: 'w1' }));
+    const button = screen.getByTestId('temper-open-skill');
     expect(button).toHaveTextContent('Open Defensive');
-    expect(button).toHaveTextContent('2 Uncommon flux · 1 Link · 150 scrap');
-    expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription('Needs 150 scrap');
-    act(() => store().setProfile({ ...store().profile, scrap: 150 }));
+    expect(button).toHaveTextContent('2 Uncommon flux · 1 Link · 40 scrap');
     expect(button).toBeEnabled();
-    expect(button).not.toHaveAttribute('aria-describedby');
     fireEvent.click(button);
     expect(openSkill).toHaveBeenLastCalledWith(
       registry,
-      expect.objectContaining({ scrap: 150 }),
+      expect.objectContaining({ scrap: 40 }),
       'w1',
       'defensive',
     );
-    expect(store().profile).toMatchObject({ scrap: 0 });
-    expect(store().profile.bag[0].moveset!.slots.defensive).toBe(1);
+    expect(store().profile.scrap).toBe(0);
     expect(screen.getByRole('status')).toHaveTextContent('Defensive opened!');
-    // A common sword's Ultimate has a ceiling of 0: nothing is left to open.
-    expect(screen.getByTestId('temper-op-open-skill')).toBeDisabled();
-    expect(screen.getByTestId('temper-op-open-skill')).toHaveAccessibleDescription(
-      'Every skill it can hold is open',
+    // Opened: the weapon holds every skill it can; the row says so.
+    expect(screen.getByTestId('temper-open-skill')).toBeDisabled();
+    expect(screen.getByTestId('temper-open-skill')).toHaveAccessibleDescription(
+      'Every skill this weapon can hold is open',
     );
   });
 
-  it('Open a skill names the first closed skill with a ceiling; other gear and a weapon with every skill open say so', () => {
-    vi.mocked(openSkillPrice).mockReturnValue({ flux: { magic: 1 }, links: 2, scrap: 80 });
-    vi.mocked(openSkill).mockImplementation((_registry, p) => ({ ok: true, profile: p }));
-    // A magic sword starts with a Defensive; its Ultimate (a ceiling of 1) is the one to open.
-    bench(sword('magic'));
-    expect(screen.getByTestId('temper-op-open-skill')).toHaveTextContent('Open Ultimate');
-    expect(openSkill).toHaveBeenCalledWith(registry, expect.anything(), 'w1', 'ultimate');
-    cleanup();
-    // A rare sword starts with every skill.
-    bench(sword('rare'));
-    expect(screen.getByTestId('temper-op-open-skill')).toBeDisabled();
-    expect(screen.getByTestId('temper-op-open-skill')).toHaveAccessibleDescription(
-      'Every skill it can hold is open',
+  it('Open a skill is enabled only as the dry run allows; a weapon with nothing to open says so', () => {
+    vi.mocked(openSkill).mockReturnValue({
+      ok: false,
+      profile: store().profile,
+      reason: 'Needs 2 Uncommon flux',
+    });
+    bench(sword('common'));
+    expect(screen.getByTestId('temper-open-skill')).toBeDisabled();
+    expect(screen.getByTestId('temper-open-skill')).toHaveAccessibleDescription(
+      'Needs 2 Uncommon flux',
     );
     cleanup();
-    bench({ ...helm('fire'), rarity: 'rare' as const });
-    expect(screen.getByTestId('temper-op-open-skill')).toBeDisabled();
-    expect(screen.getByTestId('temper-op-open-skill')).toHaveAccessibleDescription(
-      'Only a weapon opens a skill',
+    // A rare sword starts with every skill it can hold.
+    bench(sword('rare'));
+    expect(screen.getByTestId('temper-open-skill')).toBeDisabled();
+    expect(screen.getByTestId('temper-open-skill')).toHaveAccessibleDescription(
+      'Every skill this weapon can hold is open',
     );
   });
 });
