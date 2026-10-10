@@ -46,7 +46,7 @@ test.describe('Delve Training Grounds', () => {
     const ability0 = page.getByTestId('ability-0');
     await expect(ability0).toBeVisible({ timeout: ARENA_READY });
     // The sandbox starts on Fire's default chains.
-    await expect(ability0).toHaveAttribute('aria-label', 'Primary: light Fire Bolt');
+    await expect(ability0).toHaveAttribute('aria-label', 'Primary: medium Fire Strike'); // the sword's class form
 
     // The Training bar fits on one line: Anvil, the meter, then Panel and Menu.
     const bar = (await page.getByTestId('training-bar').boundingBox())!;
@@ -154,7 +154,7 @@ test.describe('Delve Training Grounds', () => {
     expect((await read('alloy:delve:sandbox:v1')).chains.primary.moves[0].kind).toBe('heavy');
     expect(
       (await read('alloy:delve:v2')).equipped.weapon.moveset.chains.primary.moves[0].kind,
-    ).toBe('light');
+    ).toBe('medium');
     // The way back: the Skills tab on the Primary, one change still unapplied.
     await page.getByTestId('training-back').click();
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
