@@ -4,7 +4,9 @@ import { BUTTON, installPad, tap } from './fixtures/pad';
 
 // The lean HUD (the pad-first spec, 3): the default; the gain feed, the corner, Full by choice.
 test.describe('Delve HUD', () => {
-  test.describe.configure({ timeout: 240_000 });
+  // About 2× their slowest, 33 s each (desktop, two workers; 16–31 s with one), on the Linux
+  // software renderer.
+  test.describe.configure({ timeout: 90_000 });
 
   test('H01: lean by default: the corner and a gain feed that grows with the pickups; Settings → Full brings back the purse', async ({
     page,

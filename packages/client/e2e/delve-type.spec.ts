@@ -1,5 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createDefaultRegistry, createDelveProfile, startDive as beginDive } from '@alloy/engine';
+import {
+  createDefaultRegistry,
+  createDelveProfile,
+  defaultMoveset,
+  generateItem,
+  SeededRNG,
+  startDive as beginDive,
+  type DataRegistry,
+  type DelveProfile,
+} from '@alloy/engine';
 import { ARENA_READY, armed, seedProfile, startDive, stepTo } from './fixtures/delve';
 
 /**
@@ -8,6 +17,19 @@ import { ARENA_READY, armed, seedProfile, startDive, stepTo } from './fixtures/d
  * computed font-size: the screens' zoom applies after it, and at 1920×1080 it is 1 anyway.
  */
 const FLOOR = 16;
+
+// A rare bag axe (a frame to compare and Move all onto) and two loose constructs in the bag.
+const CONSTRUCTS = (registry: DataRegistry) => {
+  const axe = generateItem(registry, { uid: 'bag-axe', ilvl: 4, rarity: 'rare', slot: 'weapon', baseId: 'axe', mana: 'fire' }, new SeededRNG(7));
+  return {
+    bag: [{ ...axe, moveset: defaultMoveset(registry, axe, 'fire') }],
+    constructs: [
+      { uid: 'c9001', kind: 'medium', form: 'strike', elements: ['fire'], runes: [null] },
+      { uid: 'c9002', kind: 'light', form: 'bolt', elements: ['fire'] },
+    ],
+    nextConstructUid: 9100,
+  } satisfies Partial<DelveProfile>;
+};
 
 interface Run {
   size: number;
@@ -58,14 +80,22 @@ test.describe('the type floor', () => {
   test.skip(({ viewport }) => viewport?.width !== 1920, 'measured at 1920×1080 (desktop-1080)');
 
   test('TY01: the Anvil: every tab, the benches, the editor, the sheets and the dialogs', async ({ page }) => {
-    await seedProfile(page, 4242, false);
+    await seedProfile(page, 4242, false, undefined, CONSTRUCTS(createDefaultRegistry()));
     await page.goto('/delve');
     for (const tab of ['loadout', 'skills', 'forge', 'codex', 'quests'] as const) {
       await page.getByTestId(`tab-${tab}`).click();
       await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
       await measure(page, tab);
     }
+    // The Loadout's compare pane on a bag weapon: the frame line and Move all here.
+    await page.getByTestId('tab-loadout').click();
+    await page.locator('[data-uid="bag-axe"]').click();
+    await expect(page.getByTestId('weapon-frame')).toBeVisible();
+    await measure(page, 'loadout-weapon');
+    // The Skills tab's bag pane with constructs in it.
     await page.getByTestId('tab-skills').click();
+    await expect(page.getByTestId('construct-bag').locator('[data-construct]')).toHaveCount(2); // the Primary's filter: the Strike, and the Bolt a sword can't express (dormant, with its reason)
+    await measure(page, 'skills-bag');
     await page.getByTestId('move-0').click();
     await expect(page.getByTestId('move-editor')).toBeVisible();
     await measure(page, 'skills-editor');
@@ -115,7 +145,9 @@ test.describe('the type floor', () => {
     await expect(page.getByTestId('pause-screen')).toBeVisible();
     await measure(page, 'pause-list');
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 60_000 });
+    // About 2× the 60 s this wait took on the Linux software renderer, two workers (26 s
+    // with one).
+    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 120_000 });
     await measure(page, 'stop');
   });
 });

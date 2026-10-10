@@ -37,11 +37,11 @@ async function padToQuests(page: Page): Promise<void> {
   await expect(page.getByTestId('tab-quests')).toHaveAttribute('aria-selected', 'true');
 }
 test.describe('Delve quests', () => {
-  // A floor's clear may take most of the default two minutes under load.
-  test.describe.configure({ timeout: 240_000 });
   test('Q01: First Steps done in a dive, claimed at the Anvil, and the next main quest opens', async ({
     page,
   }) => {
+    // About 2× its slowest, 71 s (desktop-1080, one worker), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await page.goto('/delve');
     await startDive(page);
@@ -104,9 +104,9 @@ test.describe('Delve quests', () => {
   test('Q03: on the pad, Quests lands on Claim all, and A claims every quest that waits', async ({
     page,
   }) => {
-    // Three dives of the autopilot leave quests waiting (seed 4: two side quests).
+    // Three dives of the autopilot leave quests waiting (seed 1: a side quest and a contract).
     const registry = createDefaultRegistry();
-    const profile = economySim(registry, 4, 3).profile;
+    const profile = economySim(registry, 1, 3).profile;
     const waiting = questStates(registry, profile).filter((q) => q.status === 'complete');
     expect(waiting.length).toBeGreaterThanOrEqual(2);
     await seedSave(page, profile);

@@ -571,8 +571,7 @@ describe('delveStore: the draft and its bag', () => {
     expect(s().chainDraft?.chains.primary?.payment).toBe('charge');
   });
 
-  // D2 un-skips: B2's applyDraft prices and commits the draft (A's refuses "Not yet").
-  it.skip('socketing a pouch rune is free: Apply takes it from the pouch', () => {
+  it('socketing a pouch rune is free: Apply takes it from the pouch', () => {
     strikes([[null]], { runes: { widen: [1, 0, 0, 0, 0] } });
     const primary = saved().primary;
     const [first, second] = primary.moves;
@@ -585,9 +584,8 @@ describe('delveStore: the draft and its bag', () => {
     expect(pouchCount(s().profile.runes, widen)).toBe(0);
   });
 
-  // D2 un-skips: B2's applyDraft moves a construct into the bag (A's refuses "Not yet").
-  it.skip('Apply sets the chains and the bag together: an unsocketed construct lands in the bag', () => {
-    strikes([]);
+  it('Apply sets the chains and the bag together: an unsocketed construct lands in the bag', () => {
+    strikes([], { autoSalvagePlain: false }); // on, a plain construct would be deleted (spec §3.3)
     const primary = saved().primary;
     const [a, b] = primary.moves;
     s().editDraft('primary', { ...primary, moves: [b] }, [a]);
@@ -598,8 +596,7 @@ describe('delveStore: the draft and its bag', () => {
     expect(s().chainDraft).toBeNull();
   });
 
-  // D2 un-skips.
-  it.skip('a new socket costs Links and scrap by its index, and Apply needs them', () => {
+  it('a new socket costs Links and scrap by its index, and Apply needs them', () => {
     strikes([], { links: 0, scrap: 20 });
     const primary = saved().primary;
     const [first, second] = primary.moves;
@@ -612,8 +609,7 @@ describe('delveStore: the draft and its bag', () => {
     expect(s().profile).toMatchObject({ links: 0, scrap: 0 });
   });
 
-  // D2 un-skips (needs B2's applyDraft: A's refuses "Not yet").
-  it.skip("when the engine won't price the draft, says why, and the pouch stays as it is", () => {
+  it("when the engine won't price the draft, says why, and the pouch stays as it is", () => {
     strikes([[null]], { runes: {} });
     const primary = saved().primary;
     const [first, second] = primary.moves;
@@ -635,8 +631,7 @@ describe('delveStore: the draft and its bag', () => {
     expect(selectDraftApply(s())).toBe(paying);
   });
 
-  // D2 un-skips.
-  it.skip('the pull rule: paying (as shipped), a pull costs scrap and the rune comes back; destroying, it is gone', () => {
+  it('the pull rule: paying (as shipped), a pull costs scrap and the rune comes back; destroying, it is gone', () => {
     strikes([[split]], { scrap: 100 });
     const primary = saved().primary;
     const [first, second] = primary.moves;
@@ -671,8 +666,7 @@ describe('delveStore: the draft and its bag', () => {
     expect(s().profile.constructs).toEqual([spare]);
   });
 
-  // D2 un-skips: B2's salvageConstruct.
-  it.skip('salvaging a bag construct commits at once and offers Undo for UNDO_MS', () => {
+  it('salvaging a bag construct commits at once and offers Undo for UNDO_MS', () => {
     vi.useFakeTimers();
     const spare = { ...saved().primary.moves[0], uid: 'spare', runes: [split] };
     strikes([], { scrap: 100 }, [spare]);
@@ -956,8 +950,7 @@ describe('constructs: Move all, salvaging a construct, Open a skill', () => {
     expect(s().profile.equipped.weapon!.uid).not.toBe('w1');
   });
 
-  // D2 un-skips: B2's moveAll.
-  it.skip('Move all wears the bag weapon with your constructs on it, and clears its NEW mark', () => {
+  it('Move all wears the bag weapon with your constructs on it, and clears its NEW mark', () => {
     s().markNew(['w1']);
     const mine = movesetOf(registry, s().profile.equipped.weapon!).chains.primary!;
     const res = s().moveAll('w1');
@@ -970,8 +963,7 @@ describe('constructs: Move all, salvaging a construct, Open a skill', () => {
     expect(s().newUids.w1).toBeUndefined();
   });
 
-  // D2 un-skips: B2's salvageConstruct.
-  it.skip('salvaging a bag construct offers Undo for UNDO_MS, like a salvage', () => {
+  it('salvaging a bag construct offers Undo for UNDO_MS, like a salvage', () => {
     vi.useFakeTimers();
     const [c] = movesetOf(registry, s().profile.bag[0]).chains.primary!.moves;
     // One construct in the bag: unsocketed from the bag weapon by B2's op, stood here by hand.

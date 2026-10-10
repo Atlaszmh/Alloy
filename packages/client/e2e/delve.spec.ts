@@ -12,8 +12,8 @@ import {
 } from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
-  // A floor's clear may take most of the default two minutes under load.
-  test.describe.configure({ timeout: 240_000 });
+  // The default 120 s is about 2× the rest at their slowest on the Linux software renderer,
+  // one or two workers: D05 54 s, D01 53 s (desktop-1080).
   test('D01: menu → anvil → dive → clear depth → extract → back to the anvil', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/');
@@ -50,10 +50,10 @@ test.describe('Delve loot loop', () => {
     // Primary's (G04 and T01 see its first move before any press).
     await expect(page.getByTestId('ability-0')).toHaveAttribute(
       'aria-label',
-      /^Primary: (light|medium|heavy) Fire Bolt$/,
+      /^Primary: (light|medium|heavy) Fire Strike$/,
     );
-    // The seeded sword is uncommon: it carries no Defensive or Ultimate, so they have no button.
-    await expect(page.getByTestId('ability-1')).toHaveCount(0);
+    // The seeded sword is uncommon: it carries the Primary and the Defensive (the slot table), not the Ultimate.
+    await expect(page.getByTestId('ability-1')).toBeVisible();
     await expect(page.getByTestId('ability-2')).toHaveCount(0);
     await expect(page.getByTestId('mana-bar')).toBeVisible();
     await expect(page.getByTestId('dodge-button')).toBeVisible();
@@ -83,11 +83,12 @@ test.describe('Delve loot loop', () => {
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
     page,
   }) => {
-    // A floor and a half on a loaded machine.
-    test.setTimeout(360_000);
-    // Only elites and bosses drop gear: seed 5's first floor, played by the bot to the exit,
+    // About 2× its slowest, 86 s (desktop-1080, two workers; 44 s with one), on the Linux
+    // software renderer.
+    test.setTimeout(180_000);
+    // Only elites and bosses drop gear: seed 8's first floor, played by the bot to the exit,
     // drops gear at every steady step (pinned in the engine's delve-banking test).
-    await seedProfile(page, 5);
+    await seedProfile(page, 8);
     await useFullHud(page);
     await page.goto('/delve');
     await startDive(page);
@@ -135,6 +136,8 @@ test.describe('Delve loot loop', () => {
   test('D03: the stop offers three boons, then a road; the boon taken shows in the HUD on the next depth', async ({
     page,
   }) => {
+    // About 2× its slowest, 74 s (desktop-1080, one worker), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await page.goto('/delve');
     await startDive(page);
@@ -182,6 +185,8 @@ test.describe('Delve loot loop', () => {
   });
 
   test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
+    // About 2× its slowest, 64 s (desktop-1080, one worker), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await page.goto('/delve');
     await startDive(page);
@@ -200,6 +205,8 @@ test.describe('Delve loot loop', () => {
   test("D11: materials ride the floor's haul, bank at the stop, and an abandon loses a share", async ({
     page,
   }) => {
+    // About 2× its slowest, 74 s (desktop-1080, two workers), on the Linux software renderer.
+    test.setTimeout(150_000);
     await seedProfile(page);
     await useFullHud(page);
     await page.goto('/delve');
@@ -274,9 +281,9 @@ test.describe('Delve loot loop', () => {
   });
 
   test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {
-    await seedProfile(page, 4242, true, 'nature', { links: 1, scrap: 20 });
+    await seedProfile(page, 4242, true, 'nature', { links: 2, scrap: 40 });
     await page.goto('/delve');
-    await expect(page.getByTestId('links-count')).toHaveText('1 Link');
+    await expect(page.getByTestId('links-count')).toHaveText('2 Links');
     await expect(page.getByTestId('mana-strip')).toContainText('Skills');
     // The attunement strip opens Skills on its Mana view; Back shows the move inspector.
     await page.getByTestId('mana-strip').click();
@@ -289,17 +296,17 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('move-form').click();
     await page.getByTestId('form-burst').click();
     await stepTo(page, 'move-elements', /^Fire \+ Nature$/);
-    await expect(page.getByTestId('ability-readout')).toContainText('light Wildfire Burst');
+    await expect(page.getByTestId('ability-readout')).toContainText('medium Wildfire Burst');
     await expect(page.getByTestId('chain-price')).toContainText('free until your first dive');
     await applyDraft(page);
     await expect(page.getByTestId('chain-price')).toHaveText('No changes');
     const summary = page.getByTestId('abilities-summary');
-    await expect(summary).toHaveText('light Wildfire Burst');
-    // A Link and 20 scrap buy a second slot, holding the chain's next default move.
-    await expect(page.getByTestId('chain-slots')).toHaveText('1 of 1 slots');
-    await page.getByTestId('add-slot').click();
-    await expect(summary).toHaveText('light Wildfire Burst · medium Wildfire Burst');
+    await expect(summary).toHaveText('medium Wildfire Burst · medium Fire Strike');
+    // Two Links and 40 scrap buy a third slot, holding the chain's next default move.
     await expect(page.getByTestId('chain-slots')).toHaveText('2 of 2 slots');
+    await page.getByTestId('add-slot').click();
+    await expect(summary).toHaveText('medium Wildfire Burst · medium Fire Strike · heavy Fire Strike');
+    await expect(page.getByTestId('chain-slots')).toHaveText('3 of 3 slots');
     await expect(page.getByTestId('move-add')).toHaveCount(0);
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('forge-panel')).toBeVisible();
@@ -334,12 +341,12 @@ test.describe('Delve loot loop', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('help-dialog')).toHaveCount(0);
     await page.getByTestId('tab-skills').click();
-    // The common sword carries the Basic alone: the others show locked.
+    // The common sword holds two Primary constructs; the Defensive and the Ultimate are closed.
     const summary = page.getByTestId('abilities-summary');
     await page.getByTestId('chain-skill-primary').click();
-    await expect(summary).toContainText('Carried by uncommon weapons and better');
+    await expect(summary).toHaveText('medium Frost Strike · medium Frost Strike');
     await page.getByTestId('chain-skill-defensive').click();
-    await expect(summary).toContainText('Carried by rare weapons and better');
+    await expect(summary).toContainText('No Defensive slot yet: Open a skill');
     // The paper doll is on the Loadout tab.
     await page.getByTestId('tab-loadout').click();
     await page.getByTestId('slot-weapon').click();
@@ -390,6 +397,8 @@ test.describe('Delve loot loop', () => {
   test("D12: a generated floor's vault opens on the interact key, and the gate asks before leaving", async ({
     page,
   }) => {
+    // About 2× its slowest, 96 s (desktop-1080, two workers), on the Linux software renderer.
+    test.setTimeout(210_000);
     // Seed 4's first floor holds a vault. The bot walks the floor, but stands at each
     // interactable until C is pressed, and the gate and an alcove open their dialogs.
     await seedProfile(page, 4, 'ask');

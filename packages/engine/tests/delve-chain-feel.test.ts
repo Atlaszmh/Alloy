@@ -63,6 +63,12 @@ const MAUL: EquippedGear = {
   weapon: gear('fire', 'weapon', 'maul'),
   chest: gear('earth', 'chest'),
 };
+// A dagger's style darts in on the press and adds no step on the release, so the Bolt's recoil is the only
+// step push to wait out (a sword's style adds its own).
+const DAGGER: EquippedGear = {
+  weapon: gear('fire', 'weapon', 'dagger'),
+  chest: gear('earth', 'chest'),
+};
 const casts = (events: ArpgEvent[]) =>
   events.filter((e): e is Extract<ArpgEvent, { kind: 'cast' }> => e.kind === 'cast');
 /** Seconds after `from` of each `holdStage` event (its stage) while `step` runs `seconds`. */
@@ -157,7 +163,7 @@ describe('holds by tempo', () => {
   const holder = (equipped?: EquippedGear) =>
     arena([dummy(13, 30)], { noBasic: true, primary: { kind: 'hold' }, equipped });
 
-  it('reach full charge at holdTime × tempo (holdFull)', () => {
+  it('reach full charge at holdTime ï¿½ tempo (holdFull)', () => {
     expect(holdFull(bal, 1)).toBe(bal.chains.holdTime);
     expect(holdFull(bal, 1.3)).toBeCloseTo(bal.chains.holdTime * 1.3);
     expect(holdFull({ ...bal, chains: { ...bal.chains, holdTime: 2 } }, 0.8)).toBeCloseTo(1.6);
@@ -425,7 +431,7 @@ describe('the basic swing while a press waits', () => {
   };
 
   it("a swing that strikes by the press's tick starts and lands first; one that wouldn't doesn't start", () => {
-    const fits = fighter();
+    const fits = fighter(DAGGER);
     press(fits, 0);
     const end = fits.hero.beatUntil[0];
     pressOnly(fits, 0);

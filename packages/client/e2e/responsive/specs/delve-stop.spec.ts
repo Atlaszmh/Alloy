@@ -4,8 +4,9 @@ import { FLOOR_CLEAR, seedProfile, startDive, toRoad } from '../../fixtures/delv
 
 for (const vp of [...PC_VIEWPORTS, ...TEXT_VIEWPORTS]) {
   test(`Delve stop @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
-    // The bot clears depth 1 at every size: at 3440×1440 that takes over a minute.
-    test.setTimeout(240_000);
+    // The bot clears depth 1 at every size: about 2× the slowest, 3440×1440's 103 s (40–81 s
+    // the rest, one or two workers), on the Linux software renderer.
+    test.setTimeout(210_000);
     await page.setViewportSize({ width: vp.width, height: vp.height });
     // The bot clears depth 1, and the stop between depths opens.
     await seedProfile(page);

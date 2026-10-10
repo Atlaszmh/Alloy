@@ -113,18 +113,17 @@ describe('SkillsTab', () => {
       );
   });
 
-  // D2 un-skips: it applies through B2's engine, reads a price, or needs a real draftRefusal.
-  it.skip('edits a draft: Apply commits it, free before the first dive, and Revert drops it', () => {
+  it('edits a draft: Apply commits it, free before the first dive, and Revert drops it', () => {
     roomy();
     renderSkills();
     expect(priceLine()).toHaveTextContent('No changes');
     edit(0);
     pickForm('burst');
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Burst');
-    expect(chains().primary.moves[0].form).toBe('lance'); // not yet
+    expect(chains().primary.moves[0].form).toBe('strike'); // not yet
     expect(priceLine()).toHaveTextContent('free until your first dive');
     fireEvent.click(screen.getByTestId('chain-revert'));
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Strike');
     expect(priceLine()).toHaveTextContent('No changes');
     pickForm('burst');
     expect(screen.getByTestId('chain-apply')).toHaveAccessibleName('Apply'); // free: no price
@@ -153,8 +152,7 @@ describe('SkillsTab', () => {
     expect(chains().primary.moves[0].form).toBe('strike');
   });
 
-  // D2 un-skips: it applies through B2's engine, reads a price, or needs a real draftRefusal.
-  it.skip('Apply is off while the engine would refuse the draft, and says why; the draft stays', () => {
+  it('Apply is off while the engine would refuse the draft, and says why; the draft stays', () => {
     roomy();
     renderSkills();
     // A storm move the pair (Fire alone) doesn't hold: the engine refuses it.
@@ -224,8 +222,7 @@ describe('SkillsTab', () => {
     expect(priceLine()).toHaveTextContent('No changes'); // gone, not waiting on the sword
   });
 
-  // D2 un-skips: B2's realign maps the worn weapon's constructs by role.
-  it.skip('a realign re-maps the moves the draft was made on, and drops it', () => {
+  it('a realign re-maps the moves the draft was made on, and drops it', () => {
     roomy();
     act(() => {
       store().bindSecondary('storm');
@@ -242,8 +239,7 @@ describe('SkillsTab', () => {
     expect(chains().primary.moves[0]).toMatchObject({ form: 'strike', elements: ['frost'] });
   });
 
-  // D2 un-skips: it applies through B2's engine, reads a price, or needs a real draftRefusal.
-  it.skip('after the first dive the draft shows its price in Mana Dust, and Apply pays it', () => {
+  it('after the first dive the draft shows its price in Mana Dust, and Apply pays it', () => {
     roomy();
     const p = store().profile;
     store().setProfile({ ...p, stats: { ...p.stats, dives: 1 }, manaDust: 4 });
@@ -445,8 +441,7 @@ describe('SkillsTab', () => {
     expect(screen.queryByTestId('add-slot')).toBeNull();
   });
 
-  // D2 un-skips: it applies through B2's engine, reads a price, or needs a real draftRefusal.
-  it.skip("a refused Add slot or Apply says the engine's reason on the lane's message line", () => {
+  it("a refused Add slot or Apply says the engine's reason on the lane's message line", () => {
     store().setProfile({ ...store().profile, links: 2, scrap: 45 });
     renderSkills();
     const refuse = (reason: string) => ({ ok: false, profile: store().profile, reason });
@@ -623,8 +618,7 @@ describe('SkillsTab: sockets and runes', () => {
     fireEvent.click(within(screen.getByTestId(`sockets-${i}`)).getByRole('button', { name }));
   const picker = () => within(screen.getByTestId('rune-picker'));
 
-  // D2 un-skips: it applies through B2's engine, reads a price, or needs a real draftRefusal.
-  it.skip('+ socket opens one on the chosen move at its price; Apply pays the Links and scrap', () => {
+  it('+ socket opens one on the chosen move at its price; Apply pays the Links and scrap', () => {
     store().setProfile({ ...store().profile, links: 1, scrap: 20 });
     renderSkills();
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets · 0 of 3');
@@ -643,8 +637,7 @@ describe('SkillsTab: sockets and runes', () => {
     expect(store().profile).toMatchObject({ links: 0, scrap: 0 });
   });
 
-  // D2 un-skips: it applies through B2's engine, reads a price, or needs a real draftRefusal.
-  it.skip("a draft the engine won't price says why in place of a price, once", () => {
+  it("a draft the engine won't price says why in place of a price, once", () => {
     socketed([null]);
     renderSkills();
     const primary = chains().primary;
@@ -663,8 +656,7 @@ describe('SkillsTab: sockets and runes', () => {
     expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('apply-sheet-why').id);
   });
 
-  // D2 un-skips: it applies through B2's engine, reads a price, or needs a real draftRefusal.
-  it.skip("+ socket is off without the Links, saying why in the engine's words", () => {
+  it("+ socket is off without the Links, saying why in the engine's words", () => {
     store().setProfile({ ...store().profile, links: 0, scrap: 20 });
     renderSkills();
     edit(0);

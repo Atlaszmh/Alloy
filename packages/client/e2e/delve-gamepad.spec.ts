@@ -8,7 +8,7 @@ import {
   type GearItem,
   type Moveset,
 } from '@alloy/engine';
-import { startDive } from './fixtures/delve';
+import { startDive, withUids } from './fixtures/delve';
 
 /**
  * Controller support with a fake standard-mapping pad: Playwright has no real
@@ -44,7 +44,7 @@ function withSocket(moveset: Moveset): Moveset {
 }
 
 /**
- * A fire hero's save, its sword uncommon (a new save's common sword carries no Primary) with
+ * A fire hero's save, its sword uncommon (the slot table's uncommon row: a Defensive slot too) with
  * its Primary at `primarySlots` slots of default moves; with
  * `socket`, its first move has one open, empty socket and Quick III waits in the pouch; with
  * `bag`, the bag holds what `bag` makes.
@@ -60,15 +60,17 @@ async function setup(
   const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
   const sword = { ...profile.equipped.weapon!, rarity: 'uncommon' as const };
   const moveset = defaultMoveset(registry, sword, 'fire', { primary: primarySlots });
-  const save = JSON.stringify({
-    ...profile,
-    equipped: {
-      ...profile.equipped,
-      weapon: { ...sword, moveset: socket ? withSocket(moveset) : moveset },
-    },
-    runes: socket ? { quick: [0, 0, 1, 0, 0] } : profile.runes,
-    bag: [...profile.bag, ...bag(registry)],
-  });
+  const save = JSON.stringify(
+    withUids({
+      ...profile,
+      equipped: {
+        ...profile.equipped,
+        weapon: { ...sword, moveset: socket ? withSocket(moveset) : moveset },
+      },
+      runes: socket ? { quick: [0, 0, 1, 0, 0] } : profile.runes,
+      bag: [...profile.bag, ...bag(registry)],
+    }),
+  );
   await page.addInitScript(
     ([value, bot]) => {
       const w = window as unknown as { __pad: unknown };
@@ -110,8 +112,8 @@ async function frames(page: Page, n: number): Promise<void> {
 
 /**
  * Press and release within the page, across one frame: the controller is read
- * once per frame, so it sees exactly one press (a longer hold can trigger the
- * D-pad's repeat when frames are slow under load).
+ * once per frame, so it sees exactly one press. One frame, not two: the D-pad repeats on
+ * wall-clock time (350 ms), and two software-rendered 1080 frames (~216 ms each) outlast it.
  */
 async function tap(page: Page, button: number): Promise<void> {
   await page.evaluate(
@@ -121,12 +123,10 @@ async function tap(page: Page, button: number): Promise<void> {
           window as unknown as { __pad: { buttons: { pressed: boolean; value: number }[] } }
         ).__pad;
         pad.buttons[i] = { pressed: true, value: 1 };
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            pad.buttons[i] = { pressed: false, value: 0 };
-            resolve();
-          }),
-        );
+        requestAnimationFrame(() => {
+          pad.buttons[i] = { pressed: false, value: 0 };
+          resolve();
+        });
       }),
     button,
   );
@@ -241,8 +241,8 @@ test.describe('Delve with a controller', () => {
     await page.goto('/delve');
     await startDive(page);
     const dodge = page.getByTestId('dodge-button');
-    await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
-    expect(await tapAndReadCharges(page, BUTTON.b)).toBe('1');
+    await expect(dodge).toHaveAttribute('data-charges', '3', { timeout: ARENA_READY });
+    expect(await tapAndReadCharges(page, BUTTON.b)).toBe('2');
     await expect(dodge).toContainText('B');
     // The Primary's slot names its pad button too.
     await expect(page.getByTestId('ability-0')).toContainText('RT');
@@ -251,7 +251,7 @@ test.describe('Delve with a controller', () => {
   test('G04: holding RT with the right stick aimed keeps casting the Primary, through its chain', async ({
     page,
   }) => {
-    await setup(page, false, 2); // a light Bolt, then a medium one
+    await setup(page, false, 2); // two moves of the sword's Primary
     await page.goto('/delve');
     await startDive(page);
     const bar = page.getByTestId('mana-bar');
@@ -259,7 +259,7 @@ test.describe('Delve with a controller', () => {
     const mana = async () =>
       Number((await bar.getAttribute('aria-label'))!.match(/Mana (\d+)/)![1]);
     const primary = page.getByTestId('ability-0');
-    await expect(primary).toHaveAttribute('aria-label', 'Primary: light Fire Bolt');
+    await expect(primary).toHaveAttribute('aria-label', 'Primary: medium Fire Strike'); // the sword's class form
     const before = await mana();
     await page.evaluate(() => {
       const pad = (
@@ -270,13 +270,10 @@ test.describe('Delve with a controller', () => {
       pad.axes = [0, 0, 0, -1];
       pad.buttons[7] = { pressed: true, value: 1 };
     });
-    // Two or more Bolts outpace the regen while RT is held, stepping through the
-    // chain, each waiting out the last one's beat (polling while held, since game
-    // time runs slow when the machine is busy).
-    await expect.poll(mana, { timeout: ARENA_READY }).toBeLessThan(before - 6);
-    await expect
-      .poll(() => primary.getAttribute('aria-label'), { timeout: ARENA_READY })
-      .toBe('Primary: medium Fire Bolt');
+    // Holding RT casts again and again, each waiting out the last one's beat: both Strikes (8 mana
+    // each) are paid. The chain's two moves read alike, so the mana tells (polling while held,
+    // since game time runs slow when the machine is busy).
+    await expect.poll(mana, { timeout: ARENA_READY }).toBeLessThan(before - 12);
     await page.evaluate(() => {
       const pad = (
         window as unknown as {
@@ -295,7 +292,7 @@ test.describe('Delve with a controller', () => {
     await page.goto('/delve');
     await startDive(page);
     const dodge = page.getByTestId('dodge-button');
-    await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
+    await expect(dodge).toHaveAttribute('data-charges', '3', { timeout: ARENA_READY });
 
     await tap(page, BUTTON.menu);
     await page.getByTestId('open-controls').click();
@@ -308,7 +305,7 @@ test.describe('Delve with a controller', () => {
     await tap(page, BUTTON.b); // resumes the dive
     await expect(page.getByTestId('pause-screen')).toBeHidden();
 
-    expect(await tapAndReadCharges(page, BUTTON.a)).toBe('1');
+    expect(await tapAndReadCharges(page, BUTTON.a)).toBe('2');
     await expect(dodge).toContainText('A');
   });
 
@@ -443,7 +440,7 @@ test.describe('Delve with a controller', () => {
     await expect(sheet).toContainText('Selected · compared with your weapon');
     // The verdict leads the pane, and the footer's A says what it does on this weapon.
     await expect(page.getByTestId('item-verdict')).toBeVisible();
-    await expect(page.locator('.k-prompt', { hasText: 'Equip or transfer' })).toBeVisible();
+    await expect(page.locator('.k-prompt', { hasText: 'Equip or move all' })).toBeVisible();
     await expect(page.locator('.k-prompt', { hasText: 'Actions' })).toHaveCount(0);
     // The pane's buttons are the mouse's: right from the bag never lands on them.
     await tap(page, BUTTON.right);
@@ -453,10 +450,10 @@ test.describe('Delve with a controller', () => {
       ),
     ).toBe(false);
     await padWalk(page, 'bag-item');
-    // A opens the take sheet; A on Transfer moves the moveset onto the axe, which is worn now.
+    // A opens the take sheet; A on Move all moves the constructs onto the axe, which is worn now.
     await tap(page, BUTTON.a);
     await expect(page.getByTestId('take-sheet')).toBeVisible();
-    await page.getByTestId('take-transfer').focus();
+    await page.getByTestId('take-move-all').focus();
     await tap(page, BUTTON.a);
     await expect.poll(async () => (await save()).equipped.weapon?.uid).toBe('bag-axe');
     await expect(page.getByTestId('take-sheet')).toHaveCount(0);

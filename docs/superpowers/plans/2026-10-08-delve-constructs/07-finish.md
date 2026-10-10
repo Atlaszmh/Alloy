@@ -482,13 +482,79 @@ The stage's final whole-feature review: everything green on the merged branch, t
 
 **Task 1 (un-skips):** files …; tests …
 
-**Task 2 (the style gate):** the table …; levers tried …
+**Task 2 (the style gate):** run on `43adebdc` (D2 Task 1's merge), `STYLE_GATE=1`, depth 10, eight seeds: 2 of 2 green in about 5 s; no tuning, so no levers tried and Steps 3–4 skipped. Only the pairs in the gate's `WAIVED` list (B1's, decided with the user) sit outside 0.85–1.2×, each at its waived value. The table (ratio to the form's class median; `*` waived):
 
-**Task 3 (the rune gates):** two-build gate rows …; the Lab's maxima (single / set, one dummy / pack) …; levers tried …
+```
+one dummy
+lance      melee  dagger 1.08  sword 1.12  axe 0.92  maul 0.84*
+lance      ranged staff 1.00  wand 1.06  bow 0.91
+burst      melee  dagger 1.06  sword 1.07  axe 0.86  maul 0.94
+burst      ranged staff 1.00  wand 1.04  bow 0.90
+strike     melee  dagger 1.07  sword 1.11  axe 0.93  maul 0.91
+whirl      melee  dagger 0.98  sword 1.12  axe 0.88  maul 1.02
+nova       melee  dagger 1.20  sword 0.95  axe 0.78*  maul 1.05
+nova       ranged staff 1.02  wand 0.96  bow 1.00
+onslaught  melee  dagger 1.19  sword 0.88  axe 0.89  maul 1.11
+maelstrom  melee  dagger 0.83*  sword 0.93  axe 1.07  maul 1.19
+maelstrom  ranged staff 1.30*  wand 1.00  bow 0.84*
+bolt       ranged staff 1.00  wand 1.08  bow 0.86
+volley     ranged staff 1.00  wand 1.20  bow 0.80*
+barrage    ranged staff 0.86  wand 1.00  bow 1.18
+weapons: dagger 1.06  sword 1.03  axe 0.90  maul 1.01  staff 1.03  wand 1.05  bow 0.93
+pack
+lance      melee  dagger 1.00  sword 1.12  axe 1.00  maul 0.87
+lance      ranged staff 1.00  wand 1.07  bow 0.79*
+burst      melee  dagger 1.05  sword 1.07  axe 0.95  maul 0.95
+burst      ranged staff 1.00  wand 1.05  bow 0.88
+strike     melee  dagger 0.99  sword 1.08  axe 1.01  maul 0.93
+whirl      melee  dagger 0.91  sword 1.08  axe 1.00  maul 1.00
+nova       melee  dagger 0.90  sword 1.28*  axe 0.83*  maul 1.10
+nova       ranged staff 1.12  wand 0.87  bow 1.00
+onslaught  melee  dagger 1.12  sword 0.88  axe 1.14  maul 0.88
+maelstrom  melee  dagger 0.72*  sword 1.07  axe 0.93  maul 1.23*
+maelstrom  ranged staff 1.30*  wand 1.00  bow 0.89
+bolt       ranged staff 1.00  wand 0.93  bow 1.28*
+volley     ranged staff 0.84*  wand 1.00  bow 2.09*
+barrage    ranged staff 1.33*  wand 1.00  bow 0.93
+weapons: dagger 0.93  sword 1.05  axe 0.95  maul 0.97  staff 1.05  wand 0.96  bow 1.09
+```
 
-**Task 4 (pacing):** the rails (seeds as they run): …; known failures carried from main: `delve-pacing-robust` × 2 (…names…); the first-forge rail: held / retired (Step 3); 16 seeds: Fire …; beeline …; Frost (8) …; economy …; bag at dive 12 …; Links held …; worn rarity …; levers tried: …
+At the band's edge (watch after Task 3's trait changes): one dummy's nova dagger 1.20 and volley wand 1.20.
 
-**Task 5 (D02's pin):** seed 5 holds / re-pinned to …
+**Task 2, the structural failures (decided with the user, 2026-10-09):** the charge-paid Ultimates (their cast count set by the unstyled basic's charge and `chargeLockout`, which no style scales) and the bow's `pierce: 1` on the clump keep B1 Task 12's answer as it is: Ultimates read per cast, pierce with its ×0.95 power trade-off, the rest in `WAIVED`. Not taken: a fixed-charge read, charge gain normalised over the foes a basic hits, and a new bow trait (pierce off Volley would bring its pack 2.09× in; without pierce the pack Bolt reads about 0.61×). The gate re-run on `2cb2674a`: 2 of 2 green, the table as above; on `95a671f0` (no engine file changed between them) `delve-pacing.test.ts` 11 of 11 (the "legendaries arrive" rail B1 Task 12 had flipped passes again) and `delve-pacing-pairs.test.ts` green. No tuning.
+
+**Task 3 (the rune gates):** run on `2cb2674a` (D2 Task 2's merge), depth 10, eight seeds; both hold, no tuning, so Step 3 skipped and no levers tried.
+
+Step 1, the two-build gate (`RUNE_COST_GATE=1`): 7 of 7 green in about 89 s (vitest's "Timeout calling onTaskUpdate" printed once: the file has no yielding `afterEach`; every test passed). Each form's best set (loads zeroed), then the pack and one dummy as `full unloaded → loaded, starved loaded (unloaded), supported loaded (unloaded)`:
+
+```
+bolt   staff echo+heavy+linger         pack 2.39 → 1.12, starved 1.03 (2.40), supported 1.51 (2.05)   one 2.47 → 1.12, starved 1.06, supported 1.46   per press 2.89× / 2.07×
+volley staff pierce+echo+heavy         pack 3.92 → 1.56, starved 1.53 (3.96), supported 2.15 (2.95)   one 1.17 → 0.43, starved 0.42, supported 0.63   per press 2.89× / 2.07×
+lance  sword detonate+heavy+linger     pack 2.46 → 1.14, starved 1.12 (2.38), supported 1.71 (2.35)   one 1.77 → 0.88, starved 0.83, supported 1.20   per press 2.84× / 2.04×
+lance  staff echo+heavy+volatile       pack 2.60 → 1.65, starved 1.19 (1.23), supported 1.64 (2.75)   one 2.69 → 1.06, starved 0.72, supported 1.64   per press 2.23× / 1.88×
+burst  sword echo+heavy+linger         pack 2.57 → 1.19, starved 1.13 (2.61), supported 1.75 (2.26)   one 2.59 → 1.19, starved 1.09, supported 1.75   per press 2.89× / 2.07×
+burst  staff echo+heavy+volatile       pack 2.41 → 1.57, starved 1.15 (1.21), supported 1.67 (2.58)   one 1.57 → 1.18, starved 0.64, supported 1.76   per press 2.23× / 1.88×
+strike sword echo+heavy+linger         pack 2.58 → 1.21, starved 1.17 (2.62), supported 1.88 (2.32)   one 2.47 → 1.19, starved 1.13, supported 1.82   per press 2.89× / 2.07×
+```
+
+Supported 1.51–2.15× on the pack (lowest the staff's Bolt, 0.01 over the floor), starved 1.03–1.19× (Volley 1.53×), per press 2.23–2.89× starved and 1.88–2.07× supported (the staff's Lance and Burst lowest). Against v0.52.0 (supported 1.62–2.07×, starved 1.01–1.18×, Volley 1.34×): Bolt now sits at the floor's edge, so a later change that trims the staff's Bolt or raises its load fails this gate first.
+
+Step 2, the rune balance gate: read headlessly instead of in the browser (the Lab's rune view holds only single-rune rows; the three-rune sets come from `runeComboSetups`, which the Lab doesn't run). A scratch script (`$HOME/tmp/constructs/d2t3/sweep.mjs`, never committed) ran the rune view's 241 single rows and all 4068 sets of `runeComboSetups` over every attack form × its reference weapons and every weapon's blows, through `simulateDps` (eight seeds a row) on one dummy and on the pack, with the loads zeroed (`delve.runes.load.bySlot` all 0, the gate's measure since v0.52.0; with the loads in, every rune on the Ultimate's Nova and Maelstrom reads 0×, since a loaded Ultimate costs more than the pool). The maxima:
+
+- single, one dummy: **1.79×** Linger on the sword's Nova (ceiling 2.0×);
+- single, pack: **2.11×** Pierce on the staff's Volley (ceiling 2.5×); Detonate's highest 1.85× (Volley), 1.80× (Onslaught), 1.72× (Whirl), 1.56× (Strike);
+- set, one dummy: **5.97×** Heavy + Linger + Volatile on the sword's Nova (ceiling 3.0×, the known Nova + Linger exception). Nine sets read over 3.0×, all a Nova with Linger: the old five on the sword (3.04–5.97×, as at v0.52.0) and four on the staff, the new reference weapon (3.13–4.35×); on the pack they read 3.04–3.35×. The highest set without Nova + Linger is 2.95× (Echo + Saturate + Volatile on the maul's blows);
+- set, pack: **3.92×** Pierce + Echo + Heavy on the staff's Volley (ceiling 4.0×); Detonate's highest set 3.28× (Detonate + Chain + Heavy on Volley), the staff's Linger sets at most 3.17× (its Nova).
+
+**Task 4 (pacing):** run on `cbb85965` (D2 Task 3's merge); no tuning, so Steps 5 and 7 skipped and no levers tried.
+
+The rails (Step 1, seeds as they run): 72 of 74 in 1476 s. `delve-pacing.test.ts` 11 of 11 (the "legendaries arrive" rail passes), the pairs, the tutorial bot (every run done) and the maps sweep green. Two failures, both `delve-pacing-robust.test.ts`'s "the first legendary follows the first essence within two visits…" on seed 3 (`expected false to be true`); the describe labels print `undefined × 0.8` and `undefined × 1.2` (`$block.$lever` doesn't interpolate), and the 16-seed read below shows they are the forge's price, `crafting.forgeScrap` × 0.8 (the known failure on main, `01-contract.md`'s Base) and × 1.2 (new since B1 Task 12, which passed it). Read over 16 seeds (8 dives, the test's own run): `forgeScrap` × 0.8 follows in 14 of 16 (seeds 3 and 13: essence dive 4, legendary dive 7 and 8), × 1.2 in 15 of 16 (seed 3: essence dive 7, no legendary by dive 8, the window's edge); `scrapByKind` × 0.8 16 of 16, × 1.2 15 of 16 (seed 15: 5 → 7). The legendary waits on scrap and epic flux, none of this task's levers (slots, `openSkill`, `extraSlots`), and the unscaled 16-seed read holds 16 of 16: no tuning.
+
+The first-forge rail (Step 3): held. `opened: true` on every seed, plain and scaled (the kit still forges before dive 1), so the expectation stays.
+
+16 seeds, 12 dives (Step 2, two shards of 8, about 13 min each; Frost ran on all 16, since the sweep's `seed <= SEED0 + 7` is per shard): Fire's depth after dive 1 / 6 / 12 5.00 / 29.06 / 47.31, 4.69 deaths, 63.0 s a floor, a legendary at dive 12 in 15 of 16; the beeline 5.00 / 28.69 / 46.63 (0.99 × a full clear), 8.81 deaths, 34.4 s a floor (the clear 1.83 × it), a legendary in 7 of 16; Frost 5.00 / 28.50 / 49.25, 4.19 deaths, 65.0 s, a legendary in 16 of 16; no floor timed out. Economy: the first epic after dive 2.81 on average (2 to 4 on every seed), the first legendary within two visits of the first essence in 16 of 16; the bag at dive 12 empty on every seed (the bot's `salvageBag` melts what it doesn't place; `autoSalvagePlain` is on in `createDelveProfile`); Links held 0.35 on average (spent: the ceilings aren't reached early); the worn weapon at dive 12 epic on 11 seeds, legendary on 5. Against v0.70.0 (Fire 5.0 / 27.5 / 45.1, 4.3 deaths, 62 s; beeline 45.8, 1.02 ×, 33 s; Frost 49.5; first epic 4.1; 16/16; 15/16): every band holds; the early game runs slightly ahead (dive 6 +1.6, the first epic 1.3 dives sooner) with deaths unchanged, so early weapons don't run away; dive 1 ends at depth 5 on every seed (the first boss's extract, as before). Logs: `$HOME/tmp/constructs/d2t4-rails.log`, `constructs-pacing-shard{1,2}.txt`, `d2t4-robust*-*.log`.
+
+**Task 5 (D02's pin):** run on `45ac258f`: the pin in `delve-banking.test.ts` already sat at seed 8 (moved by A's switch commit `38cec043`), so `-t "E2E"` passing showed seed 8 holds, not seed 5. Seed 5 swapped into a scratch copy of the pin fails (`expected 0 to be greater than 0`: no gear). D02's `seedProfile` and comment moved from seed 5 to seed 8; the engine pin is unchanged (comment tidied). Task 11 Step 15 is needed with n = 8: "D02's gear floor is seed 8 (seed 5 until the constructs, v0.76.0; seed 3 until the steered dodge, v0.71.0)".
 
 **Tasks 6–10 (E2E):** desktop …; desktop-1080 …; responsive …; durations …
 

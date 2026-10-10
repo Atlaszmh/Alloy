@@ -4,7 +4,8 @@ import { GLYPH_ART } from '../glyph-art';
 import { KitGallery } from '../KitGallery';
 
 describe('the kit gallery (dev)', () => {
-  it('draws every kit piece on one screen', () => {
+  // 0.5 s alone; the full suite's load in the container stretches it past 5 s.
+  it('draws every kit piece on one screen', { timeout: 15_000 }, () => {
     render(<KitGallery />);
     expect(screen.getByTestId('kit-gallery')).toBeInTheDocument();
     for (const id of Object.keys(GLYPH_ART)) {

@@ -379,7 +379,7 @@ export function Temper({ item }: { item: GearItem }) {
                   data-temper-row
                 >
                   <Button
-                    className="flex-1 justify-between"
+                    className="max-w-full min-w-0 flex-1 flex-wrap justify-between gap-x-3"
                     disabled={o.why !== null}
                     aria-describedby={o.why !== null ? `${id}-${o.id}` : undefined}
                     onClick={o.run}
@@ -392,7 +392,7 @@ export function Temper({ item }: { item: GearItem }) {
                   {o.why !== null && (
                     <span
                       id={`${id}-${o.id}`}
-                      className="k-note w-[200px] flex-none [@media(max-height:809px)]:w-auto"
+                      className="k-note max-w-full w-[200px] flex-none [@media(max-height:809px)]:w-auto"
                       style={{ color: 'var(--k-bad-text)' }}
                     >
                       {o.why}
