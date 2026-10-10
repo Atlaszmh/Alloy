@@ -1130,11 +1130,16 @@ describe('the autopilot and the pair', () => {
     ...new Set(chainsOf(p).primary!.moves.map((m) => m.elements.join('+'))),
   ];
 
-  /** A `primary` hero back from its first dive (to depth 3), Mana Dust enough to fuse its Primary. */
+  /** A `primary` hero back from its first dive (to depth 3), Mana Dust enough to fuse its Primary and to pay a new slot's plain construct. */
   const back = (primary: ManaType): DelveProfile => {
     const p = createDelveProfile(registry, 5, { primary });
     const stats = { ...p.stats, dives: 1 };
-    return { ...p, bestDepth: 3, manaDust: bal.movesets.elementDust, stats };
+    return {
+      ...p,
+      bestDepth: 3,
+      manaDust: bal.movesets.elementDust + bal.movesets.editDust,
+      stats,
+    };
   };
 
   it('binds nothing before its first dive', () => {

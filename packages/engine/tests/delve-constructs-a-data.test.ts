@@ -199,19 +199,4 @@ describe('the placeholder behaviours (B1 replaces)', () => {
     const events = press(w, 0);
     expect(events.some((e) => e.kind === 'slash')).toBe(true);
   });
-
-  it('a Repel plays as a Ward, an Onslaught as a Nova', () => {
-    const w = arena([dummy(11.5, 10)], {
-      chains: { ...chainOf('repel', 'defensive'), ...chainOf('onslaught', 'ultimate') } as never,
-    });
-    const buffs = press(w, 1).filter((e) => e.kind === 'buff');
-    expect(buffs).toEqual([expect.objectContaining({ kind: 'buff', form: 'ward' })]);
-    fillCharge(w);
-    // The dummy beside the hero: a Nova's blast reaches it.
-    Object.assign(w.monsters[0], { x: w.hero.x + 1.5, y: w.hero.y });
-    const before = w.monsters[0].hp;
-    press(w, 2);
-    for (let i = 0; i < 30; i++) stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
-    expect(w.monsters[0].hp).toBeLessThan(before);
-  });
 });
