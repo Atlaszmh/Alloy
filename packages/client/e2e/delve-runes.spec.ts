@@ -128,9 +128,9 @@ test.describe('Delve runes', () => {
     expect(after.links).toBe(0);
     expect(after.scrap).toBe(0);
     expect(after.runes.quick).toEqual([0, 0, 0, 0, 0]);
-    // A filled socket shows its rune with Pull, which destroys it as shipped.
+    // A filled socket shows its rune with Pull, which pays and returns it to the pouch as shipped.
     await cards.getByTestId('socket-0').click();
-    await expect(picker.getByTestId('rune-pull')).toContainText('destroys');
+    await expect(picker.getByTestId('rune-pull')).toContainText('back to your pouch');
     await picker.getByTestId('rune-picker-close').click();
     await expect(picker).toBeHidden();
   });
